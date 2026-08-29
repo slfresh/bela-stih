@@ -29,27 +29,37 @@ const COURTS: Rank[] = ['J', 'Q', 'K'];
 /** Pip layouts for VII–X: x column, t 0..1 down the pip field. */
 const COL = { L: 30, C: 50, R: 70 } as const;
 
-const LAYOUTS: Record<string, Array<[number, number]>> = {
-  '7': [
-    [COL.L, 0], [COL.R, 0], [COL.C, 0.17], [COL.L, 0.34], [COL.R, 0.34], [COL.L, 1], [COL.R, 1],
-  ],
-  '8': [
-    [COL.L, 0], [COL.R, 0], [COL.L, 0.333], [COL.R, 0.333],
-    [COL.L, 0.667], [COL.R, 0.667], [COL.L, 1], [COL.R, 1],
-  ],
-  '9': [
-    [COL.L, 0], [COL.R, 0], [COL.L, 0.3], [COL.R, 0.3], [COL.C, 0.5],
-    [COL.L, 0.7], [COL.R, 0.7], [COL.L, 1], [COL.R, 1],
-  ],
-  '10': [
-    [COL.L, 0], [COL.R, 0], [COL.C, 0.15], [COL.L, 0.3], [COL.R, 0.3],
-    [COL.L, 0.7], [COL.R, 0.7], [COL.C, 0.85], [COL.L, 1], [COL.R, 1],
-  ],
+/**
+ * Number cards the Tell-pattern way: pips hug the left and right edges in a
+ * mirrored top/bottom arrangement (the lower half printed upside down), the
+ * roman numeral sits centred at BOTH ends, and the freed middle corridor
+ * carries a small scenic vignette — exactly as on the printed deck.
+ *
+ * Each entry is the TOP half; the bottom half repeats it inside a 180°
+ * rotation. [x, y] on the card canvas; y rows are 25 / 44 / 63.
+ */
+const L = 21;
+const R = 79;
+const C = 50;
+const HALF_LAYOUTS: Record<string, { top: Array<[number, number]>; bottom: Array<[number, number]> }> = {
+  '10': {
+    top: [[L, 25], [R, 25], [C, 44], [L, 63], [R, 63]],
+    bottom: [[L, 25], [R, 25], [C, 44], [L, 63], [R, 63]],
+  },
+  '9': {
+    top: [[L, 25], [R, 25], [C, 44], [L, 63], [R, 63]],
+    bottom: [[L, 25], [R, 25], [L, 63], [R, 63]],
+  },
+  '8': {
+    top: [[L, 25], [R, 25], [L, 63], [R, 63]],
+    bottom: [[L, 25], [R, 25], [L, 63], [R, 63]],
+  },
+  '7': {
+    top: [[L, 25], [R, 25], [L, 63], [R, 63]],
+    bottom: [[L, 25], [R, 25], [C, 44]],
+  },
 };
 
-// The pip field starts below the corner index and stops above its mirror.
-const PIP_TOP = 33;
-const PIP_BOTTOM = 114;
 const PIP_SCALE = 0.175;
 
 export function CardFace({ card, width }: { card: Card; width: number }) {
@@ -70,13 +80,6 @@ export function CardFace({ card, width }: { card: Card; width: number }) {
         fill="none" stroke={fill} strokeWidth="0.9" opacity={0.45}
       />
 
-      {/* Index top-left, and repeated bottom-right rotated 180° — as printed on
-          the real cards, so the card reads from either end. */}
-      <CornerIndex rank={rank} suit={card.suit} colour={fill} />
-      <G transform="rotate(180 50 72.5)">
-        <CornerIndex rank={rank} suit={card.suit} colour={fill} />
-      </G>
-
       {card.rank === 'A' ? (
         <Ace suit={card.suit} colour={fill} />
       ) : COURTS.includes(card.rank) ? (
@@ -88,49 +91,38 @@ export function CardFace({ card, width }: { card: Card; width: number }) {
   );
 }
 
-/** The rank, plus a small pip beneath it, tight into the top-left corner. */
-function CornerIndex({ rank, suit, colour }: { rank: string; suit: Suit; colour: string }) {
-  const size = rank.length >= 4 ? 13 : rank.length === 3 ? 15 : 19;
-  return (
-    <G>
-      <SvgText x="13" y={size + 3} fontSize={size} fontWeight="bold" fill={colour} textAnchor="middle">
-        {rank}
-      </SvgText>
-      <G transform={`translate(8 ${size + 5}) scale(0.10)`}>
-        <PipShape suit={suit} />
-      </G>
-    </G>
-  );
-}
-
-/** Number cards: the pip repeated, lower half printed inverted. */
+/** Number cards: mirrored edge pips, centred numerals, and the vignette. */
 function Pips({ rank, suit }: { rank: Rank; suit: Suit }) {
-  const layout = LAYOUTS[rank];
+  const layout = HALF_LAYOUTS[rank];
   if (!layout) return null;
-  const span = PIP_BOTTOM - PIP_TOP;
   const half = (100 * PIP_SCALE) / 2;
   const makerPanel = rank === '7' && suit === 'clubs';
+  const numeral = lang.rankShort(rank);
+  const { fill } = suitColour(suit);
+
+  const pipAt = ([x, y]: [number, number], i: number) => (
+    <G key={i} transform={`translate(${x - half} ${y - half}) scale(${PIP_SCALE})`}>
+      <PipShape suit={suit} />
+    </G>
+  );
 
   return (
     <G>
-      {layout.map(([x, t], i) => {
-        const y = PIP_TOP + t * span;
-        const flip = y > 72.5;
-        return (
-          <G
-            key={i}
-            transform={
-              `translate(${x - half} ${y - half}) scale(${PIP_SCALE})` +
-              (flip ? ' rotate(180 50 50)' : '')
-            }
-          >
-            <PipShape suit={suit} />
-          </G>
-        );
-      })}
+      {/* the numeral, centred at both ends as on the printed cards */}
+      <SvgText x="50" y="17.5" fontSize="12" fontWeight="bold" fill={fill} textAnchor="middle">
+        {numeral}
+      </SvgText>
+      {layout.top.map(pipAt)}
+      <G transform="rotate(180 50 72.5)">
+        <SvgText x="50" y="17.5" fontSize="12" fontWeight="bold" fill={fill} textAnchor="middle">
+          {numeral}
+        </SvgText>
+        {layout.bottom.map(pipAt)}
+      </G>
 
-      {/* The traditional maker's panel, on the VII of acorns only. */}
-      {makerPanel && (
+      {/* the middle corridor: maker's panel on the VII of acorns, a small
+          scenic vignette everywhere else — the pattern's little pictures */}
+      {makerPanel ? (
         <G>
           <Rect x="26" y="66" width="48" height="13" rx="2.5"
             fill={garb.cream} stroke={garb.brownDark} strokeWidth="1" />
@@ -139,10 +131,73 @@ function Pips({ rank, suit }: { rank: Rank; suit: Suit }) {
             BELA ŠTIH
           </SvgText>
         </G>
+      ) : (
+        <RankVignette suit={suit} />
       )}
     </G>
   );
 }
+
+/**
+ * The little picture between the pips, one motif per suit: a horseman for
+ * hearts, the mower for bells, a riverside for leaves, a leaping stag for
+ * acorns. Flat silhouettes in the deck's garb colours, on a 30×21 box
+ * centred at (50, 72.5).
+ */
+function RankVignette({ suit }: { suit: Suit }) {
+  return (
+    <G transform="translate(35 62)">
+      {MADARICA_SUIT_VIGNETTE[suit]}
+    </G>
+  );
+}
+
+const MADARICA_SUIT_VIGNETTE: Record<Suit, React.JSX.Element> = {
+  // srce: a horseman at a trot
+  hearts: (
+    <G>
+      <Path d="M2 19 H28" stroke={garb.skinLine} strokeWidth="0.8" />
+      <Rect x="8" y="11" width="13" height="4.5" rx="2" fill={garb.brownDark} />
+      <Rect x="9.5" y="15" width="1.4" height="4" fill={garb.brownDark} />
+      <Rect x="12.5" y="15" width="1.4" height="4" fill={garb.brownDark} />
+      <Rect x="16.5" y="15" width="1.4" height="4" fill={garb.brownDark} />
+      <Rect x="19.3" y="15" width="1.4" height="4" fill={garb.brownDark} />
+      <Path d="M20 12 L23.5 6 L26 7 L22.5 12 Z" fill={garb.brownDark} />
+      <Rect x="23.6" y="5" width="4" height="2.6" rx="1.2" fill={garb.brownDark} />
+      <Rect x="12.8" y="4.5" width="3.6" height="7" rx="1.6" fill={garb.red} />
+      <Circle cx="14.6" cy="3" r="1.9" fill={garb.skin} />
+    </G>
+  ),
+  // bundeva: the mower, scythe over his shoulder
+  diamonds: (
+    <G>
+      <Path d="M2 19 H28" stroke={garb.skinLine} strokeWidth="0.8" />
+      <Path d="M12 19l2-9h3l2 9h-2l-1.5-6L14 19z" fill={garb.blue} />
+      <Rect x="12.6" y="4.5" width="3.6" height="6" rx="1.4" fill={garb.blue} />
+      <Circle cx="14.4" cy="3" r="1.9" fill={garb.skin} />
+      <Path d="M9 1l10 6" stroke={garb.brownDark} strokeWidth="1" />
+      <Path d="M9 1C6 1 4 3 4 5c2-1 4-2 5-4z" fill={garb.steel} />
+    </G>
+  ),
+  // list: a riverside with a tree
+  spades: (
+    <G>
+      <Path d="M2 14 Q10 9 16 13 T28 13 V19 H2 Z" fill={garb.green} opacity={0.55} />
+      <Path d="M2 17 Q8 15.5 15 17 T28 17" stroke={garb.blue} strokeWidth="1.4" fill="none" />
+      <Rect x="21" y="7" width="1.8" height="7" fill={garb.brownDark} />
+      <Circle cx="22" cy="5.5" r="3.6" fill={garb.greenDark} />
+    </G>
+  ),
+  // žir: a stag mid-leap
+  clubs: (
+    <G>
+      <Path d="M2 19 H28" stroke={garb.skinLine} strokeWidth="0.8" />
+      <Path d="M8 16c0-3 4-6 8-6 3 0 6 1 7 3l1 3h-2l-1-2-2 4h-2l1-4-5 1-2 4h-2l1-4c-1 0-2 0-2 1z" fill={garb.brown} />
+      <Path d="M22 10l2-4M24 8l2-3M23 9l3-1" stroke={garb.brownDark} strokeWidth="0.9" fill="none" />
+      <Circle cx="22.5" cy="11" r="1.6" fill={garb.brown} />
+    </G>
+  ),
+};
 
 /** The ace: two pips (it is historically a deuce), the season scene, a banner. */
 function Ace({ suit, colour }: { suit: Suit; colour: string }) {

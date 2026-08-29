@@ -112,7 +112,7 @@ export function HomeScreen({
             <View style={styles.headerRow}>
               <Pressable onPress={open(onOpenProfile)} style={styles.identity} hitSlop={6}>
                 <Avatar id={profile.selectedAvatar} size={42} />
-                <View>
+                <View style={styles.identityText}>
                   <Text style={styles.headerName} numberOfLines={1}>
                     {settings.nickname.trim() || ui.profile}
                   </Text>
@@ -251,8 +251,9 @@ const styles = StyleSheet.create({
   scroll: { padding: 20, gap: 16, paddingBottom: 40 },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  identity: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
-  headerName: { color: theme.text, fontSize: 15, fontWeight: '700', flexShrink: 1 },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 },
+  identityText: { flexShrink: 1, minWidth: 0 },
+  headerName: { color: theme.text, fontSize: 15, fontWeight: '700' },
   headerLevel: { color: theme.textDim, fontSize: 12 },
   coinChip: {
     backgroundColor: 'rgba(0,0,0,0.28)',

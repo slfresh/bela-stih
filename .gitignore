@@ -6,3 +6,4 @@ apps/mobile/credentials.json
 *.log
 *.tgz
 .DS_Store
+*.aab
