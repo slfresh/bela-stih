@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@belot/shared-types": ["packages/shared-types/src/index.ts"],
+      "@belot/engine": ["packages/engine/src/index.ts"],
+      "@belot/bots": ["packages/bots/src/index.ts"],
+      "@belot/table": ["packages/table/src/index.ts"],
+      "@belot/i18n": ["packages/i18n/src/index.ts"],
+      "@belot/progression": ["packages/progression/src/index.ts"]
+    }
+  },
+  "include": [
+    "packages/*/src/**/*.ts",
+    "packages/*/test/**/*.ts",
+    "apps/cli/src/**/*.ts",
+    "vitest.config.ts"
+  ]
+}

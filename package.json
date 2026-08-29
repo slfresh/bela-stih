@@ -1,0 +1,35 @@
+{
+  "name": "belot-monorepo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Belot / Bela \u2014 Balkan 4-player partnership card game. Shared TypeScript rules engine, bots, server, and Expo client.",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "selfplay": "vitest run packages/engine/test/selfplay.test.ts",
+    "play": "tsx apps/cli/src/main.ts",
+    "demo": "tsx apps/cli/src/main.ts --auto --seed 21 --deals 2",
+    "server": "npm run start --workspace @belot/server",
+    "smoke": "npm run smoke --workspace @belot/server",
+    "icons": "node scripts/make-icons.mjs",
+    "sfx": "node scripts/make-sfx.mjs",
+    "android": "npm run android --workspace @belot/mobile",
+    "fill": "npm run fill --workspace @belot/server --"
+  },
+  "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.23.12",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,223 @@
+import { describe, expect, it } from 'vitest';
+import {
+  applyAction,
+  cardId,
+  createMatch,
+  currentActor,
+  legalActions,
+  makeRng,
+  publicView,
+  startDeal,
+  teamOf,
+  type Action,
+  type Card,
+  type DealScoreResult,
+  type GameState,
+  type Seat,
+} from '@belot/engine';
+
+/**
+ * The self-play harness. Thousands of deals of uniformly random *legal* play,
+ * asserting the engine's invariants after every one. Random play is deliberate:
+ * it wanders into positions a heuristic bot would never reach (forced
+ * undertrumps, valats, mutual declaration cancellations, exact ties).
+ *
+ * Everything is seeded, so any failure reports the seed that reproduces it.
+ */
+
+const DEALS = Number(process.env.SELFPLAY_DEALS ?? 10_000);
+
+interface Invariants {
+  deals: number;
+  pads: number;
+  valats: number;
+  belas: number;
+  declarationContests: number;
+  cancelledContests: number;
+  kontras: number;
+  matches: number;
+  maxDealScore: number;
+}
+
+function checkDeal(s: GameState, r: DealScoreResult, inv: Invariants): void {
+  // Every card played exactly once, in exactly eight tricks.
+  expect(s.completedTricks).toHaveLength(8);
+  const played = s.completedTricks.flatMap((t) => t.cards).map(cardId);
+  expect(played).toHaveLength(32);
+  expect(new Set(played).size).toBe(32);
+  expect(s.hands.every((h) => h.length === 0)).toBe(true);
+
+  // Point conservation: the table is always worth 152 in cards, 162 with the last trick.
+  expect(r.cardPoints[0] + r.cardPoints[1]).toBe(152);
+  expect(r.trickPoints[0] + r.trickPoints[1]).toBe(162);
+
+  // Valat is all-or-nothing and belongs to whoever actually swept.
+  const tricksWon: [number, number] = [0, 0];
+  for (const t of s.completedTricks) tricksWon[teamOf(t.winnerSeat)] += 1;
+  expect(tricksWon[0] + tricksWon[1]).toBe(8);
+  if (tricksWon[0] === 8) expect(r.valatTeam).toBe(0);
+  else if (tricksWon[1] === 8) expect(r.valatTeam).toBe(1);
+  else expect(r.valatTeam).toBeNull();
+  if (r.valatTeam !== null) {
+    expect(r.valatBonus[r.valatTeam]).toBe(90);
+    inv.valats += 1;
+  }
+
+  // Bela is worth 20 to exactly one side, or nobody.
+  expect(r.bela[0] + r.bela[1]).toBeLessThanOrEqual(20);
+  expect([0, 20]).toContain(r.bela[0]);
+  expect([0, 20]).toContain(r.bela[1]);
+  if (r.bela[0] + r.bela[1] > 0) inv.belas += 1;
+
+  // Only one team ever scores declarations.
+  expect(Math.min(r.declarationPoints[0], r.declarationPoints[1])).toBe(0);
+  const anyDeclared = s.announcedDeclarations.some((d) => d.length > 0);
+  if (anyDeclared) {
+    inv.declarationContests += 1;
+    if (r.declarationPoints[0] + r.declarationPoints[1] === 0) inv.cancelledContests += 1;
+  }
+
+  // rawTotal is exactly its declared parts.
+  for (const t of [0, 1] as const) {
+    expect(r.rawTotal[t]).toBe(
+      r.trickPoints[t] + r.valatBonus[t] + r.declarationPoints[t] + r.bela[t],
+    );
+  }
+
+  // The contract check is a strict comparison, so an exact tie must fail.
+  // callerSeat and multiplier survive scoring; only startDeal clears them.
+  const callerTeam = teamOf(s.callerSeat!);
+  const other = (1 - callerTeam) as 0 | 1;
+  expect(r.callerMade).toBe(r.rawTotal[callerTeam] > r.rawTotal[other]);
+  if (!r.callerMade) {
+    inv.pads += 1;
+    // A failed caller keeps nothing but its bela.
+    expect(r.finalScore[callerTeam]).toBe(r.bela[callerTeam]);
+  }
+
+  // Conservation across the whole deal, multiplier included.
+  const valatTotal = r.valatBonus[0] + r.valatBonus[1];
+  const flatTotal = r.declarationPoints[0] + r.declarationPoints[1] + r.bela[0] + r.bela[1];
+  const expectedTotal = (162 + valatTotal) * s.multiplier + flatTotal;
+  expect(r.finalScore[0] + r.finalScore[1]).toBe(expectedTotal);
+
+  expect(r.finalScore[0]).toBeGreaterThanOrEqual(0);
+  expect(r.finalScore[1]).toBeGreaterThanOrEqual(0);
+  inv.maxDealScore = Math.max(inv.maxDealScore, r.finalScore[0], r.finalScore[1]);
+}
+
+/** The engine must be pure: applying an action never mutates the state passed in. */
+function assertPure(before: GameState, action: Action): void {
+  const snapshot = JSON.stringify({ ...before, rng: undefined, config: undefined });
+  applyAction(before, action);
+  expect(JSON.stringify({ ...before, rng: undefined, config: undefined })).toBe(snapshot);
+}
+
+/**
+ * The security property, stated exactly: a seat's view may never contain a card
+ * that is right now in SOMEBODY ELSE's hand. Cards already played are public, and
+ * a seat's own cards (held or played) are its own business — only another
+ * player's unplayed holding is a secret worth protecting.
+ */
+function assertNoLeak(s: GameState): void {
+  for (const seat of [0, 1, 2, 3] as Seat[]) {
+    const others = new Set(
+      ([0, 1, 2, 3] as Seat[])
+        .filter((x) => x !== seat)
+        .flatMap((x) => s.hands[x]!.map(cardId)),
+    );
+    const leaked = collectCards(publicView(s, seat))
+      .map(cardId)
+      .filter((id) => others.has(id));
+    expect(leaked).toEqual([]);
+  }
+}
+
+function collectCards(value: unknown, out: Card[] = []): Card[] {
+  if (Array.isArray(value)) {
+    for (const v of value) collectCards(v, out);
+  } else if (value && typeof value === 'object') {
+    const o = value as Record<string, unknown>;
+    if (typeof o.suit === 'string' && typeof o.rank === 'string') out.push(o as unknown as Card);
+    else for (const v of Object.values(o)) collectCards(v, out);
+  }
+  return out;
+}
+
+describe('self-play harness', () => {
+  it(`survives ${DEALS.toLocaleString()} deals of random legal play`, () => {
+    const rng = makeRng(0xbe10c);
+    const inv: Invariants = {
+      deals: 0,
+      pads: 0,
+      valats: 0,
+      belas: 0,
+      declarationContests: 0,
+      cancelledContests: 0,
+      kontras: 0,
+      matches: 0,
+      maxDealScore: 0,
+    };
+
+    let matchSeed = 1;
+    const harnessConfig = { allowKontra: true }; // keep the doubling path under test
+    let s = startDeal(createMatch({ seed: matchSeed, dealer: 0, config: harnessConfig }));
+    let steps = 0;
+
+    while (inv.deals < DEALS) {
+      if (steps++ > DEALS * 200) throw new Error('harness failed to make progress');
+
+      const actor = currentActor(s);
+      expect(actor).not.toBeNull();
+
+      const legal = legalActions(s);
+      expect(legal.length).toBeGreaterThan(0);
+      // Every offered action must name the seat actually on turn.
+      for (const a of legal) expect(a.seat).toBe(actor);
+
+      const choice = legal[Math.floor(rng() * legal.length)]!;
+
+      // Spot-check purity and hidden hands without paying for it every step.
+      if (steps % 997 === 0) {
+        assertPure(s, choice);
+        if (s.phase === 'PLAY') assertNoLeak(s);
+      }
+
+      const before = s;
+      s = applyAction(s, choice);
+
+      if (before.phase === 'DOUBLE' && s.multiplier !== before.multiplier) inv.kontras += 1;
+
+      if (s.phase === 'DEAL_OVER' || s.phase === 'MATCH_OVER') {
+        if (s.lastDealResult) {
+          checkDeal(s, s.lastDealResult, inv);
+          inv.deals += 1;
+        }
+        if (s.phase === 'MATCH_OVER') {
+          inv.matches += 1;
+          s = startDeal(createMatch({ seed: ++matchSeed, dealer: 0, config: harnessConfig }));
+        } else {
+          s = startDeal(s);
+        }
+      }
+    }
+
+    // The harness is only meaningful if random play actually reaches the hard cases.
+    expect(inv.deals).toBe(DEALS);
+    expect(inv.matches).toBeGreaterThan(0);
+    expect(inv.pads).toBeGreaterThan(0);
+    expect(inv.belas).toBeGreaterThan(0);
+    expect(inv.declarationContests).toBeGreaterThan(0);
+    expect(inv.cancelledContests).toBeGreaterThan(0);
+    expect(inv.kontras).toBeGreaterThan(0);
+    expect(inv.valats).toBeGreaterThan(0);
+
+    // Surface the coverage so a regression in reachability is visible in CI output.
+    console.log(
+      `[selfplay] ${inv.deals} deals over ${inv.matches} matches — ` +
+        `${inv.pads} pads, ${inv.valats} valats, ${inv.belas} belas, ` +
+        `${inv.declarationContests} declaration contests (${inv.cancelledContests} cancelled), ` +
+        `${inv.kontras} doublings, biggest deal ${inv.maxDealScore}`,
+    );
+  });
+});

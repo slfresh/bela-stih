@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="hr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bela Štih — pridruži se stolu</title>
+  <style>
+    body {
+      margin: 0; padding: 40px 20px; background: #0d2a1f; color: #f2efe6;
+      font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      text-align: center;
+    }
+    main { max-width: 420px; margin: 0 auto; }
+    h1 { font-size: 26px; margin: 0 0 24px; }
+    .label { color: rgba(242,239,230,0.62); font-size: 14px; }
+    .code {
+      font-size: 34px; font-weight: 800; letter-spacing: 3px; color: #d8a531;
+      margin: 6px 0 28px; user-select: all; word-break: break-all;
+    }
+    a.button {
+      display: block; margin: 10px auto; padding: 14px 22px; max-width: 320px;
+      border-radius: 14px; text-decoration: none; font-weight: 700; font-size: 17px;
+    }
+    .open { background: #d8a531; color: #241a05; }
+    .store { border: 1px solid rgba(255,255,255,0.25); color: #f2efe6; }
+    .hint { color: rgba(242,239,230,0.62); font-size: 13px; margin-top: 24px; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Bela Štih</h1>
+  <p class="label">Šifra stola · Table code</p>
+  <div class="code" id="code">—</div>
+
+  <a class="button open" id="open" href="#">Otvori u aplikaciji · Open in app</a>
+  <a class="button store"
+     href="https://play.google.com/store/apps/details?id=com.slfresh.belastih">
+    Preuzmi na Google Playu · Get it on Google Play
+  </a>
+
+  <p class="hint">Ako se aplikacija ne otvori sama, upišite šifru u
+     „Pridruži se šifrom”. · If the app does not open by itself, type the code
+     into “Join by code”.</p>
+
+  <script>
+    // The code is the last path segment: /join/CODE
+    var m = location.pathname.match(/\/join\/([A-Za-z0-9_-]{1,24})\/?$/);
+    var code = m ? m[1] : '';
+    document.getElementById('code').textContent = code || '—';
+    // intent:// opens the installed app (custom scheme, no verification
+    // needed) and falls back to the Play listing when it is not installed.
+    document.getElementById('open').href =
+      'intent://join/' + encodeURIComponent(code) +
+      '#Intent;scheme=belastih;package=com.slfresh.belastih;' +
+      'S.browser_fallback_url=' +
+      encodeURIComponent('https://play.google.com/store/apps/details?id=com.slfresh.belastih') +
+      ';end';
+  </script>
+</main>
+</body>
+</html>

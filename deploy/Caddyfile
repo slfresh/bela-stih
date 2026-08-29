@@ -1,0 +1,33 @@
+# Caddy fronts everything on {$DOMAIN}: automatic Let's Encrypt TLS, the
+# Colyseus game traffic proxied through, and the static privacy page for
+# plain browsers. Colyseus needs three things forwarded: the HTTP matchmaking
+# calls (/matchmake/*), the websocket upgrade (any path), and /health.
+{$DOMAIN} {
+	encode gzip
+
+	@game path /matchmake/* /health
+	handle @game {
+		reverse_proxy bela:2567
+	}
+
+	@ws {
+		header Connection *Upgrade*
+		header Upgrade websocket
+	}
+	handle @ws {
+		reverse_proxy bela:2567
+	}
+
+	# Invite links: /join/CODE all render the same static page, which reads
+	# the code from the URL and hands off to the app (or the Play listing).
+	handle /join/* {
+		root * /srv/site
+		rewrite * /join.html
+		file_server
+	}
+
+	handle {
+		root * /srv/site
+		file_server
+	}
+}

@@ -1,0 +1,45 @@
+import { createServer } from 'node:http';
+import express, { type Request, type Response } from 'express';
+import { Server } from '@colyseus/core';
+import { WebSocketTransport } from '@colyseus/ws-transport';
+import { BelaRoom } from './BelaRoom';
+import { ROOM_NAME } from './protocol';
+
+/**
+ * The Bela game server.
+ *
+ * Deliberately tiny: all the rules live in `@belot/engine`, all the seat
+ * handling in `@belot/table`, and this only wires them to a socket. The same
+ * engine that runs on the phone decides every move here, which is what makes
+ * "the server is authoritative" true rather than aspirational.
+ *
+ *   npm run start --workspace @belot/server
+ *
+ * The HTTP server must be an express app, not a bare request handler: Colyseus
+ * mounts its `/matchmake/*` routes alongside it, and a catch-all handler
+ * swallows them so every join fails with a 404.
+ */
+
+const PORT = Number(process.env.PORT ?? 2567);
+
+const app = express();
+
+// A health endpoint, so a host or uptime check has something to hit.
+app.get('/health', (_req: Request, res: Response) => {
+  res.json({ ok: true, room: ROOM_NAME });
+});
+
+const httpServer = createServer(app);
+const gameServer = new Server({
+  transport: new WebSocketTransport({ server: httpServer }),
+});
+
+gameServer.define(ROOM_NAME, BelaRoom);
+
+gameServer
+  .listen(PORT)
+  .then(() => console.log(`[bela] listening on :${PORT}`))
+  .catch((err: unknown) => {
+    console.error('[bela] failed to start', err);
+    process.exitCode = 1;
+  });

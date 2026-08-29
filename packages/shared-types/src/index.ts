@@ -1,0 +1,280 @@
+/**
+ * @belot/shared-types
+ *
+ * Pure data types shared by the engine, the bots, the Colyseus server, and the
+ * Expo client. No logic lives here — only the vocabulary. Keeping these types in
+ * one place is what lets the *same* protocol cross the wire (client <-> server)
+ * and the *same* engine run on device and on the server.
+ */
+
+// ---------------------------------------------------------------------------
+// Cards
+// ---------------------------------------------------------------------------
+
+export type Suit = 'spades' | 'hearts' | 'diamonds' | 'clubs';
+
+export const SUITS: readonly Suit[] = ['spades', 'hearts', 'diamonds', 'clubs'];
+
+/**
+ * Ranks listed in **natural** ascending order (7 < 8 < 9 < 10 < J < Q < K < A).
+ * This ordering is used ONLY for declaration sequence-detection (terca/kvarta/
+ * kvinta). Trick-winning order is completely different and lives in the engine's
+ * power tables — never conflate the two (a classic Belot engine bug).
+ */
+export type Rank = '7' | '8' | '9' | '10' | 'J' | 'Q' | 'K' | 'A';
+
+export const RANKS: readonly Rank[] = ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+
+/** A card carries only suit + rank. Its power and point value are *derived* from
+ *  the play CONTEXT (which contract, which trump) — never stored on the card. */
+export interface Card {
+  suit: Suit;
+  rank: Rank;
+}
+
+// ---------------------------------------------------------------------------
+// Contract / play context
+// ---------------------------------------------------------------------------
+
+/**
+ * The contract type drives every card derivation.
+ * - SUIT:        one trump suit (the only contract shipped in v1).
+ * - ALL_TRUMPS:  every suit is trump (Bulgarian; Phase 4).
+ * - NO_TRUMPS:   no suit is trump (Bulgarian; Phase 4).
+ */
+export type ContractType = 'SUIT' | 'ALL_TRUMPS' | 'NO_TRUMPS';
+
+export interface PlayContext {
+  contractType: ContractType;
+  /** The trump suit for SUIT contracts; null for ALL_TRUMPS / NO_TRUMPS / unbid. */
+  trumpSuit: Suit | null;
+}
+
+// ---------------------------------------------------------------------------
+// Seats and teams
+// ---------------------------------------------------------------------------
+
+/** Seats are clockwise 0,1,2,3. Partners sit across: team 0 = {0,2}, team 1 = {1,3}. */
+export type Seat = 0 | 1 | 2 | 3;
+export type TeamId = 0 | 1;
+
+export const SEATS: readonly Seat[] = [0, 1, 2, 3];
+
+// ---------------------------------------------------------------------------
+// Declarations (zvanja)
+// ---------------------------------------------------------------------------
+
+export type DeclarationKind = 'sequence' | 'carre';
+
+export interface Declaration {
+  kind: DeclarationKind;
+  /** The cards that make up the declaration (for UI display / verification). */
+  cards: Card[];
+  /** Point value: terca 20 / kvarta 50 / kvinta(5+) 100; carré J=200, 9=150, A/10/K/Q=100. */
+  value: number;
+  /** Sequence length (carré is always 4). Used to break ranking ties. */
+  length: number;
+  /** Top card's natural rank (used to break equal-length ranking ties). */
+  topRank: Rank;
+  seat: Seat;
+}
+
+/**
+ * What the TABLE knows about an announced declaration: its shape and worth, but
+ * NOT the cards. At a real table you call "terca" and only the winning team shows
+ * cards after trick 1 — so the cards must never cross the wire, or announcing
+ * would hand opponents your hand. The server has already verified the holding.
+ */
+export interface DeclarationSummary {
+  kind: DeclarationKind;
+  value: number;
+  length: number;
+  topRank: Rank;
+  seat: Seat;
+}
+
+/**
+ * Whether declarations must be announced to count.
+ * - 'announce' (default): authentic announce-or-forfeit. A seat holding zvanja
+ *   must call them during trick 1, before playing its card, or score nothing for
+ *   them. Staying silent to conceal your hand is a real strategic option.
+ * - 'auto': every declaration counts automatically (a gentler casual/beginner mode).
+ */
+export type DeclarationMode = 'auto' | 'announce';
+
+/**
+ * Whether bela (trump K+Q, worth 20) must be called to count.
+ * - 'announce' (default): authentic. You call "bela" AS you play the first of the
+ *   pair, or forfeit the 20. Calling reveals that you hold both — which is exactly
+ *   what saying it out loud does at a real table.
+ * - 'auto': awarded to whoever was dealt the pair (a gentler casual/beginner mode).
+ *
+ * Kept separate from `declarationMode` because they are different mechanics: zvanja
+ * are a trick-1 decision, bela is tied to a specific card leaving your hand.
+ */
+export type BelaMode = 'auto' | 'announce';
+
+// ---------------------------------------------------------------------------
+// Engine configuration — the regional-variation knobs
+// ---------------------------------------------------------------------------
+
+export interface EngineConfig {
+  /** Match target. Balkan Bela = 1001. */
+  matchTarget: number;
+  /**
+   * THE #1 ENGINE BUG knob. When you cannot follow suit and your PARTNER is
+   * already winning the trick: must you still trump/over-trump?
+   * - false (default, ex-Yu "ne piši po partneru"): free discard.
+   * - true: you are forced to over-trump even your own partner.
+   */
+  forcedOvertrumpOverPartner: boolean;
+  /** On a failed (pad) contract, does the failing team keep its bela 20? Default true. */
+  keepBelaOnFailedContract: boolean;
+  /**
+   * What an exact points tie means for the contract.
+   * - false (default, Balkan Bela): a tie is a FAIL (pad) -- the caller must be
+   *   strictly ahead. An 81-81 board hands the whole table to the defenders.
+   * - true (French Belote, per pagat): the taker succeeds on "at least as many
+   *   points as the other team", so a tie stands.
+   */
+  contractTieSucceeds: boolean;
+  /**
+   * Is kontra/rekontra played at all? When false the doubling round is skipped
+   * entirely: calling trump goes straight to play and the multiplier stays 1.
+   * Every kontra knob below is then dormant.
+   */
+  allowKontra: boolean;
+  /**
+   * What the kontra/rekontra multiplier scales.
+   * - 'trickPoints' (default): only card points + last trick + valat are doubled;
+   *   declarations and bela are added at face value.
+   * - 'all': everything is doubled.
+   */
+  kontraScope: 'trickPoints' | 'all';
+  /**
+   * What a MADE kontra pays. A failed kontra always hands the defenders the whole
+   * table, doubled; sources disagree on the mirror case.
+   * - false (default): the deal is scored as usual and simply doubled, so each
+   *   side keeps its own points at x2.
+   * - true: the calling team sweeps the table the way defenders do on a pad,
+   *   making kontra a symmetric all-or-nothing bet.
+   * OPEN RULES QUESTION - settle this with real players before launch.
+   */
+  kontraSuccessSweeps: boolean;
+  /** If everyone passes the bid round, is the dealer forced to call ("muss")? Default true. */
+  dealerMustCall: boolean;
+  /** Last-trick (štih) bonus. Default 10. */
+  lastTrickBonus: number;
+  /** Valat (all 8 tricks) bonus on top of the last-trick bonus. Balkan = 90 (=> 252 total). */
+  valatBonus: number;
+  /** When two teams' best declarations are exactly equal, do all declarations cancel? Default true. */
+  declarationTieCancels: boolean;
+  /** Must zvanja be announced during trick 1 to score? Default 'announce'. */
+  declarationMode: DeclarationMode;
+  /** Must bela be called when playing the first of the trump K/Q? Default 'announce'. */
+  belaMode: BelaMode;
+}
+
+export const DEFAULT_CONFIG: EngineConfig = {
+  matchTarget: 1001,
+  forcedOvertrumpOverPartner: false,
+  keepBelaOnFailedContract: true,
+  contractTieSucceeds: false,
+  allowKontra: false,
+  kontraScope: 'trickPoints',
+  kontraSuccessSweeps: false,
+  dealerMustCall: true,
+  lastTrickBonus: 10,
+  valatBonus: 90,
+  declarationTieCancels: true,
+  declarationMode: 'announce',
+  belaMode: 'announce',
+};
+
+// ---------------------------------------------------------------------------
+// Game phases
+// ---------------------------------------------------------------------------
+
+export type Phase =
+  | 'IDLE' // created, no deal yet
+  | 'BID' // choosing trump (call / pass)
+  | 'DOUBLE' // kontra / rekontra opportunity
+  | 'PLAY' // 8 tricks
+  | 'DEAL_OVER' // a deal scored; call startDeal for the next
+  | 'MATCH_OVER'; // a team reached the target
+
+// ---------------------------------------------------------------------------
+// Actions (the player-facing protocol — also what crosses the wire)
+// ---------------------------------------------------------------------------
+
+export type Action =
+  | { type: 'BID_PASS'; seat: Seat }
+  | { type: 'BID_CALL'; seat: Seat; suit: Suit } // v1: names the trump suit (SUIT contract)
+  | { type: 'DOUBLE_KONTRA'; seat: Seat }
+  | { type: 'DOUBLE_REKONTRA'; seat: Seat }
+  | { type: 'DOUBLE_PASS'; seat: Seat }
+  // Trick 1 only, and only for a seat that actually holds zvanja: announce them
+  // all, or stay silent and forfeit them. Taken BEFORE that seat plays its card.
+  | { type: 'DECLARE_ANNOUNCE'; seat: Seat }
+  | { type: 'DECLARE_SKIP'; seat: Seat }
+  | {
+      type: 'PLAY_CARD';
+      seat: Seat;
+      card: Card;
+      /**
+       * Call "bela" with this card. Legal only when the card is the trump K or Q
+       * AND you still hold both — which is precisely what makes it the FIRST of
+       * the pair, so a late call is impossible by construction.
+       */
+      announceBela?: boolean;
+    };
+
+export type ActionType = Action['type'];
+
+// ---------------------------------------------------------------------------
+// Public view — what a given seat is allowed to see (hidden-hand safe)
+// ---------------------------------------------------------------------------
+
+export interface TrickPlay {
+  seat: Seat;
+  card: Card;
+}
+
+/**
+ * The redacted state a single seat may receive over the wire. Crucially it
+ * contains only the receiver's own `hand`, plus public counts of other hands.
+ * The server builds this with the engine; opponents' cards never leave the room.
+ */
+export interface PublicView {
+  phase: Phase;
+  dealer: Seat;
+  /** The receiving seat. */
+  seat: Seat;
+  /** Only this seat's cards. */
+  hand: Card[];
+  /** Number of cards remaining in each seat's hand (public info). */
+  handCounts: [number, number, number, number];
+  context: PlayContext;
+  callerSeat: Seat | null;
+  multiplier: 1 | 2 | 4;
+  trickLeader: Seat | null;
+  currentTrick: TrickPlay[];
+  /** Whose turn it is to act, if any. */
+  toAct: Seat | null;
+  matchScores: [number, number];
+  /**
+   * Everything announced at this table so far, as public summaries WITHOUT cards.
+   * This is exactly what a player at a real table has heard.
+   */
+  announcedDeclarations: DeclarationSummary[];
+  /** The receiving seat's OWN zvanja — its cards are already in `hand`, so this leaks nothing. */
+  myDeclarations: Declaration[];
+  /** True when this seat owes an announce-or-skip decision before it may play. */
+  mustDeclare: boolean;
+  /** True when this seat could call bela right now (its legal plays include the option). */
+  canAnnounceBela: boolean;
+  /** Who has called bela this deal, once called. Public — everyone hears it. */
+  belaAnnouncedBy: Seat | null;
+  /** Legal actions for `seat` right now (empty if it is not this seat's turn). */
+  legalActions: Action[];
+}

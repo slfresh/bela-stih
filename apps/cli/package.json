@@ -1,0 +1,17 @@
+{
+  "name": "@belot/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Playable terminal Bela \u2014 proves the engine end to end and doubles as a rules sandbox.",
+  "scripts": {
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@belot/shared-types": "*",
+    "@belot/engine": "*",
+    "@belot/bots": "*",
+    "@belot/table": "*",
+    "@belot/i18n": "*"
+  }
+}

@@ -1,0 +1,290 @@
+import { describe, expect, it } from 'vitest';
+import { cardId, teamOf, type Action, type Card, type Seat } from '@belot/engine';
+import { Table, type TableEvent } from '@belot/table';
+
+/**
+ * The table layer plays the bot seats by itself and reports what happened. These
+ * tests pin both halves: that it always stops in a state a person can act on, and
+ * that the event stream is a faithful, complete account of the deal.
+ */
+
+function kinds(events: TableEvent[]): string[] {
+  return events.map((e) => e.kind);
+}
+
+describe('an all-bot table', () => {
+  it('plays a whole match to a winner without intervention', () => {
+    const t = new Table({ seed: 21 });
+    expect(t.humanSeats.size).toBe(0);
+    t.playWholeMatch();
+
+    expect(t.phase).toBe('MATCH_OVER');
+    const winner = t.winner()!;
+    expect([0, 1]).toContain(winner);
+    expect(Math.max(...t.matchScores)).toBeGreaterThanOrEqual(1001);
+
+    const events = t.drainEvents();
+    expect(kinds(events)).toContain('matchOver');
+    expect(events.filter((e) => e.kind === 'dealScored').length).toBeGreaterThan(1);
+  });
+
+  it('is reproducible from a seed', () => {
+    const a = new Table({ seed: 99 });
+    const b = new Table({ seed: 99 });
+    a.playWholeMatch();
+    b.playWholeMatch();
+    expect(a.matchScores).toEqual(b.matchScores);
+    expect(JSON.stringify(kinds(a.drainEvents()))).toBe(JSON.stringify(kinds(b.drainEvents())));
+  });
+
+  it('refuses playWholeMatch when a person holds a seat', () => {
+    const t = new Table({ seed: 3, humanSeats: [0] });
+    expect(() => t.playWholeMatch()).toThrow(/all-bot table/);
+  });
+});
+
+describe('a table with a person at seat 0', () => {
+  it('stops on the human and offers them legal actions', () => {
+    const t = new Table({ seed: 5, humanSeats: [0] });
+    expect(t.isHumanTurn()).toBe(true);
+    expect(t.actor()).toBe(0);
+    expect(t.legal().length).toBeGreaterThan(0);
+    for (const a of t.legal()) expect(a.seat).toBe(0);
+  });
+
+  it('runs the bots forward after the person acts', () => {
+    const t = new Table({ seed: 5, humanSeats: [0] });
+    t.drainEvents();
+    t.submit(t.legal()[0]!);
+    // Either it came back round to the person, or the deal has been scored.
+    expect(t.isHumanTurn() || t.actor() === null).toBe(true);
+    expect(t.drainEvents().length).toBeGreaterThan(0);
+  });
+
+  it('rejects an action for a seat the person does not hold', () => {
+    const t = new Table({ seed: 5, humanSeats: [0] });
+    const bogus: Action = { type: 'BID_PASS', seat: 1 };
+    expect(() => t.submit(bogus)).toThrow(/seat 0's turn/);
+  });
+
+  it('rejects an action while the bots are still to move', () => {
+    const t = new Table({ seed: 5, humanSeats: [2] });
+    // Seat 0 opens the bidding, so it is not the person's turn yet.
+    if (t.actor() !== 2) {
+      expect(() => t.submit({ type: 'BID_PASS', seat: 2 })).toThrow(/played by a bot/);
+    }
+  });
+
+  it('plays a full match through the human seat', () => {
+    const t = new Table({ seed: 8, humanSeats: [0] });
+    let guard = 0;
+    while (t.phase !== 'MATCH_OVER') {
+      if (guard++ > 20_000) throw new Error('match did not finish');
+      if (t.phase === 'DEAL_OVER') {
+        t.startNextDeal();
+        continue;
+      }
+      expect(t.isHumanTurn()).toBe(true); // bots never leave us mid-turn
+      t.submit(t.legal()[0]!);
+    }
+    expect(Math.max(...t.matchScores)).toBeGreaterThanOrEqual(1001);
+  });
+
+  it('never hands the person another seat’s cards', () => {
+    const t = new Table({ seed: 13, humanSeats: [0] });
+    const view = t.view(0);
+    const others = new Set(
+      ([1, 2, 3] as Seat[]).flatMap((s) => t.state.hands[s]!.map(cardId)),
+    );
+    const seen = collectCards(view).map(cardId);
+    expect(seen.filter((id) => others.has(id))).toEqual([]);
+  });
+});
+
+/** How a disconnect is survived online: the seat becomes a bot and play carries on. */
+describe('handing a seat to a bot and back', () => {
+  it('lets a bot take over a seat mid-game and finish the deal', () => {
+    const t = new Table({ seed: 5, humanSeats: [0] });
+    expect(t.isHumanTurn()).toBe(true);
+
+    t.setSeatHuman(0, false); // the player drops
+    expect(t.humanSeats.has(0)).toBe(false);
+    // With nobody human left, the bots run the deal to its end unaided.
+    expect(t.actor()).toBeNull();
+    expect(['DEAL_OVER', 'MATCH_OVER']).toContain(t.phase);
+  });
+
+  it('gives the seat back and stops for the player again', () => {
+    const t = new Table({ seed: 5, humanSeats: [0, 1] });
+    t.setSeatHuman(0, false);
+    // Seat 1 is still human, so the table must still stop for somebody.
+    expect(t.actor()).not.toBeNull();
+
+    t.setSeatHuman(0, true);
+    expect(t.humanSeats.has(0)).toBe(true);
+    let guard = 0;
+    while (t.phase !== 'MATCH_OVER' && guard++ < 20_000) {
+      if (t.phase === 'DEAL_OVER') {
+        t.startNextDeal();
+        continue;
+      }
+      expect(t.isHumanTurn()).toBe(true);
+      t.submit(t.legal()[0]!);
+    }
+    expect(Math.max(...t.matchScores)).toBeGreaterThanOrEqual(1001);
+  });
+
+  it('runs a four-human table that never moves without input', () => {
+    const t = new Table({ seed: 9, humanSeats: [0, 1, 2, 3] });
+    let guard = 0;
+    while (t.phase !== 'MATCH_OVER') {
+      if (guard++ > 40_000) throw new Error('match did not finish');
+      if (t.phase === 'DEAL_OVER') {
+        t.startNextDeal();
+        continue;
+      }
+      // Every single decision belongs to a person.
+      expect(t.isHumanTurn()).toBe(true);
+      t.submit(t.legal()[0]!);
+    }
+    expect(Math.max(...t.matchScores)).toBeGreaterThanOrEqual(1001);
+  });
+});
+
+describe('the event stream', () => {
+  /** Collect every event of one complete deal from a fresh all-bot table. */
+  function firstDeal(seed: number): TableEvent[] {
+    const t = new Table({ seed });
+    t.runBots();
+    return t.drainEvents();
+  }
+
+  it('opens with a deal and closes with a score', () => {
+    const events = firstDeal(31);
+    expect(events[0]!.kind).toBe('dealStarted');
+    expect(events.at(-1)!.kind).toBe('dealScored');
+  });
+
+  it('reports the contract once doubling has closed', () => {
+    const events = firstDeal(31);
+    const done = events.find((e) => e.kind === 'handsCompleted');
+    expect(done).toBeDefined();
+    if (done?.kind === 'handsCompleted') {
+      expect(['spades', 'hearts', 'diamonds', 'clubs']).toContain(done.trumpSuit);
+      expect([1, 2, 4]).toContain(done.multiplier);
+    }
+  });
+
+  it('accounts for all 32 cards and all 8 tricks', () => {
+    const events = firstDeal(31);
+    const played = events.filter((e) => e.kind === 'cardPlayed');
+    expect(played).toHaveLength(32);
+    const ids = played.map((e) => cardId((e as { card: Card }).card));
+    expect(new Set(ids).size).toBe(32);
+
+    const tricks = events.filter((e) => e.kind === 'trickWon');
+    expect(tricks).toHaveLength(8);
+    expect(tricks.map((e) => (e as { trickNumber: number }).trickNumber)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8,
+    ]);
+    expect(tricks.filter((e) => (e as { isLastTrick: boolean }).isLastTrick)).toHaveLength(1);
+  });
+
+  it('adds the trick points up to the 152 on the table', () => {
+    const events = firstDeal(31);
+    const total = events
+      .filter((e) => e.kind === 'trickWon')
+      .reduce((sum, e) => sum + (e as { points: number }).points, 0);
+    expect(total).toBe(152);
+  });
+
+  it('settles every seat’s zvanja exactly once before the cards fly', () => {
+    const events = firstDeal(31);
+    const settled = events.filter(
+      (e) => e.kind === 'declared' || e.kind === 'declarationSkipped',
+    );
+    const seats = settled.map((e) => (e as { seat: Seat }).seat);
+    expect(new Set(seats).size).toBe(seats.length); // never twice for one seat
+
+    // Each settlement lands before that seat's first card.
+    for (const seat of seats) {
+      const settledAt = events.findIndex(
+        (e) => (e.kind === 'declared' || e.kind === 'declarationSkipped') && e.seat === seat,
+      );
+      const firstCardAt = events.findIndex((e) => e.kind === 'cardPlayed' && e.seat === seat);
+      expect(settledAt).toBeLessThan(firstCardAt);
+    }
+  });
+
+  it('announces bela immediately before the card that carries it', () => {
+    // The medium bot always calls, so any dealt pair shows up in the stream.
+    for (let seed = 1; seed < 60; seed++) {
+      const events = firstDeal(seed);
+      const at = events.findIndex((e) => e.kind === 'belaCalled');
+      if (at < 0) continue;
+
+      const call = events[at] as { seat: Seat };
+      const next = events[at + 1]!;
+      expect(next.kind).toBe('cardPlayed');
+      if (next.kind === 'cardPlayed') {
+        expect(next.seat).toBe(call.seat);
+        expect(['K', 'Q']).toContain(next.card.rank);
+      }
+      // And the deal pays the 20 to that seat's team.
+      const scored = events.find((e) => e.kind === 'dealScored');
+      if (scored?.kind === 'dealScored') {
+        expect(scored.result.bela[teamOf(call.seat)]).toBe(20);
+      }
+      return;
+    }
+    throw new Error('no seed produced a bela');
+  });
+
+  it('matches the score it reports against the running match total', () => {
+    const t = new Table({ seed: 44 });
+    t.runBots();
+    const scored = t.drainEvents().find((e) => e.kind === 'dealScored');
+    expect(scored).toBeDefined();
+    if (scored?.kind === 'dealScored') {
+      expect(scored.matchScores).toEqual(t.matchScores);
+      expect(scored.result.finalScore[0] + scored.result.finalScore[1]).toBeGreaterThan(0);
+    }
+  });
+
+  it('empties on drain', () => {
+    const t = new Table({ seed: 7 });
+    t.runBots();
+    expect(t.drainEvents().length).toBeGreaterThan(0);
+    expect(t.drainEvents()).toEqual([]);
+  });
+});
+
+describe('dealing on', () => {
+  it('refuses to deal while a hand is in progress', () => {
+    const t = new Table({ seed: 7, humanSeats: [0] });
+    expect(() => t.startNextDeal()).toThrow(/cannot deal from phase/);
+  });
+
+  it('rotates the dealer and reports the new deal', () => {
+    const t = new Table({ seed: 7 });
+    t.runBots();
+    expect(t.phase).toBe('DEAL_OVER');
+    const dealerBefore = t.state.dealer;
+    t.drainEvents();
+    t.startNextDeal();
+    const started = t.drainEvents().find((e) => e.kind === 'dealStarted');
+    expect(started).toBeDefined();
+    if (started?.kind === 'dealStarted') expect(started.dealer).toBe(dealerBefore);
+  });
+});
+
+function collectCards(value: unknown, out: Card[] = []): Card[] {
+  if (Array.isArray(value)) {
+    for (const v of value) collectCards(v, out);
+  } else if (value && typeof value === 'object') {
+    const o = value as Record<string, unknown>;
+    if (typeof o.suit === 'string' && typeof o.rank === 'string') out.push(o as unknown as Card);
+    else for (const v of Object.values(o)) collectCards(v, out);
+  }
+  return out;
+}

@@ -1,0 +1,145 @@
+import { useState } from 'react';
+import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import type { Lang } from '@belot/i18n';
+import type { PlayerProfile } from '@belot/progression';
+import { resetProfile, type Settings } from '../storage';
+import { playSfx } from '../audio';
+import { radius, theme } from '../theme';
+import { APP_VERSION, Panel, ScreenShell } from './common';
+
+const LOCALES: ReadonlyArray<{ id: Settings['locale']; label: string }> = [
+  { id: 'hr', label: 'Hrvatski' },
+  { id: 'sr-Cyrl', label: 'Српски' },
+  { id: 'en', label: 'English' },
+];
+
+export function SettingsScreen({
+  lang,
+  settings,
+  onSettingsChange,
+  onProfileChange,
+  onBack,
+}: {
+  lang: Lang;
+  settings: Settings;
+  onSettingsChange: (s: Settings) => void;
+  onProfileChange: (p: PlayerProfile) => void;
+  onBack: () => void;
+}) {
+  const ui = lang.s.ui;
+  // Reset arms on the first tap and fires on the second — a dialog would be
+  // heavier machinery than one destructive dev-facing action deserves.
+  const [armed, setArmed] = useState(false);
+
+  const toggleRow = (label: string, value: boolean, set: (v: boolean) => void) => (
+    <View style={styles.row}>
+      <Text style={styles.rowLabel}>{label}</Text>
+      <Switch
+        value={value}
+        onValueChange={(v) => {
+          playSfx('tap');
+          set(v);
+        }}
+        trackColor={{ false: 'rgba(255,255,255,0.15)', true: theme.accent }}
+        thumbColor={theme.cardFace}
+      />
+    </View>
+  );
+
+  return (
+    <ScreenShell title={ui.settings} onBack={onBack}>
+      <Panel>
+        {toggleRow(ui.sound, settings.sound, (sound) => onSettingsChange({ ...settings, sound }))}
+        {toggleRow(ui.haptics, settings.haptics, (haptics) =>
+          onSettingsChange({ ...settings, haptics }),
+        )}
+      </Panel>
+
+      <Panel label={ui.language}>
+        <View style={styles.localeRow}>
+          {LOCALES.map((l) => (
+            <Pressable
+              key={l.id}
+              onPress={() => {
+                playSfx('tap');
+                onSettingsChange({ ...settings, locale: l.id });
+              }}
+              style={[styles.localeChip, settings.locale === l.id && styles.localeChipOn]}
+            >
+              <Text
+                style={[styles.localeText, settings.locale === l.id && styles.localeTextOn]}
+              >
+                {l.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </Panel>
+
+      <Panel>
+        <Pressable
+          onPress={() => {
+            if (!armed) {
+              setArmed(true);
+              return;
+            }
+            playSfx('tap');
+            setArmed(false);
+            onProfileChange(resetProfile());
+          }}
+          style={[styles.resetButton, armed && styles.resetArmed]}
+        >
+          <Text style={styles.resetText}>{armed ? ui.resetConfirm : ui.resetProgress}</Text>
+        </Pressable>
+      </Panel>
+
+      {/* Google Play's User Data policy requires the policy reachable in-app. */}
+      <Panel>
+        <Pressable
+          onPress={() => {
+            playSfx('tap');
+            void Linking.openURL('https://belastih.com').catch(() => {});
+          }}
+          hitSlop={6}
+        >
+          <Text style={styles.link}>{ui.privacyPolicy} ↗</Text>
+        </Pressable>
+      </Panel>
+
+      <Text style={styles.version}>
+        {ui.version} {APP_VERSION}
+      </Text>
+    </ScreenShell>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  rowLabel: { color: theme.text, fontSize: 15 },
+
+  localeRow: { flexDirection: 'row', gap: 8 },
+  localeChip: {
+    flex: 1,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: theme.line,
+    paddingVertical: 9,
+    alignItems: 'center',
+  },
+  localeChipOn: { borderColor: theme.accent, backgroundColor: 'rgba(216,165,49,0.14)' },
+  localeText: { color: theme.textDim, fontSize: 13, fontWeight: '600' },
+  localeTextOn: { color: theme.accent },
+
+  resetButton: {
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: theme.danger,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  resetArmed: { backgroundColor: theme.danger },
+  resetText: { color: theme.text, fontSize: 14, fontWeight: '700' },
+
+  link: { color: theme.accent, fontSize: 15, fontWeight: '600', textAlign: 'center' },
+  version: { color: theme.textDim, fontSize: 12, textAlign: 'center' },
+});

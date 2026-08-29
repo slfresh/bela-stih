@@ -1,0 +1,48 @@
+# The whole production stack: the game server (private) behind Caddy (public,
+# automatic HTTPS). Run from this directory on the VPS:
+#
+#   DOMAIN=bela.example.com docker compose up -d --build
+#
+# Caddy terminates TLS for wss:// and https://, proxies the Colyseus traffic
+# (matchmaking POSTs, the websocket, /health) to the game container, and serves
+# the static privacy-policy page for everything else.
+services:
+  bela:
+    build:
+      context: ..
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    expose:
+      - "2567"
+    # Container logs can incidentally contain connection metadata; cap them so
+    # "we keep nothing" stays true in practice, not just in the code.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - bela
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN, e.g. DOMAIN=bela.example.com docker compose up -d}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./site:/srv/site:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:

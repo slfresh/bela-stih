@@ -1,0 +1,84 @@
+import { useEffect, useRef, useState } from 'react';
+import { useKeepAwake } from 'expo-keep-awake';
+import { teamOf } from '@belot/engine';
+import { anchorId } from './anim/FxBus';
+import { TableScreen } from './TableScreen';
+import { HUMAN, useGame } from './useGame';
+import type { Settings } from './storage';
+
+/**
+ * A local game against the bots. A rematch remounts the inner match component,
+ * so table, director, anchors and effects always restart together.
+ */
+export function OfflineGame({ settings, onExit }: { settings: Settings; onExit: () => void }) {
+  const [matchId, setMatchId] = useState(0);
+  return (
+    <OfflineMatch
+      key={matchId}
+      settings={settings}
+      onExit={onExit}
+      onRematch={() => setMatchId((n) => n + 1)}
+    />
+  );
+}
+
+function OfflineMatch({
+  settings,
+  onExit,
+  onRematch,
+}: {
+  settings: Settings;
+  onExit: () => void;
+  onRematch: () => void;
+}) {
+  useKeepAwake();
+  const g = useGame(settings);
+
+  const settled = g.view.phase === 'DEAL_OVER' || g.view.phase === 'MATCH_OVER';
+  const matchOver = g.view.phase === 'MATCH_OVER';
+
+  // Reward coins fly to the wallet; a won match rains confetti. Fired from
+  // state changes so online can reuse the identical pattern.
+  const lastBanner = useRef<typeof g.banner>(null);
+  useEffect(() => {
+    if (g.banner && g.banner !== lastBanner.current && g.banner.coins > 0) {
+      const from = g.anchors.centre(anchorId.deck);
+      const to = g.anchors.centre(anchorId.wallet);
+      if (from && to) g.fxBus.emit({ kind: 'coins', from, to, count: 6 });
+    }
+    lastBanner.current = g.banner;
+  }, [g.banner, g.anchors, g.fxBus]);
+
+  const cheered = useRef(false);
+  useEffect(() => {
+    if (matchOver && !cheered.current && g.table.winner() === teamOf(HUMAN)) {
+      cheered.current = true;
+      g.fxBus.emit({ kind: 'confetti' });
+    }
+  }, [matchOver, g.table, g.fxBus]);
+
+  return (
+    <TableScreen
+      mySeat={HUMAN}
+      lang={g.lang}
+      view={g.view}
+      options={settled || !g.idle ? [] : g.view.legalActions}
+      myTurn={g.myTurn}
+      settled={settled}
+      matchOver={matchOver}
+      lastDealResult={g.table.state.lastDealResult}
+      matchScores={g.view.matchScores}
+      winnerTeam={g.table.winner()}
+      profile={g.profile}
+      banner={g.banner}
+      anchors={g.anchors}
+      fxBus={g.fxBus}
+      turnDeadline={null}
+      onAction={g.submit}
+      onNext={g.nextDeal}
+      onFinish={matchOver ? onRematch : onExit}
+      finishLabel={matchOver ? g.lang.s.newMatch : 'Izađi'}
+      onEmote={g.emote}
+    />
+  );
+}

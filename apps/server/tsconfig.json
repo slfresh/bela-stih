@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@belot/shared-types": ["../../packages/shared-types/src/index.ts"],
+      "@belot/engine": ["../../packages/engine/src/index.ts"],
+      "@belot/bots": ["../../packages/bots/src/index.ts"],
+      "@belot/table": ["../../packages/table/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

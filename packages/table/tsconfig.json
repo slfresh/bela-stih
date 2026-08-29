@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@belot/shared-types": ["../shared-types/src/index.ts"],
+      "@belot/engine": ["../engine/src/index.ts"],
+      "@belot/bots": ["../bots/src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts"]
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@belot/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Authoritative Bela room. Reuses the shared engine so the server never trusts a client.",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "smoke": "tsx src/smoke.ts",
+    "fill": "tsx src/fill.ts"
+  },
+  "dependencies": {
+    "@belot/shared-types": "*",
+    "@belot/engine": "*",
+    "@belot/bots": "*",
+    "@belot/table": "*",
+    "@colyseus/ws-transport": "0.16.5",
+    "@colyseus/core": "0.16.22",
+    "express": "^5.1.0",
+    "tsx": "^4.23.12"
+  },
+  "devDependencies": {
+    "colyseus.js": "0.16.22",
+    "@types/express": "^5.0.0"
+  }
+}

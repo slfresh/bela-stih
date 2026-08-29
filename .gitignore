@@ -1,0 +1,8 @@
+node_modules/
+.expo/
+apps/mobile/android/
+apps/mobile/credentials/
+apps/mobile/credentials.json
+*.log
+*.tgz
+.DS_Store
