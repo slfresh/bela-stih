@@ -29,10 +29,28 @@ export function feltStyle(id: string): FeltStyle {
   return FELTS[id] ?? FELTS.green!;
 }
 
-let current = { cardBack: 'classic', felt: 'green', avatar: 'djed' };
+/** The three card-face styles the player can choose between, free of charge. */
+export type DeckStyle = 'madarice' | 'francuske' | 'simple';
+
+let current = {
+  cardBack: 'classic',
+  felt: 'green',
+  avatar: 'djed',
+  deckStyle: 'madarice' as DeckStyle,
+};
 
 export function setCosmetics(p: PlayerProfile): void {
-  current = { cardBack: p.selectedCardBack, felt: p.selectedFelt, avatar: p.selectedAvatar };
+  current = {
+    ...current,
+    cardBack: p.selectedCardBack,
+    felt: p.selectedFelt,
+    avatar: p.selectedAvatar,
+  };
+}
+
+/** Face style comes from Settings, not the profile — same module, same rules. */
+export function setDeckStyle(style: DeckStyle): void {
+  current = { ...current, deckStyle: style };
 }
 
 export function cosmetics(): Readonly<typeof current> {

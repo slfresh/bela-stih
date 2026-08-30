@@ -3,6 +3,8 @@ import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native
 import type { Lang } from '@belot/i18n';
 import type { PlayerProfile } from '@belot/progression';
 import { resetProfile, type Settings } from '../storage';
+import { setDeckStyle } from '../cosmetics';
+import { PlayingCard } from '../PlayingCard';
 import { playSfx } from '../audio';
 import { radius, theme } from '../theme';
 import { APP_VERSION, Panel, ScreenShell } from './common';
@@ -53,6 +55,40 @@ export function SettingsScreen({
         {toggleRow(ui.haptics, settings.haptics, (haptics) =>
           onSettingsChange({ ...settings, haptics }),
         )}
+      </Panel>
+
+      <Panel label={lang.s.deckStyleLabel}>
+        <View style={styles.localeRow}>
+          {(
+            [
+              { id: 'madarice', label: lang.s.deckMadarice },
+              { id: 'francuske', label: lang.s.deckFrancuske },
+              { id: 'simple', label: lang.s.deckSimple },
+            ] as const
+          ).map((d) => (
+            <Pressable
+              key={d.id}
+              onPress={() => {
+                playSfx('tap');
+                setDeckStyle(d.id);
+                onSettingsChange({ ...settings, deckStyle: d.id });
+              }}
+              style={[styles.localeChip, settings.deckStyle === d.id && styles.localeChipOn]}
+            >
+              <Text
+                style={[styles.localeText, settings.deckStyle === d.id && styles.localeTextOn]}
+              >
+                {d.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        {/* live preview in the selected style */}
+        <View style={styles.previewRow}>
+          <PlayingCard card={{ suit: 'hearts', rank: 'A' }} size="lg" />
+          <PlayingCard card={{ suit: 'spades', rank: 'K' }} size="lg" />
+          <PlayingCard card={{ suit: 'clubs', rank: '10' }} size="lg" />
+        </View>
       </Panel>
 
       <Panel label={lang.s.difficulty}>
@@ -168,6 +204,7 @@ const styles = StyleSheet.create({
   resetText: { color: theme.text, fontSize: 14, fontWeight: '700' },
 
   hint: { color: theme.textDim, fontSize: 12, lineHeight: 17, marginTop: 10 },
+  previewRow: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginTop: 12 },
   link: { color: theme.accent, fontSize: 15, fontWeight: '600', textAlign: 'center' },
   version: { color: theme.textDim, fontSize: 12, textAlign: 'center' },
 });

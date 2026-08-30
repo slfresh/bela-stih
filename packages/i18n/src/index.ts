@@ -194,6 +194,11 @@ interface Strings {
   difficultyEasy: string;
   difficultyHard: string;
   difficultyHardHint: string;
+  /** Card-face style chooser. */
+  deckStyleLabel: string;
+  deckMadarice: string;
+  deckFrancuske: string;
+  deckSimple: string;
 
   dealHeading: (n: number, dealer: string) => string;
   dealResult: string;
@@ -327,6 +332,10 @@ const hr: Strings = {
   difficultyHard: 'Prava bela',
   difficultyHardHint:
     'Prava bela: aplikacija ne čuva pravila umjesto vas. Zvanja tražite sami, a kriva karta je auzmeš — protivnici pišu sve.',
+  deckStyleLabel: 'Karte',
+  deckMadarice: 'Mađarice',
+  deckFrancuske: 'Francuske',
+  deckSimple: 'Jednostavne',
 
   dealHeading: (n, dealer) => `Dijeljenje ${n} — djeli ${dealer}`,
   dealResult: 'Obračun dijeljenja',
@@ -503,6 +512,10 @@ const srCyrl: Strings = {
   difficultyHard: 'Права бела',
   difficultyHardHint:
     'Права бела: апликација не чува правила уместо вас. Звања тражите сами, а крива карта је аузмеш — противници пишу све.',
+  deckStyleLabel: 'Карте',
+  deckMadarice: 'Мађарице',
+  deckFrancuske: 'Француске',
+  deckSimple: 'Једноставне',
 
   dealHeading: (n, dealer) => `Дељење ${n} — дели ${dealer}`,
   dealResult: 'Обрачун дељења',
@@ -675,6 +688,10 @@ const en: Strings = {
   difficultyHard: 'True bela',
   difficultyHardHint:
     'True bela: the app stops policing for you. Find your own declarations, and an illegal card is renons — the opponents write everything.',
+  deckStyleLabel: 'Cards',
+  deckMadarice: 'Hungarian',
+  deckFrancuske: 'French',
+  deckSimple: 'Simple',
 
   dealHeading: (n, dealer) => `Deal ${n} — dealt by ${dealer}`,
   dealResult: 'Deal result',

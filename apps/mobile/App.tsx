@@ -19,7 +19,7 @@ import {
   type Settings,
 } from './src/storage';
 import { preloadSfx, setSoundEnabled } from './src/audio';
-import { setCosmetics } from './src/cosmetics';
+import { setCosmetics, setDeckStyle } from './src/cosmetics';
 
 /** The menu stack, one level deep: home, or one of its satellite screens. */
 type MenuScreen = 'home' | 'shop' | 'settings' | 'profile';
@@ -59,6 +59,7 @@ export default function App() {
 
   setSoundEnabled(settings.sound);
   setCosmetics(profile);
+  setDeckStyle(settings.deckStyle);
 
   const updateProfile = useCallback((p: PlayerProfile) => {
     saveProfile(p);

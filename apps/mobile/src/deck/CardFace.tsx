@@ -6,6 +6,8 @@ import { PipShape, suitColour } from './pips';
 import { SeasonScene } from './scenes';
 import { CourtHalf } from './courts';
 import { garb } from './palette';
+import { FrenchFace, frenchColour } from './french';
+import { SimpleFace } from './simple';
 
 /**
  * A mađarica, drawn on a 100x145 canvas, composed from the Tell-pattern canon
@@ -64,8 +66,8 @@ const PIP_SCALE = 0.175;
 
 export function CardFace({ card, width }: { card: Card; width: number }) {
   const height = width * 1.45;
-  const { fill } = suitColour(card.suit);
-  const rank = lang.rankShort(card.rank);
+  const style = cosmetics().deckStyle;
+  const frame = style === 'francuske' ? frenchColour(card.suit) : suitColour(card.suit).fill;
 
   return (
     <Svg width={width} height={height} viewBox="0 0 100 145">
@@ -77,11 +79,15 @@ export function CardFace({ card, width }: { card: Card; width: number }) {
       />
       <Rect
         x="4.5" y="4.5" width="91" height="136" rx="6"
-        fill="none" stroke={fill} strokeWidth="0.9" opacity={0.45}
+        fill="none" stroke={frame} strokeWidth="0.9" opacity={0.45}
       />
 
-      {card.rank === 'A' ? (
-        <Ace suit={card.suit} colour={fill} />
+      {style === 'francuske' ? (
+        <FrenchFace card={card} />
+      ) : style === 'simple' ? (
+        <SimpleFace card={card} />
+      ) : card.rank === 'A' ? (
+        <Ace suit={card.suit} colour={suitColour(card.suit).fill} />
       ) : COURTS.includes(card.rank) ? (
         <Court rank={card.rank} suit={card.suit} />
       ) : (

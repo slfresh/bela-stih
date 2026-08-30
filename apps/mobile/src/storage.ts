@@ -33,6 +33,8 @@ export interface Settings {
    * spotted by the player. Applies to offline games and private tables you host.
    */
   hardMode: boolean;
+  /** Card face style: mađarice (default), French suits, or big-and-simple. */
+  deckStyle: 'madarice' | 'francuske' | 'simple';
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -41,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   locale: 'hr',
   nickname: '',
   hardMode: false,
+  deckStyle: 'madarice',
 };
 
 function read<T>(key: string, fallback: T): T {
