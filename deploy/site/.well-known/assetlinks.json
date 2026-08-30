@@ -5,7 +5,9 @@
       "namespace": "android_app",
       "package_name": "com.slfresh.belastih",
       "sha256_cert_fingerprints": [
-        "REPLACE_WITH_PLAY_APP_SIGNING_SHA256_AT_RELEASE_TIME"
+        "5E:F8:87:55:7E:7C:A5:E2:9B:1B:64:52:C2:10:8B:92:B4:80:D5:6E:9A:7B:71:F5:29:D6:CA:4D:40:D4:28:27",
+        "FA:05:60:AE:6B:1F:69:F8:E4:26:ED:18:B6:AA:E3:8D:9D:F1:12:06:03:DE:33:6F:26:11:7D:AB:AB:36:62:66",
+        "08:2A:B2:6A:01:64:E7:DC:11:1C:1F:8D:CC:81:68:E4:F1:A1:A0:22:11:F8:82:AD:22:D7:5D:42:A0:9E:DE:18"
       ]
     }
   }
