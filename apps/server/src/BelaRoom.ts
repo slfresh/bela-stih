@@ -55,6 +55,8 @@ export class BelaRoom extends Room {
 
   private table!: Table;
   private hard = false;
+  /** The table's creator (first joiner); start-with-bots rights follow them. */
+  private hostId: string | null = null;
   private occupants: Occupant[] = [];
   private turnTimer: ReturnType<typeof setTimeout> | null = null;
   private turnEndsAt = 0;
@@ -91,8 +93,12 @@ export class BelaRoom extends Room {
   }
 
   private freeSeat(): Seat | null {
-    const i = this.occupants.findIndex((o) => o.sessionId === null);
-    return i < 0 ? null : (i as Seat);
+    // Partner-first order: the second joiner sits ACROSS from the host (0 and
+    // 2 are a team), so two friends and two bots is partners by default.
+    for (const s of [0, 2, 1, 3] as Seat[]) {
+      if (this.occupants[s]!.sessionId === null) return s;
+    }
+    return null;
   }
 
   override onJoin(client: Client, options: { name?: string; avatar?: string } = {}): void {
@@ -109,6 +115,7 @@ export class BelaRoom extends Room {
       connected: true,
     };
     this.table.setSeatHuman(seat, true);
+    if (this.hostId === null) this.hostId = client.sessionId;
 
     if (!this.started && this.occupants.every((o) => o.sessionId !== null)) {
       this.started = true;
@@ -148,8 +155,11 @@ export class BelaRoom extends Room {
   }
 
   private release(seat: Seat): void {
+    const wasHost = this.occupants[seat]!.sessionId === this.hostId;
     this.occupants[seat] = { sessionId: null, name: '', avatar: '', connected: false };
     this.table.setSeatHuman(seat, false);
+    // The crown passes to whoever is still seated.
+    if (wasHost) this.hostId = this.occupants.find((o) => o.sessionId !== null)?.sessionId ?? null;
     this.afterMove();
   }
 
@@ -178,11 +188,24 @@ export class BelaRoom extends Room {
       return;
     }
 
+    if (packet.type === 'sit') {
+      // Before the game starts, anyone may move to a free seat — that is how
+      // friends pick teams. No state has advanced yet, so it is a pure swap.
+      const target = (packet.message as { seat?: Seat } | undefined)?.seat;
+      if (this.started) return;
+      if (typeof target !== 'number' || target < 0 || target > 3 || target === seat) return;
+      if (this.occupants[target]!.sessionId !== null) return;
+      this.occupants[target] = this.occupants[seat]!;
+      this.occupants[seat] = { sessionId: null, name: '', avatar: '', connected: false };
+      this.publish();
+      return;
+    }
+
     if (packet.type === 'start') {
-      // The host (seat 0 — the table's creator) may start early; every empty
-      // seat plays as a bot from here on. The table locks exactly as it does
-      // when a fourth human sits down.
-      if (seat !== 0 || this.started) return;
+      // The host (the table's creator) may start early; every empty seat
+      // plays as a bot from here on. The table locks exactly as it does when
+      // a fourth human sits down.
+      if (client.sessionId !== this.hostId || this.started) return;
       for (const s of SEATS) {
         if (this.occupants[s]!.sessionId === null) this.table.setSeatHuman(s, false);
       }
@@ -280,6 +303,9 @@ export class BelaRoom extends Room {
         ? { turnMsLeft: Math.max(0, this.turnEndsAt - Date.now()), turnTotalMs: TURN_MS }
         : {}),
       ...(this.hard ? { hard: true } : {}),
+      ...(this.hostId !== null && this.seatOf(this.hostId) !== null
+        ? { hostSeat: this.seatOf(this.hostId)! }
+        : {}),
     };
     // Views first: a client must know its own seat before the event stream
     // arrives, or the first batch cannot be attributed to anyone.

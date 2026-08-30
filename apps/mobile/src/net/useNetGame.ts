@@ -57,6 +57,7 @@ interface RoomMessage {
   turnTotalMs?: number;
   /** True on "prava bela" tables. */
   hard?: boolean;
+  hostSeat?: Seat;
 }
 
 export function useNetGame(settings: Settings) {
@@ -75,6 +76,7 @@ export function useNetGame(settings: Settings) {
   const [idle, setIdle] = useState(true);
   const [seats, setSeats] = useState<SeatInfo[]>([]);
   const [hard, setHard] = useState(false);
+  const [hostSeat, setHostSeat] = useState<Seat | null>(null);
   const [banner, setBanner] = useState<Award | null>(null);
   const [lastDealResult, setLastDealResult] = useState<DealScoreResult | null>(null);
   const [winnerTeam, setWinnerTeam] = useState<TeamId | null>(null);
@@ -171,6 +173,7 @@ export function useNetGame(settings: Settings) {
     room.onMessage('room', (msg: RoomMessage) => {
       setSeats(msg.seats);
       setHard(msg.hard === true);
+      setHostSeat(msg.hostSeat ?? null);
       setStatus(msg.status);
       // A stale-tap refusal is stale itself the moment the game moves on.
       if (msg.events.length > 0) setError(null);
@@ -270,6 +273,11 @@ export function useNetGame(settings: Settings) {
     roomRef.current?.send('start', {});
   }, []);
 
+  /** Pre-start: move to a free seat — how friends pick teams. */
+  const sit = useCallback((target: Seat) => {
+    roomRef.current?.send('sit', { seat: target });
+  }, []);
+
   return {
     status,
     error,
@@ -279,6 +287,7 @@ export function useNetGame(settings: Settings) {
     idle,
     seats,
     hard,
+    hostSeat,
     profile: profileRef.current,
     banner,
     lastDealResult,
@@ -293,6 +302,7 @@ export function useNetGame(settings: Settings) {
     createPrivate,
     joinById,
     startWithBots,
+    sit,
     submit,
     next,
     sendEmote,

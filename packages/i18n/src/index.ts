@@ -127,6 +127,7 @@ export interface UiStrings {
   leaveTable: string;
   botPlaysFor: (names: string) => string;
   startWithBots: string;
+  sitHere: string;
   invite: string;
   inviteText: (url: string) => string;
 }
@@ -412,6 +413,7 @@ const hr: Strings = {
     leaveTable: 'Napusti stol',
     botPlaysFor: (names) => `${names} — bot igra umjesto njih`,
     startWithBots: 'Počni s botovima',
+    sitHere: 'sjedni ovdje',
     invite: 'Pozovi prijatelje',
     inviteText: (url) => `Zaigraj Belu sa mnom! Pridruži se mom stolu: ${url}`,
   },
@@ -594,6 +596,7 @@ const srCyrl: Strings = {
     leaveTable: 'Напусти сто',
     botPlaysFor: (names) => `${names} — бот игра уместо њих`,
     startWithBots: 'Почни са ботовима',
+    sitHere: 'седни овде',
     invite: 'Позови пријатеље',
     inviteText: (url) => `Заиграј белу са мном! Придружи се мом столу: ${url}`,
   },
@@ -772,6 +775,7 @@ const en: Strings = {
     leaveTable: 'Leave table',
     botPlaysFor: (names) => `${names} — a bot plays for them`,
     startWithBots: 'Start with bots',
+    sitHere: 'sit here',
     invite: 'Invite friends',
     inviteText: (url) => `Come play Bela with me! Join my table: ${url}`,
   },

@@ -1,5 +1,13 @@
 import { useEffect, useRef } from 'react';
-import { ActivityIndicator, ScrollView, Share, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useKeepAwake } from 'expo-keep-awake';
 import type { Seat } from '@belot/engine';
@@ -151,9 +159,13 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
               {net.roomId}
             </Text>
             <Text style={styles.hint}>{ui.shareCode}</Text>
-            {net.seat === 0 && net.status === 'waiting' && seated >= 1 && seated < 4 && (
-              <Button label={ui.startWithBots} tone="strong" onPress={net.startWithBots} />
-            )}
+            {net.seat !== null &&
+              net.seat === net.hostSeat &&
+              net.status === 'waiting' &&
+              seated >= 1 &&
+              seated < 4 && (
+                <Button label={ui.startWithBots} tone="strong" onPress={net.startWithBots} />
+              )}
             <Button
               label={ui.invite}
               tone="strong"
@@ -170,11 +182,33 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
 
         {net.seats.length > 0 && (
           <View style={styles.panel}>
-            {net.seats.map((s) => (
-              <Text key={s.seat} style={styles.seatLine}>
-                {s.connected ? '●' : '○'} {s.name}
-                {s.seat === net.seat ? `  (${net.lang.s.seat[0]})` : ''}
-              </Text>
+            {/* Two team rows: 0&2 vs 1&3. Before the start, an empty seat is a
+                button — tap it to move there and pick your partner. */}
+            {([[0, 2], [1, 3]] as const).map((team, ti) => (
+              <View key={ti} style={styles.teamRow}>
+                <Text style={styles.teamTag}>
+                  {ti === 0 ? net.lang.s.teamA : net.lang.s.teamB}
+                </Text>
+                {team.map((idx) => {
+                  const s = net.seats[idx]!;
+                  const free = !s.connected && net.status === 'waiting';
+                  const canSit = free && net.seat !== null && net.seat !== idx;
+                  return (
+                    <Pressable
+                      key={idx}
+                      disabled={!canSit}
+                      onPress={() => net.sit(idx as Seat)}
+                      style={[styles.seatCell, canSit && styles.seatCellFree]}
+                    >
+                      <Text style={styles.seatLine}>
+                        {s.connected ? '●' : '○'}{' '}
+                        {s.connected ? s.name : canSit ? ui.sitHere : s.name}
+                        {idx === net.seat ? `  (${net.lang.s.seat[0]})` : ''}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
             ))}
           </View>
         )}
@@ -204,4 +238,8 @@ const styles = StyleSheet.create({
   code: { color: theme.accent, fontSize: 26, fontWeight: '800', letterSpacing: 2 },
   hint: { color: theme.textDim, fontSize: 12, textAlign: 'center' },
   seatLine: { color: theme.text, fontSize: 15 },
+  teamRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 4 },
+  teamTag: { color: theme.textDim, fontSize: 12, width: 34 },
+  seatCell: { flex: 1, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 10 },
+  seatCellFree: { borderWidth: 1, borderColor: theme.line, borderStyle: 'dashed' },
 });

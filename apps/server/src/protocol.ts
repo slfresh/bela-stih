@@ -18,6 +18,8 @@ export type ClientMessage =
   | { type: 'action'; action: Action }
   /** Host only (seat 0): start now, empty seats play as bots. */
   | { type: 'start' }
+  /** Pre-start only: move to a free seat (how friends pick teams). */
+  | { type: 'sit'; seat: Seat }
   /** Advance from a scored deal to the next one. */
   | { type: 'next' }
   /** A quick emote; relayed, rate-limited, never stored. */
@@ -70,6 +72,8 @@ export interface RoomMessage {
   turnTotalMs?: number;
   /** True on "prava bela" tables: renons punishes and zvanja are blind. */
   hard?: boolean;
+  /** Seat of the table's creator — the one who may start with bots. */
+  hostSeat?: Seat;
 }
 
 export const MSG = {
