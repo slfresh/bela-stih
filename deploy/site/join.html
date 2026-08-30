@@ -33,6 +33,7 @@
   <div class="code" id="code">—</div>
 
   <a class="button open" id="open" href="#">Otvori u aplikaciji · Open in app</a>
+  <a class="button open" id="web" href="/igra/">Igraj u pregledniku · Play in browser</a>
   <a class="button store"
      href="https://play.google.com/store/apps/details?id=com.slfresh.belastih">
     Preuzmi na Google Playu · Get it on Google Play
@@ -55,6 +56,8 @@
       'S.browser_fallback_url=' +
       encodeURIComponent('https://play.google.com/store/apps/details?id=com.slfresh.belastih') +
       ';end';
+    // The browser build joins straight from a query parameter.
+    document.getElementById('web').href = '/igra/?code=' + encodeURIComponent(code);
   </script>
 </main>
 </body>

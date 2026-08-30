@@ -7,3 +7,5 @@ apps/mobile/credentials.json
 *.tgz
 .DS_Store
 *.aab
+apps/mobile/dist/
+deploy/site/igra/

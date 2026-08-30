@@ -1,4 +1,4 @@
-import { createMMKV } from 'react-native-mmkv';
+import { Platform } from 'react-native';
 import { emptyProfile, ensureQuests, isoDay, type PlayerProfile } from '@belot/progression';
 
 /**
@@ -10,8 +10,36 @@ import { emptyProfile, ensureQuests, isoDay, type PlayerProfile } from '@belot/p
  * honest and close to "no data collected".
  */
 
-// react-native-mmkv v4 exposes a factory; `MMKV` is only a type now.
-const store = createMMKV({ id: 'bela-stih' });
+// react-native-mmkv v4 exposes a factory; `MMKV` is only a type now. On web the
+// same two calls back onto localStorage — the try/catch keeps private-mode
+// browsers (where localStorage throws) playable with in-memory defaults.
+interface KV {
+  getString(key: string): string | undefined;
+  set(key: string, value: string): void;
+}
+
+const store: KV =
+  Platform.OS === 'web'
+    ? {
+        getString: (key) => {
+          try {
+            return window.localStorage.getItem(`bela-stih.${key}`) ?? undefined;
+          } catch {
+            return undefined;
+          }
+        },
+        set: (key, value) => {
+          try {
+            window.localStorage.setItem(`bela-stih.${key}`, value);
+          } catch {
+            /* private mode: play on, forget on reload */
+          }
+        },
+      }
+    : // eslint-disable-next-line @typescript-eslint/no-require-imports -- native-only module
+      (require('react-native-mmkv') as typeof import('react-native-mmkv')).createMMKV({
+        id: 'bela-stih',
+      });
 
 const KEY = {
   profile: 'profile.v1',

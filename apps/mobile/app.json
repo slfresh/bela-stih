@@ -45,7 +45,11 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+    "experiments": {
+      "baseUrl": "/igra"
     },
     "backgroundColor": "#0d2a1f",
     "plugins": [

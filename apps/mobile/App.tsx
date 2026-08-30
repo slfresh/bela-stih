@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Linking } from 'react-native';
+import { BackHandler, Linking, Platform, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Lang } from '@belot/i18n';
@@ -46,7 +46,10 @@ export default function App() {
   launchRef.current = launch;
   useEffect(() => {
     const joinFrom = (url: string | null) => {
-      const code = url?.match(/(?:^|\/)join\/([A-Za-z0-9_-]{1,24})\/?$/)?.[1];
+      // Native deep link .../join/CODE, or the web app's /igra/?code=CODE.
+      const code =
+        url?.match(/(?:^|\/)join\/([A-Za-z0-9_-]{1,24})\/?$/)?.[1] ??
+        url?.match(/[?&]code=([A-Za-z0-9_-]{1,24})/)?.[1];
       if (code && launchRef.current === null) {
         setMenu('home');
         setLaunch({ mode: 'join', code });
@@ -93,10 +96,8 @@ export default function App() {
 
   const toHome = useCallback(() => setMenu('home'), []);
 
-  return (
-    <SafeAreaProvider>
-      <StatusBar style="light" />
-      {launch === null ? (
+  const content =
+    launch === null ? (
         menu === 'shop' ? (
           <ShopScreen
             lang={lang}
@@ -133,18 +134,36 @@ export default function App() {
             onOpenProfile={() => setMenu('profile')}
           />
         )
-      ) : launch.mode === 'gallery' ? (
-        <DeckGallery onExit={exitToHome} />
-      ) : launch.mode === 'offline' ? (
-        <OfflineGame settings={settings} onExit={exitToHome} />
+    ) : launch.mode === 'gallery' ? (
+      <DeckGallery onExit={exitToHome} />
+    ) : launch.mode === 'offline' ? (
+      <OfflineGame settings={settings} onExit={exitToHome} />
+    ) : (
+      <OnlineGame
+        settings={settings}
+        mode={launch.mode}
+        joinCode={launch.mode === 'join' ? launch.code : undefined}
+        onExit={exitToHome}
+      />
+    );
+
+  return (
+    <SafeAreaProvider>
+      <StatusBar style="light" />
+      {Platform.OS === 'web' ? (
+        // On a desktop browser the app lives in a centred phone-shaped column;
+        // the game itself is identical, and phones get the full viewport.
+        <View style={web.desk}>
+          <View style={web.column}>{content}</View>
+        </View>
       ) : (
-        <OnlineGame
-          settings={settings}
-          mode={launch.mode}
-          joinCode={launch.mode === 'join' ? launch.code : undefined}
-          onExit={exitToHome}
-        />
+        content
       )}
     </SafeAreaProvider>
   );
 }
+
+const web = StyleSheet.create({
+  desk: { flex: 1, backgroundColor: '#0a1f16', flexDirection: 'row', justifyContent: 'center' },
+  column: { flex: 1, maxWidth: 480, overflow: 'hidden' },
+});
