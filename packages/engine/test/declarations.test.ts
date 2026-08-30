@@ -182,7 +182,7 @@ describe('resolving the declaration contest', () => {
     expect(r.perTeamValue).toEqual([20, 0]);
   });
 
-  it('uses the shipped default of cancelling ties', () => {
-    expect(DEFAULT_CONFIG.declarationTieCancels).toBe(true);
+  it('ships with ties resolving to the first player, not cancelling (UHDDR rule 7)', () => {
+    expect(DEFAULT_CONFIG.declarationTieCancels).toBe(false);
   });
 });

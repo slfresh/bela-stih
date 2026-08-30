@@ -108,6 +108,8 @@ export function resolveDeclarations(
   perSeat: Declaration[][],
   teamOf: (s: Seat) => TeamId,
   config: Pick<EngineConfig, 'declarationTieCancels'>,
+  /** The deal's first trick leader — ties go to whoever plays earlier from here. */
+  firstLeader: Seat = 0,
 ): DeclarationResolution {
   const all = perSeat.flat();
   if (all.length === 0) return { winningTeam: null, perTeamValue: [0, 0], winningDeclarations: [] };
@@ -128,12 +130,14 @@ export function resolveDeclarations(
     const c = cmpKey(declKey(b0), declKey(b1));
     if (c > 0) winner = 0;
     else if (c < 0) winner = 1;
-    // An exact tie cancels under the Balkan convention. With cancelling off,
-    // pagat's French rule awards the tie to the trump sequence, else to the
-    // earliest player in rotation; lacking trump/dealer context here we settle
-    // it by lowest seat, which is that rule's rotation part only.
+    // Exactly equal best declarations: UHDDR tournament rule 7 gives the tie
+    // to whoever is FIRST in play order from the deal's first leader ("prednost
+    // ima onaj koji je prvi na štihu"). The cancel variant stays as a knob.
     else if (config.declarationTieCancels) winner = null;
-    else winner = teamOf(b0.seat <= b1.seat ? b0.seat : b1.seat);
+    else {
+      const dist = (seat: Seat) => (seat - firstLeader + 4) % 4;
+      winner = teamOf(dist(b0.seat) <= dist(b1.seat) ? b0.seat : b1.seat);
+    }
   } else winner = null;
 
   if (winner === null) return { winningTeam: null, perTeamValue: [0, 0], winningDeclarations: [] };

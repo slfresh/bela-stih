@@ -1,20 +1,25 @@
 import type { Card, PlayContext, Seat, TrickPlay } from '@belot/shared-types';
 import { isTrump, rankPower } from './power';
-import { trickWinnerIndex } from './compare';
 
 /**
- * The legal-play predicate chain — the heart of "fair" Belot. Ordered:
- *   1. follow suit (always mandatory if able)
- *      1a. if TRUMP was led: must over-trump ("rise") if able, unless partner already winning
- *   2. cannot follow:
- *      2a. partner already winning  -> free discard           (config: forcedOvertrumpOverPartner)
- *      2b. opponent winning with a trump -> must over-trump; else discard non-trump;
- *          else (only trumps left) forced undertrump
- *      2c. opponent winning with non-trump -> must cut (any trump); else discard anything
+ * The legal-play predicate chain — continental Croatian (Slavonian) bela,
+ * per hr.wikipedia "Belot", belaklub.com and the UHDDR tournament rulebook:
  *
- * Implemented for SUIT contracts (the only v1 contract). ALL_TRUMPS / NO_TRUMPS
- * reuse the same follow-suit path but their over-trump-within-suit nuance is
- * Phase 4 and intentionally not wired here.
+ *   1. follow the led suit if able — and IBER: you must beat the highest card
+ *      of the led suit currently in the trick if you can ("pravilo ibera"),
+ *      EXCEPT when the trick has already been cut by a trump (then any card
+ *      of the led suit does; you cannot win anyway). When trump is led the
+ *      same rule reads: must over-trump if able, else any trump.
+ *   2. void in the led suit: you MUST play a trump ("mora se rezati") — even
+ *      when your partner currently holds the trick (the partner exemption is
+ *      French belote, not bela). If the trick already contains a trump you
+ *      must OVER-trump if able; holding only lower trumps you still must
+ *      throw one (podrezivanje).
+ *   3. holding neither the led suit nor a trump: anything goes.
+ *
+ * The one house-rule knob kept from the old chain, `forcedOvertrumpOverPartner`,
+ * now defaults to TRUE (the native rule). Setting it false restores the
+ * French-lineage "partner drži štih" exemption for tables that want it.
  */
 
 export interface LegalityInput {
@@ -39,53 +44,72 @@ export function legalPlays(input: LegalityInput): Card[] {
   const cardsOfLed = hand.filter((c) => c.suit === ledSuit);
   const trumpLed = isTrump(trick[0]!.card, ctx);
 
-  // Current winner so far.
-  const winnerLocal = trickWinnerIndex(
-    trick.map((p) => p.card),
-    ctx,
-  );
-  const winnerSeat = trick[winnerLocal]!.seat;
-  const partnerWinning = winnerSeat === partnerOf(mySeat);
-
   const trumpsInTrick = trick.filter((p) => isTrump(p.card, ctx));
   const highestTrumpInTrick =
     trumpsInTrick.length > 0
       ? Math.max(...trumpsInTrick.map((p) => rankPower(p.card, ctx)))
       : -Infinity;
 
+  // Partner-exemption support (house rule only; off by default).
+  const winnerSeatOfTrick = (): Seat => {
+    let best = 0;
+    for (let i = 1; i < trick.length; i++) {
+      const a = trick[i]!.card;
+      const b = trick[best]!.card;
+      const aTrump = isTrump(a, ctx);
+      const bTrump = isTrump(b, ctx);
+      if (aTrump !== bTrump) {
+        if (aTrump) best = i;
+      } else if (aTrump) {
+        if (rankPower(a, ctx) > rankPower(b, ctx)) best = i;
+      } else if (a.suit === ledSuit && b.suit === ledSuit) {
+        if (rankPower(a, ctx) > rankPower(b, ctx)) best = i;
+      } else if (a.suit === ledSuit) best = i;
+    }
+    return trick[best]!.seat;
+  };
+  const partnerWinning = winnerSeatOfTrick() === partnerOf(mySeat);
+
   // --- 1. Must follow led suit if able ---
   if (cardsOfLed.length > 0) {
     if (trumpLed) {
-      // Trump was led: must rise (over-trump) if able, unless partner is winning
-      // and we are not forcing over-partner play.
+      // Trump led: iber within trump — must over-trump if able.
       if (partnerWinning && !forcedOvertrumpOverPartner) return cardsOfLed;
       const higher = cardsOfLed.filter((c) => rankPower(c, ctx) > highestTrumpInTrick);
       return higher.length > 0 ? higher : cardsOfLed;
     }
-    // Non-trump led: just follow suit (no rise obligation within a plain suit).
-    return cardsOfLed;
+    // Plain suit led, and the trick was already cut by a trump: iber is
+    // suspended — any card of the led suit ("ne mora poštovati iber ...
+    // upravo zato što je igrač prethodno bacio adut").
+    if (trumpsInTrick.length > 0) return cardsOfLed;
+    // Plain suit led, no cut yet: iber — beat the highest led-suit card if able.
+    if (partnerWinning && !forcedOvertrumpOverPartner) return cardsOfLed;
+    const highestLed = Math.max(
+      ...trick.filter((p) => p.card.suit === ledSuit).map((p) => rankPower(p.card, ctx)),
+    );
+    const beating = cardsOfLed.filter((c) => rankPower(c, ctx) > highestLed);
+    return beating.length > 0 ? beating : cardsOfLed;
   }
 
-  // --- 2. Cannot follow suit ---
+  // --- 2. Void in the led suit: must trump ("mora se rezati") ---
   const myTrumps = hand.filter((c) => isTrump(c, ctx));
 
-  // 2a. partner winning -> free discard (the ex-Yu default)
   if (partnerWinning && !forcedOvertrumpOverPartner) {
+    // House-rule exemption (French lineage): free discard over a winning partner.
     return hand.slice();
   }
 
-  // opponent winning (or we are forced to act over a winning partner)
-  if (trumpsInTrick.length > 0) {
-    // 2b. a trump is currently winning -> must over-trump if possible
-    const higher = myTrumps.filter((c) => rankPower(c, ctx) > highestTrumpInTrick);
-    if (higher.length > 0) return higher;
-    // can't over-trump: discard a non-trump if we have one (no forced undertrump)
-    if (myTrumps.length < hand.length) return hand.filter((c) => !isTrump(c, ctx));
-    // only trumps left -> forced undertrump
+  if (myTrumps.length > 0) {
+    if (trumpsInTrick.length > 0) {
+      // Trick already trumped: over-trump if able, else forced undertrump —
+      // a trump must be thrown either way.
+      const higher = myTrumps.filter((c) => rankPower(c, ctx) > highestTrumpInTrick);
+      return higher.length > 0 ? higher : myTrumps;
+    }
+    // No trump in the trick yet: any trump cuts.
     return myTrumps;
   }
 
-  // 2c. opponent winning with a non-trump, no trump played yet -> must cut if able
-  if (myTrumps.length > 0) return myTrumps;
+  // --- 3. Neither led suit nor trump: anything goes ---
   return hand.slice();
 }

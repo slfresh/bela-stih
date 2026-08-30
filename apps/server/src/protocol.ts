@@ -66,6 +66,8 @@ export interface RoomMessage {
   turnMsLeft?: number;
   /** Full length of a turn, so the client's ring scales correctly. */
   turnTotalMs?: number;
+  /** True on "prava bela" tables: renons punishes and zvanja are blind. */
+  hard?: boolean;
 }
 
 export const MSG = {

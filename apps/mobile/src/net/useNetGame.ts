@@ -55,6 +55,8 @@ interface RoomMessage {
   events: TableEvent[];
   turnMsLeft?: number;
   turnTotalMs?: number;
+  /** True on "prava bela" tables. */
+  hard?: boolean;
 }
 
 export function useNetGame(settings: Settings) {
@@ -72,6 +74,7 @@ export function useNetGame(settings: Settings) {
   const [view, setView] = useState<PublicView | null>(null);
   const [idle, setIdle] = useState(true);
   const [seats, setSeats] = useState<SeatInfo[]>([]);
+  const [hard, setHard] = useState(false);
   const [banner, setBanner] = useState<Award | null>(null);
   const [lastDealResult, setLastDealResult] = useState<DealScoreResult | null>(null);
   const [winnerTeam, setWinnerTeam] = useState<TeamId | null>(null);
@@ -167,6 +170,7 @@ export function useNetGame(settings: Settings) {
 
     room.onMessage('room', (msg: RoomMessage) => {
       setSeats(msg.seats);
+      setHard(msg.hard === true);
       setStatus(msg.status);
       // A stale-tap refusal is stale itself the moment the game moves on.
       if (msg.events.length > 0) setError(null);
@@ -230,8 +234,12 @@ export function useNetGame(settings: Settings) {
     [connect, name, avatar],
   );
   const createPrivate = useCallback(
-    () => connect((c) => c.create(ROOM_NAME, { name, avatar, private: true })),
-    [connect, name, avatar],
+    () =>
+      connect((c) =>
+        // The host's difficulty setting travels with the table it creates.
+        c.create(ROOM_NAME, { name, avatar, private: true, hard: settings.hardMode }),
+      ),
+    [connect, name, avatar, settings.hardMode],
   );
   const joinById = useCallback(
     (id: string) => connect((c) => c.joinById(id.trim(), { name, avatar })),
@@ -265,6 +273,7 @@ export function useNetGame(settings: Settings) {
     view,
     idle,
     seats,
+    hard,
     profile: profileRef.current,
     banner,
     lastDealResult,

@@ -9,7 +9,12 @@ function trick(...plays: Array<[Seat, string]>): TrickPlay[] {
   return plays.map(([seat, id]) => ({ seat, card: c(id) }));
 }
 
-function legal(hand: string[], t: TrickPlay[], mySeat: Seat, forced = false): string[] {
+/**
+ * `forced` mirrors config.forcedOvertrumpOverPartner and defaults to TRUE here
+ * exactly as in DEFAULT_CONFIG — the native Croatian rule has no partner
+ * exemption. Passing false exercises the French-lineage house rule.
+ */
+function legal(hand: string[], t: TrickPlay[], mySeat: Seat, forced = true): string[] {
   return legalPlays({
     hand: hand.map(c),
     trick: t,
@@ -21,23 +26,52 @@ function legal(hand: string[], t: TrickPlay[], mySeat: Seat, forced = false): st
     .sort();
 }
 
-describe('following suit', () => {
+describe('following suit — pravilo ibera', () => {
   it('lets the leader play anything', () => {
     const hand = ['AH', '7D', 'JS'];
     expect(legal(hand, [], 0)).toEqual(['7D', 'AH', 'JS'].sort());
   });
 
-  it('forces following the led plain suit when able', () => {
-    const hand = ['AH', '7H', 'JS', 'AD'];
-    const t = trick([0, '10H']);
-    expect(legal(hand, t, 1)).toEqual(['7H', 'AH'].sort());
+  it('forces beating the highest led-suit card when able (iber)', () => {
+    // hr.wikipedia's own example: led 8, holding 7 and 10 you MUST play the 10.
+    const hand = ['10H', '7H', 'JS', 'AD'];
+    const t = trick([0, '8H']);
+    expect(legal(hand, t, 1)).toEqual(['10H']);
   });
 
-  it('does not force rising within a plain suit', () => {
-    // 10H is winning; we hold both a higher and a lower heart and may play either.
+  it('beats the highest card of the trick so far, not just the lead', () => {
+    // Led 8H, then QH: our JH no longer beats (plain order A 10 K Q J 9 8 7);
+    // only the KH does.
+    const hand = ['KH', 'JH', '7H'];
+    const t = trick([0, '8H'], [1, 'QH']);
+    expect(legal(hand, t, 2)).toEqual(['KH']);
+  });
+
+  it('allows any led-suit card when none of ours can beat', () => {
+    const hand = ['9H', '7H', 'JS'];
+    const t = trick([0, 'AH']);
+    expect(legal(hand, t, 1)).toEqual(['7H', '9H'].sort());
+  });
+
+  it('suspends iber once the trick has been cut by a trump', () => {
+    // hr.wikipedia: after a cut you must still follow the led suit, but any
+    // card of it will do — you cannot win the trick anyway.
     const hand = ['AH', '7H'];
-    const t = trick([0, '10H']);
-    expect(legal(hand, t, 1)).toEqual(['7H', 'AH'].sort());
+    const t = trick([0, '8H'], [1, '9S']); // seat 1 void, cuts with trump
+    expect(legal(hand, t, 2)).toEqual(['7H', 'AH'].sort());
+  });
+
+  it('applies iber even when the partner leads (native rule)', () => {
+    // Seat 2's partner is seat 0, currently winning with 10H. Iber still binds.
+    const hand = ['AH', '7H'];
+    const t = trick([0, '10H'], [1, '9H']);
+    expect(legal(hand, t, 2)).toEqual(['AH']);
+  });
+
+  it('house rule: partner exemption lifts iber within the suit', () => {
+    const hand = ['AH', '7H'];
+    const t = trick([0, '10H'], [1, '9H']);
+    expect(legal(hand, t, 2, false)).toEqual(['7H', 'AH'].sort());
   });
 });
 
@@ -55,34 +89,35 @@ describe('when trump is led', () => {
     expect(legal(hand, t, 1)).toEqual(['7S', '8S'].sort());
   });
 
-  it('drops the rise obligation when our partner already holds the trick', () => {
+  it('keeps the rise obligation over a winning partner (native rule)', () => {
     const hand = ['JS', '7S'];
-    // We are seat 3; our partner is seat 1, who leads the trick with 10S.
+    // We are seat 3; our partner is seat 1, who holds the trick with 10S.
     const t = trick([0, '8S'], [1, '10S'], [2, '7H']);
-    expect(legal(hand, t, 3)).toEqual(['7S', 'JS'].sort());
+    expect(legal(hand, t, 3)).toEqual(['JS']);
   });
 
-  it('keeps the rise obligation over a winning partner when configured to', () => {
+  it('house rule: partner exemption drops the rise obligation', () => {
     const hand = ['JS', '7S'];
     const t = trick([0, '8S'], [1, '10S'], [2, '7H']);
-    expect(legal(hand, t, 3, true)).toEqual(['JS']);
+    expect(legal(hand, t, 3, false)).toEqual(['7S', 'JS'].sort());
   });
 });
 
 /**
- * The headline regional divergence ("ne piši po partneru"). Seat 3 is void in the
- * led suit and seat 1 — its partner — already holds the trick with the ace.
+ * Void in the led suit: "mora se rezati" — trumping is unconditional in the
+ * native rules, even over a winning partner. The French exemption survives
+ * only behind the house-rule knob.
  */
 describe('void in the led suit while our partner is winning', () => {
   const t = trick([0, '10H'], [1, 'AH'], [2, '7H']);
   const hand = ['JS', '7S', 'AC', '8D'];
 
-  it('permits a free discard by default (ex-Yu)', () => {
-    expect(legal(hand, t, 3, false)).toEqual(['7S', '8D', 'AC', 'JS'].sort());
+  it('forces the cut even over the partner (native rule)', () => {
+    expect(legal(hand, t, 3)).toEqual(['7S', 'JS'].sort());
   });
 
-  it('forces the cut when forcedOvertrumpOverPartner is on', () => {
-    expect(legal(hand, t, 3, true)).toEqual(['7S', 'JS'].sort());
+  it('house rule: free discard over a winning partner', () => {
+    expect(legal(hand, t, 3, false)).toEqual(['7S', '8D', 'AC', 'JS'].sort());
   });
 });
 
@@ -105,23 +140,10 @@ describe('void in the led suit while an opponent is winning', () => {
     expect(legal(hand, t, 2)).toEqual(['JS']);
   });
 
-  it('permits a plain discard rather than a pointless undertrump', () => {
+  it('forces the undertrump when unable to over-trump — no plain discard', () => {
+    // A trump must hit the felt even when it cannot win ("podrezivanje").
     const t = trick([0, 'AH'], [1, 'JS']);
     const hand = ['7S', '8S', 'AC', '9D'];
-    expect(legal(hand, t, 2)).toEqual(['9D', 'AC'].sort());
-  });
-
-  it('forces the undertrump only when nothing but trumps remain', () => {
-    const t = trick([0, 'AH'], [1, 'JS']);
-    const hand = ['7S', '8S'];
     expect(legal(hand, t, 2)).toEqual(['7S', '8S'].sort());
-  });
-});
-
-describe('trump led while we are void of trump', () => {
-  it('is a free discard', () => {
-    const t = trick([0, 'JS']);
-    const hand = ['AH', '7D', 'KC'];
-    expect(legal(hand, t, 1)).toEqual(['7D', 'AH', 'KC'].sort());
   });
 });

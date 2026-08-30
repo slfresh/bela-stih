@@ -48,6 +48,8 @@ export interface DealScoreResult {
   callerMade: boolean;
   /** Final points added to the match score for each team (multiplier applied). */
   finalScore: [number, number];
+  /** Set when the deal ended by renons ("auzmeš"): the seat that misplayed. */
+  renonsSeat?: Seat | null;
 }
 
 const BELA_VALUE = 20;

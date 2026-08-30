@@ -30,6 +30,7 @@ export function suppress(view: PublicView): PublicView {
     toAct: null,
     legalActions: [],
     mustDeclare: false,
+    canDeclare: false,
     canAnnounceBela: false,
   };
 }

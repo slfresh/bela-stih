@@ -70,12 +70,15 @@ describe('every locale is complete', () => {
         expect(bela.length).toBeGreaterThan(plain.length);
       });
 
-      it('names every declaration and includes its value', () => {
-        for (const d of SAMPLE_DECLARATIONS) {
-          const text = lang.declaration(d);
-          expect(text).toContain(String(d.value));
-          expect(text.trim().length).toBeGreaterThan(3);
-        }
+      it('announces every declaration by its spoken value, distinctly', () => {
+        // "dvadeset do kralja", never "terca (20)" — the value is a WORD.
+        const texts = SAMPLE_DECLARATIONS.map((d) => lang.declaration(d));
+        for (const text of texts) expect(text.trim().length).toBeGreaterThan(3);
+        // Different declarations must not collapse to the same announcement.
+        expect(new Set(texts).size).toBe(SAMPLE_DECLARATIONS.length);
+        // A sequence announcement names the top card, not the sequence kind.
+        const seq = SAMPLE_DECLARATIONS.find((d) => d.kind === 'sequence')!;
+        expect(lang.declaration(seq)).toContain(lang.rankName(seq.topRank));
       });
 
       it('names all four seats distinctly, relative and absolute', () => {

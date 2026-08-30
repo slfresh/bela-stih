@@ -92,6 +92,7 @@ export function OnlineGame({
       mySeat={net.seat}
       lang={net.lang}
       view={net.view}
+      hardMode={net.hard}
       options={settled || !net.idle ? [] : net.view.legalActions}
       myTurn={net.idle && net.view.toAct === net.seat}
       settled={settled}

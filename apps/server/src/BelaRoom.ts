@@ -1,6 +1,6 @@
 import { Room, type Client } from '@colyseus/core';
 import type { Action, Seat } from '@belot/engine';
-import { SEATS } from '@belot/engine';
+import { HARD_CONFIG_OVERRIDES, SEATS } from '@belot/engine';
 import { Table } from '@belot/table';
 import {
   EMOTE_GAP_MS,
@@ -54,6 +54,7 @@ export class BelaRoom extends Room {
   override maxClients = 4;
 
   private table!: Table;
+  private hard = false;
   private occupants: Occupant[] = [];
   private turnTimer: ReturnType<typeof setTimeout> | null = null;
   private turnEndsAt = 0;
@@ -63,10 +64,16 @@ export class BelaRoom extends Room {
   /** Last emote per seat, for the rate limit. */
   private lastEmoteAt = [0, 0, 0, 0];
 
-  override onCreate(options: { private?: boolean } = {}): void {
+  override onCreate(options: { private?: boolean; hard?: boolean } = {}): void {
     this.occupants = SEATS.map(() => ({ sessionId: null, name: '', avatar: '', connected: false }));
+    // "Prava bela" is the host's choice, and only on private tables — quick
+    // play must stay predictable for strangers.
+    this.hard = options.private === true && options.hard === true;
     // Four humans: nothing moves until a real player acts, or a timer fires.
-    this.table = new Table({ humanSeats: [...SEATS] });
+    this.table = new Table({
+      humanSeats: [...SEATS],
+      config: this.hard ? HARD_CONFIG_OVERRIDES : undefined,
+    });
     this.table.drainEvents();
 
     if (options.private) this.setPrivate(true);
@@ -258,6 +265,7 @@ export class BelaRoom extends Room {
       ...(this.turnEndsAt > 0
         ? { turnMsLeft: Math.max(0, this.turnEndsAt - Date.now()), turnTotalMs: TURN_MS }
         : {}),
+      ...(this.hard ? { hard: true } : {}),
     };
     // Views first: a client must know its own seat before the event stream
     // arrives, or the first batch cannot be attributed to anyone.

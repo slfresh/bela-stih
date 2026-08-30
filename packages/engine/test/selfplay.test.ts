@@ -160,7 +160,10 @@ describe('self-play harness', () => {
     };
 
     let matchSeed = 1;
-    const harnessConfig = { allowKontra: true }; // keep the doubling path under test
+    // Keep the doubling path under test, and the tie-cancel HOUSE RULE on so the
+    // cancelled-contest invariant still gets exercised (the shipped default now
+    // resolves ties to the first player in rotation, per UHDDR rule 7).
+    const harnessConfig = { allowKontra: true, declarationTieCancels: true };
     let s = startDeal(createMatch({ seed: matchSeed, dealer: 0, config: harnessConfig }));
     let steps = 0;
 

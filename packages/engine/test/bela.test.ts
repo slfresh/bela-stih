@@ -74,7 +74,19 @@ function playDeal(start: GameState, callBela: boolean): GameState {
       continue;
     }
     const belaOption = legal.find((a) => a.type === 'PLAY_CARD' && a.announceBela === true);
-    s = applyAction(s, callBela && belaOption ? belaOption : (legal[0] as Action));
+    if (belaOption && belaOption.type === 'PLAY_CARD') {
+      // Play the SAME card either way — with or without the call — so the two
+      // runs walk identical tricks and differ only by the 20.
+      const plain = legal.find(
+        (a) =>
+          a.type === 'PLAY_CARD' &&
+          a.announceBela !== true &&
+          cardId(a.card) === cardId(belaOption.card),
+      )!;
+      s = applyAction(s, callBela ? belaOption : plain);
+      continue;
+    }
+    s = applyAction(s, legal[0] as Action);
   }
   return s;
 }

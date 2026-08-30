@@ -62,6 +62,7 @@ function OfflineMatch({
       mySeat={HUMAN}
       lang={g.lang}
       view={g.view}
+      hardMode={settings.hardMode}
       options={settled || !g.idle ? [] : g.view.legalActions}
       myTurn={g.myTurn}
       settled={settled}

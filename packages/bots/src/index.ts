@@ -21,6 +21,12 @@ export function decideAction(view: PublicView, rng: () => number, level: BotLeve
   const actions = view.legalActions;
   if (actions.length === 0) throw new Error('bot asked to act with no legal actions');
   if (actions.length === 1) return actions[0]!;
+
+  // Blind (hard) mode offers a voluntary claim ALONGSIDE the cards. A bot never
+  // overlooks its zvanja — it claims first, at every level, then plays.
+  const blindClaim = actions.find((a) => a.type === 'DECLARE_ANNOUNCE');
+  if (blindClaim && actions.some((a) => a.type === 'PLAY_CARD')) return blindClaim;
+
   if (level === 'easy') return pick(actions, rng);
 
   const head = actions[0]!.type;
@@ -35,7 +41,10 @@ export function decideAction(view: PublicView, rng: () => number, level: BotLeve
     // is the only way the points can ever score.
     return actions.find((a) => a.type === 'DECLARE_ANNOUNCE') ?? actions[0]!;
   }
-  return decidePlay(view, preferBela(actions as PlayCardAction[]));
+  return decidePlay(
+    view,
+    preferBela(actions.filter((a): a is PlayCardAction => a.type === 'PLAY_CARD')),
+  );
 }
 
 /**

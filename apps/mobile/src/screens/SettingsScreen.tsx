@@ -55,6 +55,33 @@ export function SettingsScreen({
         )}
       </Panel>
 
+      <Panel label={lang.s.difficulty}>
+        <View style={styles.localeRow}>
+          {(
+            [
+              { hard: false, label: lang.s.difficultyEasy },
+              { hard: true, label: lang.s.difficultyHard },
+            ] as const
+          ).map((d) => (
+            <Pressable
+              key={String(d.hard)}
+              onPress={() => {
+                playSfx('tap');
+                onSettingsChange({ ...settings, hardMode: d.hard });
+              }}
+              style={[styles.localeChip, settings.hardMode === d.hard && styles.localeChipOn]}
+            >
+              <Text
+                style={[styles.localeText, settings.hardMode === d.hard && styles.localeTextOn]}
+              >
+                {d.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        {settings.hardMode && <Text style={styles.hint}>{lang.s.difficultyHardHint}</Text>}
+      </Panel>
+
       <Panel label={ui.language}>
         <View style={styles.localeRow}>
           {LOCALES.map((l) => (
@@ -140,6 +167,7 @@ const styles = StyleSheet.create({
   resetArmed: { backgroundColor: theme.danger },
   resetText: { color: theme.text, fontSize: 14, fontWeight: '700' },
 
+  hint: { color: theme.textDim, fontSize: 12, lineHeight: 17, marginTop: 10 },
   link: { color: theme.accent, fontSize: 15, fontWeight: '600', textAlign: 'center' },
   version: { color: theme.textDim, fontSize: 12, textAlign: 'center' },
 });

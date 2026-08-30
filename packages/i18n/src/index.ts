@@ -173,10 +173,27 @@ interface Strings {
   declareHint: string;
   belaHint: string;
 
-  terca: (top: string) => string;
-  kvarta: (top: string) => string;
-  kvinta: (top: string) => string;
+  /**
+   * The value word a player would say out loud — sequences are announced by
+   * VALUE, never by name: "dvadeset do kralja", not "terca". Per the UHDDR
+   * "koliko i dokle" convention.
+   */
+  declValue: (value: number) => string;
+  /** The "do" in "dvadeset do kralja". */
+  declTo: string;
   carre: (rank: string) => string;
+  /** Renons/auzmeš — the hard-mode misplay call. */
+  renonsTitle: string;
+  renonsBy: (who: string) => string;
+  /** Hard-mode blind claim button + empty-claim toast. */
+  claimZvanja: string;
+  claimZvanjaHint: string;
+  noZvanja: string;
+  /** Difficulty setting. */
+  difficulty: string;
+  difficultyEasy: string;
+  difficultyHard: string;
+  difficultyHardHint: string;
 
   dealHeading: (n: number, dealer: string) => string;
   dealResult: string;
@@ -295,10 +312,21 @@ const hr: Strings = {
   declareHint: 'Ako ne zovete sada, propada — ali protivnici ništa ne saznaju.',
   belaHint: 'Belu zovete uz kralja ili babu aduta.',
 
-  terca: (top) => `terca do ${top}`,
-  kvarta: (top) => `kvarta do ${top}`,
-  kvinta: (top) => `kvinta do ${top}`,
+  declValue: (value) =>
+    ({ 20: 'dvadeset', 50: 'pedeset', 100: 'sto', 150: 'sto pedeset', 200: 'dvjesto' })[value] ??
+    String(value),
+  declTo: 'do',
   carre: (rank) => `četiri ${rank}`,
+  renonsTitle: 'Auzmeš!',
+  renonsBy: (who) => `${who} je pogriješio — cijelo dijeljenje ide protivnicima`,
+  claimZvanja: 'Zovem zvanje',
+  claimZvanjaHint: 'Imate li zvanje? Sami pazite — tko ne zove, propada mu.',
+  noZvanja: 'Nemate ništa za zvati',
+  difficulty: 'Težina',
+  difficultyEasy: 'Lagana',
+  difficultyHard: 'Prava bela',
+  difficultyHardHint:
+    'Prava bela: aplikacija ne čuva pravila umjesto vas. Zvanja tražite sami, a kriva karta je auzmeš — protivnici pišu sve.',
 
   dealHeading: (n, dealer) => `Dijeljenje ${n} — djeli ${dealer}`,
   dealResult: 'Obračun dijeljenja',
@@ -460,10 +488,21 @@ const srCyrl: Strings = {
   declareHint: 'Ако не зовете сада, пропада — али противници ништа не сазнају.',
   belaHint: 'Белу зовете уз краља или бабу адута.',
 
-  terca: (top) => `терца до ${top}`,
-  kvarta: (top) => `кварта до ${top}`,
-  kvinta: (top) => `квинта до ${top}`,
+  declValue: (value) =>
+    ({ 20: 'двадесет', 50: 'педесет', 100: 'сто', 150: 'сто педесет', 200: 'двеста' })[value] ??
+    String(value),
+  declTo: 'до',
   carre: (rank) => `четири ${rank}`,
+  renonsTitle: 'Аузмеш!',
+  renonsBy: (who) => `${who} је погрешио — цело дељење иде противницима`,
+  claimZvanja: 'Зовем звање',
+  claimZvanjaHint: 'Имате ли звање? Сами пазите — ко не зове, пропада му.',
+  noZvanja: 'Немате ништа за звати',
+  difficulty: 'Тежина',
+  difficultyEasy: 'Лагана',
+  difficultyHard: 'Права бела',
+  difficultyHardHint:
+    'Права бела: апликација не чува правила уместо вас. Звања тражите сами, а крива карта је аузмеш — противници пишу све.',
 
   dealHeading: (n, dealer) => `Дељење ${n} — дели ${dealer}`,
   dealResult: 'Обрачун дељења',
@@ -621,10 +660,21 @@ const en: Strings = {
   declareHint: 'Stay silent and it is forfeited — but the opponents learn nothing.',
   belaHint: 'Call bela with the king or over of trumps.',
 
-  terca: (top) => `tierce to the ${top}`,
-  kvarta: (top) => `quart to the ${top}`,
-  kvinta: (top) => `quint to the ${top}`,
+  declValue: (value) =>
+    ({ 20: 'twenty', 50: 'fifty', 100: 'a hundred', 150: '150', 200: '200' })[value] ??
+    String(value),
+  declTo: 'to the',
   carre: (rank) => `four ${rank}s`,
+  renonsTitle: 'Renons!',
+  renonsBy: (who) => `${who} broke the rules of play — the whole deal goes to the opponents`,
+  claimZvanja: 'Declare',
+  claimZvanjaHint: 'Got a declaration? Spot it yourself — unclaimed is forfeited.',
+  noZvanja: 'Nothing to declare',
+  difficulty: 'Difficulty',
+  difficultyEasy: 'Casual',
+  difficultyHard: 'True bela',
+  difficultyHardHint:
+    'True bela: the app stops policing for you. Find your own declarations, and an illegal card is renons — the opponents write everything.',
 
   dealHeading: (n, dealer) => `Deal ${n} — dealt by ${dealer}`,
   dealResult: 'Deal result',
@@ -753,16 +803,11 @@ export class Lang {
   }
 
   declaration(d: DeclarationSummary): string {
+    // Announced the way it is said at the table: by value, "dvadeset do kralja" —
+    // never by name, and never revealing more than the top card.
     const top = this.rankName(d.topRank);
-    const name =
-      d.kind === 'carre'
-        ? this.t.carre(top)
-        : d.length >= 5
-          ? this.t.kvinta(top)
-          : d.length === 4
-            ? this.t.kvarta(top)
-            : this.t.terca(top);
-    return `${name} (${d.value})`;
+    if (d.kind === 'carre') return `${this.t.declValue(d.value)} (${this.t.carre(top)})`;
+    return `${this.t.declValue(d.value)} ${this.t.declTo} ${top}`;
   }
 
   /** Short label for a legal action, for buttons and numbered lists. */

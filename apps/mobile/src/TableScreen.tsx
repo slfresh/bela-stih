@@ -67,6 +67,11 @@ export interface TableScreenProps {
   finishLabel: string;
   /** When set, the emote tray is available and sends through here. */
   onEmote?: (id: string) => void;
+  /**
+   * "Prava bela": no card assist — every card is tappable, and an illegal one
+   * is a renons the engine punishes. The claim/bela buttons stay unassisted too.
+   */
+  hardMode?: boolean;
 }
 
 export function TableScreen(props: TableScreenProps) {
@@ -74,6 +79,7 @@ export function TableScreen(props: TableScreenProps) {
     mySeat, lang, view, options, myTurn, settled, matchOver, lastDealResult,
     matchScores, winnerTeam, profile, banner, seatMeta, status, anchors, fxBus,
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
+    hardMode = false,
   } = props;
 
   // The tray closes on send; the cooldown mirrors the server's rate limit so
@@ -227,7 +233,12 @@ export function TableScreen(props: TableScreenProps) {
               <Text style={styles.promptHint}>{lang.s.declareHint}</Text>
             </View>
           )}
-          {!settled && view.canAnnounceBela && (
+          {!settled && view.canDeclare === true && (
+            <View style={styles.promptRow}>
+              <Text style={styles.promptHint}>{lang.s.claimZvanjaHint}</Text>
+            </View>
+          )}
+          {!settled && view.canAnnounceBela && !hardMode && (
             <View style={styles.promptRow}>
               <Text style={styles.promptText}>{lang.s.belaHint}</Text>
             </View>
@@ -235,7 +246,13 @@ export function TableScreen(props: TableScreenProps) {
 
           {/* my hand, fanned; the seat anchor for sprites sits underneath it */}
           <Anchor id={anchorId.seat(mySeat)} style={styles.handArea}>
-            <Hand cards={view.hand} options={options} enabled={myTurn} onPlay={onAction} />
+            <Hand
+              cards={view.hand}
+              options={options}
+              enabled={myTurn}
+              onPlay={onAction}
+              freePlay={hardMode}
+            />
             {/* online, my own turn is on the clock too — show it */}
             {myTurn && turnDeadline !== null && (
               <View style={styles.myTimer} pointerEvents="none">
@@ -283,6 +300,11 @@ export function TableScreen(props: TableScreenProps) {
                 matchScores={matchScores}
                 matchOver={matchOver}
                 winnerLabel={winnerTeam !== null ? lang.team(winnerTeam, mySeat) : ''}
+                renonsText={
+                  lastDealResult?.renonsSeat != null
+                    ? lang.s.renonsBy(meta(lastDealResult.renonsSeat).name)
+                    : null
+                }
                 onNext={tap(onNext)}
                 onFinish={tap(onFinish)}
                 finishLabel={finishLabel}
@@ -336,11 +358,14 @@ function Hand({
   options,
   enabled,
   onPlay,
+  freePlay = false,
 }: {
   cards: Card[];
   options: Action[];
   enabled: boolean;
   onPlay: (a: Action) => void;
+  /** Hard mode: any card is tappable and nothing is dimmed or lifted as a hint. */
+  freePlay?: boolean;
 }) {
   const plays = options.filter(
     (a): a is Extract<Action, { type: 'PLAY_CARD' }> => a.type === 'PLAY_CARD',
@@ -364,15 +389,23 @@ function Hand({
   return (
     <View style={styles.fan}>
       {sorted.map((card, i) => {
+        const inPlayMoment = plays.length > 0;
         const action = byCard.get(cardId(card));
-        const playable = enabled && action !== undefined;
-        const illegalNow = enabled && plays.length > 0 && !playable;
+        // Hard mode: every card is submittable — the engine, not the UI, is
+        // the judge, and a wrong card is a renons.
+        const chosen =
+          action ??
+          (freePlay && inPlayMoment
+            ? ({ type: 'PLAY_CARD', seat: plays[0]!.seat, card } as Action)
+            : undefined);
+        const playable = enabled && chosen !== undefined;
+        const illegalNow = !freePlay && enabled && inPlayMoment && !playable;
         const off = i - mid;
         return (
           <Pressable
             key={cardId(card)}
             disabled={!playable}
-            onPress={() => action && onPlay(action)}
+            onPress={() => chosen && onPlay(chosen)}
             style={[
               styles.fanCard,
               {
@@ -385,7 +418,12 @@ function Hand({
               },
             ]}
           >
-            <PlayingCard card={card} size="lg" dimmed={illegalNow} highlight={playable} />
+            <PlayingCard
+              card={card}
+              size="lg"
+              dimmed={illegalNow}
+              highlight={playable && !freePlay}
+            />
           </Pressable>
         );
       })}
@@ -428,6 +466,7 @@ function DealResult({
   matchScores,
   matchOver,
   winnerLabel,
+  renonsText,
   onNext,
   onFinish,
   finishLabel,
@@ -437,6 +476,7 @@ function DealResult({
   matchScores: readonly [number, number];
   matchOver: boolean;
   winnerLabel: string;
+  renonsText?: string | null;
   onNext: () => void;
   onFinish: () => void;
   finishLabel: string;
@@ -460,9 +500,15 @@ function DealResult({
         row(lang.s.declarations, result.declarationPoints)}
       {result.bela[0] + result.bela[1] > 0 && row(lang.s.bela, result.bela)}
       {row(lang.s.total, result.rawTotal)}
-      <Text style={[styles.verdict, result.callerMade ? styles.made : styles.failed]}>
-        {result.callerMade ? lang.s.callerMade : lang.s.callerFailed}
-      </Text>
+      {renonsText ? (
+        <Text style={[styles.verdict, styles.failed]}>
+          {lang.s.renonsTitle} {renonsText}
+        </Text>
+      ) : (
+        <Text style={[styles.verdict, result.callerMade ? styles.made : styles.failed]}>
+          {result.callerMade ? lang.s.callerMade : lang.s.callerFailed}
+        </Text>
+      )}
       {row(lang.s.recorded, result.finalScore)}
       {row(lang.s.matchScore, matchScores)}
 

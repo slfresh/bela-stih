@@ -230,7 +230,8 @@ export function legalActions(s: GameState): Action[] {
           { type: 'DECLARE_SKIP', seat },
         ];
       }
-      return legalPlays({
+      const blind = s.config.declarationMode === 'blind';
+      const acts: Action[] = legalPlays({
         hand: s.hands[seat]!,
         trick: s.currentTrick,
         mySeat: seat,
@@ -239,11 +240,18 @@ export function legalActions(s: GameState): Action[] {
       }).flatMap((card): Action[] => {
         const play: Action = { type: 'PLAY_CARD', seat, card };
         // Where bela is available, playing the card silently and calling it are
-        // two genuinely different moves, so both are offered.
-        return canAnnounceBelaWith(s, seat, card)
-          ? [play, { type: 'PLAY_CARD', seat, card, announceBela: true }]
-          : [play];
+        // two genuinely different moves, so both are offered. In blind mode the
+        // option appears on ANY trump K/Q — offering it only with the pair in
+        // hand would leak exactly the information hard mode hides.
+        const offerBela = blind ? couldTryBelaWith(s, card) : canAnnounceBelaWith(s, seat, card);
+        return offerBela ? [play, { type: 'PLAY_CARD', seat, card, announceBela: true }] : [play];
       });
+      // Blind mode: declaring is optional and never forced — you may claim
+      // zvanja before your first card, or just play and forfeit them.
+      if (blind && s.completedTricks.length === 0 && !s.declared[seat]) {
+        acts.push({ type: 'DECLARE_ANNOUNCE', seat });
+      }
+      return acts;
     }
     default:
       return [];
@@ -365,9 +373,15 @@ function completeDeal(s: GameState): GameState {
     s.declared = [true, true, true, true];
   } else {
     s.announcedDeclarations = [[], [], [], []];
-    // A seat with nothing to declare has no decision to make, so it is never
-    // prompted. That leaks nothing: legalActions are private to the seat on turn.
-    s.declared = SEATS.map((seat) => s.availableDeclarations[seat]!.length === 0);
+    if (s.config.declarationMode === 'blind') {
+      // Blind (hard) mode: EVERY seat keeps its claim window open, holdings or
+      // not — pre-settling the empty-handed would tell them they hold nothing.
+      s.declared = [false, false, false, false];
+    } else {
+      // A seat with nothing to declare has no decision to make, so it is never
+      // prompted. That leaks nothing: legalActions are private to the seat on turn.
+      s.declared = SEATS.map((seat) => s.availableDeclarations[seat]!.length === 0);
+    }
   }
 
   s.belaHolderSeat = detectBelaSeat(s.hands, s.context);
@@ -412,6 +426,20 @@ function applyDeclare(
 ): GameState {
   expectPhase(s, 'PLAY');
   expectSeat(seat, s.turn);
+
+  // Blind (hard) mode: a voluntary claim before the first card. The engine
+  // announces exactly what the hand actually holds — claiming with nothing is
+  // a legal, slightly embarrassing no-op, just like at a real table.
+  if (s.config.declarationMode === 'blind') {
+    if (type !== 'DECLARE_ANNOUNCE') throw new Error('nothing to skip in blind mode');
+    if (s.completedTricks.length !== 0 || s.declared[seat]) {
+      throw new Error('too late to declare');
+    }
+    s.declared[seat] = true;
+    s.announcedDeclarations[seat] = s.availableDeclarations[seat]!.slice();
+    return s;
+  }
+
   if (!owesDeclaration(s, seat)) throw new Error('no declaration is owed');
 
   s.declared[seat] = true;
@@ -441,12 +469,30 @@ function canAnnounceBelaWith(s: GameState, seat: Seat, card: Card): boolean {
   );
 }
 
+/**
+ * Blind-mode counterpart of `canAnnounceBelaWith`: may the player TRY to call
+ * bela on this card? True for any trump K/Q while bela is still uncalled —
+ * deliberately ignoring whether the pair is actually in hand, so the option's
+ * presence never leaks what hard mode is hiding.
+ */
+function couldTryBelaWith(s: GameState, card: Card): boolean {
+  if (s.config.belaMode !== 'announce') return false;
+  if (s.belaAnnouncedSeat !== null) return false;
+  const trump = s.context.trumpSuit;
+  if (s.context.contractType !== 'SUIT' || trump === null) return false;
+  return card.suit === trump && (card.rank === 'K' || card.rank === 'Q');
+}
+
 function applyPlay(s: GameState, seat: Seat, card: Card, announceBela: boolean): GameState {
   expectPhase(s, 'PLAY');
   expectSeat(seat, s.turn);
   if (owesDeclaration(s, seat)) {
     throw new Error('must announce or skip zvanja before playing in trick 1');
   }
+  const blind = s.config.declarationMode === 'blind';
+  // Blind mode: playing your first card without claiming forfeits your zvanja.
+  if (blind && s.completedTricks.length === 0) s.declared[seat] = true;
+
   const hand = s.hands[seat]!;
   if (!hasCard(hand, card)) throw new Error(`card ${cardId(card)} not in hand`);
   const legal = legalPlays({
@@ -457,14 +503,25 @@ function applyPlay(s: GameState, seat: Seat, card: Card, announceBela: boolean):
     forcedOvertrumpOverPartner: s.config.forcedOvertrumpOverPartner,
   });
   if (!legal.some((c) => cardEquals(c, card))) {
+    if (s.config.renonsMode === 'punish') {
+      // Renons ("auzmeš"): the wrong card hits the felt and the deal is over —
+      // the opponents write the whole table. hr.wikipedia: "protivnicima pišu
+      // se 162 boda + sva zvanja koja su bila zvana u tom dijeljenju."
+      s.hands[seat] = removeCard(hand, card);
+      s.currentTrick.push({ seat, card });
+      return applyRenons(s, seat);
+    }
     throw new Error(`illegal play ${cardId(card)}`);
   }
 
   if (announceBela) {
     if (!canAnnounceBelaWith(s, seat, card)) {
-      throw new Error(`cannot call bela on ${cardId(card)}`);
+      // In blind mode a false bela call is simply ignored — the table checks
+      // your hand and nothing scores. Elsewhere it is a client bug: fail loud.
+      if (!blind) throw new Error(`cannot call bela on ${cardId(card)}`);
+    } else {
+      s.belaAnnouncedSeat = seat;
     }
-    s.belaAnnouncedSeat = seat;
   }
 
   s.hands[seat] = removeCard(hand, card);
@@ -491,7 +548,10 @@ function applyPlay(s: GameState, seat: Seat, card: Card, announceBela: boolean):
 
 function scoreCurrentDeal(s: GameState): GameState {
   // Only what was actually announced enters the contest; silence forfeits.
-  const resolution = resolveDeclarations(s.announcedDeclarations, teamOf, s.config);
+  // Ties resolve to whoever is first in play order from the deal's first leader
+  // (UHDDR rule 7, "prvi na štihu"), unless the cancel house rule is on.
+  const firstLeader = ((s.dealer + 1) % 4) as Seat;
+  const resolution = resolveDeclarations(s.announcedDeclarations, teamOf, s.config, firstLeader);
   // Only a called bela scores; an uncalled pair is forfeited exactly like zvanja.
   const belaTeam = s.belaAnnouncedSeat === null ? null : teamOf(s.belaAnnouncedSeat);
   const result = scoreDeal({
@@ -504,7 +564,48 @@ function scoreCurrentDeal(s: GameState): GameState {
     belaTeam,
     config: s.config,
   });
+  return finishDeal(s, result);
+}
 
+/**
+ * Renons ("auzmeš"): an illegal play accepted under renonsMode 'punish'. The
+ * deal ends on the spot; the offender's opponents score all 162 card points
+ * plus EVERY zvanje announced this deal, no matter who announced it, plus an
+ * announced bela. No multipliers — the rulebooks state the flat table.
+ */
+function applyRenons(s: GameState, offender: Seat): GameState {
+  const offTeam = teamOf(offender);
+  const defTeam = (1 - offTeam) as TeamId;
+  const zvanjaTotal = s.announcedDeclarations.flat().reduce((t, d) => t + d.value, 0);
+  const belaTotal = s.belaAnnouncedSeat !== null ? 20 : 0;
+
+  const cardPoints: [number, number] = [0, 0];
+  const trickPoints: [number, number] = [0, 0];
+  const declarationPoints: [number, number] = [0, 0];
+  const bela: [number, number] = [0, 0];
+  const finalScore: [number, number] = [0, 0];
+  cardPoints[defTeam] = 152;
+  trickPoints[defTeam] = 162;
+  declarationPoints[defTeam] = zvanjaTotal;
+  bela[defTeam] = belaTotal;
+  finalScore[defTeam] = 162 + zvanjaTotal + belaTotal;
+
+  const result: DealScoreResult = {
+    cardPoints,
+    trickPoints,
+    valatTeam: null,
+    valatBonus: [0, 0],
+    declarationPoints,
+    bela,
+    rawTotal: [finalScore[0], finalScore[1]],
+    callerMade: teamOf(s.callerSeat!) === defTeam,
+    finalScore,
+    renonsSeat: offender,
+  };
+  return finishDeal(s, result);
+}
+
+function finishDeal(s: GameState, result: DealScoreResult): GameState {
   s.matchScores = [
     s.matchScores[0] + result.finalScore[0],
     s.matchScores[1] + result.finalScore[1],
@@ -512,6 +613,7 @@ function scoreCurrentDeal(s: GameState): GameState {
   s.lastDealResult = result;
   s.dealNumber += 1;
   s.turn = null;
+  s.currentTrick = [];
   s.dealer = ((s.dealer + 1) % 4) as Seat;
 
   // First team past the target wins. If both cross on the same deal the higher
@@ -551,9 +653,17 @@ export function publicView(s: GameState, seat: Seat): PublicView {
     matchScores: [s.matchScores[0], s.matchScores[1]],
     // Public summaries only: what the table has HEARD, never the cards behind it.
     announcedDeclarations: s.announcedDeclarations.flat().map(summarize),
-    // The seat's own zvanja; their cards are already in `hand`, so this leaks nothing.
-    myDeclarations: s.availableDeclarations[seat]!.slice(),
+    // The seat's own zvanja; their cards are already in `hand`, so this leaks
+    // nothing — EXCEPT in blind (hard) mode, where spotting them is the game.
+    myDeclarations:
+      s.config.declarationMode === 'blind' ? [] : s.availableDeclarations[seat]!.slice(),
     mustDeclare: toAct === seat && owesDeclaration(s, seat),
+    canDeclare:
+      s.config.declarationMode === 'blind' &&
+      s.phase === 'PLAY' &&
+      toAct === seat &&
+      s.completedTricks.length === 0 &&
+      !s.declared[seat],
     canAnnounceBela:
       toAct === seat &&
       s.phase === 'PLAY' &&

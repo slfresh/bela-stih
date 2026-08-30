@@ -28,6 +28,11 @@ export interface Settings {
    * data-safety declaration honest at "no data collected".
    */
   nickname: string;
+  /**
+   * "Prava bela": renons punishes instead of being blocked, and zvanja must be
+   * spotted by the player. Applies to offline games and private tables you host.
+   */
+  hardMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -35,6 +40,7 @@ export const DEFAULT_SETTINGS: Settings = {
   haptics: true,
   locale: 'hr',
   nickname: '',
+  hardMode: false,
 };
 
 function read<T>(key: string, fallback: T): T {

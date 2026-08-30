@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import type { Action, PublicView, Seat } from '@belot/engine';
+import { HARD_CONFIG_OVERRIDES, type Action, type PublicView, type Seat } from '@belot/engine';
 import { Table } from '@belot/table';
 import type { BotLevel } from '@belot/bots';
 import { Lang } from '@belot/i18n';
@@ -32,6 +32,7 @@ function preDealView(v: PublicView): PublicView {
     toAct: null,
     legalActions: [],
     mustDeclare: false,
+    canDeclare: false,
     canAnnounceBela: false,
   };
 }
@@ -47,7 +48,11 @@ function preDealView(v: PublicView): PublicView {
 export function useGame(settings: Settings, level: BotLevel = 'medium') {
   const tableRef = useRef<Table | null>(null);
   if (tableRef.current === null) {
-    tableRef.current = new Table({ humanSeats: [HUMAN], botLevel: level });
+    tableRef.current = new Table({
+      humanSeats: [HUMAN],
+      botLevel: level,
+      config: settings.hardMode ? HARD_CONFIG_OVERRIDES : undefined,
+    });
   }
   const table = tableRef.current;
 

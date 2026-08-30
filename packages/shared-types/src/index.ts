@@ -99,8 +99,23 @@ export interface DeclarationSummary {
  *   must call them during trick 1, before playing its card, or score nothing for
  *   them. Staying silent to conceal your hand is a real strategic option.
  * - 'auto': every declaration counts automatically (a gentler casual/beginner mode).
+ * - 'blind': hard mode — the engine never tells you what you hold. You may claim
+ *   ("zovem zvanje") before your first card and whatever you actually hold is
+ *   announced; play your first card without claiming and it is silently forfeited,
+ *   exactly like overlooking a terca at a real table.
  */
-export type DeclarationMode = 'auto' | 'announce';
+export type DeclarationMode = 'auto' | 'announce' | 'blind';
+
+/**
+ * What happens when a player submits a card that breaks the rules of play.
+ * - 'block' (default): the move is rejected — the app is the tolerant friend
+ *   who says "ne možeš to".
+ * - 'punish': the move is ACCEPTED and the deal ends immediately as a renons
+ *   ("auzmeš"): the opponents score all 162 card points plus every zvanje
+ *   announced in the deal, per hr.wikipedia/UHDDR rule 14. Hard mode.
+ * Bots always pick from legal plays, so only humans can renons.
+ */
+export type RenonsMode = 'block' | 'punish';
 
 /**
  * Whether bela (trump K+Q, worth 20) must be called to count.
@@ -122,12 +137,18 @@ export interface EngineConfig {
   /** Match target. Balkan Bela = 1001. */
   matchTarget: number;
   /**
-   * THE #1 ENGINE BUG knob. When you cannot follow suit and your PARTNER is
-   * already winning the trick: must you still trump/over-trump?
-   * - false (default, ex-Yu "ne piši po partneru"): free discard.
-   * - true: you are forced to over-trump even your own partner.
+   * When you cannot follow suit and your PARTNER is already winning the trick:
+   * must you still trump/over-trump?
+   * - true (default — the native Croatian rule, "mora se rezati" without
+   *   exception; verified against hr.wikipedia, belaklub and the UHDDR
+   *   tournament rulebook): you must trump even over your partner, and iber
+   *   applies even when your partner leads the trick.
+   * - false: the French-lineage "partner drži štih" exemption, kept as a
+   *   house-rule knob only.
    */
   forcedOvertrumpOverPartner: boolean;
+  /** Illegal-play handling; 'punish' = renons ends the deal for the offender. */
+  renonsMode: RenonsMode;
   /** On a failed (pad) contract, does the failing team keep its bela 20? Default true. */
   keepBelaOnFailedContract: boolean;
   /**
@@ -167,7 +188,12 @@ export interface EngineConfig {
   lastTrickBonus: number;
   /** Valat (all 8 tricks) bonus on top of the last-trick bonus. Balkan = 90 (=> 252 total). */
   valatBonus: number;
-  /** When two teams' best declarations are exactly equal, do all declarations cancel? Default true. */
+  /**
+   * When two teams' best declarations are exactly equal, do all declarations
+   * cancel? Default FALSE per UHDDR tournament rule 7: "prednost ima onaj koji
+   * je prvi na štihu" — the tie goes to whoever is earlier in play order from
+   * the deal's first leader. True is kept as a house-rule knob.
+   */
   declarationTieCancels: boolean;
   /** Must zvanja be announced during trick 1 to score? Default 'announce'. */
   declarationMode: DeclarationMode;
@@ -177,7 +203,8 @@ export interface EngineConfig {
 
 export const DEFAULT_CONFIG: EngineConfig = {
   matchTarget: 1001,
-  forcedOvertrumpOverPartner: false,
+  forcedOvertrumpOverPartner: true,
+  renonsMode: 'block',
   keepBelaOnFailedContract: true,
   contractTieSucceeds: false,
   allowKontra: false,
@@ -186,9 +213,15 @@ export const DEFAULT_CONFIG: EngineConfig = {
   dealerMustCall: true,
   lastTrickBonus: 10,
   valatBonus: 90,
-  declarationTieCancels: true,
+  declarationTieCancels: false,
   declarationMode: 'announce',
   belaMode: 'announce',
+};
+
+/** The hard-difficulty ("prava bela") overrides applied on top of the defaults. */
+export const HARD_CONFIG_OVERRIDES: Partial<EngineConfig> = {
+  renonsMode: 'punish',
+  declarationMode: 'blind',
 };
 
 // ---------------------------------------------------------------------------
@@ -271,6 +304,12 @@ export interface PublicView {
   myDeclarations: Declaration[];
   /** True when this seat owes an announce-or-skip decision before it may play. */
   mustDeclare: boolean;
+  /**
+   * Blind (hard) mode only: this seat MAY claim zvanja right now. Always offered
+   * before the first card regardless of what the hand holds — the button's
+   * presence must not leak whether there is anything to claim.
+   */
+  canDeclare: boolean;
   /** True when this seat could call bela right now (its legal plays include the option). */
   canAnnounceBela: boolean;
   /** Who has called bela this deal, once called. Public — everyone hears it. */
