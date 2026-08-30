@@ -16,6 +16,8 @@ export const ROOM_NAME = 'bela';
 /** Client -> server. */
 export type ClientMessage =
   | { type: 'action'; action: Action }
+  /** Host only (seat 0): start now, empty seats play as bots. */
+  | { type: 'start' }
   /** Advance from a scored deal to the next one. */
   | { type: 'next' }
   /** A quick emote; relayed, rate-limited, never stored. */

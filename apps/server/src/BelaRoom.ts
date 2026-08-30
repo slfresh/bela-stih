@@ -178,6 +178,20 @@ export class BelaRoom extends Room {
       return;
     }
 
+    if (packet.type === 'start') {
+      // The host (seat 0 — the table's creator) may start early; every empty
+      // seat plays as a bot from here on. The table locks exactly as it does
+      // when a fourth human sits down.
+      if (seat !== 0 || this.started) return;
+      for (const s of SEATS) {
+        if (this.occupants[s]!.sessionId === null) this.table.setSeatHuman(s, false);
+      }
+      this.started = true;
+      this.lock();
+      this.afterMove();
+      return;
+    }
+
     if (packet.type === 'next') {
       if (this.table.phase === 'DEAL_OVER') {
         this.table.startNextDeal();

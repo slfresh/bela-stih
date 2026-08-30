@@ -265,6 +265,11 @@ export function useNetGame(settings: Settings) {
     roomRef.current?.send('emote', { id });
   }, []);
 
+  /** Host only: start the game now, bots filling the empty seats. */
+  const startWithBots = useCallback(() => {
+    roomRef.current?.send('start', {});
+  }, []);
+
   return {
     status,
     error,
@@ -287,6 +292,7 @@ export function useNetGame(settings: Settings) {
     quickPlay,
     createPrivate,
     joinById,
+    startWithBots,
     submit,
     next,
     sendEmote,

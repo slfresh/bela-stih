@@ -151,6 +151,9 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
               {net.roomId}
             </Text>
             <Text style={styles.hint}>{ui.shareCode}</Text>
+            {net.seat === 0 && net.status === 'waiting' && seated >= 1 && seated < 4 && (
+              <Button label={ui.startWithBots} tone="strong" onPress={net.startWithBots} />
+            )}
             <Button
               label={ui.invite}
               tone="strong"
