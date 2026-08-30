@@ -6,8 +6,10 @@ import { PipShape, suitColour } from './pips';
 import { SeasonScene } from './scenes';
 import { CourtHalf } from './courts';
 import { garb } from './palette';
+import { Image as RNImage, StyleSheet } from 'react-native';
 import { FrenchFace, frenchColour } from './french';
 import { SimpleFace } from './simple';
+import { vintageSource } from './vintage';
 
 /**
  * A mađarica, drawn on a 100x145 canvas, composed from the Tell-pattern canon
@@ -67,6 +69,24 @@ const PIP_SCALE = 0.175;
 export function CardFace({ card, width }: { card: Card; width: number }) {
   const height = width * 1.45;
   const style = cosmetics().deckStyle;
+
+  // The vintage deck is photographic: a real printed card, rounded and framed.
+  if (style === 'starinske') {
+    return (
+      <RNImage
+        source={vintageSource(card)}
+        style={{
+          width,
+          height,
+          borderRadius: width * 0.09,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderColor: 'rgba(0,0,0,0.35)',
+        }}
+        resizeMode="cover"
+      />
+    );
+  }
+
   const frame = style === 'francuske' ? frenchColour(card.suit) : suitColour(card.suit).fill;
 
   return (

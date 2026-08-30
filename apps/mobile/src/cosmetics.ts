@@ -29,8 +29,8 @@ export function feltStyle(id: string): FeltStyle {
   return FELTS[id] ?? FELTS.green!;
 }
 
-/** The three card-face styles the player can choose between, free of charge. */
-export type DeckStyle = 'madarice' | 'francuske' | 'simple';
+/** The card-face styles the player can choose between, free of charge. */
+export type DeckStyle = 'madarice' | 'starinske' | 'francuske' | 'simple';
 
 let current = {
   cardBack: 'classic',

@@ -62,6 +62,7 @@ export function SettingsScreen({
           {(
             [
               { id: 'madarice', label: lang.s.deckMadarice },
+              { id: 'starinske', label: lang.s.deckStarinske },
               { id: 'francuske', label: lang.s.deckFrancuske },
               { id: 'simple', label: lang.s.deckSimple },
             ] as const

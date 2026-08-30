@@ -197,6 +197,7 @@ interface Strings {
   /** Card-face style chooser. */
   deckStyleLabel: string;
   deckMadarice: string;
+  deckStarinske: string;
   deckFrancuske: string;
   deckSimple: string;
 
@@ -334,6 +335,7 @@ const hr: Strings = {
     'Prava bela: aplikacija ne čuva pravila umjesto vas. Zvanja tražite sami, a kriva karta je auzmeš — protivnici pišu sve.',
   deckStyleLabel: 'Karte',
   deckMadarice: 'Mađarice',
+  deckStarinske: 'Starinske',
   deckFrancuske: 'Francuske',
   deckSimple: 'Jednostavne',
 
@@ -514,6 +516,7 @@ const srCyrl: Strings = {
     'Права бела: апликација не чува правила уместо вас. Звања тражите сами, а крива карта је аузмеш — противници пишу све.',
   deckStyleLabel: 'Карте',
   deckMadarice: 'Мађарице',
+  deckStarinske: 'Старинске',
   deckFrancuske: 'Француске',
   deckSimple: 'Једноставне',
 
@@ -690,6 +693,7 @@ const en: Strings = {
     'True bela: the app stops policing for you. Find your own declarations, and an illegal card is renons — the opponents write everything.',
   deckStyleLabel: 'Cards',
   deckMadarice: 'Hungarian',
+  deckStarinske: 'Vintage',
   deckFrancuske: 'French',
   deckSimple: 'Simple',
 
