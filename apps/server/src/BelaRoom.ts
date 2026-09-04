@@ -57,6 +57,13 @@ export class BelaRoom extends Room {
   private hard = false;
   /** The table's creator (first joiner); start-with-bots rights follow them. */
   private hostId: string | null = null;
+  /** Matches won per team since these people sat down. */
+  private series: [number, number] = [0, 0];
+  private matchNumber = 0;
+  /** Idempotence guard: afterMove() runs on every publish, the score once. */
+  private lastRecordedMatch = -1;
+  /** Seats that have asked for another match; cleared on each restart. */
+  private readonly rematchVotes = new Set<Seat>();
   private occupants: Occupant[] = [];
   private turnTimer: ReturnType<typeof setTimeout> | null = null;
   private turnEndsAt = 0;
@@ -117,6 +124,15 @@ export class BelaRoom extends Room {
     this.table.setSeatHuman(seat, true);
     if (this.hostId === null) this.hostId = client.sessionId;
 
+    // The series belongs to the people who sat down together, so a NEW face
+    // resets it. A reconnect never lands here (it goes through
+    // allowReconnection), so a dropped player keeps the tally.
+    if (this.started) {
+      this.series = [0, 0];
+      this.matchNumber = 0;
+      this.lastRecordedMatch = -1;
+    }
+
     if (!this.started && this.occupants.every((o) => o.sessionId !== null)) {
       this.started = true;
       this.lock();
@@ -160,6 +176,28 @@ export class BelaRoom extends Room {
     this.table.setSeatHuman(seat, false);
     // The crown passes to whoever is still seated.
     if (wasHost) this.hostId = this.occupants.find((o) => o.sessionId !== null)?.sessionId ?? null;
+    this.afterMove();
+  }
+
+  /** Every connected human still at the table has asked for another match. */
+  private everyHumanVoted(): boolean {
+    const humans = SEATS.filter(
+      (s) => this.occupants[s]!.sessionId !== null && this.occupants[s]!.connected,
+    );
+    return humans.length > 0 && humans.every((s) => this.rematchVotes.has(s));
+  }
+
+  private beginRematch(): void {
+    // A seat that is still occupied and connected stays HUMAN whatever it
+    // voted — the vote gates the START, it never takes somebody's cards away.
+    // Empty and dropped seats become bots, exactly as at table creation.
+    for (const s of SEATS) {
+      const o = this.occupants[s]!;
+      this.table.setSeatHuman(s, o.sessionId !== null && o.connected);
+    }
+    this.rematchVotes.clear();
+    this.matchNumber += 1;
+    this.table.newMatch();
     this.afterMove();
   }
 
@@ -215,6 +253,22 @@ export class BelaRoom extends Room {
       return;
     }
 
+    if (packet.type === 'rematch' || packet.type === 'rematchCancel') {
+      if (this.table.phase !== 'MATCH_OVER') return;
+      if (packet.type === 'rematch') this.rematchVotes.add(seat);
+      else this.rematchVotes.delete(seat);
+      if (packet.type === 'rematch' && this.everyHumanVoted()) this.beginRematch();
+      else this.publish();
+      return;
+    }
+
+    if (packet.type === 'rematchStart') {
+      // The host can start without a full house; anyone who left is botted.
+      if (client.sessionId !== this.hostId || this.table.phase !== 'MATCH_OVER') return;
+      this.beginRematch();
+      return;
+    }
+
     if (packet.type === 'next') {
       if (this.table.phase === 'DEAL_OVER') {
         this.table.startNextDeal();
@@ -236,6 +290,11 @@ export class BelaRoom extends Room {
   }
 
   private afterMove(): void {
+    // Score the series exactly once per match, however many publishes follow.
+    if (this.table.phase === 'MATCH_OVER' && this.lastRecordedMatch !== this.matchNumber) {
+      this.lastRecordedMatch = this.matchNumber;
+      this.series[this.table.winner()!] += 1;
+    }
     if (this.table.phase === 'MATCH_OVER') this.stopTimer();
     else this.armTimer();
     this.publish();
@@ -303,6 +362,9 @@ export class BelaRoom extends Room {
         ? { turnMsLeft: Math.max(0, this.turnEndsAt - Date.now()), turnTotalMs: TURN_MS }
         : {}),
       ...(this.hard ? { hard: true } : {}),
+      series: [this.series[0], this.series[1]],
+      matchNumber: this.matchNumber,
+      ...(this.rematchVotes.size > 0 ? { rematchVotes: [...this.rematchVotes] } : {}),
       ...(this.hostId !== null && this.seatOf(this.hostId) !== null
         ? { hostSeat: this.seatOf(this.hostId)! }
         : {}),

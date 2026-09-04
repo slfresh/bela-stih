@@ -128,6 +128,12 @@ export interface UiStrings {
   botPlaysFor: (names: string) => string;
   startWithBots: string;
   sitHere: string;
+  /** Rematch flow after a finished match. */
+  playAgain: string;
+  waitingForRematch: (n: number) => string;
+  rematchAsked: string;
+  startAnyway: string;
+  seriesScore: string;
   invite: string;
   inviteText: (url: string) => string;
 }
@@ -425,6 +431,11 @@ const hr: Strings = {
     botPlaysFor: (names) => `${names} — bot igra umjesto njih`,
     startWithBots: 'Počni s botovima',
     sitHere: 'sjedni ovdje',
+    playAgain: 'Igraj opet',
+    waitingForRematch: (n) => `Čekamo još ${n} ${n === 1 ? 'igrača' : 'igrača'}...`,
+    rematchAsked: 'Tražili ste novu partiju',
+    startAnyway: 'Počni svejedno',
+    seriesScore: 'Partije',
     invite: 'Pozovi prijatelje',
     inviteText: (url) => `Zaigraj Belu sa mnom! Pridruži se mom stolu: ${url}`,
   },
@@ -610,6 +621,11 @@ const srCyrl: Strings = {
     botPlaysFor: (names) => `${names} — бот игра уместо њих`,
     startWithBots: 'Почни са ботовима',
     sitHere: 'седни овде',
+    playAgain: 'Играј опет',
+    waitingForRematch: (n) => `Чекамо још ${n} играча...`,
+    rematchAsked: 'Тражили сте нову партију',
+    startAnyway: 'Почни свеједно',
+    seriesScore: 'Партије',
     invite: 'Позови пријатеље',
     inviteText: (url) => `Заиграј белу са мном! Придружи се мом столу: ${url}`,
   },
@@ -791,6 +807,11 @@ const en: Strings = {
     botPlaysFor: (names) => `${names} — a bot plays for them`,
     startWithBots: 'Start with bots',
     sitHere: 'sit here',
+    playAgain: 'Play again',
+    waitingForRematch: (n) => `Waiting for ${n} more...`,
+    rematchAsked: 'You asked for another match',
+    startAnyway: 'Start anyway',
+    seriesScore: 'Matches',
     invite: 'Invite friends',
     inviteText: (url) => `Come play Bela with me! Join my table: ${url}`,
   },

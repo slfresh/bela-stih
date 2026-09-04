@@ -76,6 +76,12 @@ export interface TableScreenProps {
   finishLabel: string;
   /** When set, the emote tray is available and sends through here. */
   onEmote?: (id: string) => void;
+  /** Rematch flow (online): the series score and the accept controls. */
+  series?: readonly [number, number] | null;
+  askedRematch?: boolean;
+  waitingFor?: number;
+  onRematch?: () => void;
+  onForceRematch?: () => void;
   /**
    * "Prava bela": no card assist — every card is tappable, and an illegal one
    * is a renons the engine punishes. The claim/bela buttons stay unassisted too.
@@ -88,7 +94,7 @@ export function TableScreen(props: TableScreenProps) {
     mySeat, lang, view, options, myTurn, settled, matchOver, lastDealResult,
     matchScores, winnerTeam, profile, banner, seatMeta, status, anchors, fxBus,
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
-    hardMode = false,
+    hardMode = false, series, askedRematch, waitingFor, onRematch, onForceRematch,
   } = props;
 
   // The tray closes on send; the cooldown mirrors the server's rate limit so
@@ -311,6 +317,11 @@ export function TableScreen(props: TableScreenProps) {
                     ? lang.s.renonsBy(meta(lastDealResult.renonsSeat).name)
                     : null
                 }
+                series={series}
+                askedRematch={askedRematch}
+                waitingFor={waitingFor}
+                onRematch={onRematch}
+                onForceRematch={onForceRematch}
                 onNext={tap(onNext)}
                 onFinish={tap(onFinish)}
                 finishLabel={finishLabel}
@@ -524,6 +535,11 @@ function DealResult({
   matchOver,
   winnerLabel,
   renonsText,
+  series,
+  askedRematch = false,
+  waitingFor = 0,
+  onRematch,
+  onForceRematch,
   onNext,
   onFinish,
   finishLabel,
@@ -534,6 +550,14 @@ function DealResult({
   matchOver: boolean;
   winnerLabel: string;
   renonsText?: string | null;
+  /** Matches won per side since this roster sat down; online only. */
+  series?: readonly [number, number] | null;
+  /** Has this seat already asked for another match? */
+  askedRematch?: boolean;
+  /** How many players have yet to accept. */
+  waitingFor?: number;
+  onRematch?: () => void;
+  onForceRematch?: () => void;
   onNext: () => void;
   onFinish: () => void;
   finishLabel: string;
@@ -572,7 +596,27 @@ function DealResult({
       {matchOver ? (
         <>
           <Text style={styles.winner}>{lang.s.winner(winnerLabel)}</Text>
-          <Button label={finishLabel} tone="strong" onPress={onFinish} />
+          {series && (
+            <Text style={styles.seriesLine}>
+              {lang.s.ui.seriesScore}  {series[0]} : {series[1]}
+            </Text>
+          )}
+          {onRematch && (
+            <>
+              {askedRematch ? (
+                <Text style={styles.subDim}>
+                  {waitingFor > 0 ? lang.s.ui.waitingForRematch(waitingFor) : lang.s.ui.rematchAsked}
+                </Text>
+              ) : (
+                <Button label={lang.s.ui.playAgain} tone="strong" onPress={onRematch} />
+              )}
+              {/* The host never has to wait on somebody who has wandered off. */}
+              {onForceRematch && askedRematch && waitingFor > 0 && (
+                <Button label={lang.s.ui.startAnyway} tone="plain" onPress={onForceRematch} />
+              )}
+            </>
+          )}
+          <Button label={finishLabel} tone="plain" onPress={onFinish} />
         </>
       ) : (
         <View style={styles.resultButtons}>
@@ -646,6 +690,7 @@ const styles = StyleSheet.create({
   scoreLabel: { color: theme.textDim, fontSize: 13 },
   scoreValue: { color: theme.text, fontSize: 20, fontWeight: '800' },
   subDim: { color: theme.textDim, fontSize: 12 },
+  seriesLine: { color: theme.textDim, fontSize: 13, textAlign: 'center' },
   dealCount: { color: theme.accent, fontSize: 13, fontWeight: '700' },
   dealCountDim: { color: theme.textDim, fontSize: 13, fontWeight: '700' },
 

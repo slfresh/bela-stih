@@ -23,7 +23,13 @@ export type ClientMessage =
   /** Advance from a scored deal to the next one. */
   | { type: 'next' }
   /** A quick emote; relayed, rate-limited, never stored. */
-  | { type: 'emote'; id: string };
+  | { type: 'emote'; id: string }
+  /** After MATCH_OVER: this seat wants another match with the same people. */
+  | { type: 'rematch' }
+  /** Withdraw that ask. */
+  | { type: 'rematchCancel' }
+  /** Host only, after MATCH_OVER: start now, bots filling anyone who left. */
+  | { type: 'rematchStart' };
 
 /**
  * The fixed emote vocabulary. Anything else is dropped server-side, so free
@@ -74,6 +80,12 @@ export interface RoomMessage {
   hard?: boolean;
   /** Seat of the table's creator — the one who may start with bots. */
   hostSeat?: Seat;
+  /** Matches won per team since this roster sat down. */
+  series: [number, number];
+  /** Matches finished at this table (0 during the first). */
+  matchNumber: number;
+  /** Seats that have asked for another match. Only meaningful at MATCH_OVER. */
+  rematchVotes?: Seat[];
 }
 
 export const MSG = {

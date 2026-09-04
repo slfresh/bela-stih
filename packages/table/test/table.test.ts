@@ -288,3 +288,72 @@ function collectCards(value: unknown, out: Card[] = []): Card[] {
   }
   return out;
 }
+
+describe('starting a new match at the same table', () => {
+  function finished(): Table {
+    const t = new Table({ seed: 5 });
+    t.playWholeMatch();
+    t.drainEvents();
+    return t;
+  }
+
+  it('refuses to discard a match that is still being played', () => {
+    const t = new Table({ seed: 5 });
+    expect(() => t.newMatch()).toThrow(/cannot start a new match/);
+  });
+
+  it('resets the score and deals again, keeping the seats', () => {
+    const t = finished();
+    const humansBefore = [...t.humanSeats];
+    const wonWith = Math.max(...t.matchScores);
+    t.newMatch();
+
+    // An all-bot table plays its first deal out the moment it is dealt, so the
+    // score is a single deal's worth rather than a literal 0:0 — what matters
+    // is that the finished match's total is gone.
+    expect(Math.max(...t.matchScores)).toBeLessThan(wonWith);
+    expect(t.matchScores[0] + t.matchScores[1]).toBeLessThanOrEqual(252);
+    expect(t.phase).not.toBe('MATCH_OVER');
+    expect([...t.humanSeats]).toEqual(humansBefore);
+
+    const kinds = t.drainEvents().map((e) => e.kind);
+    expect(kinds[0]).toBe('matchStarted');
+    expect(kinds[1]).toBe('dealStarted');
+  });
+
+  it('carries the dealer rotation on instead of snapping back', () => {
+    const t = finished();
+    const dealerBefore = t.state.dealer;
+    t.newMatch();
+    const started = t.drainEvents().find((e) => e.kind === 'dealStarted');
+    expect(started && started.kind === 'dealStarted' && started.dealer).toBe(dealerBefore);
+  });
+
+  it('keeps the engine config', () => {
+    const t = new Table({ seed: 5, config: { renonsMode: 'punish', declarationMode: 'blind' } });
+    t.playWholeMatch();
+    t.newMatch();
+    expect(t.state.config.renonsMode).toBe('punish');
+    expect(t.state.config.declarationMode).toBe('blind');
+  });
+
+  it('does not replay the finished match — the bot RNG carries on', () => {
+    const t = new Table({ seed: 5 });
+    t.playWholeMatch();
+    const first = t.matchScores.join(':');
+    t.newMatch();
+    t.playWholeMatch();
+    const second = t.matchScores.join(':');
+    // Two independent matches; identical totals would mean the RNG reset.
+    expect(second).not.toBe(first);
+  });
+
+  it('drops events left undrained from the finished match', () => {
+    const t = new Table({ seed: 5 });
+    t.playWholeMatch(); // events deliberately NOT drained
+    t.newMatch();
+    const kinds = t.drainEvents().map((e) => e.kind);
+    expect(kinds).not.toContain('matchOver');
+    expect(kinds[0]).toBe('matchStarted');
+  });
+});

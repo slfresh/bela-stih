@@ -142,6 +142,10 @@ export function applyEventStart(view: PublicView, e: TableEvent, mySeat: Seat): 
         dealProgress: null,
       });
 
+    case 'matchStarted':
+      // Scores back to nil; the dealStarted that follows sweeps the table.
+      return suppress({ ...view, phase: 'IDLE', matchScores: [0, 0], dealProgress: null });
+
     case 'cardPlayed': {
       const handCounts = [...view.handCounts] as PublicView['handCounts'];
       handCounts[e.seat] = Math.max(0, handCounts[e.seat] - 1);

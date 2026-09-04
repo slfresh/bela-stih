@@ -161,6 +161,9 @@ export function renderEvent(e: TableEvent, humanSeat: Seat | null): string | nul
             `(${e.matchScores[0]} : ${e.matchScores[1]})`,
         ),
       );
+    case 'matchStarted':
+      return bold(`
+═══ ${lang.s.newMatch} #${e.matchNumber + 1} ═══`);
   }
 }
 

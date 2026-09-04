@@ -61,6 +61,7 @@ export const DEFAULT_TIMINGS: Timings = {
   trickWon: { dur: 1000, gap: 200 },
   dealScored: { dur: 900, gap: 0 },
   matchOver: { dur: 300, gap: 0 },
+  matchStarted: { dur: 600, gap: 200 },
 };
 
 /** All-zero timings: the director settles synchronously. Used by tests. */

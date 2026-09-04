@@ -58,6 +58,9 @@ interface RoomMessage {
   /** True on "prava bela" tables. */
   hard?: boolean;
   hostSeat?: Seat;
+  series: [number, number];
+  matchNumber: number;
+  rematchVotes?: Seat[];
 }
 
 export function useNetGame(settings: Settings) {
@@ -77,6 +80,9 @@ export function useNetGame(settings: Settings) {
   const [seats, setSeats] = useState<SeatInfo[]>([]);
   const [hard, setHard] = useState(false);
   const [hostSeat, setHostSeat] = useState<Seat | null>(null);
+  const [series, setSeries] = useState<[number, number]>([0, 0]);
+  const [matchNumber, setMatchNumber] = useState(0);
+  const [rematchVotes, setRematchVotes] = useState<Seat[]>([]);
   const [banner, setBanner] = useState<Award | null>(null);
   const [lastDealResult, setLastDealResult] = useState<DealScoreResult | null>(null);
   const [winnerTeam, setWinnerTeam] = useState<TeamId | null>(null);
@@ -134,6 +140,9 @@ export function useNetGame(settings: Settings) {
     setView(null);
     setIdle(true);
     setSeats([]);
+    setSeries([0, 0]);
+    setMatchNumber(0);
+    setRematchVotes([]);
     setBanner(null);
     setLastDealResult(null);
     setWinnerTeam(null);
@@ -174,6 +183,9 @@ export function useNetGame(settings: Settings) {
       setSeats(msg.seats);
       setHard(msg.hard === true);
       setHostSeat(msg.hostSeat ?? null);
+      setSeries(msg.series ?? [0, 0]);
+      setMatchNumber(msg.matchNumber ?? 0);
+      setRematchVotes(msg.rematchVotes ?? []);
       setStatus(msg.status);
       // A stale-tap refusal is stale itself the moment the game moves on.
       if (msg.events.length > 0) setError(null);
@@ -184,6 +196,12 @@ export function useNetGame(settings: Settings) {
       for (const e of msg.events) {
         if (e.kind === 'dealScored') setLastDealResult(e.result);
         if (e.kind === 'matchOver') setWinnerTeam(e.winner);
+        // A new match wipes the last one's verdict off the screen.
+        if (e.kind === 'matchStarted') {
+          setWinnerTeam(null);
+          setLastDealResult(null);
+          setBanner(null);
+        }
       }
 
       const d = directorRef.current;
@@ -278,6 +296,12 @@ export function useNetGame(settings: Settings) {
     roomRef.current?.send('sit', { seat: target });
   }, []);
 
+  /** After a match: ask for another with the same people (all must agree). */
+  const rematch = useCallback(() => roomRef.current?.send('rematch', {}), []);
+  const rematchCancel = useCallback(() => roomRef.current?.send('rematchCancel', {}), []);
+  /** Host only: start the next match now, bots filling anyone who left. */
+  const rematchStart = useCallback(() => roomRef.current?.send('rematchStart', {}), []);
+
   return {
     status,
     error,
@@ -288,6 +312,9 @@ export function useNetGame(settings: Settings) {
     seats,
     hard,
     hostSeat,
+    series,
+    matchNumber,
+    rematchVotes,
     profile: profileRef.current,
     banner,
     lastDealResult,
@@ -303,6 +330,9 @@ export function useNetGame(settings: Settings) {
     joinById,
     startWithBots,
     sit,
+    rematch,
+    rematchCancel,
+    rematchStart,
     submit,
     next,
     sendEmote,

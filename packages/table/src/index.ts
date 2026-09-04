@@ -55,7 +55,9 @@ export type TableEvent =
   | { kind: 'cardPlayed'; seat: Seat; card: Card }
   | { kind: 'trickWon'; seat: Seat; trickNumber: number; points: number; isLastTrick: boolean }
   | { kind: 'dealScored'; result: DealScoreResult; matchScores: [number, number] }
-  | { kind: 'matchOver'; winner: TeamId; matchScores: [number, number] };
+  | { kind: 'matchOver'; winner: TeamId; matchScores: [number, number] }
+  /** A fresh match at the same table, same seats. */
+  | { kind: 'matchStarted'; matchNumber: number };
 
 export interface TableOptions {
   /** Seats a person controls. Empty means every seat is a bot (demo / auto-play). */
@@ -72,6 +74,7 @@ export class Table {
   private queued: TableEvent[] = [];
 
   private readonly humans: Set<Seat>;
+  private matchNumber = 0;
   readonly botLevel: BotLevel;
 
   constructor(opts: TableOptions = {}) {
@@ -156,6 +159,33 @@ export class Table {
     if (action.seat !== seat) throw new Error(`it is seat ${seat}'s turn, not ${action.seat}'s`);
 
     this.applyAndRecord(action);
+    this.runBots();
+  }
+
+  /**
+   * Start a fresh match at the same table: same seats, same bot level, same
+   * engine config, and the same bot RNG carried on so the bots do not replay
+   * their last match. Scores and the deal counter reset; the dealer rotation
+   * continues round the table rather than snapping back.
+   *
+   * Legal only once a match is over — a live match is never silently discarded.
+   */
+  newMatch(opts: { seed?: number; dealer?: Seat } = {}): void {
+    if (this.s.phase !== 'MATCH_OVER') {
+      throw new Error(`cannot start a new match from phase ${this.s.phase}`);
+    }
+    // Anything still undrained belongs to the finished match; it must not be
+    // replayed into the new one.
+    this.queued = [];
+    this.matchNumber += 1;
+    this.s = createMatch({
+      seed: opts.seed ?? (Date.now() & 0x7fffffff),
+      dealer: opts.dealer ?? this.s.dealer,
+      config: this.s.config,
+    });
+    this.s = startDeal(this.s);
+    this.queued.push({ kind: 'matchStarted', matchNumber: this.matchNumber });
+    this.queued.push({ kind: 'dealStarted', dealNumber: this.s.dealNumber, dealer: this.s.dealer });
     this.runBots();
   }
 

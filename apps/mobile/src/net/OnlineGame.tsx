@@ -58,18 +58,24 @@ export function OnlineGame({
     lastBanner.current = net.banner;
   }, [net.banner, net.anchors, net.fxBus]);
 
-  const cheered = useRef(false);
+  // Everyone still connected has to accept; bots and empty seats never count.
+  const seatedHumans = net.seats.filter((s) => s.connected && !s.bot).length;
+  const waitingForRematch = Math.max(0, seatedHumans - net.rematchVotes.length);
+
+  // Every match of a series deserves its own confetti, so the latch is keyed
+  // on the match rather than on the mount.
+  const cheeredMatch = useRef(-1);
   useEffect(() => {
     if (
       net.matchOver &&
-      !cheered.current &&
+      cheeredMatch.current !== net.matchNumber &&
       net.seat !== null &&
       net.winnerTeam === teamOf(net.seat)
     ) {
-      cheered.current = true;
+      cheeredMatch.current = net.matchNumber;
       net.fxBus.emit({ kind: 'confetti' });
     }
-  }, [net.matchOver, net.winnerTeam, net.seat, net.fxBus]);
+  }, [net.matchOver, net.matchNumber, net.winnerTeam, net.seat, net.fxBus]);
 
   const leaveAndExit = () => {
     net.leave();
@@ -101,6 +107,11 @@ export function OnlineGame({
       lang={net.lang}
       view={net.view}
       hardMode={net.hard}
+      series={net.series}
+      askedRematch={net.rematchVotes.includes(net.seat)}
+      waitingFor={waitingForRematch}
+      onRematch={net.rematch}
+      onForceRematch={net.seat === net.hostSeat ? net.rematchStart : undefined}
       options={settled || !net.idle ? [] : net.view.legalActions}
       myTurn={net.idle && net.view.toAct === net.seat}
       settled={settled}
