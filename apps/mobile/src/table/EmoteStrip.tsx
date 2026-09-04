@@ -19,6 +19,7 @@ export function EmoteStrip({
   lang,
   open,
   dimmed,
+  vertical = false,
   onSend,
 }: {
   lang: Lang;
@@ -26,13 +27,15 @@ export function EmoteStrip({
   open: boolean;
   /** Fade back while the player is deciding a card. */
   dimmed: boolean;
+  /** Landscape: the strip lives in the right rail and runs down it. */
+  vertical?: boolean;
   onSend: (id: string) => void;
 }) {
   return (
-    <View style={styles.wrap} pointerEvents="box-none">
+    <View style={[styles.wrap, vertical && styles.wrapCol]} pointerEvents="box-none">
       {/* The phrases float, so opening them cannot move the felt or the hand. */}
       {open && (
-        <View style={[styles.row, styles.phraseRow]}>
+        <View style={[styles.row, vertical ? styles.phraseCol : styles.phraseRow]}>
           {PHRASES.map((e) => (
             <Pressable key={e.id} onPress={() => onSend(e.id)} style={styles.phraseChip}>
               <Text style={styles.phrase}>{emoteText(lang, e.id)}</Text>
@@ -40,7 +43,7 @@ export function EmoteStrip({
           ))}
         </View>
       )}
-      <View style={[styles.row, dimmed && styles.faded]}>
+      <View style={[styles.row, vertical && styles.col, dimmed && styles.faded]}>
         {GLYPHS.map((e) => (
           <Pressable key={e.id} onPress={() => onSend(e.id)} style={styles.chip} hitSlop={4}>
             <Text style={styles.glyph}>{emoteText(lang, e.id)}</Text>
@@ -53,8 +56,12 @@ export function EmoteStrip({
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'flex-end', minHeight: 34 },
+  wrapCol: { justifyContent: 'flex-start', minHeight: 0 },
   phraseRow: { position: 'absolute', bottom: 40, left: 0, right: 0 },
+  // Landscape: phrases open leftwards, over the felt, never over the rail.
+  phraseCol: { position: 'absolute', right: 40, top: 0, width: 150, alignItems: 'flex-end' },
   row: { flexDirection: 'row', gap: 6, justifyContent: 'center', flexWrap: 'wrap' },
+  col: { flexDirection: 'column', flexWrap: 'nowrap' },
   faded: { opacity: 0.55 },
   chip: {
     width: 34,

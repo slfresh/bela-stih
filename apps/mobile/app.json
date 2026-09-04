@@ -4,7 +4,7 @@
     "slug": "bela-stih",
     "version": "1.0.0",
     "scheme": "belastih",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
     "ios": {

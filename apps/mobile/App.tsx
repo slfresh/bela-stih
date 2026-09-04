@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Linking, Platform, StyleSheet, View } from 'react-native';
+import { BackHandler, Linking, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Lang } from '@belot/i18n';
 import type { PlayerProfile } from '@belot/progression';
 import { HomeScreen, type Launch } from './src/HomeScreen';
 import { DeckGallery } from './src/DeckGallery';
+import { WebShell } from './src/WebShell';
 import { OfflineGame } from './src/OfflineGame';
 import { OnlineGame } from './src/net/OnlineGame';
 import { ProfileScreen } from './src/screens/ProfileScreen';
@@ -153,20 +154,8 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
-      {Platform.OS === 'web' ? (
-        // On a desktop browser the app lives in a centred phone-shaped column;
-        // the game itself is identical, and phones get the full viewport.
-        <View style={web.desk}>
-          <View style={web.column}>{content}</View>
-        </View>
-      ) : (
-        content
-      )}
+      {/* On the web the app lives in a centred column; phones get the viewport. */}
+      {Platform.OS === 'web' ? <WebShell>{content}</WebShell> : content}
     </SafeAreaProvider>
   );
 }
-
-const web = StyleSheet.create({
-  desk: { flex: 1, backgroundColor: '#0a1f16', flexDirection: 'row', justifyContent: 'center' },
-  column: { flex: 1, maxWidth: 480, overflow: 'hidden' },
-});

@@ -56,12 +56,16 @@ export function SeatPuck({
   size?: number;
 }) {
   const initial = (name.trim()[0] ?? '?').toUpperCase();
+  // The name sits under the disc and needs room for a couple of words; a
+  // smaller puck must give that room back, or a shrunk seat still costs 86px
+  // of the table's width. 54 + 32 is exactly the old fixed width.
+  const width = size + 32;
   const colour = AVATAR_COLOURS[seat % AVATAR_COLOURS.length]!;
   const ringSize = size + 10;
   const portrait = avatar && hasAvatar(avatar) ? avatar : null;
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { width }]}>
       <View style={{ width: ringSize, height: ringSize }}>
         <Anchor id={anchorId.seat(seat)} style={[StyleSheet.absoluteFill, styles.centre]}>
           {portrait ? (
@@ -129,7 +133,7 @@ export function SeatPuck({
 }
 
 const styles = StyleSheet.create({
-  root: { alignItems: 'center', gap: 2, width: 86 },
+  root: { alignItems: 'center', gap: 2 },
   centre: { alignItems: 'center', justifyContent: 'center' },
   name: { color: theme.textDim, fontSize: 12, maxWidth: 84 },
   dealer: {

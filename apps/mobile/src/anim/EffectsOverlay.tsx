@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -236,6 +236,7 @@ function Bubble({
   /** Emoji emotes read at reaction size, not caption size. */
   big?: boolean;
 }) {
+  const { width: screenW } = useWindowDimensions();
   const s = useSharedValue(0);
   useEffect(() => {
     s.value = withSequence(
@@ -257,7 +258,12 @@ function Bubble({
         styles.bubble,
         tone === 'gold' && styles.bubbleGold,
         // Clamped so a top-seat bubble can never sit over the HUD.
-        { left: at.x - 70, top: Math.max(8, at.y - 64) },
+        {
+          // Clamped: a puck near the edge would otherwise push the bubble off
+          // the screen, which is exactly where the landscape rails put them.
+          left: Math.max(8, Math.min(at.x - 70, screenW - 148)),
+          top: Math.max(8, at.y - 64),
+        },
       ]}
     >
       <Animated.View style={style}>
@@ -315,6 +321,9 @@ function Coin({ from, to, delay, wobble }: { from: XY; to: XY; delay: number; wo
 const CONFETTI_COLOURS = [garb.red, garb.gold, garb.green, garb.blue, garb.cream];
 
 function Confetti({ seed }: { seed: number }) {
+  // Was hard-coded to a 360x700 phone, so in landscape the confetti fell down
+  // the left third of the screen and stopped halfway.
+  const { width, height } = useWindowDimensions();
   const pieces = useMemo(
     () =>
       Array.from({ length: 26 }).map((_, i) => ({
@@ -329,7 +338,7 @@ function Confetti({ seed }: { seed: number }) {
   return (
     <>
       {pieces.map(({ key, ...c }) => (
-        <ConfettiPiece key={key} {...c} />
+        <ConfettiPiece key={key} {...c} width={width} height={height} />
       ))}
     </>
   );
@@ -337,11 +346,15 @@ function Confetti({ seed }: { seed: number }) {
 
 function ConfettiPiece({
   x,
+  width,
+  height,
   delay,
   colour,
   spin,
 }: {
   x: number;
+  width: number;
+  height: number;
   delay: number;
   colour: string;
   spin: number;
@@ -354,8 +367,8 @@ function ConfettiPiece({
   const style = useAnimatedStyle(() => ({
     opacity: p.value === 0 ? 0 : 1 - Math.max(0, p.value - 0.8) * 5,
     transform: [
-      { translateX: x * 360 + 10 * Math.sin(p.value * 6) },
-      { translateY: -20 + p.value * 700 },
+      { translateX: x * width + 10 * Math.sin(p.value * 6) },
+      { translateY: -20 + p.value * (height + 60) },
       { rotateZ: `${p.value * spin}deg` },
     ],
   }));

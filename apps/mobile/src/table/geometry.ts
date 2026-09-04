@@ -62,16 +62,23 @@ export interface HandFit {
  * Size the hand to the space it actually has, so eight cards are always ONE
  * row — on a 320dp phone they used to spill off both edges, and a wrapped
  * second row is the layout players complain about most in rival apps.
+ *
+ * `maxCardW` lets a short screen (landscape) hold the fan down to a height it
+ * can actually spare; the width rules are unchanged.
  */
-export function fitHand(available: number, count: number): HandFit {
+export function fitHand(available: number, count: number, maxCardW = MAX_CARD_W): HandFit {
+  // Turned sideways there is width to spare and no height at all, so the cap
+  // that matters is the caller's, not the fan's own.
+  const cap = clamp(maxCardW, MIN_CARD_W, MAX_CARD_W);
   const cardW =
     count <= 1
-      ? Math.min(MAX_CARD_W, available)
-      : clamp(available / (1 + (count - 1) * 0.62), MIN_CARD_W, MAX_CARD_W);
+      ? Math.min(cap, available)
+      : clamp(available / (1 + (count - 1) * 0.62), MIN_CARD_W, cap);
   const advance =
     count <= 1
       ? 0
       : clamp((available - cardW) / (count - 1), cardW * MIN_REVEAL, cardW * MAX_REVEAL);
+
   return {
     cardW,
     cardH: cardW * CARD_ASPECT,
@@ -81,6 +88,103 @@ export function fitHand(available: number, count: number): HandFit {
   };
 }
 
+/** Breathing room above the fan, so a lifted card is not clipped. */
+export const FAN_PAD = 16;
+
+/**
+ * How tall a fan of `count` cards of this width actually is.
+ *
+ * Not just the card: the outermost cards are pushed down by the arc and the
+ * playable ones lift up out of it. Reserving only the card height is what let
+ * the bottom row get clipped off a landscape screen.
+ */
+export function fanHeight(cardW: number, count: number): number {
+  const scale = cardW / 58;
+  return cardW * CARD_ASPECT + fanArc(count) * scale + 14 * scale + FAN_PAD;
+}
+
+/** The outer card's drop, in reference (58px card) pixels. Mirrors `Hand`. */
+function fanArc(count: number): number {
+  return Math.pow(Math.max(0, (count - 1) / 2), 1.6) * 3.2;
+}
+
+/**
+ * The inverse: the widest card whose fan still fits in `budget` of height.
+ * `fanHeight` is linear in the card width apart from the constant pad, so one
+ * division inverts it exactly.
+ */
+export function cardWidthForHeight(budget: number, count: number): number {
+  const perUnit = (fanHeight(58, count) - FAN_PAD) / 58;
+  return Math.max(0, (budget - FAN_PAD) / perUnit);
+}
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+// ---------------------------------------------------------------------------
+// The trick cross
+// ---------------------------------------------------------------------------
+
+/**
+ * Where each seat's trick slot sits inside the felt: a compact cross around the
+ * centre, so a full trick reads as one pile.
+ *
+ * The gaps are proportional to the card, which means the cross grows and
+ * shrinks with the table instead of leaving a hole on a tablet or overlapping
+ * on a small phone. At the reference 46x67 slot it reproduces the old hand-tuned
+ * constants exactly, so a scale of 1 is pixel-for-pixel what shipped before.
+ */
+export function slotOffsets(slotW: number, slotH: number): Record<Position, SlotOffset> {
+  const gapX = Math.round(slotW * (31 / 46));
+  const gapY = Math.round(slotH * (39 / 67));
+  const halfW = Math.round(slotW / 2);
+  const halfH = Math.floor(slotH / 2);
+  return {
+    bottom: { left: '50%', marginLeft: -halfW, top: '55%', marginTop: gapY },
+    top: {
+      left: '50%',
+      marginLeft: -halfW,
+      top: '55%',
+      marginTop: -(gapY + slotH),
+    },
+    left: {
+      left: '50%',
+      marginLeft: -(gapX + slotW),
+      top: '55%',
+      marginTop: -halfH,
+    },
+    right: { left: '50%', marginLeft: gapX, top: '55%', marginTop: -halfH },
+  };
+}
+
+/**
+ * The biggest trick slot whose cross still fits inside the felt.
+ *
+ * The cross is 3.16 slots tall and 3.35 wide (see `slotOffsets`); landscape
+ * turns the felt into a short wide ellipse, and sizing the slots off the window
+ * there pushed the top and bottom cards straight out through the rim. The
+ * divisors carry a little more than that so the cards keep clear of the border.
+ */
+export function fitTrickCross(
+  feltW: number,
+  feltH: number,
+  maxSlotH: number,
+): {
+  slotW: number;
+  slotH: number;
+} {
+  // Before the first layout pass there is nothing to measure; the window-derived
+  // size is the right guess and is corrected on the very next frame.
+  const byH = feltH > 0 ? feltH / 3.55 : maxSlotH;
+  const byW = feltW > 0 ? (feltW / 3.7) * CARD_ASPECT : maxSlotH;
+  const slotH = Math.round(clamp(Math.min(maxSlotH, byH, byW), 26, maxSlotH));
+  return { slotH, slotW: Math.round(slotH / CARD_ASPECT) };
+}
+
+export interface SlotOffset {
+  left: '50%';
+  marginLeft: number;
+  top: '55%';
+  marginTop: number;
 }

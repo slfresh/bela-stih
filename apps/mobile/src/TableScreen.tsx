@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
-  useWindowDimensions,
   View,
   type StyleProp,
   type ViewStyle,
@@ -25,7 +25,16 @@ import { Anchor, AnchorHost, type AnchorMap } from './anim/AnchorRegistry';
 import { EffectsOverlay } from './anim/EffectsOverlay';
 import { anchorId, type FxBus } from './anim/FxBus';
 import { SeatPuck } from './table/SeatPuck';
-import { fitHand, seatAt, seatPosition, type Position } from './table/geometry';
+import {
+  FAN_PAD,
+  fitHand,
+  fitTrickCross,
+  seatAt,
+  seatPosition,
+  slotOffsets,
+  type Position,
+} from './table/geometry';
+import { useTableMetrics } from './table/useTableMetrics';
 import { useHandOrder, type HandSort } from './table/useHandOrder';
 import type { ConfirmPlay } from './storage';
 import { TurnRing } from './anim/TurnRing';
@@ -116,9 +125,20 @@ export function TableScreen(props: TableScreenProps) {
   } = props;
 
   // Every dimension the table draws is derived from the real window, so eight
-  // cards fit one row on a 320dp phone and grow on a tablet.
-  const { width: winW } = useWindowDimensions();
-  const handWidth = Math.max(240, winW - 24);
+  // cards fit one row on a 320dp phone, grow on a tablet, and rearrange into
+  // three columns when the phone is turned on its side.
+  const m = useTableMetrics();
+  const land = m.orientation === 'landscape';
+
+  // The trick cross is sized against the felt it is drawn in, not the window:
+  // a landscape felt is a short wide ellipse and window-sized cards hang out
+  // through its rim. Measured, because the felt is what flex left over.
+  const [feltBox, setFeltBox] = useState({ w: 0, h: 0 });
+  const slot = useMemo(
+    () => fitTrickCross(feltBox.w, feltBox.h, m.slotH),
+    [feltBox.w, feltBox.h, m.slotH],
+  );
+  const slots = useMemo(() => slotOffsets(slot.slotW, slot.slotH), [slot.slotW, slot.slotH]);
 
   const [arranging, setArranging] = useState(false);
   const hand = useHandOrder(view.hand, view.context.trumpSuit, handSort, onHandSortChange ?? (() => {}));
@@ -165,6 +185,7 @@ export function TableScreen(props: TableScreenProps) {
       active={view.toAct === s}
       tone={seatTone(s, mySeat)}
       partner={isPartner(s, mySeat)}
+      size={m.puck}
       deadline={turnDeadline}
       totalMs={turnTotalMs}
     />
@@ -182,215 +203,316 @@ export function TableScreen(props: TableScreenProps) {
   const trump = view.context.trumpSuit;
   const baize = feltStyle(profile.selectedFelt);
 
+  // ---------------------------------------------------------------------
+  // The pieces, built once and placed by whichever layout is in force. Both
+  // orientations render the SAME nodes, so every anchor stays single-sourced
+  // and a rotation cannot leave sprites flying to a slot that moved.
+  // ---------------------------------------------------------------------
+
+  const feltBody = (
+    <View
+      style={[
+        styles.felt,
+        { backgroundColor: baize.felt, borderColor: baize.rim },
+        // Landscape hangs the partner over the far rim, so the felt starts
+        // just below their disc rather than below their whole puck.
+        land && { marginTop: Math.round(m.puck * 0.5) },
+      ]}
+    >
+      <View
+        style={styles.feltInner}
+        onLayout={(e) => {
+          const { width, height } = e.nativeEvent.layout;
+          setFeltBox((b) =>
+            Math.abs(b.w - width) < 1 && Math.abs(b.h - height) < 1 ? b : { w: width, h: height },
+          );
+        }}
+      >
+        {/* centre plaque: trump + multiplier; doubles as the deck anchor */}
+        <Anchor id={anchorId.deck} style={[styles.plaque, land && styles.plaqueLand]}>
+          {trump ? (
+            <>
+              <SuitPip suit={trump} size={26} />
+              {view.multiplier > 1 && <Text style={styles.plaqueMult}>×{view.multiplier}</Text>}
+            </>
+          ) : (
+            <Text style={styles.subDim}>{lang.s.trumpUndecided}</Text>
+          )}
+          {view.callerSeat !== null && (
+            <Text style={styles.plaqueCaller}>{lang.s.calledBy(meta(view.callerSeat).name)}</Text>
+          )}
+        </Anchor>
+
+        {/* one trick slot per seat, positioned by table side */}
+        {([0, 1, 2, 3] as Seat[]).map((s) => {
+          const pos = seatPosition(s, mySeat);
+          const played = view.currentTrick.find((p) => p.seat === s);
+          return (
+            <Anchor
+              key={s}
+              id={anchorId.slot(s)}
+              style={[
+                styles.slot,
+                { width: slot.slotW, height: slot.slotH },
+                slots[pos],
+                // Whose card this is, at a glance — and whose empty slot,
+                // before anybody has played into it.
+                played
+                  ? {
+                      borderWidth: 2,
+                      borderColor: seatTone(s, mySeat).edge,
+                      borderRadius: radius.card,
+                      margin: -2,
+                    }
+                  : null,
+              ]}
+            >
+              {played ? (
+                <PlayingCard card={played.card} width={slot.slotW} />
+              ) : (
+                <View style={[styles.slotGhost, { borderColor: seatTone(s, mySeat).dim }]} />
+              )}
+            </Anchor>
+          );
+        })}
+      </View>
+    </View>
+  );
+
+  const felt = land ? (
+    // Sideways there is no room for a row above the table AND a row below it,
+    // so the partner sits on the far rim the way they would at a real table.
+    <View style={styles.tableArea}>
+      <View style={styles.midRow}>
+        <View style={styles.sideSeat}>{puck(at('left'))}</View>
+        {feltBody}
+        <View style={styles.sideSeat}>{puck(at('right'))}</View>
+      </View>
+      <View style={styles.landTopSeat} pointerEvents="box-none">
+        {puck(at('top'))}
+      </View>
+    </View>
+  ) : (
+    <View style={[styles.tableArea, { minHeight: m.feltMinHeight }]}>
+      <View style={styles.topSeat}>{puck(at('top'))}</View>
+      <View style={styles.midRow}>
+        <View style={styles.sideSeat}>{puck(at('left'))}</View>
+        {feltBody}
+        <View style={styles.sideSeat}>{puck(at('right'))}</View>
+      </View>
+    </View>
+  );
+
+  // Running zvanja record (bubbles are transient; this stays).
+  const calls =
+    view.announcedDeclarations.length > 0 || view.belaAnnouncedBy !== null ? (
+      <View style={[styles.callsRow, land && styles.callsCol]}>
+        {view.announcedDeclarations.map((d, i) => (
+          <View key={i} style={styles.callChip}>
+            <Text style={styles.callChipText}>
+              {meta(d.seat).name}: {lang.declaration(d)}
+            </Text>
+          </View>
+        ))}
+        {view.belaAnnouncedBy !== null && (
+          <View style={[styles.callChip, styles.callChipGold]}>
+            <Text style={styles.callChipText}>
+              {meta(view.belaAnnouncedBy).name}: {lang.s.bela} (20)
+            </Text>
+          </View>
+        )}
+      </View>
+    ) : null;
+
+  // Prompts that need words, not just buttons.
+  const prompts = (
+    <>
+      {!settled && view.mustDeclare && view.myDeclarations.length > 0 && (
+        <View style={styles.promptRow}>
+          <Text style={styles.promptText}>
+            {lang.s.declarations}:{' '}
+            {view.myDeclarations.map((d) => lang.declaration({ ...d, seat: mySeat })).join(', ')}
+          </Text>
+          {!m.compact && <Text style={styles.promptHint}>{lang.s.declareHint}</Text>}
+        </View>
+      )}
+      {!settled && view.canDeclare === true && (
+        <View style={styles.promptRow}>
+          <Text style={styles.promptHint}>{lang.s.claimZvanjaHint}</Text>
+        </View>
+      )}
+      {arranging && (
+        <View style={styles.promptRow}>
+          <Text style={styles.promptText}>{lang.s.ui.arrangeHint}</Text>
+          <Button label={lang.s.ui.arrangeDone} tone="strong" onPress={() => setArranging(false)} />
+        </View>
+      )}
+      {!settled && view.canAnnounceBela && !hardMode && (
+        <View style={styles.promptRow}>
+          <Text style={styles.promptText}>{lang.s.belaHint}</Text>
+        </View>
+      )}
+    </>
+  );
+
+  // My hand, fanned; the seat anchor for sprites sits underneath it.
+  const handBlock = (
+    <Anchor id={anchorId.seat(mySeat)} style={[styles.handArea, { minHeight: m.handMinHeight }]}>
+      <Pressable
+        onLongPress={() => {
+          playSfx('tap');
+          setArranging((a) => !a);
+        }}
+        delayLongPress={500}
+      >
+        <Hand
+          cards={hand.cards}
+          options={options}
+          enabled={myTurn}
+          onPlay={onAction}
+          freePlay={hardMode}
+          width={m.handWidth}
+          maxCardW={m.handCardMax}
+          arranging={arranging}
+          onSwap={hand.swap}
+          confirmPlay={confirmPlay}
+        />
+      </Pressable>
+      {/* online, my own turn is on the clock too — show it */}
+      {myTurn && turnDeadline !== null && (
+        <View style={styles.myTimer} pointerEvents="none">
+          <TurnRing size={36} deadline={turnDeadline} totalMs={turnTotalMs} />
+        </View>
+      )}
+    </Anchor>
+  );
+
+  // A fixed 34px (or one column wide), so it never reflows the felt.
+  const emotes =
+    !settled && onEmote ? (
+      <EmoteStrip lang={lang} open={trayOpen} dimmed={myTurn} vertical={land} onSend={sendEmote} />
+    ) : null;
+
+  const emoteToggle = onEmote ? (
+    <Pressable
+      onPress={() => setTrayOpen((o) => !o)}
+      hitSlop={8}
+      style={[styles.emoteToggle, trayOpen && styles.emoteToggleOn]}
+    >
+      <Text style={styles.emoteToggleText}>😄</Text>
+    </Pressable>
+  ) : null;
+
+  const awardRow = banner ? (
+    <View style={styles.awardRow}>
+      <Text style={styles.awardText}>
+        +{banner.xp} XP{banner.coins > 0 ? `   +${banner.coins} ●` : ''}
+        {banner.levelUp !== null ? `   ★ ${lang.s.ui.level} ${banner.levelUp}` : ''}
+      </Text>
+    </View>
+  ) : null;
+
+  const resultSheet = settled ? (
+    <View style={styles.resultBackdrop} pointerEvents="box-none">
+      <DealResult
+        lang={lang}
+        maxHeight={Math.round(m.height * 0.92)}
+        result={lastDealResult}
+        matchScores={matchScores}
+        matchOver={matchOver}
+        winnerLabel={winnerTeam !== null ? lang.team(winnerTeam, mySeat) : ''}
+        renonsText={
+          lastDealResult?.renonsSeat != null
+            ? lang.s.renonsBy(meta(lastDealResult.renonsSeat).name)
+            : null
+        }
+        series={series}
+        askedRematch={askedRematch}
+        waitingFor={waitingFor}
+        onRematch={onRematch}
+        onForceRematch={onForceRematch}
+        onNext={tap(onNext)}
+        onFinish={tap(onFinish)}
+        finishLabel={finishLabel}
+      />
+    </View>
+  ) : null;
+
   return (
     <AnchorHost map={anchors}>
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.root}>
-          {/* wallet / level strip */}
-          <ProfileBar profile={profile} />
-          {status ? <Text style={styles.status}>{status}</Text> : null}
-
-          {/* score strip: match score, plus this deal's running count */}
-          <TableHeader
-            lang={lang}
-            mySeat={mySeat}
-            matchScores={matchScores}
-            progress={view.dealProgress}
-          />
-
-          {/* the table */}
-          <View style={styles.tableArea}>
-            <View style={styles.topSeat}>{puck(at('top'))}</View>
-
-            <View style={styles.midRow}>
-              <View style={styles.sideSeat}>{puck(at('left'))}</View>
-
-              <View style={[styles.felt, { backgroundColor: baize.felt, borderColor: baize.rim }]}>
-                <View style={styles.feltInner}>
-                  {/* centre plaque: trump + multiplier; doubles as the deck anchor */}
-                  <Anchor id={anchorId.deck} style={styles.plaque}>
-                    {trump ? (
-                      <>
-                        <SuitPip suit={trump} size={26} />
-                        {view.multiplier > 1 && (
-                          <Text style={styles.plaqueMult}>×{view.multiplier}</Text>
-                        )}
-                      </>
-                    ) : (
-                      <Text style={styles.subDim}>{lang.s.trumpUndecided}</Text>
-                    )}
-                    {view.callerSeat !== null && (
-                      <Text style={styles.plaqueCaller}>
-                        {lang.s.calledBy(meta(view.callerSeat).name)}
-                      </Text>
-                    )}
-                  </Anchor>
-
-                  {/* one trick slot per seat, positioned by table side */}
-                  {([0, 1, 2, 3] as Seat[]).map((s) => {
-                    const pos = seatPosition(s, mySeat);
-                    const played = view.currentTrick.find((p) => p.seat === s);
-                    return (
-                      <Anchor
-                        key={s}
-                        id={anchorId.slot(s)}
-                        style={[
-                          styles.slot,
-                          SLOT[pos],
-                          // Whose card this is, at a glance — and whose empty
-                          // slot, before anybody has played into it.
-                          played
-                            ? { borderWidth: 2, borderColor: seatTone(s, mySeat).edge, borderRadius: radius.card, margin: -2 }
-                            : null,
-                        ]}
-                      >
-                        {played ? (
-                          <PlayingCard card={played.card} size="md" />
-                        ) : (
-                          <View style={[styles.slotGhost, { borderColor: seatTone(s, mySeat).dim }]} />
-                        )}
-                      </Anchor>
-                    );
-                  })}
-                </View>
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+        <View style={[styles.root, land && styles.rootLand]}>
+          {land ? (
+            // Turned sideways there is no vertical room to stack chrome above
+            // and below the felt, so everything that is not the table itself
+            // moves into the two rails and the middle keeps its full height.
+            <>
+              <View style={[styles.rail, { width: m.railW }]}>
+                <ProfileBar profile={profile} vertical />
+                <TableHeader
+                  lang={lang}
+                  mySeat={mySeat}
+                  matchScores={matchScores}
+                  progress={view.dealProgress}
+                  vertical
+                />
+                {calls}
+                <View style={styles.railGap} />
+                <Button label={finishLabel} tone="plain" onPress={tap(onFinish)} />
               </View>
 
-              <View style={styles.sideSeat}>{puck(at('right'))}</View>
-            </View>
-          </View>
-
-          {/* running zvanja record (bubbles are transient; this stays) */}
-          {(view.announcedDeclarations.length > 0 || view.belaAnnouncedBy !== null) && (
-            <View style={styles.callsRow}>
-              {view.announcedDeclarations.map((d, i) => (
-                <View key={i} style={styles.callChip}>
-                  <Text style={styles.callChipText}>
-                    {meta(d.seat).name}: {lang.declaration(d)}
-                  </Text>
-                </View>
-              ))}
-              {view.belaAnnouncedBy !== null && (
-                <View style={[styles.callChip, styles.callChipGold]}>
-                  <Text style={styles.callChipText}>
-                    {meta(view.belaAnnouncedBy).name}: {lang.s.bela} (20)
-                  </Text>
-                </View>
-              )}
-            </View>
-          )}
-
-          {banner && (
-            <View style={styles.awardRow}>
-              <Text style={styles.awardText}>
-                +{banner.xp} XP{banner.coins > 0 ? `   +${banner.coins} ●` : ''}
-                {banner.levelUp !== null ? `   ★ ${lang.s.ui.level} ${banner.levelUp}` : ''}
-              </Text>
-            </View>
-          )}
-
-          {/* prompts that need words, not just buttons */}
-          {!settled && view.mustDeclare && view.myDeclarations.length > 0 && (
-            <View style={styles.promptRow}>
-              <Text style={styles.promptText}>
-                {lang.s.declarations}:{' '}
-                {view.myDeclarations.map((d) => lang.declaration({ ...d, seat: mySeat })).join(', ')}
-              </Text>
-              <Text style={styles.promptHint}>{lang.s.declareHint}</Text>
-            </View>
-          )}
-          {!settled && view.canDeclare === true && (
-            <View style={styles.promptRow}>
-              <Text style={styles.promptHint}>{lang.s.claimZvanjaHint}</Text>
-            </View>
-          )}
-          {arranging && (
-            <View style={styles.promptRow}>
-              <Text style={styles.promptText}>{lang.s.ui.arrangeHint}</Text>
-              <Button label={lang.s.ui.arrangeDone} tone="strong" onPress={() => setArranging(false)} />
-            </View>
-          )}
-          {!settled && view.canAnnounceBela && !hardMode && (
-            <View style={styles.promptRow}>
-              <Text style={styles.promptText}>{lang.s.belaHint}</Text>
-            </View>
-          )}
-
-          {/* my hand, fanned; the seat anchor for sprites sits underneath it */}
-          <Anchor id={anchorId.seat(mySeat)} style={styles.handArea}>
-            <Pressable
-              onLongPress={() => {
-                playSfx('tap');
-                setArranging((a) => !a);
-              }}
-              delayLongPress={500}
-            >
-              <Hand
-                cards={hand.cards}
-                options={options}
-                enabled={myTurn}
-                onPlay={onAction}
-                freePlay={hardMode}
-                width={handWidth}
-                arranging={arranging}
-                onSwap={hand.swap}
-                confirmPlay={confirmPlay}
-              />
-            </Pressable>
-            {/* online, my own turn is on the clock too — show it */}
-            {myTurn && turnDeadline !== null && (
-              <View style={styles.myTimer} pointerEvents="none">
-                <TurnRing size={36} deadline={turnDeadline} totalMs={turnTotalMs} />
+              <View style={styles.centre}>
+                {status ? <Text style={styles.status}>{status}</Text> : null}
+                {felt}
+                {awardRow}
+                {prompts}
+                {handBlock}
               </View>
-            )}
-          </Anchor>
 
-          {/* Always-on emote row: a fixed 34px, so it never reflows the felt. */}
-          {!settled && onEmote && (
-            <EmoteStrip lang={lang} open={trayOpen} dimmed={myTurn} onSend={sendEmote} />
-          )}
+              <View style={[styles.rail, styles.railRight, { width: m.railW }]}>
+                {emotes}
+                <View style={styles.railGap} />
+                {!settled && (
+                  <View style={styles.actionsCol}>
+                    <NonCardActions options={options} lang={lang} onChoose={onAction} />
+                    {emoteToggle}
+                  </View>
+                )}
+              </View>
+            </>
+          ) : (
+            <>
+              {/* wallet / level strip */}
+              <ProfileBar profile={profile} />
+              {status ? <Text style={styles.status}>{status}</Text> : null}
 
-          {/* actions: bidding, declaring, bela, leave */}
-          {!settled && (
-            <View style={styles.actionsRow}>
-              {onEmote && (
-                <Pressable
-                  onPress={() => setTrayOpen((o) => !o)}
-                  hitSlop={8}
-                  style={[styles.emoteToggle, trayOpen && styles.emoteToggleOn]}
-                >
-                  <Text style={styles.emoteToggleText}>😄</Text>
-                </Pressable>
-              )}
-              <NonCardActions options={options} lang={lang} onChoose={onAction} />
-              <Button label={finishLabel} tone="plain" onPress={tap(onFinish)} />
-            </View>
-          )}
-
-          {/* result sheet */}
-          {settled && (
-            <View style={styles.resultBackdrop} pointerEvents="box-none">
-              <DealResult
+              {/* score strip: match score, plus this deal's running count */}
+              <TableHeader
                 lang={lang}
-                result={lastDealResult}
+                mySeat={mySeat}
                 matchScores={matchScores}
-                matchOver={matchOver}
-                winnerLabel={winnerTeam !== null ? lang.team(winnerTeam, mySeat) : ''}
-                renonsText={
-                  lastDealResult?.renonsSeat != null
-                    ? lang.s.renonsBy(meta(lastDealResult.renonsSeat).name)
-                    : null
-                }
-                series={series}
-                askedRematch={askedRematch}
-                waitingFor={waitingFor}
-                onRematch={onRematch}
-                onForceRematch={onForceRematch}
-                onNext={tap(onNext)}
-                onFinish={tap(onFinish)}
-                finishLabel={finishLabel}
+                progress={view.dealProgress}
               />
-            </View>
+
+              {felt}
+              {calls}
+              {awardRow}
+              {prompts}
+              {handBlock}
+              {emotes}
+
+              {/* actions: bidding, declaring, bela, leave */}
+              {!settled && (
+                <View style={styles.actionsRow}>
+                  {emoteToggle}
+                  <NonCardActions options={options} lang={lang} onChoose={onAction} />
+                  <Button label={finishLabel} tone="plain" onPress={tap(onFinish)} />
+                </View>
+              )}
+            </>
           )}
+
+          {resultSheet}
 
           {/* sprites, always last */}
           <EffectsOverlay bus={fxBus} />
@@ -399,15 +521,6 @@ export function TableScreen(props: TableScreenProps) {
     </AnchorHost>
   );
 }
-
-// A compact cross around the felt centre, so a full trick reads as one pile
-// (slot is 46×67; offsets keep a small gap between neighbouring cards).
-const SLOT: Record<Position, ViewStyle> = {
-  bottom: { left: '50%', marginLeft: -23, top: '55%', marginTop: 39 },
-  top: { left: '50%', marginLeft: -23, top: '55%', marginTop: -106 },
-  left: { left: '50%', marginLeft: -77, top: '55%', marginTop: -33 },
-  right: { left: '50%', marginLeft: 31, top: '55%', marginTop: -33 },
-};
 
 /**
  * The match score, and — while a deal is being played — the running count for
@@ -423,11 +536,14 @@ function TableHeader({
   mySeat,
   matchScores,
   progress,
+  vertical = false,
 }: {
   lang: Lang;
   mySeat: Seat;
   matchScores: readonly [number, number];
   progress: DealProgress | null;
+  /** Landscape puts the whole strip in the left rail, stacked. */
+  vertical?: boolean;
 }) {
   const us = teamOf(mySeat);
   const them = (1 - us) as TeamId;
@@ -437,8 +553,8 @@ function TableHeader({
   const live = progress ? (progress.provisional ? styles.dealCountDim : styles.dealCount) : null;
 
   return (
-    <View style={styles.scoreRow}>
-      <View style={styles.pillRow}>
+    <View style={[styles.scoreRow, vertical && styles.scoreCol]}>
+      <View style={[styles.pillRow, vertical && styles.pillCol]}>
         <View style={[styles.teamPill, { backgroundColor: team.usDim, borderColor: team.usEdge }]}>
           <Text style={styles.pillLabel}>{lang.team(us, mySeat)}</Text>
           <Text style={[styles.pillValue, { color: team.usInk }]}>{matchScores[us]}</Text>
@@ -450,10 +566,10 @@ function TableHeader({
       </View>
 
       {progress ? (
-        <Text style={live!}>
+        <Text style={[live!, vertical && styles.centreText]}>
           {progress.running[us]} : {progress.running[them]}
           <Text style={styles.subDim}>
-            {'   '}
+            {vertical ? '\n' : '   '}
             {progress.callerNeeds === 0
               ? lang.s.contractSafe
               : lang.s.needsMore(progress.callerNeeds)}
@@ -467,14 +583,14 @@ function TableHeader({
 }
 
 /** Level, XP progress and the coin balance; the coins are the wallet anchor. */
-function ProfileBar({ profile }: { profile: PlayerProfile }) {
+function ProfileBar({ profile, vertical = false }: { profile: PlayerProfile; vertical?: boolean }) {
   const p = levelProgress(profile.xp);
   return (
-    <View style={styles.profileBar}>
+    <View style={[styles.profileBar, vertical && styles.profileBarCol]}>
       <View style={styles.levelBadge}>
         <Text style={styles.levelText}>{p.level}</Text>
       </View>
-      <View style={styles.xpWrap}>
+      <View style={[styles.xpWrap, vertical && styles.xpWrapCol]}>
         <View style={styles.xpTrack}>
           <View style={[styles.xpFill, { width: `${Math.round(p.fraction * 100)}%` }]} />
         </View>
@@ -494,6 +610,7 @@ function Hand({
   onPlay,
   freePlay = false,
   width,
+  maxCardW,
   arranging = false,
   onSwap,
   confirmPlay = 'ambiguous',
@@ -506,6 +623,8 @@ function Hand({
   freePlay?: boolean;
   /** Space the fan may use; the cards size themselves to fit it in ONE row. */
   width: number;
+  /** Height budget, expressed as a card width; landscape sets it low. */
+  maxCardW?: number;
   /** Arrange mode: taps swap cards and can never play one. */
   arranging?: boolean;
   onSwap?: (idA: string, idB: string) => void;
@@ -529,7 +648,7 @@ function Hand({
   const needsConfirm =
     confirmPlay === 'always' ? true : confirmPlay === 'ambiguous' ? !forced : false;
 
-  const fit = fitHand(width, cards.length);
+  const fit = fitHand(width, cards.length, maxCardW);
   const mid = (cards.length - 1) / 2;
   const lift = 14 * fit.scale;
 
@@ -638,6 +757,7 @@ function NonCardActions({
 
 function DealResult({
   lang,
+  maxHeight,
   result,
   matchScores,
   matchOver,
@@ -653,6 +773,8 @@ function DealResult({
   finishLabel,
 }: {
   lang: Lang;
+  /** The sheet scrolls rather than run off a short (landscape) screen. */
+  maxHeight: number;
   result: DealScoreResult | null;
   matchScores: readonly [number, number];
   matchOver: boolean;
@@ -681,7 +803,10 @@ function DealResult({
   );
 
   return (
-    <View style={styles.resultPanel}>
+    <ScrollView
+      style={[styles.resultPanel, { maxHeight }]}
+      contentContainerStyle={styles.resultContent}
+    >
       <Text style={styles.resultTitle}>{lang.s.dealResult}</Text>
       {row(lang.s.cardsAndLastTrick, result.trickPoints)}
       {result.valatTeam !== null && row(lang.s.valat, result.valatBonus)}
@@ -732,7 +857,7 @@ function DealResult({
           <Button label={finishLabel} tone="plain" onPress={onFinish} />
         </View>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -760,6 +885,12 @@ export function Button({
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.feltDeep },
   root: { flex: 1, padding: 12, gap: 8 },
+  // Landscape: two narrow rails of chrome with the table between them.
+  rootLand: { flexDirection: 'row', paddingVertical: 6, gap: 6 },
+  rail: { gap: 6, alignItems: 'center' },
+  railRight: { justifyContent: 'flex-end' },
+  railGap: { flex: 1 },
+  centre: { flex: 1, gap: 6 },
 
   profileBar: {
     flexDirection: 'row',
@@ -781,7 +912,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   levelText: { color: theme.accent, fontWeight: '800', fontSize: 12 },
+  profileBarCol: { flexDirection: 'column', gap: 6, paddingVertical: 8, alignSelf: 'stretch' },
   xpWrap: { flex: 1 },
+  // A column has no width to give the bar, so pin it instead of flexing.
+  xpWrapCol: { flex: 0, alignSelf: 'stretch' },
   xpTrack: {
     height: 5,
     borderRadius: 3,
@@ -794,12 +928,15 @@ const styles = StyleSheet.create({
   status: { color: theme.accent, fontSize: 12, textAlign: 'center' },
 
   scoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  scoreCol: { flexDirection: 'column', gap: 4, alignItems: 'center', alignSelf: 'stretch' },
+  centreText: { textAlign: 'center' },
   scoreText: {},
   scoreLabel: { color: theme.textDim, fontSize: 13 },
   scoreValue: { color: theme.text, fontSize: 20, fontWeight: '800' },
   subDim: { color: theme.textDim, fontSize: 12 },
   seriesLine: { color: theme.textDim, fontSize: 13, textAlign: 'center' },
   pillRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  pillCol: { flexDirection: 'column', gap: 4, alignSelf: 'stretch' },
   teamPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -814,8 +951,9 @@ const styles = StyleSheet.create({
   dealCount: { color: theme.accent, fontSize: 13, fontWeight: '700' },
   dealCountDim: { color: theme.textDim, fontSize: 13, fontWeight: '700' },
 
-  tableArea: { flex: 1, minHeight: 260 },
+  tableArea: { flex: 1 },
   topSeat: { alignItems: 'center' },
+  landTopSeat: { position: 'absolute', top: 0, left: 0, right: 0, alignItems: 'center' },
   midRow: { flex: 1, flexDirection: 'row', alignItems: 'stretch', gap: 4 },
   sideSeat: { justifyContent: 'center' },
 
@@ -838,6 +976,9 @@ const styles = StyleSheet.create({
   },
   // Sits in the felt's upper lobe, clear of the trick cross at the centre.
   plaque: { position: 'absolute', top: '5%', alignSelf: 'center', alignItems: 'center', gap: 1 },
+  // Landscape parks the partner on the top rim, so the plaque moves to the
+  // left lobe, which the trick cross never reaches.
+  plaqueLand: { top: '38%', left: '4%', alignSelf: 'flex-start' },
   plaqueMult: { color: theme.accent, fontSize: 13, fontWeight: '800' },
   plaqueCaller: { color: theme.textDim, fontSize: 10 },
 
@@ -852,6 +993,7 @@ const styles = StyleSheet.create({
   myTimer: { position: 'absolute', right: 8, top: -20, width: 36, height: 36 },
 
   callsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  callsCol: { flexDirection: 'column', flexWrap: 'nowrap', alignSelf: 'stretch' },
   callChip: {
     backgroundColor: 'rgba(0,0,0,0.28)',
     borderRadius: radius.pill,
@@ -876,12 +1018,13 @@ const styles = StyleSheet.create({
   promptText: { color: theme.accent, fontWeight: '700', fontSize: 13 },
   promptHint: { color: theme.textDim, fontSize: 12 },
 
-  handArea: { minHeight: 118, justifyContent: 'flex-end' },
+  handArea: { justifyContent: 'flex-end' },
   fan: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'flex-end',
-    paddingTop: 16,
+    // Shared with fanHeight(), which reserves the row this padding sits in.
+    paddingTop: FAN_PAD,
   },
   fanCard: {},
 
@@ -893,6 +1036,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingBottom: 2,
   },
+  actionsCol: { gap: 6, alignItems: 'stretch', alignSelf: 'stretch' },
 
   emoteToggle: {
     width: 40,
@@ -935,9 +1079,9 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.panel + 6,
     borderWidth: 1,
     borderColor: theme.line,
-    padding: 16,
-    gap: 4,
+    flexGrow: 0,
   },
+  resultContent: { padding: 16, gap: 4 },
   resultTitle: { color: theme.text, fontWeight: '800', fontSize: 16, marginBottom: 4 },
   resultRow: { flexDirection: 'row', justifyContent: 'space-between' },
   resultLabel: { color: theme.textDim, fontSize: 14 },
