@@ -14,17 +14,23 @@ export type CardSize = keyof typeof WIDTHS;
 export function PlayingCard({
   card,
   size = 'md',
+  width,
   dimmed = false,
   highlight = false,
+  selected = false,
 }: {
   card: Card;
   size?: CardSize;
+  /** Exact width, for the hand — it sizes itself to the screen. Wins over `size`. */
+  width?: number;
   dimmed?: boolean;
   highlight?: boolean;
+  /** Armed by a first tap, waiting for the confirming second one. */
+  selected?: boolean;
 }) {
   return (
-    <View style={[highlight && styles.highlight, dimmed && styles.dimmed]}>
-      <CardFace card={card} width={WIDTHS[size]} />
+    <View style={[highlight && styles.highlight, selected && styles.selected, dimmed && styles.dimmed]}>
+      <CardFace card={card} width={width ?? WIDTHS[size]} />
     </View>
   );
 }
@@ -40,6 +46,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: theme.accent,
     margin: -2,
+  },
+  selected: {
+    borderRadius: radius.card,
+    borderWidth: 3,
+    borderColor: theme.ok,
+    margin: -3,
   },
   dimmed: { opacity: 0.4 },
 });

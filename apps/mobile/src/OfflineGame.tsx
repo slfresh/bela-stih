@@ -10,12 +10,21 @@ import type { Settings } from './storage';
  * A local game against the bots. A rematch remounts the inner match component,
  * so table, director, anchors and effects always restart together.
  */
-export function OfflineGame({ settings, onExit }: { settings: Settings; onExit: () => void }) {
+export function OfflineGame({
+  settings,
+  onSettingsChange,
+  onExit,
+}: {
+  settings: Settings;
+  onSettingsChange?: (s: Settings) => void;
+  onExit: () => void;
+}) {
   const [matchId, setMatchId] = useState(0);
   return (
     <OfflineMatch
       key={matchId}
       settings={settings}
+      onSettingsChange={onSettingsChange}
       onExit={onExit}
       onRematch={() => setMatchId((n) => n + 1)}
     />
@@ -24,10 +33,12 @@ export function OfflineGame({ settings, onExit }: { settings: Settings; onExit: 
 
 function OfflineMatch({
   settings,
+  onSettingsChange,
   onExit,
   onRematch,
 }: {
   settings: Settings;
+  onSettingsChange?: (s: Settings) => void;
   onExit: () => void;
   onRematch: () => void;
 }) {
@@ -63,6 +74,9 @@ function OfflineMatch({
       lang={g.lang}
       view={g.view}
       hardMode={settings.hardMode}
+      handSort={settings.handSort}
+      onHandSortChange={(m) => onSettingsChange?.({ ...settings, handSort: m })}
+      confirmPlay={settings.confirmPlay}
       options={settled || !g.idle ? [] : g.view.legalActions}
       myTurn={g.myTurn}
       settled={settled}

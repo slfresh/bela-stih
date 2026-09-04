@@ -1,5 +1,13 @@
 import { useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type {
   Action,
@@ -17,7 +25,9 @@ import { Anchor, AnchorHost, type AnchorMap } from './anim/AnchorRegistry';
 import { EffectsOverlay } from './anim/EffectsOverlay';
 import { anchorId, type FxBus } from './anim/FxBus';
 import { SeatPuck } from './table/SeatPuck';
-import { seatAt, seatPosition, type Position } from './table/geometry';
+import { fitHand, seatAt, seatPosition, type Position } from './table/geometry';
+import { useHandOrder, type HandSort } from './table/useHandOrder';
+import type { ConfirmPlay } from './storage';
 import { TurnRing } from './anim/TurnRing';
 import { feltStyle } from './cosmetics';
 import { emoteText, EMOTES } from './emotes';
@@ -77,6 +87,11 @@ export interface TableScreenProps {
   /** When set, the emote tray is available and sends through here. */
   onEmote?: (id: string) => void;
   /** Rematch flow (online): the series score and the accept controls. */
+  /** How the player wants the hand laid out; persisted in Settings. */
+  handSort?: HandSort;
+  onHandSortChange?: (m: HandSort) => void;
+  /** Misclick guard; 'ambiguous' (default) only asks when the card is a choice. */
+  confirmPlay?: ConfirmPlay;
   series?: readonly [number, number] | null;
   askedRematch?: boolean;
   waitingFor?: number;
@@ -95,7 +110,16 @@ export function TableScreen(props: TableScreenProps) {
     matchScores, winnerTeam, profile, banner, seatMeta, status, anchors, fxBus,
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
     hardMode = false, series, askedRematch, waitingFor, onRematch, onForceRematch,
+    handSort = 'auto', onHandSortChange, confirmPlay = 'ambiguous',
   } = props;
+
+  // Every dimension the table draws is derived from the real window, so eight
+  // cards fit one row on a 320dp phone and grow on a tablet.
+  const { width: winW } = useWindowDimensions();
+  const handWidth = Math.max(240, winW - 24);
+
+  const [arranging, setArranging] = useState(false);
+  const hand = useHandOrder(view.hand, view.context.trumpSuit, handSort, onHandSortChange ?? (() => {}));
 
   // The tray closes on send; the cooldown mirrors the server's rate limit so
   // a spammed tap dies here instead of being silently dropped over the wire.
@@ -250,6 +274,12 @@ export function TableScreen(props: TableScreenProps) {
               <Text style={styles.promptHint}>{lang.s.claimZvanjaHint}</Text>
             </View>
           )}
+          {arranging && (
+            <View style={styles.promptRow}>
+              <Text style={styles.promptText}>{lang.s.ui.arrangeHint}</Text>
+              <Button label={lang.s.ui.arrangeDone} tone="strong" onPress={() => setArranging(false)} />
+            </View>
+          )}
           {!settled && view.canAnnounceBela && !hardMode && (
             <View style={styles.promptRow}>
               <Text style={styles.promptText}>{lang.s.belaHint}</Text>
@@ -258,13 +288,25 @@ export function TableScreen(props: TableScreenProps) {
 
           {/* my hand, fanned; the seat anchor for sprites sits underneath it */}
           <Anchor id={anchorId.seat(mySeat)} style={styles.handArea}>
-            <Hand
-              cards={view.hand}
-              options={options}
-              enabled={myTurn}
-              onPlay={onAction}
-              freePlay={hardMode}
-            />
+            <Pressable
+              onLongPress={() => {
+                playSfx('tap');
+                setArranging((a) => !a);
+              }}
+              delayLongPress={500}
+            >
+              <Hand
+                cards={hand.cards}
+                options={options}
+                enabled={myTurn}
+                onPlay={onAction}
+                freePlay={hardMode}
+                width={handWidth}
+                arranging={arranging}
+                onSwap={hand.swap}
+                confirmPlay={confirmPlay}
+              />
+            </Pressable>
             {/* online, my own turn is on the clock too — show it */}
             {myTurn && turnDeadline !== null && (
               <View style={styles.myTimer} pointerEvents="none">
@@ -427,6 +469,10 @@ function Hand({
   enabled,
   onPlay,
   freePlay = false,
+  width,
+  arranging = false,
+  onSwap,
+  confirmPlay = 'ambiguous',
 }: {
   cards: Card[];
   options: Action[];
@@ -434,6 +480,12 @@ function Hand({
   onPlay: (a: Action) => void;
   /** Hard mode: any card is tappable and nothing is dimmed or lifted as a hint. */
   freePlay?: boolean;
+  /** Space the fan may use; the cards size themselves to fit it in ONE row. */
+  width: number;
+  /** Arrange mode: taps swap cards and can never play one. */
+  arranging?: boolean;
+  onSwap?: (idA: string, idB: string) => void;
+  confirmPlay?: ConfirmPlay;
 }) {
   const plays = options.filter(
     (a): a is Extract<Action, { type: 'PLAY_CARD' }> => a.type === 'PLAY_CARD',
@@ -445,20 +497,24 @@ function Hand({
     if (!byCard.has(key) || p.announceBela !== true) byCard.set(key, p);
   }
 
-  const suits = ['clubs', 'spades', 'hearts', 'diamonds'];
-  const ranks = ['7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
-  const sorted = [...cards].sort((a, b) => {
-    const s = suits.indexOf(a.suit) - suits.indexOf(b.suit);
-    return s !== 0 ? s : ranks.indexOf(a.rank) - ranks.indexOf(b.rank);
-  });
+  // One tap arms a card, the second plays it — but never when the card is
+  // forced, which in bela is most tricks. That keeps the guard exactly where a
+  // mistake is possible without taxing the taps that cannot go wrong.
+  const [armed, setArmed] = useState<string | null>(null);
+  const forced = plays.length === 1;
+  const needsConfirm =
+    confirmPlay === 'always' ? true : confirmPlay === 'ambiguous' ? !forced : false;
 
-  const mid = (sorted.length - 1) / 2;
+  const fit = fitHand(width, cards.length);
+  const mid = (cards.length - 1) / 2;
+  const lift = 14 * fit.scale;
 
   return (
     <View style={styles.fan}>
-      {sorted.map((card, i) => {
+      {cards.map((card, i) => {
+        const id = cardId(card);
         const inPlayMoment = plays.length > 0;
-        const action = byCard.get(cardId(card));
+        const action = byCard.get(id);
         // Hard mode: every card is submittable — the engine, not the UI, is
         // the judge, and a wrong card is a renons.
         const chosen =
@@ -466,20 +522,47 @@ function Hand({
           (freePlay && inPlayMoment
             ? ({ type: 'PLAY_CARD', seat: plays[0]!.seat, card } as Action)
             : undefined);
-        const playable = enabled && chosen !== undefined;
-        const illegalNow = !freePlay && enabled && inPlayMoment && !playable;
+        const playable = !arranging && enabled && chosen !== undefined;
+        const illegalNow = !freePlay && !arranging && enabled && inPlayMoment && !playable;
+        const isArmed = armed === id;
         const off = i - mid;
+
+        const press = () => {
+          if (arranging) {
+            if (armed === null) setArmed(id);
+            else {
+              if (armed !== id) onSwap?.(armed, id);
+              setArmed(null);
+            }
+            return;
+          }
+          if (!chosen) return;
+          if (needsConfirm && !isArmed) {
+            setArmed(id);
+            return;
+          }
+          setArmed(null);
+          onPlay(chosen);
+        };
+
         return (
           <Pressable
-            key={cardId(card)}
-            disabled={!playable}
-            onPress={() => chosen && onPlay(chosen)}
+            key={id}
+            disabled={!playable && !arranging}
+            onPress={press}
+            // Vertical only: horizontal slop would overlap the neighbouring
+            // card in touch space and make mis-taps MORE likely, not less.
+            hitSlop={{ top: 12, bottom: 8 }}
             style={[
               styles.fanCard,
               {
-                marginLeft: i === 0 ? 0 : -22,
+                marginLeft: i === 0 ? 0 : fit.overlap,
                 transform: [
-                  { translateY: Math.pow(Math.abs(off), 1.6) * 3.2 - (playable ? 14 : 0) },
+                  {
+                    translateY:
+                      Math.pow(Math.abs(off), 1.6) * 3.2 * fit.scale -
+                      (playable || (arranging && isArmed) ? lift : 0),
+                  },
                   { rotateZ: `${off * 4.5}deg` },
                 ],
                 zIndex: i,
@@ -488,9 +571,10 @@ function Hand({
           >
             <PlayingCard
               card={card}
-              size="lg"
+              width={fit.cardW}
               dimmed={illegalNow}
-              highlight={playable && !freePlay}
+              highlight={playable && !freePlay && !isArmed}
+              selected={isArmed}
             />
           </Pressable>
         );

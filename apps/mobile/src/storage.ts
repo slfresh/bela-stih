@@ -46,6 +46,8 @@ const KEY = {
   settings: 'settings.v1',
 } as const;
 
+export type ConfirmPlay = 'off' | 'ambiguous' | 'always';
+
 export interface Settings {
   sound: boolean;
   haptics: boolean;
@@ -63,6 +65,13 @@ export interface Settings {
   hardMode: boolean;
   /** Card face style: mađarice (default), vintage photos, French suits, or big-and-simple. */
   deckStyle: 'madarice' | 'starinske' | 'francuske' | 'simple';
+  /** How the hand is laid out. 'manual' keeps whatever the player arranged. */
+  handSort: 'auto' | 'suits' | 'manual';
+  /**
+   * Misclick guard. 'ambiguous' (default) arms a card on the first tap only
+   * when there is a genuine choice — a forced card still plays on one tap.
+   */
+  confirmPlay: ConfirmPlay;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -72,6 +81,8 @@ export const DEFAULT_SETTINGS: Settings = {
   nickname: '',
   hardMode: false,
   deckStyle: 'madarice',
+  handSort: 'auto',
+  confirmPlay: 'ambiguous',
 };
 
 function read<T>(key: string, fallback: T): T {

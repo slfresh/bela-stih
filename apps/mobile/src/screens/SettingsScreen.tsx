@@ -92,6 +92,57 @@ export function SettingsScreen({
         </View>
       </Panel>
 
+      <Panel label={ui.sortHand}>
+        <View style={styles.localeRow}>
+          {(
+            [
+              { id: 'auto', label: ui.sortAuto },
+              { id: 'suits', label: ui.sortSuits },
+              { id: 'manual', label: ui.sortManual },
+            ] as const
+          ).map((o) => (
+            <Pressable
+              key={o.id}
+              onPress={() => {
+                playSfx('tap');
+                onSettingsChange({ ...settings, handSort: o.id });
+              }}
+              style={[styles.localeChip, settings.handSort === o.id && styles.localeChipOn]}
+            >
+              <Text style={[styles.localeText, settings.handSort === o.id && styles.localeTextOn]}>
+                {o.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+        <Text style={styles.hint}>{ui.arrangeHint}</Text>
+      </Panel>
+
+      <Panel label={ui.confirmPlayLabel}>
+        <View style={styles.localeRow}>
+          {(
+            [
+              { id: 'off', label: ui.confirmOff },
+              { id: 'ambiguous', label: ui.confirmAmbiguous },
+              { id: 'always', label: ui.confirmAlways },
+            ] as const
+          ).map((o) => (
+            <Pressable
+              key={o.id}
+              onPress={() => {
+                playSfx('tap');
+                onSettingsChange({ ...settings, confirmPlay: o.id });
+              }}
+              style={[styles.localeChip, settings.confirmPlay === o.id && styles.localeChipOn]}
+            >
+              <Text style={[styles.localeText, settings.confirmPlay === o.id && styles.localeTextOn]}>
+                {o.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </Panel>
+
       <Panel label={lang.s.difficulty}>
         <View style={styles.localeRow}>
           {(

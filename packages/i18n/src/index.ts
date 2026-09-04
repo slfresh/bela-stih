@@ -134,6 +134,17 @@ export interface UiStrings {
   rematchAsked: string;
   startAnyway: string;
   seriesScore: string;
+  /** Hand arranging + sorting. */
+  arrangeHint: string;
+  arrangeDone: string;
+  sortHand: string;
+  sortAuto: string;
+  sortSuits: string;
+  sortManual: string;
+  confirmPlayLabel: string;
+  confirmOff: string;
+  confirmAmbiguous: string;
+  confirmAlways: string;
   invite: string;
   inviteText: (url: string) => string;
 }
@@ -436,6 +447,16 @@ const hr: Strings = {
     rematchAsked: 'Tražili ste novu partiju',
     startAnyway: 'Počni svejedno',
     seriesScore: 'Partije',
+    arrangeHint: 'Dodirnite dvije karte da ih zamijenite.',
+    arrangeDone: 'Gotovo',
+    sortHand: 'Slaganje karata',
+    sortAuto: 'Adut prvi',
+    sortSuits: 'Po bojama',
+    sortManual: 'Ručno',
+    confirmPlayLabel: 'Potvrda bacanja',
+    confirmOff: 'Bez potvrde',
+    confirmAmbiguous: 'Kad ima izbora',
+    confirmAlways: 'Uvijek',
     invite: 'Pozovi prijatelje',
     inviteText: (url) => `Zaigraj Belu sa mnom! Pridruži se mom stolu: ${url}`,
   },
@@ -626,6 +647,16 @@ const srCyrl: Strings = {
     rematchAsked: 'Тражили сте нову партију',
     startAnyway: 'Почни свеједно',
     seriesScore: 'Партије',
+    arrangeHint: 'Додирните две карте да их замените.',
+    arrangeDone: 'Готово',
+    sortHand: 'Слагање карата',
+    sortAuto: 'Адут први',
+    sortSuits: 'По бојама',
+    sortManual: 'Ручно',
+    confirmPlayLabel: 'Потврда бацања',
+    confirmOff: 'Без потврде',
+    confirmAmbiguous: 'Кад има избора',
+    confirmAlways: 'Увек',
     invite: 'Позови пријатеље',
     inviteText: (url) => `Заиграј белу са мном! Придружи се мом столу: ${url}`,
   },
@@ -812,6 +843,16 @@ const en: Strings = {
     rematchAsked: 'You asked for another match',
     startAnyway: 'Start anyway',
     seriesScore: 'Matches',
+    arrangeHint: 'Tap two cards to swap them.',
+    arrangeDone: 'Done',
+    sortHand: 'Card order',
+    sortAuto: 'Trump first',
+    sortSuits: 'By suit',
+    sortManual: 'Manual',
+    confirmPlayLabel: 'Confirm play',
+    confirmOff: 'Never',
+    confirmAmbiguous: 'When there is a choice',
+    confirmAlways: 'Always',
     invite: 'Invite friends',
     inviteText: (url) => `Come play Bela with me! Join my table: ${url}`,
   },

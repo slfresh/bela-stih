@@ -25,11 +25,13 @@ import { SERVER_URL, useNetGame, type NetGame } from './useNetGame';
  */
 export function OnlineGame({
   settings,
+  onSettingsChange,
   mode,
   joinCode,
   onExit,
 }: {
   settings: Settings;
+  onSettingsChange?: (s: Settings) => void;
   mode: 'quick' | 'create' | 'join';
   joinCode?: string;
   onExit: () => void;
@@ -107,6 +109,9 @@ export function OnlineGame({
       lang={net.lang}
       view={net.view}
       hardMode={net.hard}
+      handSort={settings.handSort}
+      onHandSortChange={(m) => onSettingsChange?.({ ...settings, handSort: m })}
+      confirmPlay={settings.confirmPlay}
       series={net.series}
       askedRematch={net.rematchVotes.includes(net.seat)}
       waitingFor={waitingForRematch}

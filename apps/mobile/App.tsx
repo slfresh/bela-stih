@@ -137,10 +137,11 @@ export default function App() {
     ) : launch.mode === 'gallery' ? (
       <DeckGallery onExit={exitToHome} />
     ) : launch.mode === 'offline' ? (
-      <OfflineGame settings={settings} onExit={exitToHome} />
+      <OfflineGame settings={settings} onSettingsChange={updateSettings} onExit={exitToHome} />
     ) : (
       <OnlineGame
         settings={settings}
+        onSettingsChange={updateSettings}
         mode={launch.mode}
         joinCode={launch.mode === 'join' ? launch.code : undefined}
         onExit={exitToHome}
