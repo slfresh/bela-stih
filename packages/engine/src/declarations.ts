@@ -114,11 +114,22 @@ export function resolveDeclarations(
   const all = perSeat.flat();
   if (all.length === 0) return { winningTeam: null, perTeamValue: [0, 0], winningDeclarations: [] };
 
+  // "Prednost ima onaj koji je prvi na štihu" is a rule about PLAYERS, not about
+  // teams, so it has to decide the intra-team tie as well. Picking a team's
+  // representative by seat index (which is what `all` is ordered by) could hand
+  // the contest to the other side even though this team held the earliest of the
+  // tied-best declarations.
+  const dist = (seat: Seat): number => (seat - firstLeader + 4) % 4;
   const best: (Declaration | null)[] = [null, null];
   for (const d of all) {
     const t = teamOf(d.seat);
     const cur = best[t];
-    if (!cur || cmpKey(declKey(d), declKey(cur)) > 0) best[t] = d;
+    if (!cur) {
+      best[t] = d;
+      continue;
+    }
+    const c = cmpKey(declKey(d), declKey(cur));
+    if (c > 0 || (c === 0 && dist(d.seat) < dist(cur.seat))) best[t] = d;
   }
 
   const b0 = best[0];
@@ -134,10 +145,7 @@ export function resolveDeclarations(
     // to whoever is FIRST in play order from the deal's first leader ("prednost
     // ima onaj koji je prvi na štihu"). The cancel variant stays as a knob.
     else if (config.declarationTieCancels) winner = null;
-    else {
-      const dist = (seat: Seat) => (seat - firstLeader + 4) % 4;
-      winner = teamOf(dist(b0.seat) <= dist(b1.seat) ? b0.seat : b1.seat);
-    }
+    else winner = teamOf(dist(b0.seat) <= dist(b1.seat) ? b0.seat : b1.seat);
   } else winner = null;
 
   if (winner === null) return { winningTeam: null, perTeamValue: [0, 0], winningDeclarations: [] };

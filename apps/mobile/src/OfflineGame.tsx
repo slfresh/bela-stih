@@ -92,7 +92,7 @@ function OfflineMatch({
       onAction={g.submit}
       onNext={g.nextDeal}
       onFinish={matchOver ? onRematch : onExit}
-      finishLabel={matchOver ? g.lang.s.newMatch : 'Izađi'}
+      finishLabel={matchOver ? g.lang.s.newMatch : g.lang.s.ui.back}
       onEmote={g.emote}
     />
   );

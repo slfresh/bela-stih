@@ -24,6 +24,7 @@ import {
   shuffle,
   type Rng,
 } from './cards';
+import { CARD_POINTS_TOTAL } from './power';
 import { legalPlays } from './legality';
 import { detectDeclarations, resolveDeclarations } from './declarations';
 import { computeDealProgress, scoreDeal, type DealScoreResult, type DealTrick } from './scoring';
@@ -284,6 +285,12 @@ export function applyAction(prev: GameState, action: Action): GameState {
       return applyDeclare(s, action.type, action.seat);
     case 'PLAY_CARD':
       return applyPlay(s, action.seat, action.card, action.announceBela === true);
+    default:
+      // The union makes this unreachable to a caller that typechecks, but the
+      // server takes actions off a socket. Without this the switch falls off the
+      // end and returns undefined — and the caller commits that as the new
+      // state, which is a far worse failure than a rejected message.
+      throw new Error(`unknown action type ${String((action as { type: unknown }).type)}`);
   }
 }
 
@@ -587,6 +594,29 @@ function scoreCurrentDeal(s: GameState): GameState {
  * plus EVERY zvanje announced this deal, no matter who announced it, plus an
  * announced bela. No multipliers — the rulebooks state the flat table.
  */
+/**
+ * Could a bela still be called, and so still move the target?
+ *
+ * Public information by construction: a bela needs the trump king AND queen in
+ * one hand, so once both have been played nobody can call one. Counting the
+ * played cards says so without looking at anybody's hand.
+ */
+function belaStillOpen(s: GameState): boolean {
+  if (s.config.belaMode !== 'announce' || s.belaAnnouncedSeat !== null) return false;
+  const trump = s.context.trumpSuit;
+  if (trump === null) return false;
+  let seen = 0;
+  for (const t of s.completedTricks) {
+    for (const c of t.cards) {
+      if (c.suit === trump && (c.rank === 'K' || c.rank === 'Q')) seen += 1;
+    }
+  }
+  for (const p of s.currentTrick) {
+    if (p.card.suit === trump && (p.card.rank === 'K' || p.card.rank === 'Q')) seen += 1;
+  }
+  return seen < 2;
+}
+
 function applyRenons(s: GameState, offender: Seat): GameState {
   const offTeam = teamOf(offender);
   const defTeam = (1 - offTeam) as TeamId;
@@ -598,11 +628,16 @@ function applyRenons(s: GameState, offender: Seat): GameState {
   const declarationPoints: [number, number] = [0, 0];
   const bela: [number, number] = [0, 0];
   const finalScore: [number, number] = [0, 0];
-  cardPoints[defTeam] = 152;
-  trickPoints[defTeam] = 162;
+  // The card points are genuinely constant, but the TABLE is 152 + the
+  // configured last-trick bonus. Hardcoding 162 pays the wrong total the moment
+  // that bonus becomes a house rule, and breaks the trickPoints invariant every
+  // other scoring path maintains.
+  const table = CARD_POINTS_TOTAL + s.config.lastTrickBonus;
+  cardPoints[defTeam] = CARD_POINTS_TOTAL;
+  trickPoints[defTeam] = table;
   declarationPoints[defTeam] = zvanjaTotal;
   bela[defTeam] = belaTotal;
-  finalScore[defTeam] = 162 + zvanjaTotal + belaTotal;
+  finalScore[defTeam] = table + zvanjaTotal + belaTotal;
 
   const result: DealScoreResult = {
     cardPoints,
@@ -707,9 +742,17 @@ function progressOf(s: GameState): DealProgress {
     ),
     belaTeam: s.belaAnnouncedSeat === null ? null : teamOf(s.belaAnnouncedSeat),
     config: s.config,
-    // Trick 1 is still open and somebody has yet to speak, so a later
-    // announcement can still move the target under the player's feet.
-    provisional: s.completedTricks.length === 0 && s.declared.some((d) => !d),
+    // Trick 1 is still open and somebody may yet announce, so the target can
+    // move. Derived from PUBLIC state ONLY: the obvious test
+    // — `s.declared.some((d) => !d)` — reads an array that completeDeal
+    // pre-settles from each seat's HOLDINGS, so publishing it told the whole
+    // table whether anybody held zvanja. This over-approximates instead: it
+    // stays dimmed a little longer and leaks nothing.
+    provisional:
+      s.completedTricks.length === 0 &&
+      s.config.declarationMode !== 'auto' &&
+      s.currentTrick.length < 4,
+    belaPending: belaStillOpen(s),
   });
 }
 

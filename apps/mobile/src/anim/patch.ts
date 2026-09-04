@@ -185,6 +185,10 @@ export function applyEventEnd(
     case 'bidCalled':
       return suppress({
         ...view,
+        // The engine moves BID -> DOUBLE on a call. Nothing branches on it
+        // today because kontra is off by default, but leaving the mirror in
+        // 'BID' would misrender every doubling frame the day it is enabled.
+        phase: 'DOUBLE',
         context: { contractType: 'SUIT', trumpSuit: e.suit },
         callerSeat: e.seat,
       });
@@ -231,10 +235,14 @@ export function applyEventEnd(
         ...view,
         currentTrick: [],
         trickLeader: e.seat,
-        dealProgress:
-          view.dealProgress && !view.dealProgress.provisional
-            ? bumpProgress(view.dealProgress, teamOf(e.seat), e.points, e.isLastTrick)
-            : view.dealProgress,
+        // Always count the trick. The tally is local and purely additive, and
+        // syncProgress() deliberately KEEPS it while adopting only the statics
+        // — so a bump skipped here is never recovered, and the counter sits a
+        // whole trick light for the rest of the deal. Whether the zvanja have
+        // settled affects the target, not how many points the trick was worth.
+        dealProgress: view.dealProgress
+          ? bumpProgress(view.dealProgress, teamOf(e.seat), e.points, e.isLastTrick)
+          : view.dealProgress,
       });
 
     case 'dealScored':

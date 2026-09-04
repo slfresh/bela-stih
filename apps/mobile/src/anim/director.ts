@@ -78,6 +78,16 @@ interface Current {
 export class Director {
   private view: PublicView;
   private queue: Batch[] = [];
+  /**
+   * The authoritative view of a batch that compress() flushed without rendering
+   * WHILE another batch was already animating.
+   *
+   * Its events are in the view already; only its final state was being dropped,
+   * so the animating batch's older finalView then clobbered it and the batch
+   * after that patched from a stale table. Cleared the moment a newer batch is
+   * dequeued, which supersedes it.
+   */
+  private pendingFinal: PublicView | null = null;
   private current: Current | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private disposed = false;
@@ -146,7 +156,9 @@ export class Director {
     while (this.queue.length > 1) {
       const b = this.queue.shift()!;
       this.flushEvents(b.events, 0);
-      // Its final view is superseded by the newer batch; no need to render it.
+      // Superseded for rendering, but still the truth the next batch builds on
+      // — the same thread fastForward() keeps.
+      this.pendingFinal = b.finalView;
     }
   }
 
@@ -186,6 +198,9 @@ export class Director {
         return;
       }
       this.current = { batch, nextIndex: 0 };
+      // This batch came off the queue AFTER anything compress() flushed, so it
+      // is the newer truth and its own finalView is the right terminal sync.
+      this.pendingFinal = null;
       if (batch.events.length === 0) {
         this.finishBatch();
         return;
@@ -221,7 +236,8 @@ export class Director {
     this.current = null;
     // Terminal sync: authoritative truth, verbatim — prompts and legal actions
     // come back exactly as the engine/server stated them.
-    this.view = batch.finalView;
+    this.view = this.pendingFinal ?? batch.finalView;
+    this.pendingFinal = null;
     this.cb.onView(this.view);
     this.next();
   }

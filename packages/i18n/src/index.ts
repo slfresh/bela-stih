@@ -866,7 +866,10 @@ export class Lang {
 
   constructor(id: LocaleId = 'hr') {
     this.id = id;
-    this.t = LOCALES[id];
+    // A locale id read back from storage is not necessarily one this build
+    // knows — a rolled-back client, or settings written by a newer one. Falling
+    // back beats throwing on every screen that touches `lang.s`.
+    this.t = LOCALES[id] ?? LOCALES.hr;
   }
 
   get s(): Strings {

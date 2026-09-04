@@ -49,7 +49,12 @@ export function useHandOrder(
 ): HandOrder {
   // The arrangement, as card ids. Survives every re-render and every deal.
   const manual = useRef<string[]>([]);
-  const [, forceRender] = useState(0);
+  // A nonce, not just a re-render: `cards` is a useMemo, so bumping state
+  // without touching its deps returns the cached array and the swap is
+  // invisible. The first swap only ever appeared because switching to 'manual'
+  // changed a dep — and that same switch is persisted, so the feature bricked
+  // itself after one use.
+  const [nonce, forceRender] = useState(0);
 
   const ids = hand.map(cardId).join(',');
 
@@ -81,7 +86,7 @@ export function useHandOrder(
     // `ids` is the real dependency: re-sorting on every tick would fight the
     // director, and the hand only changes when a card leaves or arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ids, trump, mode]);
+  }, [ids, trump, mode, nonce]);
 
   const swap = (idA: string, idB: string) => {
     const order = manual.current.length > 0 ? [...manual.current] : cards.map(cardId);
@@ -90,8 +95,8 @@ export function useHandOrder(
     if (i < 0 || j < 0 || i === j) return;
     [order[i], order[j]] = [order[j]!, order[i]!];
     manual.current = order;
+    forceRender((n) => n + 1);
     if (mode !== 'manual') onModeChange('manual');
-    else forceRender((n) => n + 1);
   };
 
   return { cards, mode, swap };

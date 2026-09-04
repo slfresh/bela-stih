@@ -167,6 +167,7 @@ export interface DealProgressInput {
   config: EngineConfig;
   /** True while trick 1 is open and some seat may still announce. */
   provisional: boolean;
+  belaPending: boolean;
 }
 
 /**
@@ -174,8 +175,10 @@ export interface DealProgressInput {
  * and the one number no rival app shows: how many points the caller still
  * needs ("treba još N").
  *
- * Pinned to `scoreDeal` by test: with all 8 tricks in, `callerSafe` must equal
- * `scoreDeal().callerMade`. Three deliberate exclusions:
+ * Pinned to `scoreDeal` by test: with all 8 tricks in AND NO VALAT, `callerSafe`
+ * must equal `scoreDeal().callerMade`. On a valat the two legitimately disagree,
+ * because the +90 below is excluded here and included there. Three deliberate
+ * exclusions:
  *   - VALAT is never folded in (a conditional +90 would make the counter jump
  *     ~45 the moment somebody takes a trick); `valatPossible` is exposed so the
  *     UI can caveat instead. `callerNeeds` is exact once it reads [false,false].
@@ -251,5 +254,6 @@ export function computeDealProgress(input: DealProgressInput): DealProgress {
       tricks.length < 8 && tricksWon[1] === tricks.length,
     ],
     provisional: input.provisional,
+    belaPending: input.belaPending,
   };
 }

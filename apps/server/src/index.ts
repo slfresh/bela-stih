@@ -20,6 +20,20 @@ import { ROOM_NAME } from './protocol';
  * swallows them so every join fails with a 404.
  */
 
+/**
+ * Every room on this host shares one process, so an escaped throw from one
+ * table's message handler ends every other table's match too. BelaRoom catches
+ * per-message already; this is the backstop for anything that gets past it —
+ * a timer callback, a promise nobody awaited. Log it and keep serving: one bad
+ * room is a bug, a dead process is an outage.
+ */
+process.on('uncaughtException', (err) => {
+  console.error('[bela] uncaught exception (server stays up):', err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[bela] unhandled rejection (server stays up):', reason);
+});
+
 const PORT = Number(process.env.PORT ?? 2567);
 
 const app = express();

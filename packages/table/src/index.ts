@@ -210,6 +210,23 @@ export class Table {
     }
   }
 
+  /**
+   * Play exactly ONE bot action on `seat`'s behalf, then let the table settle as
+   * usual, leaving the seat's human flag untouched.
+   *
+   * `setSeatHuman(seat, false)` is NOT a one-move primitive: it runs the bots
+   * until the actor is null or a HUMAN seat, so on a table whose only human is
+   * the seat being covered there is nothing left to stop on and it plays out the
+   * entire deal. That is right for a disconnect and wrong for a turn timeout.
+   */
+  botMoveFor(seat: Seat): void {
+    if (this.actor() !== seat) return;
+    this.applyAndRecord(decideAction(this.view(seat), this.rng, this.botLevel));
+    // Whoever is next may also be a bot; advancing to the next human decision
+    // is the same thing a normal submit() does.
+    this.runBots();
+  }
+
   /** Play an all-bot table through to a winner. Used by the demo and the tests. */
   playWholeMatch(maxDeals = 500): void {
     if (this.humans.size > 0) throw new Error('playWholeMatch expects an all-bot table');
@@ -230,6 +247,10 @@ export class Table {
   private applyAndRecord(action: Action): void {
     const before = this.s;
     const after = applyAction(before, action);
+    // Belt and braces behind applyAction's own `default:`. Assigning first and
+    // validating later is what turned one malformed socket message into a Table
+    // whose state was permanently `undefined`.
+    if (!after) throw new Error('engine returned no state');
     this.s = after;
     const push = (e: TableEvent) => this.queued.push(e);
 

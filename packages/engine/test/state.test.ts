@@ -368,4 +368,32 @@ describe('the live deal counter crosses the wire safely', () => {
     auto = applyAction(auto, { type: 'BID_CALL', seat: 0, suit: 'spades' });
     expect(publicView(auto, 0).dealProgress!.provisional).toBe(false);
   });
+
+  /**
+   * A bela is worth 20 and can be called on any trick, so it raises the bar
+   * long after the zvanja have settled. The counter stays honest about that
+   * through its own flag rather than by widening `provisional`, which the
+   * client also uses to decide when its local tally may be trusted.
+   */
+  it('flags a callable bela separately, and only while one is possible', () => {
+    let s = startDeal(createMatch({ dealer: 3, seed: 7, config: { declarationMode: 'auto' } }));
+    s = applyAction(s, { type: 'BID_CALL', seat: 0, suit: 'spades' });
+    expect(publicView(s, 0).dealProgress!.belaPending).toBe(true);
+
+    // Auto-bela settles it at the deal, so nothing is outstanding.
+    let auto = startDeal(
+      createMatch({
+        dealer: 3,
+        seed: 7,
+        config: { declarationMode: 'auto', belaMode: 'auto' },
+      }),
+    );
+    auto = applyAction(auto, { type: 'BID_CALL', seat: 0, suit: 'spades' });
+    expect(publicView(auto, 0).dealProgress!.belaPending).toBe(false);
+
+    // It is derived from the PLAYED cards, so it says nothing about any hand.
+    expect(publicView(s, 0).dealProgress!.belaPending).toBe(
+      publicView(s, 2).dealProgress!.belaPending,
+    );
+  });
 });

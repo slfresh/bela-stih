@@ -334,7 +334,9 @@ export function questsForDay(day: string): Quest[] {
   const pool = [...QUEST_POOL];
   const picked: Quest[] = [];
   for (let i = 0; i < 3 && pool.length > 0; i++) {
-    seed = (seed * 1103515245 + 12345) >>> 0;
+    // Math.imul, not `*`: the product passes 2^53 and the low bits round away,
+    // which collapsed the rotation onto the same board on almost every day.
+    seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
     const [spec] = pool.splice(seed % pool.length, 1);
     picked.push({ ...spec!, progress: 0, claimed: false });
   }

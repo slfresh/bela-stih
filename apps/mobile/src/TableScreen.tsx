@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -550,7 +550,11 @@ function TableHeader({
 
   // While trick 1 is open a later zvanje can still move the target, so the
   // count is shown dimmed rather than hidden — it is honest, just not final.
-  const live = progress ? (progress.provisional ? styles.dealCountDim : styles.dealCount) : null;
+  // Dim while anything can still move the bar: unsettled zvanja, or a bela
+  // nobody has called yet. Presenting "prošlo" at full confidence and then
+  // scoring the deal as a pad is the one thing this counter must never do.
+  const settling = progress !== null && (progress.provisional || progress.belaPending);
+  const live = progress ? (settling ? styles.dealCountDim : styles.dealCount) : null;
 
   return (
     <View style={[styles.scoreRow, vertical && styles.scoreCol]}>
@@ -643,10 +647,28 @@ function Hand({
   // One tap arms a card, the second plays it — but never when the card is
   // forced, which in bela is most tricks. That keeps the guard exactly where a
   // mistake is possible without taxing the taps that cannot go wrong.
+  //
+  // "Forced" must count what the player can TAP, not what the engine calls
+  // legal. In hard mode every card in hand is submittable, so deriving it from
+  // the legal list relaxed the guard precisely when one legal card sat among
+  // seven renons-scoring ones — the most dangerous tap surface in the game.
   const [armed, setArmed] = useState<string | null>(null);
-  const forced = plays.length === 1;
+  // Arrange mode picks a card to SWAP, which is a different meaning; sharing
+  // one slot left a swap selection armed to fire the moment arranging ended.
+  const [arrangePick, setArrangePick] = useState<string | null>(null);
+  const tappable = freePlay && plays.length > 0 ? cards.length : byCard.size;
+  const forced = tappable === 1;
   const needsConfirm =
     confirmPlay === 'always' ? true : confirmPlay === 'ambiguous' ? !forced : false;
+
+  // Disarm whenever the decision in front of the player changes — a new turn, a
+  // new trick, entering or leaving arrange mode. Nothing here changes while they
+  // are deliberating, so this never cancels a legitimate arm.
+  const decision = `${arranging}|${enabled}|${plays.map((p) => cardId(p.card)).join(',')}`;
+  useEffect(() => {
+    setArmed(null);
+    setArrangePick(null);
+  }, [decision]);
 
   const fit = fitHand(width, cards.length, maxCardW);
   const mid = (cards.length - 1) / 2;
@@ -667,15 +689,15 @@ function Hand({
             : undefined);
         const playable = !arranging && enabled && chosen !== undefined;
         const illegalNow = !freePlay && !arranging && enabled && inPlayMoment && !playable;
-        const isArmed = armed === id;
+        const isArmed = arranging ? arrangePick === id : armed === id;
         const off = i - mid;
 
         const press = () => {
           if (arranging) {
-            if (armed === null) setArmed(id);
+            if (arrangePick === null) setArrangePick(id);
             else {
-              if (armed !== id) onSwap?.(armed, id);
-              setArmed(null);
+              if (arrangePick !== id) onSwap?.(arrangePick, id);
+              setArrangePick(null);
             }
             return;
           }

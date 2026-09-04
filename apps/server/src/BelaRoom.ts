@@ -1,3 +1,4 @@
+import { randomInt } from 'node:crypto';
 import { Room, type Client } from '@colyseus/core';
 import type { Action, Seat } from '@belot/engine';
 import { HARD_CONFIG_OVERRIDES, SEATS } from '@belot/engine';
@@ -27,6 +28,8 @@ import {
  */
 
 const TURN_MS = 30_000;
+/** Shortest gap between two accepted seat changes from one connection. */
+const SIT_GAP_MS = 250;
 const RECONNECT_SECONDS = 60;
 
 /**
@@ -70,8 +73,12 @@ export class BelaRoom extends Room {
   /** The seat the running timer was armed for, so a stale fire is detectable. */
   private turnSeat: Seat | null = null;
   private started = false;
-  /** Last emote per seat, for the rate limit. */
-  private lastEmoteAt = [0, 0, 0, 0];
+  /**
+   * Rate limits, keyed by CONNECTION rather than by seat: pre-start a client can
+   * change seats freely, so a per-seat gap is one a seat-hopper multiplies.
+   */
+  private lastEmoteAt = new Map<string, number>();
+  private lastSitAt = new Map<string, number>();
 
   override onCreate(options: { private?: boolean; hard?: boolean } = {}): void {
     this.occupants = SEATS.map(() => ({ sessionId: null, name: '', avatar: '', connected: false }));
@@ -82,13 +89,34 @@ export class BelaRoom extends Room {
     this.table = new Table({
       humanSeats: [...SEATS],
       config: this.hard ? HARD_CONFIG_OVERRIDES : undefined,
+      // Table's default is `Date.now()`, which is fine for the CLI and for
+      // offline play (dealer and player are the same device) and catastrophic
+      // here: a seated client can recover a 31-bit timestamp seed from its own
+      // six cards in about a second and then read every hand of every deal.
+      seed: randomInt(0x7fffffff),
     });
     this.table.drainEvents();
 
     if (options.private) this.setPrivate(true);
 
+    // Colyseus looks the message type up on a plain object literal, so a client
+    // sending `__proto__` / `constructor` / `toString` resolves up the prototype
+    // chain to something truthy whose `.callback` is not a function, and the
+    // throw escapes the room and takes the process with it.
+    // The handler map is private to Room; reaching it is the only way to close
+    // the lookup, since registering a named `__proto__` handler would set the
+    // prototype instead of an own key.
+    Object.setPrototypeOf((this as unknown as { onMessageHandlers: object }).onMessageHandlers, null);
+
     this.onMessage('*', (client: Client, type: string | number, message: unknown) => {
-      this.handle(client, { type, message } as never);
+      try {
+        this.handle(client, { type, message } as never);
+      } catch (err) {
+        // One malformed frame must cost the sender an error and nothing else.
+        // Every room on this host shares a process; an escape here ends them all.
+        console.error(`[bela] message ${String(type)} failed:`, err);
+        client.send(MSG.error, { reason: 'bad message' });
+      }
     });
   }
 
@@ -147,11 +175,20 @@ export class BelaRoom extends Room {
     const seat = this.seatOf(client.sessionId);
     if (seat === null) return;
 
-    // The seat keeps playing as a bot while we wait for them back. The bot
-    // may move immediately, so re-arm the clock for whoever is on turn now.
     this.occupants[seat]!.connected = false;
-    this.table.setSeatHuman(seat, false);
-    this.afterMove();
+    if (this.started) {
+      // The seat keeps playing as a bot while we wait for them back. The bot
+      // may move immediately, so re-arm the clock for whoever is on turn now.
+      this.table.setSeatHuman(seat, false);
+      this.afterMove();
+    } else {
+      // Pre-start, nothing may move: handing a lobby seat to its bot used to
+      // start the deal playing itself while `status` still read 'waiting'.
+      this.publish();
+    }
+
+    // Their departure may have been the last vote anybody was waiting on.
+    if (this.maybeRematch()) return;
 
     // A deliberate leave frees the seat at once; a dropped connection is worth
     // holding it open for.
@@ -173,10 +210,28 @@ export class BelaRoom extends Room {
   private release(seat: Seat): void {
     const wasHost = this.occupants[seat]!.sessionId === this.hostId;
     this.occupants[seat] = { sessionId: null, name: '', avatar: '', connected: false };
-    this.table.setSeatHuman(seat, false);
+    // A seat nobody is sitting in cannot be waited on for a rematch vote.
+    this.rematchVotes.delete(seat);
+    if (this.started) this.table.setSeatHuman(seat, false);
     // The crown passes to whoever is still seated.
     if (wasHost) this.hostId = this.occupants.find((o) => o.sessionId !== null)?.sessionId ?? null;
-    this.afterMove();
+    if (this.maybeRematch()) return;
+    if (this.started) this.afterMove();
+    else this.publish();
+  }
+
+  /**
+   * Start the next match if the departure just now completed the vote.
+   *
+   * everyHumanVoted() is otherwise only ever evaluated inside the `rematch`
+   * handler, so three players who accepted and then lost the fourth waited for a
+   * message that could never arrive — and the client hides "start anyway" once
+   * the outstanding count reaches zero.
+   */
+  private maybeRematch(): boolean {
+    if (this.table.phase !== 'MATCH_OVER' || !this.everyHumanVoted()) return false;
+    this.beginRematch();
+    return true;
   }
 
   /** Every connected human still at the table has asked for another match. */
@@ -197,7 +252,7 @@ export class BelaRoom extends Room {
     }
     this.rematchVotes.clear();
     this.matchNumber += 1;
-    this.table.newMatch();
+    this.table.newMatch({ seed: randomInt(0x7fffffff) });
     this.afterMove();
   }
 
@@ -208,6 +263,10 @@ export class BelaRoom extends Room {
     if (seat === null) return;
 
     if (packet.type === 'action') {
+      // Every other branch is gated on `started` or on a phase. Without this a
+      // third joiner can bid before the fourth player exists, and the fourth
+      // arrives bound to a contract they never saw.
+      if (!this.started) return;
       const action = (packet.message as { action?: Action } | undefined)?.action;
       if (!action) return;
       // The sender may only ever move its own seat.
@@ -231,9 +290,16 @@ export class BelaRoom extends Room {
       // friends pick teams. No state has advanced yet, so it is a pure swap.
       const target = (packet.message as { seat?: Seat } | undefined)?.seat;
       if (this.started) return;
-      if (typeof target !== 'number' || target < 0 || target > 3 || target === seat) return;
-      if (this.occupants[target]!.sessionId !== null) return;
-      this.occupants[target] = this.occupants[seat]!;
+      // Number.isInteger also rejects NaN and any non-number, so a fractional
+      // seat can no longer index past the end of `occupants` and throw.
+      if (!Number.isInteger(target) || target! < 0 || target! > 3 || target === seat) return;
+      // Each accepted change republishes to every client, so it needs the same
+      // kind of gap the emotes have.
+      const now = Date.now();
+      if (now - (this.lastSitAt.get(client.sessionId) ?? 0) < SIT_GAP_MS) return;
+      if (this.occupants[target!]!.sessionId !== null) return;
+      this.lastSitAt.set(client.sessionId, now);
+      this.occupants[target!] = this.occupants[seat]!;
       this.occupants[seat] = { sessionId: null, name: '', avatar: '', connected: false };
       this.publish();
       return;
@@ -282,8 +348,8 @@ export class BelaRoom extends Room {
       const id = (packet.message as { id?: string } | undefined)?.id;
       if (typeof id !== 'string' || !EMOTE_IDS.includes(id)) return;
       const now = Date.now();
-      if (now - this.lastEmoteAt[seat]! < EMOTE_GAP_MS) return;
-      this.lastEmoteAt[seat] = now;
+      if (now - (this.lastEmoteAt.get(client.sessionId) ?? 0) < EMOTE_GAP_MS) return;
+      this.lastEmoteAt.set(client.sessionId, now);
       const msg: EmoteMessage = { seat, id };
       this.broadcast(MSG.emote, msg);
     }
@@ -302,9 +368,21 @@ export class BelaRoom extends Room {
 
   /** Nobody waits forever: a seat that stalls is played by its bot. */
   private armTimer(): void {
-    this.stopTimer();
+    // Nothing is on the clock until the table is actually playing.
+    if (!this.started) {
+      this.stopTimer();
+      return;
+    }
     const actor = this.table.actor();
-    if (actor === null || !this.table.humanSeats.has(actor)) return;
+    if (actor === null || !this.table.humanSeats.has(actor)) {
+      this.stopTimer();
+      return;
+    }
+    // The same seat is still deciding: leave their clock alone. afterMove()
+    // runs on every publish, including an unrelated seat's disconnect, and
+    // restarting here handed the actor a fresh 30 seconds each time.
+    if (this.turnTimer !== null && this.turnSeat === actor) return;
+    this.stopTimer();
 
     this.turnEndsAt = Date.now() + TURN_MS;
     this.turnSeat = actor;
@@ -317,9 +395,10 @@ export class BelaRoom extends Room {
         this.afterMove();
         return;
       }
-      // Hand the seat to its bot for one move, then give it straight back.
-      this.table.setSeatHuman(seat, false);
-      this.table.setSeatHuman(seat, true);
+      // Exactly one bot move on their behalf. Toggling the human flag instead
+      // ran the bots until the next HUMAN seat, which on a table whose only
+      // human is this one meant playing out their entire remaining hand.
+      this.table.botMoveFor(seat);
       this.afterMove();
     }, TURN_MS);
   }
@@ -374,7 +453,15 @@ export class BelaRoom extends Room {
     for (const client of this.clients) {
       const seat = this.seatOf(client.sessionId);
       if (seat === null) continue;
-      client.send(MSG.view, { seat, view: this.table.view(seat) });
+      const view = this.table.view(seat);
+      // The deck is dealt when the room is created, but seats are still being
+      // chosen — so a client could walk the free seats and read three quarters
+      // of the deck before anybody else arrived. The waiting room draws no
+      // cards, so withholding them until the table locks costs nothing.
+      client.send(MSG.view, {
+        seat,
+        view: this.started ? view : { ...view, hand: [], myDeclarations: [], legalActions: [] },
+      });
     }
     this.broadcast(MSG.room, room);
   }

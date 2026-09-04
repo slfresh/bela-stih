@@ -93,7 +93,17 @@ export function makeFxSpawner(opts: { anchors: AnchorMap; bus: FxBus; lang: Lang
         break;
 
       case 'declared':
-        bubble(e.seat, e.declarations.map((d) => lang.declaration(d)).join(' · '), 'gold', 1100);
+        // In blind mode a seat may claim with nothing, and the engine answers
+        // with an empty list by design. Say so — an empty string painted a
+        // blank gold pill with a chime behind it, several times a deal.
+        bubble(
+          e.seat,
+          e.declarations.length > 0
+            ? e.declarations.map((d) => lang.declaration(d)).join(' · ')
+            : lang.s.noZvanja,
+          'gold',
+          1100,
+        );
         break;
 
       case 'belaCalled':

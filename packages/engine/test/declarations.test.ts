@@ -92,8 +92,8 @@ describe('detecting carres', () => {
 });
 
 describe('resolving the declaration contest', () => {
-  const resolve = (perSeat: Declaration[][], tieCancels = true) =>
-    resolveDeclarations(perSeat, teamOf, { declarationTieCancels: tieCancels });
+  const resolve = (perSeat: Declaration[][], tieCancels = true, firstLeader: Seat = 0) =>
+    resolveDeclarations(perSeat, teamOf, { declarationTieCancels: tieCancels }, firstLeader);
 
   it('gives a team with declarations everything when the other team has none', () => {
     const r = resolve([declare(['7H', '8H', '9H', 'AS', 'KC', 'QD', 'JD', '10S'], 0), [], [], []]);
@@ -184,5 +184,31 @@ describe('resolving the declaration contest', () => {
 
   it('ships with ties resolving to the first player, not cancelling (UHDDR rule 7)', () => {
     expect(DEFAULT_CONFIG.declarationTieCancels).toBe(false);
+  });
+
+  /**
+   * "Prednost ima onaj koji je prvi na štihu" is a rule about PLAYERS. When one
+   * team holds two equally-best declarations, the team must be represented by
+   * the EARLIER of them in play order — representing it by the lower seat index
+   * handed the contest to the other side.
+   *
+   * Here the first leader is seat 2, so play order is 2, 3, 0, 1. Team 0 holds
+   * an identical terca at seats 2 and 0, team 1 holds the same terca at seat 3.
+   * Seat 2 plays first of all three, so team 0 must win.
+   */
+  it('represents a team by its EARLIEST tied-best declaration, not its lowest seat', () => {
+    const h2 = ['7H', '8H', '9H', 'AS', 'KC', 'QC', 'JD', '10S']; // terca, top 9
+    const h0 = ['7D', '8D', '9D', 'KS', 'AC', '10C', 'JH', '9S']; // terca, top 9
+    const h3 = ['7C', '8C', '9C', 'QS', 'AH', '10H', 'JS', 'KH']; // terca, top 9
+    assertDisjoint(h2, h0);
+    assertDisjoint(h2, h3);
+    assertDisjoint(h0, h3);
+
+    const perSeat = [declare(h0, 0), [], declare(h2, 2), declare(h3, 3)];
+    expect(resolve(perSeat, false, 2).winningTeam).toBe(0);
+
+    // ...and the seat-index reading is not accidentally right: from leader 3 the
+    // order is 3, 0, 1, 2, so seat 3 speaks first and team 1 takes it.
+    expect(resolve(perSeat, false, 3).winningTeam).toBe(1);
   });
 });

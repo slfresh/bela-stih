@@ -324,6 +324,13 @@ export interface DealProgress {
   valatPossible: [boolean, boolean];
   /** Trick 1 is still open — more zvanja may land and move `target`. */
   provisional: boolean;
+  /**
+   * A bela can still be called, which adds 20 to the pot and so raises
+   * `target` — on ANY trick, by either side. Separate from `provisional`
+   * because that one means "the local tally cannot be trusted yet"; this one
+   * means "the number is right, but the bar may still rise".
+   */
+  belaPending: boolean;
 }
 
 export interface PublicView {

@@ -65,6 +65,17 @@ interface RoomMessage {
 
 export function useNetGame(settings: Settings) {
   const roomRef = useRef<Room | null>(null);
+  /**
+   * The ticket back into a room we dropped out of.
+   *
+   * The server holds a dropped seat for a minute (`allowReconnection`), but the
+   * room is locked the moment it starts, so `joinById` is refused with 4212 and
+   * the only way back in is this token. Without it every backgrounded app, tunnel
+   * and Wi-Fi handover permanently turned a player into a bot.
+   */
+  const reconnectTokenRef = useRef<string | null>(null);
+  const reconnectRef = useRef<() => void>(() => {});
+  const reconnectingRef = useRef(false);
   const directorRef = useRef<Director | null>(null);
   const authViewRef = useRef<PublicView | null>(null);
   const mySeatRef = useRef<Seat | null>(null);
@@ -128,6 +139,9 @@ export function useNetGame(settings: Settings) {
   const leave = useCallback(() => {
     const room = roomRef.current;
     roomRef.current = null;
+    // Dropping the token both stops any reconnect in flight and marks this as
+    // a departure rather than a drop.
+    reconnectTokenRef.current = null;
     if (room) void room.leave(true).catch(() => {});
     directorRef.current?.dispose();
     directorRef.current = null;
@@ -163,6 +177,7 @@ export function useNetGame(settings: Settings) {
 
   const attach = useCallback((room: Room) => {
     roomRef.current = room;
+    reconnectTokenRef.current = room.reconnectionToken;
     setRoomId(room.roomId);
 
     room.onMessage('view', (msg: { seat: Seat; view: PublicView }) => {
@@ -225,6 +240,9 @@ export function useNetGame(settings: Settings) {
       directorRef.current?.fastForward();
       setStatus('disconnected');
       setError(langRef.current.s.ui.disconnectedWithCode(code));
+      // Our seat is being played by a bot from here; the server will hold it
+      // for a minute, so spend that minute trying to get back into it.
+      reconnectRef.current();
     });
   }, []);
 
@@ -245,6 +263,47 @@ export function useNetGame(settings: Settings) {
     },
     [attach, leave],
   );
+
+  /**
+   * Walk back in on the reconnection token, with backoff, inside the server's
+   * hold window. `joinById` stays the fallback for after the window lapses —
+   * it only works on a table that has not started, but that is exactly the
+   * case the token cannot cover.
+   */
+  const reconnect = useCallback(async () => {
+    const token = reconnectTokenRef.current;
+    if (!token || reconnectingRef.current) return;
+    reconnectingRef.current = true;
+    try {
+      for (const wait of [0, 1000, 2000, 4000, 8000, 12_000]) {
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+        // The player gave up and walked away while we were trying.
+        if (reconnectTokenRef.current !== token) return;
+        try {
+          const room = await new Client(SERVER_URL).reconnect(token);
+          // Rebuild the animation from the authoritative view rather than
+          // resuming a director that missed however many events we were away
+          // for; the server publishes the current view on join.
+          directorRef.current?.dispose();
+          directorRef.current = null;
+          attach(room);
+          setError(null);
+          return;
+        } catch {
+          setStatus('connecting');
+        }
+      }
+      // The hold window has lapsed: the seat is a bot and the room is locked.
+      reconnectTokenRef.current = null;
+      setStatus('disconnected');
+    } finally {
+      reconnectingRef.current = false;
+    }
+  }, [attach]);
+
+  useEffect(() => {
+    reconnectRef.current = () => void reconnect();
+  }, [reconnect]);
 
   // The only things we ever tell the server about the player.
   const name = settings.nickname.trim().slice(0, 20);
@@ -328,6 +387,7 @@ export function useNetGame(settings: Settings) {
     quickPlay,
     createPrivate,
     joinById,
+    reconnect,
     startWithBots,
     sit,
     rematch,

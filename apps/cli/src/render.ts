@@ -138,8 +138,12 @@ export function renderEvent(e: TableEvent, humanSeat: Seat | null): string | nul
     case 'handsCompleted':
       return dim(`${lang.s.trump}: ${suitLabel(e.trumpSuit)}`);
     case 'declared':
+      // Blind mode lets a seat claim with nothing, and the engine answers with
+      // an empty list — which rendered as a dangling label with no zvanja.
       return cyan(
-        `${who(e.seat)} ${lang.s.announces}: ${e.declarations.map((d) => lang.declaration(d)).join(', ')}`,
+        e.declarations.length > 0
+          ? `${who(e.seat)} ${lang.s.announces}: ${e.declarations.map((d) => lang.declaration(d)).join(', ')}`
+          : `${who(e.seat)}: ${lang.s.noZvanja}`,
       );
     case 'declarationSkipped':
       return null; // silence is the whole point; do not announce it
@@ -196,10 +200,12 @@ export function renderPrompt(view: PublicView, humanSeat: Seat): string {
       .map((d) => lang.declaration({ ...d, seat: humanSeat }))
       .join(', ');
     lines.push(cyan(`${lang.s.declarations}: ${mine}`));
-    lines.push(dim('Ako ne zovete sada, propada — ali protivnici ništa ne saznaju.'));
+    lines.push(dim(lang.s.declareHint));
   }
   if (view.canAnnounceBela) {
-    lines.push(yellow(`Možete zvati ${lang.s.bela.toUpperCase()} uz kralja ili damu aduta.`));
+    // The i18n copy says "babe", which is the vocabulary this deck uses; the
+    // hand-written duplicate said "damu" and only existed in Croatian.
+    lines.push(yellow(lang.s.belaHint));
   }
   return lines.join('\n');
 }

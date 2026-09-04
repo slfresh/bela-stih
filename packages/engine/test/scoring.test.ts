@@ -350,6 +350,7 @@ describe('input validation', () => {
 
 interface ProgressOpts extends ScoreOpts {
   provisional?: boolean;
+  belaPending?: boolean;
 }
 
 function progress(o: ProgressOpts): DealProgress {
@@ -363,6 +364,7 @@ function progress(o: ProgressOpts): DealProgress {
     belaTeam: o.belaTeam ?? null,
     config: { ...DEFAULT_CONFIG, ...o.config },
     provisional: o.provisional ?? false,
+    belaPending: o.belaPending ?? false,
   });
 }
 

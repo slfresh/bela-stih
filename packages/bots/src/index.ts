@@ -95,7 +95,10 @@ function decideBid(view: PublicView, actions: Action[]): Action {
     }
   }
 
-  if (canPass && bestScore < 9) return { type: 'BID_PASS', seat: view.seat };
+  // 11, not 9. Measured over paired call-vs-pass forks from the same deal, the
+  // 9-10 band was net NEGATIVE — those hands are worth more passed than called,
+  // and they were 43% of all voluntary calls. The curve peaks at 11-12.
+  if (canPass && bestScore < 11) return { type: 'BID_PASS', seat: view.seat };
   return calls.find((c) => c.suit === bestSuit) ?? calls[0]!;
 }
 
@@ -125,7 +128,19 @@ function decidePlay(view: PublicView, plays: PlayCardAction[]): Action {
 
   // partner already winning -> feed them the most points
   if (winnerSeat === partner) {
-    return plays.slice().sort(lowToHigh).at(-1)!;
+    const fat = plays.slice().sort(lowToHigh);
+    // ...unless our own card would TAKE the trick off them. Last to play, a
+    // forced overtrump makes every legal card a winner, so "feed the partner"
+    // degenerated into throwing the master trump away for nothing. The points
+    // stay in the family either way; the tempo does not.
+    const last = trick.length === 3;
+    if (last) {
+      const losers = fat.filter((p) => !wouldWin(trick, p.card, ctx));
+      if (losers.length) return losers.at(-1)!;
+      // Everything wins: take it with the cheapest card that does.
+      return fat[0]!;
+    }
+    return fat.at(-1)!;
   }
 
   // opponent winning -> take it as cheaply as possible, otherwise shed cheapest
