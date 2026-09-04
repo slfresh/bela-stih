@@ -1,8 +1,16 @@
 import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import type { Action, Card, DealScoreResult, PublicView, Seat, TeamId } from '@belot/engine';
-import { cardId } from '@belot/engine';
+import type {
+  Action,
+  Card,
+  DealProgress,
+  DealScoreResult,
+  PublicView,
+  Seat,
+  TeamId,
+} from '@belot/engine';
+import { cardId, teamOf } from '@belot/engine';
 import type { Lang } from '@belot/i18n';
 import { levelProgress, type Award, type PlayerProfile } from '@belot/progression';
 import { Anchor, AnchorHost, type AnchorMap } from './anim/AnchorRegistry';
@@ -139,17 +147,13 @@ export function TableScreen(props: TableScreenProps) {
           <ProfileBar profile={profile} />
           {status ? <Text style={styles.status}>{status}</Text> : null}
 
-          {/* score strip */}
-          <View style={styles.scoreRow}>
-            <Text style={styles.scoreText}>
-              <Text style={styles.scoreLabel}>{lang.team(0, mySeat)} </Text>
-              <Text style={styles.scoreValue}>{matchScores[0]}</Text>
-              <Text style={styles.scoreLabel}> : </Text>
-              <Text style={styles.scoreValue}>{matchScores[1]}</Text>
-              <Text style={styles.scoreLabel}> {lang.team(1, mySeat)}</Text>
-            </Text>
-            <Text style={styles.subDim}>{lang.s.gameToTarget(1001)}</Text>
-          </View>
+          {/* score strip: match score, plus this deal's running count */}
+          <TableHeader
+            lang={lang}
+            mySeat={mySeat}
+            matchScores={matchScores}
+            progress={view.dealProgress}
+          />
 
           {/* the table */}
           <View style={styles.tableArea}>
@@ -330,6 +334,60 @@ const SLOT: Record<Position, ViewStyle> = {
   left: { left: '50%', marginLeft: -77, top: '55%', marginTop: -33 },
   right: { left: '50%', marginLeft: 31, top: '55%', marginTop: -33 },
 };
+
+/**
+ * The match score, and — while a deal is being played — the running count for
+ * it, ending in the number a real table keeps in its head: how many points the
+ * caller still needs.
+ *
+ * "Mi" is always the left pill. `matchScores` is indexed by absolute team id,
+ * but which team is "us" depends on where you sit, so everything here is
+ * ordered by `teamOf(mySeat)` and never by index 0/1.
+ */
+function TableHeader({
+  lang,
+  mySeat,
+  matchScores,
+  progress,
+}: {
+  lang: Lang;
+  mySeat: Seat;
+  matchScores: readonly [number, number];
+  progress: DealProgress | null;
+}) {
+  const us = teamOf(mySeat);
+  const them = (1 - us) as TeamId;
+
+  // While trick 1 is open a later zvanje can still move the target, so the
+  // count is shown dimmed rather than hidden — it is honest, just not final.
+  const live = progress ? (progress.provisional ? styles.dealCountDim : styles.dealCount) : null;
+
+  return (
+    <View style={styles.scoreRow}>
+      <Text style={styles.scoreText}>
+        <Text style={styles.scoreLabel}>{lang.team(us, mySeat)} </Text>
+        <Text style={styles.scoreValue}>{matchScores[us]}</Text>
+        <Text style={styles.scoreLabel}> : </Text>
+        <Text style={styles.scoreValue}>{matchScores[them]}</Text>
+        <Text style={styles.scoreLabel}> {lang.team(them, mySeat)}</Text>
+      </Text>
+
+      {progress ? (
+        <Text style={live!}>
+          {progress.running[us]} : {progress.running[them]}
+          <Text style={styles.subDim}>
+            {'   '}
+            {progress.callerNeeds === 0
+              ? lang.s.contractSafe
+              : lang.s.needsMore(progress.callerNeeds)}
+          </Text>
+        </Text>
+      ) : (
+        <Text style={styles.subDim}>{lang.s.gameToTarget(1001)}</Text>
+      )}
+    </View>
+  );
+}
 
 /** Level, XP progress and the coin balance; the coins are the wallet anchor. */
 function ProfileBar({ profile }: { profile: PlayerProfile }) {
@@ -588,6 +646,8 @@ const styles = StyleSheet.create({
   scoreLabel: { color: theme.textDim, fontSize: 13 },
   scoreValue: { color: theme.text, fontSize: 20, fontWeight: '800' },
   subDim: { color: theme.textDim, fontSize: 12 },
+  dealCount: { color: theme.accent, fontSize: 13, fontWeight: '700' },
+  dealCountDim: { color: theme.textDim, fontSize: 13, fontWeight: '700' },
 
   tableArea: { flex: 1, minHeight: 260 },
   topSeat: { alignItems: 'center' },

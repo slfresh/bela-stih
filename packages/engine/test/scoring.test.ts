@@ -5,8 +5,10 @@ import {
   makeDeck,
   parseCard,
   pointValue,
+  computeDealProgress,
   scoreDeal,
   teamOf,
+  type DealProgress,
   type DealScoreResult,
   type DealTrick,
   type EngineConfig,
@@ -339,5 +341,120 @@ describe('what a made kontra pays', () => {
 describe('input validation', () => {
   it('rejects a deal that is not exactly eight tricks', () => {
     expect(() => score({ tricks: EVEN_SPLIT.slice(0, 7), callerTeam: 0 })).toThrow(/8 tricks/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Live deal progress
+// ---------------------------------------------------------------------------
+
+interface ProgressOpts extends ScoreOpts {
+  provisional?: boolean;
+}
+
+function progress(o: ProgressOpts): DealProgress {
+  return computeDealProgress({
+    ctx: TRUMP,
+    tricks: o.tricks,
+    teamOf,
+    callerTeam: o.callerTeam,
+    multiplier: o.multiplier ?? 1,
+    declarations: o.declarations ?? noDeclarations(),
+    belaTeam: o.belaTeam ?? null,
+    config: { ...DEFAULT_CONFIG, ...o.config },
+    provisional: o.provisional ?? false,
+  });
+}
+
+describe('the live deal counter', () => {
+  it('opens at 82 of a 162 pot, with nobody safe and nobody doomed', () => {
+    const p = progress({ tricks: [], callerTeam: 0 });
+    expect(p.pot).toBe(162);
+    expect(p.target).toBe(82);
+    expect(p.callerNeeds).toBe(82);
+    expect(p.tricksPlayed).toBe(0);
+    expect(p.callerSafe).toBe(false);
+    expect(p.callerDoomed).toBe(false);
+  });
+
+  it('drops the threshold by one when a tie is a make', () => {
+    expect(progress({ tricks: [], callerTeam: 0, config: { contractTieSucceeds: true } }).target)
+      .toBe(81);
+  });
+
+  it('grows the pot with zvanja, and credits them to the side that won them', () => {
+    const mine = progress({ tricks: [], callerTeam: 0, declarations: declarationsWorth(0, 20) });
+    expect(mine.pot).toBe(182);
+    expect(mine.target).toBe(92);
+    // 20 already banked, so 72 of card points still to find.
+    expect(mine.callerNeeds).toBe(72);
+
+    const theirs = progress({ tricks: [], callerTeam: 0, declarations: declarationsWorth(1, 20) });
+    expect(theirs.target).toBe(92);
+    expect(theirs.callerNeeds).toBe(92);
+  });
+
+  it('counts bela for its holder and in the pot', () => {
+    const p = progress({ tricks: [], callerTeam: 0, belaTeam: 0 });
+    expect(p.pot).toBe(182);
+    expect(p.bela).toEqual([20, 0]);
+    expect(p.running[0]).toBe(20);
+  });
+
+  it('never lets the kontra multiplier move the threshold', () => {
+    // scoreDeal judges the contract at face value, so the counter must too.
+    const targets = ([1, 2, 4] as const).map(
+      (m) => progress({ tricks: [], callerTeam: 0, multiplier: m }).callerNeeds,
+    );
+    expect(new Set(targets).size).toBe(1);
+  });
+
+  it('agrees with scoreDeal once all eight tricks are in', () => {
+    for (const fixture of [EVEN_SPLIT, SWEEP_BY_TEAM_1]) {
+      for (const callerTeam of [0, 1] as TeamId[]) {
+        for (const decls of [noDeclarations(), declarationsWorth(0, 50), declarationsWorth(1, 20)]) {
+          const o = { tricks: fixture, callerTeam, declarations: decls, belaTeam: null };
+          const live = progress(o);
+          const final = score(o);
+          expect(live.callerSafe).toBe(final.callerMade);
+          // running excludes valat, which is exactly what rawTotal adds on top.
+          expect(live.running[0]).toBe(final.rawTotal[0] - final.valatBonus[0]);
+          expect(live.running[1]).toBe(final.rawTotal[1] - final.valatBonus[1]);
+        }
+      }
+    }
+  });
+
+  it('tracks who could still sweep, and stops once the tricks are split', () => {
+    const bothOpen = progress({ tricks: [], callerTeam: 0 });
+    expect(bothOpen.valatPossible).toEqual([true, true]);
+
+    const teamZeroOnly = progress({ tricks: EVEN_SPLIT.slice(0, 1), callerTeam: 0 });
+    const winner = teamOf(EVEN_SPLIT[0]!.winnerSeat);
+    expect(teamZeroOnly.valatPossible[winner]).toBe(true);
+    expect(teamZeroOnly.valatPossible[(1 - winner) as TeamId]).toBe(false);
+
+    // A finished deal can no longer "still" sweep, however it ended.
+    expect(progress({ tricks: SWEEP_BY_TEAM_1, callerTeam: 0 }).valatPossible).toEqual([false, false]);
+  });
+
+  it('holds the last-trick bonus in the pot but credits it only at trick 8', () => {
+    const midDeal = progress({ tricks: EVEN_SPLIT.slice(0, 4), callerTeam: 0 });
+    expect(midDeal.pot).toBe(162);
+    expect(midDeal.lastTrickTeam).toBeNull();
+    expect(midDeal.running[0] + midDeal.running[1]).toBe(
+      midDeal.cardPoints[0] + midDeal.cardPoints[1],
+    );
+
+    const done = progress({ tricks: EVEN_SPLIT, callerTeam: 0 });
+    expect(done.lastTrickTeam).toBe(teamOf(EVEN_SPLIT[7]!.winnerSeat));
+    expect(done.running[0] + done.running[1]).toBe(162);
+  });
+
+  it('calls a caller doomed once even everything left would not be enough', () => {
+    // Team 1 sweeps: by the last trick the caller (team 0) cannot reach 82.
+    const nearlyDone = progress({ tricks: SWEEP_BY_TEAM_1.slice(0, 7), callerTeam: 0 });
+    expect(nearlyDone.callerDoomed).toBe(true);
+    expect(progress({ tricks: [], callerTeam: 0 }).callerDoomed).toBe(false);
   });
 });

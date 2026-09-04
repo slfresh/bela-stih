@@ -43,7 +43,9 @@ export {
 
 // scoring
 export {
+  computeDealProgress,
   scoreDeal,
+  type DealProgressInput,
   type DealScoreInput,
   type DealScoreResult,
   type DealTrick,

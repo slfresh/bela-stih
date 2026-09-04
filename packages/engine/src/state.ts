@@ -2,6 +2,7 @@ import type {
   Action,
   Card,
   Declaration,
+  DealProgress,
   DeclarationSummary,
   EngineConfig,
   Phase,
@@ -25,8 +26,17 @@ import {
 } from './cards';
 import { legalPlays } from './legality';
 import { detectDeclarations, resolveDeclarations } from './declarations';
-import { scoreDeal, type DealScoreResult, type DealTrick } from './scoring';
+import { computeDealProgress, scoreDeal, type DealScoreResult, type DealTrick } from './scoring';
 import { trickWinnerIndex } from './compare';
+
+/**
+ * Who leads trick 1 of this deal: the dealer's right-hand neighbour (play runs
+ * counter-clockwise). Used both for scoring's zvanja tie-break and for the live
+ * progress readout — two copies of `(dealer + 1) % 4` would drift.
+ */
+function dealFirstLeader(s: GameState): Seat {
+  return ((s.dealer + 1) % 4) as Seat;
+}
 
 /** Partners sit across: team 0 = seats {0,2}, team 1 = seats {1,3}. */
 export function teamOf(seat: Seat): TeamId {
@@ -550,8 +560,12 @@ function scoreCurrentDeal(s: GameState): GameState {
   // Only what was actually announced enters the contest; silence forfeits.
   // Ties resolve to whoever is first in play order from the deal's first leader
   // (UHDDR rule 7, "prvi na štihu"), unless the cancel house rule is on.
-  const firstLeader = ((s.dealer + 1) % 4) as Seat;
-  const resolution = resolveDeclarations(s.announcedDeclarations, teamOf, s.config, firstLeader);
+  const resolution = resolveDeclarations(
+    s.announcedDeclarations,
+    teamOf,
+    s.config,
+    dealFirstLeader(s),
+  );
   // Only a called bela scores; an uncalled pair is forfeited exactly like zvanja.
   const belaTeam = s.belaAnnouncedSeat === null ? null : teamOf(s.belaAnnouncedSeat);
   const result = scoreDeal({
@@ -670,8 +684,33 @@ export function publicView(s: GameState, seat: Seat): PublicView {
       !owesDeclaration(s, seat) &&
       legalActions(s).some((a) => a.type === 'PLAY_CARD' && a.announceBela === true),
     belaAnnouncedBy: s.belaAnnouncedSeat,
+    // Public by construction: won tricks, heard announcements and a called bela
+    // are things everyone at the table already knows.
+    dealProgress: s.phase === 'PLAY' && s.callerSeat !== null ? progressOf(s) : null,
     legalActions: toAct === seat ? legalActions(s) : [],
   };
+}
+
+/** The live running score, derived from what the whole table can already see. */
+function progressOf(s: GameState): DealProgress {
+  return computeDealProgress({
+    ctx: s.context,
+    tricks: s.completedTricks,
+    teamOf,
+    callerTeam: teamOf(s.callerSeat!),
+    multiplier: s.multiplier,
+    declarations: resolveDeclarations(
+      s.announcedDeclarations,
+      teamOf,
+      s.config,
+      dealFirstLeader(s),
+    ),
+    belaTeam: s.belaAnnouncedSeat === null ? null : teamOf(s.belaAnnouncedSeat),
+    config: s.config,
+    // Trick 1 is still open and somebody has yet to speak, so a later
+    // announcement can still move the target under the player's feet.
+    provisional: s.completedTricks.length === 0 && s.declared.some((d) => !d),
+  });
 }
 
 /** Strip the cards off a declaration, leaving what the table is entitled to know. */

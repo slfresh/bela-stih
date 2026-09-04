@@ -1,5 +1,12 @@
-import type { Card, EngineConfig, PlayContext, Seat, TeamId } from '@belot/shared-types';
-import { pointValue } from './power';
+import type {
+  Card,
+  DealProgress,
+  EngineConfig,
+  PlayContext,
+  Seat,
+  TeamId,
+} from '@belot/shared-types';
+import { CARD_POINTS_TOTAL, pointValue } from './power';
 import type { DeclarationResolution } from './declarations';
 
 /**
@@ -140,5 +147,109 @@ export function scoreDeal(input: DealScoreInput): DealScoreResult {
     rawTotal,
     callerMade,
     finalScore,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Live deal progress — the running score players can see mid-deal
+// ---------------------------------------------------------------------------
+
+export interface DealProgressInput {
+  ctx: PlayContext;
+  /** Tricks completed so far, in play order (0..8). */
+  tricks: DealTrick[];
+  teamOf: (s: Seat) => TeamId;
+  callerTeam: TeamId;
+  multiplier: 1 | 2 | 4;
+  /** Zvanja as they resolve on what has been announced SO FAR. */
+  declarations: DeclarationResolution;
+  belaTeam: TeamId | null;
+  config: EngineConfig;
+  /** True while trick 1 is open and some seat may still announce. */
+  provisional: boolean;
+}
+
+/**
+ * The running score a player can legitimately keep in their head mid-deal —
+ * and the one number no rival app shows: how many points the caller still
+ * needs ("treba još N").
+ *
+ * Pinned to `scoreDeal` by test: with all 8 tricks in, `callerSafe` must equal
+ * `scoreDeal().callerMade`. Three deliberate exclusions:
+ *   - VALAT is never folded in (a conditional +90 would make the counter jump
+ *     ~45 the moment somebody takes a trick); `valatPossible` is exposed so the
+ *     UI can caveat instead. `callerNeeds` is exact once it reads [false,false].
+ *   - The LAST-TRICK bonus is in the pot from move one but is only credited to
+ *     a team at trick 8 — it is known, just unassigned.
+ *   - The kontra MULTIPLIER never moves the threshold: `scoreDeal` judges at
+ *     face value because doubling scales both sides equally. It rides along
+ *     purely so the UI can print "×2".
+ */
+export function computeDealProgress(input: DealProgressInput): DealProgress {
+  const { ctx, tricks, teamOf, callerTeam, multiplier, declarations, belaTeam, config } = input;
+
+  const cardPoints: [number, number] = [0, 0];
+  const tricksWon: [number, number] = [0, 0];
+  for (const trick of tricks) {
+    const t = teamOf(trick.winnerSeat);
+    tricksWon[t] += 1;
+    for (const c of trick.cards) cardPoints[t] += pointValue(c, ctx);
+  }
+
+  const lastTrickTeam = tricks.length === 8 ? teamOf(tricks[7]!.winnerSeat) : null;
+
+  const declarationPoints: [number, number] = [
+    declarations.perTeamValue[0],
+    declarations.perTeamValue[1],
+  ];
+  const bela: [number, number] = [0, 0];
+  if (belaTeam !== null) bela[belaTeam] = BELA_VALUE;
+
+  const running: [number, number] = [0, 1].map((t) =>
+    cardPoints[t]! +
+    (lastTrickTeam === t ? config.lastTrickBonus : 0) +
+    declarationPoints[t]! +
+    bela[t]!,
+  ) as [number, number];
+
+  const pot =
+    CARD_POINTS_TOTAL +
+    config.lastTrickBonus +
+    declarationPoints[0] +
+    declarationPoints[1] +
+    bela[0] +
+    bela[1];
+  const target = config.contractTieSucceeds ? Math.ceil(pot / 2) : Math.floor(pot / 2) + 1;
+
+  // Everything still on the table: unplayed card points, plus the last trick
+  // bonus while nobody has taken the 8th.
+  const remaining =
+    CARD_POINTS_TOTAL -
+    cardPoints[0] -
+    cardPoints[1] +
+    (lastTrickTeam === null ? config.lastTrickBonus : 0);
+
+  return {
+    tricksPlayed: tricks.length,
+    cardPoints,
+    tricksWon,
+    lastTrickTeam,
+    lastTrickBonus: config.lastTrickBonus,
+    declarationPoints,
+    declarationTeam: declarations.winningTeam,
+    bela,
+    running,
+    callerTeam,
+    multiplier,
+    pot,
+    target,
+    callerNeeds: Math.max(0, target - running[callerTeam]),
+    callerSafe: running[callerTeam] >= target,
+    callerDoomed: running[callerTeam] + remaining < target,
+    valatPossible: [
+      tricks.length < 8 && tricksWon[0] === tricks.length,
+      tricks.length < 8 && tricksWon[1] === tricks.length,
+    ],
+    provisional: input.provisional,
   };
 }

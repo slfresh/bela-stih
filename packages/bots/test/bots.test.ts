@@ -108,6 +108,8 @@ function viewOf(seat: Seat, hand: string[], trick: Array<[Seat, string]>, legal:
     announcedDeclarations: [],
     myDeclarations: [],
     mustDeclare: false,
+    canDeclare: false,
+    dealProgress: null,
     canAnnounceBela: false,
     belaAnnouncedBy: null,
     legalActions: actions,

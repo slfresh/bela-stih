@@ -1,5 +1,5 @@
-import type { PublicView, Seat } from '@belot/engine';
-import { cardId } from '@belot/engine';
+import type { DealProgress, PublicView, Seat, TeamId } from '@belot/engine';
+import { cardId, teamOf } from '@belot/engine';
 import type { TableEvent } from '@belot/table';
 
 /**
@@ -35,6 +35,89 @@ export function suppress(view: PublicView): PublicView {
   };
 }
 
+/** The part of the live counter that only tricks can move. */
+interface TrickPart {
+  tricksPlayed: number;
+  cardPoints: [number, number];
+  tricksWon: [number, number];
+  lastTrickTeam: TeamId | null;
+  valatPossible: [boolean, boolean];
+}
+
+const NO_TRICKS: TrickPart = {
+  tricksPlayed: 0,
+  cardPoints: [0, 0],
+  tricksWon: [0, 0],
+  lastTrickTeam: null,
+  valatPossible: [true, true],
+};
+
+function trickPartOf(p: DealProgress): TrickPart {
+  return {
+    tricksPlayed: p.tricksPlayed,
+    cardPoints: [...p.cardPoints],
+    tricksWon: [...p.tricksWon],
+    lastTrickTeam: p.lastTrickTeam,
+    valatPossible: [...p.valatPossible],
+  };
+}
+
+/**
+ * Rebuild the counter from tricks-so-far plus the deal's static parts (pot,
+ * target, zvanja, bela — all carried on the payload). Exact without the engine
+ * config, which is precisely why `DealProgress` ships `target` and
+ * `lastTrickBonus`: the arithmetic below mirrors `computeDealProgress`.
+ */
+function recount(part: TrickPart, statics: DealProgress): DealProgress {
+  const running: [number, number] = [0, 1].map((t) =>
+    part.cardPoints[t]! +
+    (part.lastTrickTeam === t ? statics.lastTrickBonus : 0) +
+    statics.declarationPoints[t]! +
+    statics.bela[t]!,
+  ) as [number, number];
+
+  const remaining =
+    152 -
+    part.cardPoints[0] -
+    part.cardPoints[1] +
+    (part.lastTrickTeam === null ? statics.lastTrickBonus : 0);
+
+  return {
+    ...statics,
+    ...part,
+    running,
+    callerNeeds: Math.max(0, statics.target - running[statics.callerTeam]),
+    callerSafe: running[statics.callerTeam] >= statics.target,
+    callerDoomed: running[statics.callerTeam] + remaining < statics.target,
+  };
+}
+
+/**
+ * Adopt the deal's static parts from the authoritative view while keeping the
+ * tricks this drain has actually shown — the same trick `hand` and
+ * `myDeclarations` already use. Zvanja and bela can only be settled by the
+ * engine (the contest gives the loser nothing), so they are taken, never
+ * derived; the trick tally stays local so the counter cannot run ahead of the
+ * cards the player is still watching fly.
+ */
+function syncProgress(view: PublicView, finalView: PublicView): DealProgress | null {
+  const statics = finalView.dealProgress;
+  if (!statics) return null;
+  return recount(view.dealProgress ? trickPartOf(view.dealProgress) : NO_TRICKS, statics);
+}
+
+/** Advance the counter by one trick, using the points the event already carries. */
+function bumpProgress(p: DealProgress, team: TeamId, points: number, isLast: boolean): DealProgress {
+  const part = trickPartOf(p);
+  part.tricksPlayed += 1;
+  part.cardPoints[team] += points;
+  part.tricksWon[team] += 1;
+  if (isLast) part.lastTrickTeam = team;
+  part.valatPossible[(1 - team) as TeamId] = false;
+  if (isLast) part.valatPossible[team] = false;
+  return recount(part, p);
+}
+
 export function applyEventStart(view: PublicView, e: TableEvent, mySeat: Seat): PublicView {
   switch (e.kind) {
     case 'dealStarted':
@@ -56,6 +139,7 @@ export function applyEventStart(view: PublicView, e: TableEvent, mySeat: Seat): 
         announcedDeclarations: [],
         myDeclarations: [],
         belaAnnouncedBy: null,
+        dealProgress: null,
       });
 
     case 'cardPlayed': {
@@ -115,16 +199,22 @@ export function applyEventEnd(
         hand: finalView.hand.length >= view.hand.length ? finalView.hand : view.hand,
         myDeclarations: finalView.myDeclarations,
         trickLeader: ((view.dealer + 1) % 4) as Seat,
+        dealProgress: syncProgress(view, finalView),
       });
 
     case 'declared':
       return suppress({
         ...view,
         announcedDeclarations: [...view.announcedDeclarations, ...e.declarations],
+        dealProgress: syncProgress(view, finalView),
       });
 
     case 'belaCalled':
-      return suppress({ ...view, belaAnnouncedBy: e.seat });
+      return suppress({
+        ...view,
+        belaAnnouncedBy: e.seat,
+        dealProgress: syncProgress(view, finalView),
+      });
 
     case 'cardPlayed':
       return suppress({
@@ -133,13 +223,22 @@ export function applyEventEnd(
       });
 
     case 'trickWon':
-      return suppress({ ...view, currentTrick: [], trickLeader: e.seat });
+      return suppress({
+        ...view,
+        currentTrick: [],
+        trickLeader: e.seat,
+        dealProgress:
+          view.dealProgress && !view.dealProgress.provisional
+            ? bumpProgress(view.dealProgress, teamOf(e.seat), e.points, e.isLastTrick)
+            : view.dealProgress,
+      });
 
     case 'dealScored':
       return suppress({
         ...view,
         phase: 'DEAL_OVER',
         matchScores: e.matchScores,
+        dealProgress: null,
         // The engine rotates the dealer as part of scoring the deal.
         dealer: ((view.dealer + 1) % 4) as Seat,
       });

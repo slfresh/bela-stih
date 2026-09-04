@@ -45,6 +45,16 @@ function projection(v: PublicView) {
     trickLeader: v.trickLeader,
     trick: v.currentTrick.map((p) => `${p.seat}:${cardId(p.card)}`),
     matchScores: v.matchScores,
+    // The live counter is patched per trick; if bumpProgress ever drifts from
+    // the engine's own arithmetic, this catches it at every batch boundary.
+    dealProgress: v.dealProgress && {
+      tricksPlayed: v.dealProgress.tricksPlayed,
+      cardPoints: v.dealProgress.cardPoints,
+      tricksWon: v.dealProgress.tricksWon,
+      running: v.dealProgress.running,
+      callerNeeds: v.dealProgress.callerNeeds,
+      lastTrickTeam: v.dealProgress.lastTrickTeam,
+    },
     // Order differs legitimately (event order vs per-seat flatten); compare as a set.
     declarations: v.announcedDeclarations
       .map((x) => `${x.seat}:${x.kind}:${x.value}:${x.topRank}`)

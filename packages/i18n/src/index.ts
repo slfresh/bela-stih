@@ -221,6 +221,10 @@ interface Strings {
   nextDeal: string;
   newMatch: string;
   gameToTarget: (target: number) => string;
+  /** Live deal counter: how many points the caller still needs. */
+  needsMore: (points: number) => string;
+  /** The caller is already past the line. */
+  contractSafe: string;
 
   ui: UiStrings;
 }
@@ -359,6 +363,8 @@ const hr: Strings = {
   nextDeal: 'Sljedeće dijeljenje',
   newMatch: 'Nova partija',
   gameToTarget: (target) => `igra do ${target}`,
+  needsMore: (points) => `treba još ${points}`,
+  contractSafe: 'prošlo',
 
   ui: {
     play: 'IGRAJ',
@@ -542,6 +548,8 @@ const srCyrl: Strings = {
   nextDeal: 'Следеће дељење',
   newMatch: 'Нова партија',
   gameToTarget: (target) => `игра до ${target}`,
+  needsMore: (points) => `треба још ${points}`,
+  contractSafe: 'прошло',
 
   ui: {
     play: 'ИГРАЈ',
@@ -721,6 +729,8 @@ const en: Strings = {
   nextDeal: 'Next deal',
   newMatch: 'New match',
   gameToTarget: (target) => `game to ${target}`,
+  needsMore: (points) => `needs ${points} more`,
+  contractSafe: 'safe',
 
   ui: {
     play: 'PLAY',

@@ -340,3 +340,32 @@ describe('finishing a match', () => {
     expect([teamOf(0), teamOf(1), teamOf(2), teamOf(3)]).toEqual([0, 1, 0, 1]);
   });
 });
+
+describe('the live deal counter crosses the wire safely', () => {
+  it('is identical in every seat view — it can leak nothing per seat', () => {
+    let s = startDeal(createMatch({ dealer: 3, seed: 7 }));
+    s = applyAction(s, { type: 'BID_CALL', seat: 0, suit: 'spades' });
+    expect(s.phase).toBe('PLAY');
+
+    const views = ([0, 1, 2, 3] as Seat[]).map((seat) => publicView(s, seat).dealProgress);
+    for (const v of views) expect(v).toEqual(views[0]);
+    expect(views[0]).not.toBeNull();
+  });
+
+  it('is null outside the play phase', () => {
+    const bidding = startDeal(createMatch({ dealer: 3, seed: 7 }));
+    expect(publicView(bidding, 0).dealProgress).toBeNull();
+  });
+
+  it('is provisional only until trick 1 has been settled', () => {
+    let s = startDeal(createMatch({ dealer: 3, seed: 7 }));
+    s = applyAction(s, { type: 'BID_CALL', seat: 0, suit: 'spades' });
+    // Somebody still owes an announce-or-skip, so the target can still move.
+    expect(publicView(s, 0).dealProgress!.provisional).toBe(true);
+
+    // Auto mode settles every seat as the hand is dealt: nothing is pending.
+    let auto = startDeal(createMatch({ dealer: 3, seed: 7, config: { declarationMode: 'auto' } }));
+    auto = applyAction(auto, { type: 'BID_CALL', seat: 0, suit: 'spades' });
+    expect(publicView(auto, 0).dealProgress!.provisional).toBe(false);
+  });
+});

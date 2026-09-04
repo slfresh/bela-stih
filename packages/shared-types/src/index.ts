@@ -283,6 +283,49 @@ export interface TrickPlay {
  * contains only the receiver's own `hand`, plus public counts of other hands.
  * The server builds this with the engine; opponents' cards never leave the room.
  */
+/**
+ * The live running score of the deal in progress — what a player at a real
+ * table keeps in their head, including the number no rival app shows:
+ * how many points the caller still needs.
+ *
+ * Numbers only: every input (won tricks, heard announcements, a called bela)
+ * is already public, so this can never leak a hand.
+ */
+export interface DealProgress {
+  /** Completed tricks so far, 0..8. */
+  tricksPlayed: number;
+  /** Card points taken so far, per team. Sums to <= 152. */
+  cardPoints: [number, number];
+  tricksWon: [number, number];
+  /** Who took the 8th trick; null until it is taken. */
+  lastTrickTeam: TeamId | null;
+  /** Shipped so the client needs no engine config to do its own arithmetic. */
+  lastTrickBonus: number;
+  /** Zvanja as they would resolve if nothing more were announced (loser gets 0). */
+  declarationPoints: [number, number];
+  /** Team currently holding the zvanja contest; null = none, or cancelled. */
+  declarationTeam: TeamId | null;
+  bela: [number, number];
+  /** cardPoints + last trick once awarded + declarations + bela. Excludes valat. */
+  running: [number, number];
+  callerTeam: TeamId;
+  /** In force now; shown, never applied — doubling does not move the threshold. */
+  multiplier: 1 | 2 | 4;
+  /** 162 + resolved zvanja + bela. Excludes valat. */
+  pot: number;
+  /** Face-value total the CALLING team must reach; honours contractTieSucceeds. */
+  target: number;
+  /** max(0, target - running[callerTeam]) — "treba još N". */
+  callerNeeds: number;
+  callerSafe: boolean;
+  /** Even taking everything left would not be enough. */
+  callerDoomed: boolean;
+  /** Per team: could still sweep all 8. While either is true, +90 is excluded. */
+  valatPossible: [boolean, boolean];
+  /** Trick 1 is still open — more zvanja may land and move `target`. */
+  provisional: boolean;
+}
+
 export interface PublicView {
   phase: Phase;
   dealer: Seat;
@@ -319,6 +362,8 @@ export interface PublicView {
   canAnnounceBela: boolean;
   /** Who has called bela this deal, once called. Public — everyone hears it. */
   belaAnnouncedBy: Seat | null;
+  /** Live running score for the deal in progress; null outside PLAY. */
+  dealProgress: DealProgress | null;
   /** Legal actions for `seat` right now (empty if it is not this seat's turn). */
   legalActions: Action[];
 }
