@@ -9,6 +9,7 @@ import { Anchor, AnchorHost, type AnchorMap } from './anim/AnchorRegistry';
 import { EffectsOverlay } from './anim/EffectsOverlay';
 import { anchorId, type FxBus } from './anim/FxBus';
 import { SeatPuck } from './table/SeatPuck';
+import { seatAt, seatPosition, type Position } from './table/geometry';
 import { TurnRing } from './anim/TurnRing';
 import { feltStyle } from './cosmetics';
 import { emoteText, EMOTES } from './emotes';
@@ -94,9 +95,10 @@ export function TableScreen(props: TableScreenProps) {
     onEmote(id);
   };
 
-  const across = ((mySeat + 2) % 4) as Seat;
-  const left = ((mySeat + 1) % 4) as Seat;
-  const right = ((mySeat + 3) % 4) as Seat;
+  // Bela runs counter-clockwise, so the seat that acts AFTER me sits on my
+  // RIGHT. Pucks and trick slots read the same map, so they can never drift
+  // apart and fly a card to the wrong side of the table.
+  const at = (pos: Position) => seatAt(pos, mySeat);
 
   const meta = (s: Seat): SeatMeta =>
     seatMeta?.[s] ?? {
@@ -151,10 +153,10 @@ export function TableScreen(props: TableScreenProps) {
 
           {/* the table */}
           <View style={styles.tableArea}>
-            <View style={styles.topSeat}>{puck(across)}</View>
+            <View style={styles.topSeat}>{puck(at('top'))}</View>
 
             <View style={styles.midRow}>
-              <View style={styles.sideSeat}>{puck(left)}</View>
+              <View style={styles.sideSeat}>{puck(at('left'))}</View>
 
               <View style={[styles.felt, { backgroundColor: baize.felt, borderColor: baize.rim }]}>
                 <View style={styles.feltInner}>
@@ -179,7 +181,7 @@ export function TableScreen(props: TableScreenProps) {
 
                   {/* one trick slot per seat, positioned by table side */}
                   {([0, 1, 2, 3] as Seat[]).map((s) => {
-                    const pos = POSITIONS[(s - mySeat + 4) % 4]!;
+                    const pos = seatPosition(s, mySeat);
                     const played = view.currentTrick.find((p) => p.seat === s);
                     return (
                       <Anchor key={s} id={anchorId.slot(s)} style={[styles.slot, SLOT[pos]]}>
@@ -190,7 +192,7 @@ export function TableScreen(props: TableScreenProps) {
                 </View>
               </View>
 
-              <View style={styles.sideSeat}>{puck(right)}</View>
+              <View style={styles.sideSeat}>{puck(at('right'))}</View>
             </View>
           </View>
 
@@ -319,9 +321,6 @@ export function TableScreen(props: TableScreenProps) {
     </AnchorHost>
   );
 }
-
-type Position = 'bottom' | 'left' | 'top' | 'right';
-const POSITIONS: Position[] = ['bottom', 'left', 'top', 'right'];
 
 // A compact cross around the felt centre, so a full trick reads as one pile
 // (slot is 46×67; offsets keep a small gap between neighbouring cards).

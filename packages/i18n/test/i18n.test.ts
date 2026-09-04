@@ -121,9 +121,19 @@ describe('seats are named from where you sit', () => {
     }
   });
 
-  it('reads left and right correctly', () => {
-    expect(lang.seat(1, 0)).toBe('Lijevi');
-    expect(lang.seat(3, 0)).toBe('Desni');
+  it('puts the next seat to act on your right (bela runs counter-clockwise)', () => {
+    expect(lang.seat(1, 0)).toBe('Desni');
+    expect(lang.seat(3, 0)).toBe('Lijevi');
+  });
+
+  // The engine plays seat+1, so seat+1 must be captioned "Desni" from EVERY
+  // chair. Together with the engine's own rotation tests this pins the word to
+  // the rule: the table can never end up captioned back-to-front.
+  it('calls seat+1 the right-hand neighbour from every chair', () => {
+    for (const seat of [0, 1, 2, 3] as Seat[]) {
+      expect(lang.seat(((seat + 1) % 4) as Seat, seat)).toBe('Desni');
+      expect(lang.seat(((seat + 3) % 4) as Seat, seat)).toBe('Lijevi');
+    }
   });
 });
 

@@ -141,6 +141,11 @@ interface Strings {
   /** Spoken name, for declarations: "terca do dečka". */
   rankName: Record<Rank, string>;
 
+  /**
+   * Relative seat names, indexed by offset in PLAY order from the viewer:
+   * [me, next-to-act, partner, previous]. Bela runs counter-clockwise, so the
+   * seat that acts after me is on my RIGHT — index 1 is "Desni", not "Lijevi".
+   */
   seat: [string, string, string, string];
   seatAbsolute: (seat: Seat) => string;
   us: string;
@@ -289,7 +294,7 @@ const hr: Strings = {
     A: 'asa',
   },
 
-  seat: ['Vi', 'Lijevi', 'Partner', 'Desni'],
+  seat: ['Vi', 'Desni', 'Partner', 'Lijevi'],
   seatAbsolute: (seat) => `Igrač ${seat}`,
   us: 'Mi',
   them: 'Oni',
@@ -472,7 +477,7 @@ const srCyrl: Strings = {
     A: 'аса',
   },
 
-  seat: ['Ви', 'Леви', 'Партнер', 'Десни'],
+  seat: ['Ви', 'Десни', 'Партнер', 'Леви'],
   seatAbsolute: (seat) => `Играч ${seat}`,
   us: 'Ми',
   them: 'Они',
@@ -654,7 +659,7 @@ const en: Strings = {
     A: 'ace',
   },
 
-  seat: ['You', 'Left', 'Partner', 'Right'],
+  seat: ['You', 'Right', 'Partner', 'Left'],
   seatAbsolute: (seat) => `Player ${seat}`,
   us: 'Us',
   them: 'Them',

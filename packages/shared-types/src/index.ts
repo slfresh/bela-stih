@@ -54,7 +54,12 @@ export interface PlayContext {
 // Seats and teams
 // ---------------------------------------------------------------------------
 
-/** Seats are clockwise 0,1,2,3. Partners sit across: team 0 = {0,2}, team 1 = {1,3}. */
+/**
+ * Seat order 0,1,2,3 IS the direction of play. Bela runs COUNTER-CLOCKWISE, so
+ * seat+1 sits to that seat's RIGHT, the dealer's right-hand neighbour bids first
+ * and leads, and the dealer is last — which is exactly why "mus" falls on them.
+ * Partners sit across: team 0 = {0,2}, team 1 = {1,3}.
+ */
 export type Seat = 0 | 1 | 2 | 3;
 export type TeamId = 0 | 1;
 

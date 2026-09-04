@@ -39,7 +39,7 @@ describe('dealing', () => {
     expect(new Set(all).size).toBe(32);
   });
 
-  it('opens the bidding to the dealers left', () => {
+  it('opens the bidding to the dealers right (bela runs counter-clockwise)', () => {
     expect(opened().bidTurn).toBe(0);
     expect(startDeal(createMatch({ dealer: 0, seed: 7 })).bidTurn).toBe(1);
   });
@@ -182,7 +182,7 @@ function settle(s: GameState, announce = true): GameState {
 }
 
 describe('playing', () => {
-  it('leads from the dealers left', () => {
+  it('leads from the dealers right', () => {
     const s = intoPlay();
     expect(s.trickLeader).toBe(0);
     expect(s.turn).toBe(0);
