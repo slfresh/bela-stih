@@ -22,4 +22,25 @@ export const theme = {
   ok: '#4e9d5b',
 } as const;
 
+/**
+ * Us and them. Green and red are what a bela player already reads as "our pile"
+ * and "theirs" — but they are also the classic confusion pair, so colour is
+ * NEVER the only carrier here: the Mi/Oni labels stay, the partner keeps a
+ * shape marker, and the two hues differ in luminance as well as hue so they
+ * survive greyscale and deuteranopia as light-vs-dark.
+ *
+ * Deliberately separate from `ok`/`danger`, which mean a good or bad OUTCOME
+ * and will sometimes have to be drawn on an "Oni" surface.
+ */
+export const team = {
+  us: '#3f9c58',
+  usDim: 'rgba(63,156,88,0.22)',
+  usEdge: 'rgba(63,156,88,0.75)',
+  usInk: '#a8e2b8',
+  them: '#c4453a',
+  themDim: 'rgba(196,69,58,0.22)',
+  themEdge: 'rgba(196,69,58,0.75)',
+  themInk: '#f0a79f',
+} as const;
+
 export const radius = { card: 8, panel: 14, pill: 999 } as const;

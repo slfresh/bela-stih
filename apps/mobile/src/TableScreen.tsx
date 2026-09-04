@@ -30,11 +30,13 @@ import { useHandOrder, type HandSort } from './table/useHandOrder';
 import type { ConfirmPlay } from './storage';
 import { TurnRing } from './anim/TurnRing';
 import { feltStyle } from './cosmetics';
-import { emoteText, EMOTES } from './emotes';
+import { EmoteStrip } from './table/EmoteStrip';
+import { useTurnCues } from './table/useTurnCues';
 import { PlayingCard } from './PlayingCard';
 import { SuitPip } from './deck';
 import { playSfx } from './audio';
-import { radius, theme } from './theme';
+import { radius, team, theme } from './theme';
+import { isPartner, seatTone } from './table/teamColour';
 
 /**
  * The table, drawn from one seat's point of view — the social-poker layout:
@@ -161,10 +163,21 @@ export function TableScreen(props: TableScreenProps) {
       isBot={meta(s).bot}
       connected={meta(s).connected}
       active={view.toAct === s}
+      tone={seatTone(s, mySeat)}
+      partner={isPartner(s, mySeat)}
       deadline={turnDeadline}
       totalMs={turnTotalMs}
     />
   );
+
+  // Your turn, your call, your clock running out.
+  useTurnCues({
+    myTurn,
+    mustDeclare: view.mustDeclare,
+    canDeclare: view.canDeclare === true,
+    deadline: turnDeadline,
+    settled,
+  });
 
   const trump = view.context.trumpSuit;
   const baize = feltStyle(profile.selectedFelt);
@@ -218,8 +231,24 @@ export function TableScreen(props: TableScreenProps) {
                     const pos = seatPosition(s, mySeat);
                     const played = view.currentTrick.find((p) => p.seat === s);
                     return (
-                      <Anchor key={s} id={anchorId.slot(s)} style={[styles.slot, SLOT[pos]]}>
-                        {played ? <PlayingCard card={played.card} size="md" /> : <View style={styles.slotGhost} />}
+                      <Anchor
+                        key={s}
+                        id={anchorId.slot(s)}
+                        style={[
+                          styles.slot,
+                          SLOT[pos],
+                          // Whose card this is, at a glance — and whose empty
+                          // slot, before anybody has played into it.
+                          played
+                            ? { borderWidth: 2, borderColor: seatTone(s, mySeat).edge, borderRadius: radius.card, margin: -2 }
+                            : null,
+                        ]}
+                      >
+                        {played ? (
+                          <PlayingCard card={played.card} size="md" />
+                        ) : (
+                          <View style={[styles.slotGhost, { borderColor: seatTone(s, mySeat).dim }]} />
+                        )}
                       </Anchor>
                     );
                   })}
@@ -315,20 +344,12 @@ export function TableScreen(props: TableScreenProps) {
             )}
           </Anchor>
 
-          {/* emote tray, floating above the action row while open */}
-          {!settled && trayOpen && onEmote && (
-            <View style={styles.emoteTray}>
-              {EMOTES.map((e) => (
-                <Pressable key={e.id} onPress={() => sendEmote(e.id)} style={styles.emoteChip}>
-                  <Text style={e.glyph ? styles.emoteGlyph : styles.emotePhrase}>
-                    {emoteText(lang, e.id)}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
+          {/* Always-on emote row: a fixed 34px, so it never reflows the felt. */}
+          {!settled && onEmote && (
+            <EmoteStrip lang={lang} open={trayOpen} dimmed={myTurn} onSend={sendEmote} />
           )}
 
-          {/* bidding / declaring / bela buttons + leave */}
+          {/* actions: bidding, declaring, bela, leave */}
           {!settled && (
             <View style={styles.actionsRow}>
               {onEmote && (
@@ -417,13 +438,16 @@ function TableHeader({
 
   return (
     <View style={styles.scoreRow}>
-      <Text style={styles.scoreText}>
-        <Text style={styles.scoreLabel}>{lang.team(us, mySeat)} </Text>
-        <Text style={styles.scoreValue}>{matchScores[us]}</Text>
-        <Text style={styles.scoreLabel}> : </Text>
-        <Text style={styles.scoreValue}>{matchScores[them]}</Text>
-        <Text style={styles.scoreLabel}> {lang.team(them, mySeat)}</Text>
-      </Text>
+      <View style={styles.pillRow}>
+        <View style={[styles.teamPill, { backgroundColor: team.usDim, borderColor: team.usEdge }]}>
+          <Text style={styles.pillLabel}>{lang.team(us, mySeat)}</Text>
+          <Text style={[styles.pillValue, { color: team.usInk }]}>{matchScores[us]}</Text>
+        </View>
+        <View style={[styles.teamPill, { backgroundColor: team.themDim, borderColor: team.themEdge }]}>
+          <Text style={[styles.pillValue, { color: team.themInk }]}>{matchScores[them]}</Text>
+          <Text style={styles.pillLabel}>{lang.team(them, mySeat)}</Text>
+        </View>
+      </View>
 
       {progress ? (
         <Text style={live!}>
@@ -775,6 +799,18 @@ const styles = StyleSheet.create({
   scoreValue: { color: theme.text, fontSize: 20, fontWeight: '800' },
   subDim: { color: theme.textDim, fontSize: 12 },
   seriesLine: { color: theme.textDim, fontSize: 13, textAlign: 'center' },
+  pillRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  teamPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+  },
+  pillLabel: { color: theme.textDim, fontSize: 12, fontWeight: '600' },
+  pillValue: { fontSize: 17, fontWeight: '800' },
   dealCount: { color: theme.accent, fontSize: 13, fontWeight: '700' },
   dealCountDim: { color: theme.textDim, fontSize: 13, fontWeight: '700' },
 
@@ -858,27 +894,6 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
 
-  emoteTray: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    borderRadius: radius.panel,
-    borderWidth: 1,
-    borderColor: theme.line,
-    padding: 8,
-  },
-  emoteChip: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    minWidth: 44,
-    alignItems: 'center',
-  },
-  emoteGlyph: { fontSize: 22 },
-  emotePhrase: { color: theme.text, fontSize: 14, fontWeight: '700', paddingVertical: 3 },
   emoteToggle: {
     width: 40,
     height: 40,

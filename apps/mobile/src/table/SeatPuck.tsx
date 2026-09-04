@@ -4,6 +4,7 @@ import type { Seat } from '@belot/engine';
 import { Anchor } from '../anim/AnchorRegistry';
 import { anchorId } from '../anim/FxBus';
 import { TurnRing } from '../anim/TurnRing';
+import type { TeamTone } from './teamColour';
 import { Avatar, hasAvatar } from '../avatars';
 import { garb } from '../deck/palette';
 import { radius, theme } from '../theme';
@@ -16,7 +17,9 @@ import { radius, theme } from '../theme';
  * The avatar disc is the anchor sprites fly to and bubbles hang over.
  */
 
-const AVATAR_COLOURS = [garb.blue, garb.red, garb.green, garb.brown];
+// Deliberately team-NEUTRAL: red and green here would fight the team ring,
+// which is the thing that actually tells you whose side a seat is on.
+const AVATAR_COLOURS = [garb.blue, garb.brown, garb.steel, garb.grape];
 
 export function SeatPuck({
   seat,
@@ -27,6 +30,8 @@ export function SeatPuck({
   isBot,
   connected = true,
   active,
+  tone,
+  partner = false,
   deadline,
   totalMs,
   size = 54,
@@ -41,6 +46,10 @@ export function SeatPuck({
   connected?: boolean;
   /** Is it this seat's turn (renders the ring)? */
   active: boolean;
+  /** Which side of the table this seat is on, from the viewer's chair. */
+  tone?: TeamTone;
+  /** Draws the partner marker — a shape, so colour is never the only carrier. */
+  partner?: boolean;
   /** Absolute epoch deadline for the ring; null = soft ring without countdown. */
   deadline: number | null;
   totalMs?: number;
@@ -78,7 +87,26 @@ export function SeatPuck({
           )}
         </Anchor>
 
+        {/* Team ring: static, and deliberately NOT the countdown ring — that
+            one means TIME (amber to red) and the two must never be confused. */}
+        {tone && (
+          <View
+            style={[
+              styles.teamRing,
+              { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: tone.edge },
+            ]}
+            pointerEvents="none"
+          />
+        )}
+
         {active && <TurnRing size={ringSize} deadline={deadline} totalMs={totalMs} />}
+
+        {/* A shape, not just a colour: the partner is readable in greyscale. */}
+        {partner && (
+          <View style={styles.partnerMark}>
+            <Text style={styles.partnerMarkText}>◆</Text>
+          </View>
+        )}
 
         {isDealer && (
           <View style={styles.dealer}>
@@ -118,6 +146,9 @@ const styles = StyleSheet.create({
     borderColor: garb.goldDark,
   },
   dealerText: { color: garb.ink, fontSize: 11, fontWeight: '800' },
+  teamRing: { position: 'absolute', borderWidth: 2 },
+  partnerMark: { position: 'absolute', bottom: -2, left: -2 },
+  partnerMarkText: { color: theme.textDim, fontSize: 11 },
   count: {
     position: 'absolute',
     bottom: -2,

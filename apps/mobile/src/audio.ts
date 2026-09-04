@@ -20,7 +20,9 @@ export type Sfx =
   | 'levelup'
   | 'coin'
   | 'tap'
-  | 'pop';
+  | 'pop'
+  | 'turn'
+  | 'tick';
 
 // require() rather than import so Metro bundles the asset and hands back a module id.
 const SOURCES: Record<Sfx, number> = {
@@ -35,6 +37,10 @@ const SOURCES: Record<Sfx, number> = {
   coin: require('../assets/sfx/coin.wav'),
   tap: require('../assets/sfx/tap.wav'),
   pop: require('../assets/sfx/pop.wav'),
+  // Aliased for now: swapping in dedicated art is one line each, and doing it
+  // here rather than at the call sites keeps the intent readable meanwhile.
+  turn: require('../assets/sfx/pop.wav'),
+  tick: require('../assets/sfx/tap.wav'),
 };
 
 /**
@@ -42,7 +48,7 @@ const SOURCES: Record<Sfx, number> = {
  * and coins never sound twice the same. The melodic ones stay put — a detuned
  * fanfare just sounds wrong.
  */
-const VARIED: ReadonlySet<Sfx> = new Set(['deal', 'play', 'trick', 'coin', 'tap', 'pop']);
+const VARIED: ReadonlySet<Sfx> = new Set(['deal', 'play', 'trick', 'coin', 'tap', 'pop', 'turn']);
 
 const players = new Map<Sfx, AudioPlayer>();
 let enabled = true;

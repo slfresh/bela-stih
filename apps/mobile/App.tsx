@@ -19,6 +19,7 @@ import {
   type Settings,
 } from './src/storage';
 import { preloadSfx, setSoundEnabled } from './src/audio';
+import { setHapticsEnabled } from './src/haptics';
 import { setCosmetics, setDeckStyle } from './src/cosmetics';
 
 /** The menu stack, one level deep: home, or one of its satellite screens. */
@@ -61,6 +62,7 @@ export default function App() {
   }, []);
 
   setSoundEnabled(settings.sound);
+  setHapticsEnabled(settings.haptics);
   setCosmetics(profile);
   setDeckStyle(settings.deckStyle);
 

@@ -88,6 +88,23 @@ export function processEvents({
         if (teamOf(e.seat) === teamOf(mySeat)) buzz(Haptics.ImpactFeedbackStyle.Medium);
         break;
 
+      // Bidding was silent film until now: these three are the moments a
+      // table actually reacts to.
+      case 'bidCalled':
+        sfx('zvanje');
+        if (e.seat === mySeat) buzz(Haptics.ImpactFeedbackStyle.Light);
+        break;
+
+      case 'doubled':
+        sfx('bela');
+        if (teamOf(e.seat) === teamOf(mySeat)) buzz(Haptics.ImpactFeedbackStyle.Medium);
+        break;
+
+      case 'handsCompleted':
+        // The talon is dealt and animated; it had no sound at all.
+        sfx('deal');
+        break;
+
       case 'declared':
         sfx('zvanje');
         if (e.seat === mySeat) tally.zvanja += e.declarations.length;
