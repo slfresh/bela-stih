@@ -75,6 +75,7 @@ export class Table {
 
   private readonly humans: Set<Seat>;
   private matchNumber = 0;
+  private moves = 0;
   readonly botLevel: BotLevel;
 
   constructor(opts: TableOptions = {}) {
@@ -113,6 +114,18 @@ export class Table {
 
   get state(): Readonly<GameState> {
     return this.s;
+  }
+
+  /**
+   * How many actions have been applied to this table, ever.
+   *
+   * Paired with `actor()` this identifies the DECISION in front of a seat, not
+   * merely the seat — which is what a turn clock has to be keyed on. Two
+   * consecutive decisions by the same player (declare, then lead) are different
+   * decisions and each deserves its own full clock.
+   */
+  get moveCount(): number {
+    return this.moves;
   }
 
   get phase(): Phase {
@@ -252,6 +265,7 @@ export class Table {
     // whose state was permanently `undefined`.
     if (!after) throw new Error('engine returned no state');
     this.s = after;
+    this.moves += 1;
     const push = (e: TableEvent) => this.queued.push(e);
 
     switch (action.type) {

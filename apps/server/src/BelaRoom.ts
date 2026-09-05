@@ -72,6 +72,8 @@ export class BelaRoom extends Room {
   private turnEndsAt = 0;
   /** The seat the running timer was armed for, so a stale fire is detectable. */
   private turnSeat: Seat | null = null;
+  /** Which DECISION that timer belongs to; see Table.moveCount. */
+  private turnDecision: string | null = null;
   private started = false;
   /**
    * Rate limits, keyed by CONNECTION rather than by seat: pre-start a client can
@@ -378,27 +380,41 @@ export class BelaRoom extends Room {
       this.stopTimer();
       return;
     }
-    // The same seat is still deciding: leave their clock alone. afterMove()
+    // The SAME DECISION is still pending: leave that clock alone. afterMove()
     // runs on every publish, including an unrelated seat's disconnect, and
     // restarting here handed the actor a fresh 30 seconds each time.
-    if (this.turnTimer !== null && this.turnSeat === actor) return;
+    //
+    // Keyed on the decision and not the seat, because a player often gets two
+    // in a row — announce and then lead, or win a trick and lead the next. On a
+    // seat key those two share one 30 seconds, and after a timeout (which
+    // leaves the same seat on turn) nothing arms at all and the table stops
+    // dead for everybody.
+    const decision = `${actor}:${this.table.moveCount}`;
+    if (this.turnTimer !== null && this.turnDecision === decision) return;
     this.stopTimer();
 
     this.turnEndsAt = Date.now() + TURN_MS;
     this.turnSeat = actor;
+    this.turnDecision = decision;
     this.turnTimer = setTimeout(() => {
-      const seat = this.table.actor();
-      if (seat === null || !this.table.humanSeats.has(seat)) return;
-      // The turn moved on since this was armed (a disconnect let a bot play,
-      // say) — do not play the NEW actor's card early; restart their clock.
-      if (seat !== this.turnSeat) {
-        this.afterMove();
-        return;
+      // Spend the handle FIRST: everything below re-enters armTimer, and a
+      // stale non-null handle there reads as "a clock is already running".
+      this.turnTimer = null;
+      try {
+        const seat = this.table.actor();
+        // Play one move only if the turn is still where it was when we armed —
+        // a disconnect may have let a bot move on, and that seat gets its own
+        // clock rather than having its card played early.
+        if (seat !== null && seat === this.turnSeat && this.table.humanSeats.has(seat)) {
+          this.table.botMoveFor(seat);
+        }
+      } catch (err) {
+        // A throw here would otherwise escape to the process and leave the room
+        // with no clock and a human on turn — the same freeze, by another road.
+        console.error('[bela] turn timer failed:', err);
       }
-      // Exactly one bot move on their behalf. Toggling the human flag instead
-      // ran the bots until the next HUMAN seat, which on a table whose only
-      // human is this one meant playing out their entire remaining hand.
-      this.table.botMoveFor(seat);
+      // Unconditionally: a room must never be left with a human on turn and
+      // nothing armed.
       this.afterMove();
     }, TURN_MS);
   }
@@ -408,6 +424,7 @@ export class BelaRoom extends Room {
     this.turnTimer = null;
     this.turnEndsAt = 0;
     this.turnSeat = null;
+    this.turnDecision = null;
   }
 
   // --- publishing ----------------------------------------------------------

@@ -357,3 +357,82 @@ describe('starting a new match at the same table', () => {
     expect(kinds[0]).toBe('matchStarted');
   });
 });
+
+/**
+ * The turn clock is keyed on these two together, so they are load-bearing well
+ * beyond the Table: keying a clock on the SEAT alone gave two consecutive
+ * decisions by the same player one shared 30 seconds, and — because a timeout
+ * usually leaves that same seat on turn — stopped the server arming a clock at
+ * all, freezing the table for everybody.
+ */
+describe('botMoveFor and moveCount', () => {
+  it('counts every applied action, and only applied ones', () => {
+    const t = new Table({ seed: 11, humanSeats: [0] });
+    const before = t.moveCount;
+    expect(before).toBeGreaterThan(0); // the constructor's bot run
+
+    // A rejected action must not advance the count.
+    expect(() => t.submit({ type: 'BID_PASS', seat: 1 })).toThrow();
+    expect(t.moveCount).toBe(before);
+
+    t.submit(t.legal()[0]!);
+    expect(t.moveCount).toBeGreaterThan(before);
+  });
+
+  it('gives consecutive decisions by the same seat different identities', () => {
+    // The exact thing a seat-keyed clock could not tell apart.
+    const t = new Table({ seed: 3, humanSeats: [0] });
+    const seen = new Set<string>();
+    let guard = 0;
+    while (t.phase !== 'DEAL_OVER' && t.phase !== 'MATCH_OVER' && guard++ < 200) {
+      const actor = t.actor();
+      if (actor === null) break;
+      const key = `${actor}:${t.moveCount}`;
+      expect(seen.has(key)).toBe(false); // never reused
+      seen.add(key);
+      if (actor === 0) t.submit(t.legal()[0]!);
+      else t.runBots();
+    }
+    expect(seen.size).toBeGreaterThan(8);
+  });
+
+  it('plays exactly one action and leaves the seat human', () => {
+    const t = new Table({ seed: 7, humanSeats: [0] });
+    let guard = 0;
+    while (t.actor() !== 0 && t.actor() !== null && guard++ < 200) t.runBots();
+    expect(t.actor()).toBe(0);
+
+    const before = t.moveCount;
+    t.botMoveFor(0);
+    // One action for seat 0, then the bots advance to the next human decision
+    // — which, with only one human, means back to seat 0 or the deal's end.
+    expect(t.moveCount).toBeGreaterThan(before);
+    expect(t.humanSeats.has(0)).toBe(true);
+    if (t.phase === 'PLAY') expect(t.actor()).toBe(0);
+  });
+
+  it('never plays the whole deal out from under its only human', () => {
+    // The bug: setSeatHuman(seat, false) runs the bots until the next HUMAN
+    // seat, and with one human there is none to stop at.
+    for (let seed = 1; seed <= 40; seed++) {
+      const t = new Table({ seed, humanSeats: [0] });
+      let guard = 0;
+      while (t.actor() !== 0 && t.actor() !== null && guard++ < 200) t.runBots();
+      if (t.actor() !== 0 || t.phase !== 'PLAY') continue;
+      const held = t.state.hands[0]!.length;
+      t.botMoveFor(0);
+      expect(held - t.state.hands[0]!.length).toBeLessThanOrEqual(1);
+      expect(t.phase).toBe('PLAY');
+    }
+  });
+
+  it('is a no-op when it is not that seat’s turn', () => {
+    const t = new Table({ seed: 9, humanSeats: [0] });
+    let guard = 0;
+    while (t.actor() !== 0 && t.actor() !== null && guard++ < 200) t.runBots();
+    const before = t.moveCount;
+    const notActor = ((t.actor()! + 1) % 4) as Seat;
+    t.botMoveFor(notActor);
+    expect(t.moveCount).toBe(before);
+  });
+});
