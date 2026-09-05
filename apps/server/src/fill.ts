@@ -28,7 +28,9 @@ async function seatOne(client: Client, index: number): Promise<void> {
   const opts = { name: `Bot ${index + 1}`, avatar: AVATARS[index % AVATARS.length] };
   const room: Room = roomId
     ? await client.joinById(roomId, opts)
-    : await client.joinOrCreate(ROOM_NAME, opts);
+    // Private: several bots from one machine are the same shape as a cheat, and
+    // the public matchmaker now seats those apart on purpose.
+    : await client.create(ROOM_NAME, { ...opts, private: true });
 
   let mySeat: Seat | null = null;
 

@@ -43,14 +43,16 @@ async function main(): Promise<void> {
   const players: Seated[] = [];
 
   console.log(`[smoke] connecting four clients to ${ENDPOINT}`);
-  // Create one room explicitly and join the rest BY ID. `joinOrCreate` can hand
-  // clients to different rooms (a stray seat reservation is enough to do it),
-  // and comparing hands across two rooms compares two different decks.
+  // Create one PRIVATE room explicitly and join the rest BY ID. `joinOrCreate`
+  // can hand clients to different rooms (a stray seat reservation is enough to
+  // do it), and comparing hands across two rooms compares two different decks.
+  // Private also exempts these four same-machine clients from the public
+  // one-seat-per-origin rule, exactly as four friends round one table would be.
   let roomId: string | null = null;
   for (let i = 0; i < 4; i++) {
     const room: Room =
       roomId === null
-        ? await client.create(ROOM_NAME, { name: `Test ${i + 1}` })
+        ? await client.create(ROOM_NAME, { name: `Test ${i + 1}`, private: true })
         : await client.joinById(roomId, { name: `Test ${i + 1}` });
     roomId ??= room.roomId;
     const seated: Seated = { room, seat: 0 as Seat, view: null, seen: new Set() };

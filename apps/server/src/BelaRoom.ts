@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { Room, type Client } from '@colyseus/core';
+import { Room, ServerError, type AuthContext, type Client } from '@colyseus/core';
 import type { Action, Seat } from '@belot/engine';
 import { HARD_CONFIG_OVERRIDES, RANKS, SEATS, SUITS } from '@belot/engine';
 import type { Card, Rank, Rng, Suit } from '@belot/engine';
@@ -117,6 +117,23 @@ interface Occupant {
   name: string;
   avatar: string;
   connected: boolean;
+  /**
+   * Where this connection came from, for the one-seat-per-origin rule below.
+   * Server-side only — it is never published, stored or logged.
+   */
+  origin: string;
+}
+
+/** Refused because a seat at THIS table is already held from the same place. */
+export const SAME_ORIGIN_CODE = 4300;
+
+/** The address a connection appears to come from, behind the proxy or not. */
+function originOf(context: AuthContext): string {
+  const ip = context.ip;
+  const first = Array.isArray(ip) ? ip[0] : ip;
+  // x-forwarded-for is a list when there is more than one proxy; the client is
+  // the first entry.
+  return String(first ?? '').split(',')[0]!.trim();
 }
 
 export class BelaRoom extends Room {
@@ -124,6 +141,8 @@ export class BelaRoom extends Room {
 
   private table!: Table;
   private hard = false;
+  /** Public tables are the ones strangers are matched into. */
+  private isPublic = true;
   /** The table's creator (first joiner); start-with-bots rights follow them. */
   private hostId: string | null = null;
   /** Matches won per team since these people sat down. */
@@ -150,7 +169,7 @@ export class BelaRoom extends Room {
   private lastVoteAt = new Map<string, number>();
 
   override onCreate(options: { private?: boolean; hard?: boolean } = {}): void {
-    this.occupants = SEATS.map(() => ({ sessionId: null, name: '', avatar: '', connected: false }));
+    this.occupants = SEATS.map(() => ({ sessionId: null, name: '', avatar: '', connected: false, origin: '' }));
     // "Prava bela" is the host's choice, and only on private tables — quick
     // play must stay predictable for strangers.
     this.hard = options.private === true && options.hard === true;
@@ -166,7 +185,10 @@ export class BelaRoom extends Room {
     });
     this.table.drainEvents();
 
-    if (options.private) this.setPrivate(true);
+    if (options.private) {
+      this.isPublic = false;
+      this.setPrivate(true);
+    }
 
     // Colyseus looks the message type up on a plain object literal, so a client
     // sending `__proto__` / `constructor` / `toString` resolves up the prototype
@@ -205,6 +227,35 @@ export class BelaRoom extends Room {
     return null;
   }
 
+  /**
+   * One seat per origin at a public table.
+   *
+   * There are no accounts, so the server cannot tell four players from one
+   * person in four tabs — and three tabs at one table is enough to read the
+   * fourth player's whole hand by elimination, since a bela deck is 32 cards
+   * and three hands are 24 of them. No rule is broken doing it; the seats are
+   * simply all theirs.
+   *
+   * Refusing rather than blocking: the client answers this by CREATING a fresh
+   * public table instead, so the second connection still gets a game — it just
+   * cannot sit down next to the first one. Nobody is ever turned away, which
+   * matters because whole mobile networks share one address, and two strangers
+   * behind the same carrier must not be mistaken for a cheat.
+   *
+   * Private tables are exempt: you get in by knowing the code, and sharing it
+   * with somebody is the entire point.
+   */
+  override onAuth(_client: Client, _options: unknown, context: AuthContext): { origin: string } {
+    const origin = originOf(context);
+    const clash =
+      this.isPublic &&
+      !this.started &&
+      origin !== '' &&
+      this.occupants.some((o) => o.sessionId !== null && o.connected && o.origin === origin);
+    if (clash) throw new ServerError(SAME_ORIGIN_CODE, 'seat already held from here');
+    return { origin };
+  }
+
   override onJoin(client: Client, options: { name?: string; avatar?: string } = {}): void {
     const seat = this.freeSeat();
     if (seat === null) {
@@ -212,6 +263,7 @@ export class BelaRoom extends Room {
       return;
     }
     this.occupants[seat] = {
+      origin: (client.auth as { origin?: string } | undefined)?.origin ?? '',
       sessionId: client.sessionId,
       name: cleanName(options.name) || `Igrač ${seat + 1}`,
       // Echoed verbatim to other clients, so keep it to a short safe token.
@@ -284,7 +336,7 @@ export class BelaRoom extends Room {
 
   private release(seat: Seat): void {
     const wasHost = this.occupants[seat]!.sessionId === this.hostId;
-    this.occupants[seat] = { sessionId: null, name: '', avatar: '', connected: false };
+    this.occupants[seat] = { sessionId: null, name: '', avatar: '', connected: false, origin: '' };
     // A seat nobody is sitting in cannot be waited on for a rematch vote.
     this.rematchVotes.delete(seat);
     if (this.started) this.table.setSeatHuman(seat, false);
@@ -398,7 +450,7 @@ export class BelaRoom extends Room {
       if (this.occupants[target!]!.sessionId !== null) return;
       this.lastSitAt.set(client.sessionId, now);
       this.occupants[target!] = this.occupants[seat]!;
-      this.occupants[seat] = { sessionId: null, name: '', avatar: '', connected: false };
+      this.occupants[seat] = { sessionId: null, name: '', avatar: '', connected: false, origin: '' };
       this.publish();
       return;
     }

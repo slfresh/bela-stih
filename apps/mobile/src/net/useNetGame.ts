@@ -37,6 +37,8 @@ const ROOM_NAME = 'bela';
  * starts, so the reconnection token is the only way back in.
  */
 const RECONNECT_HOLD_MS = 60_000;
+/** The server's refusal when a seat here is already held from this connection. */
+const SAME_ORIGIN_CODE = 4300;
 
 export type NetStatus =
   | 'idle'
@@ -328,7 +330,20 @@ export function useNetGame(settings: Settings) {
   const avatar = profileRef.current.selectedAvatar;
 
   const quickPlay = useCallback(
-    () => connect((c) => c.joinOrCreate(ROOM_NAME, { name, avatar })),
+    () =>
+      connect(async (c) => {
+        try {
+          return await c.joinOrCreate(ROOM_NAME, { name, avatar });
+        } catch (err) {
+          // The open table already has somebody playing from this connection.
+          // With no accounts the server cannot tell a second player here from
+          // a second tab, and three tabs at one table can read the fourth
+          // player's hand by elimination — so it seats us apart rather than
+          // turning us away. A fresh public table, and strangers join us there.
+          if ((err as { code?: number } | null)?.code !== SAME_ORIGIN_CODE) throw err;
+          return await c.create(ROOM_NAME, { name, avatar });
+        }
+      }),
     [connect, name, avatar],
   );
   const createPrivate = useCallback(
