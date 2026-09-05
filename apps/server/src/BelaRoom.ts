@@ -147,6 +147,7 @@ export class BelaRoom extends Room {
    */
   private lastEmoteAt = new Map<string, number>();
   private lastSitAt = new Map<string, number>();
+  private lastVoteAt = new Map<string, number>();
 
   override onCreate(options: { private?: boolean; hard?: boolean } = {}): void {
     this.occupants = SEATS.map(() => ({ sessionId: null, name: '', avatar: '', connected: false }));
@@ -230,8 +231,7 @@ export class BelaRoom extends Room {
     }
 
     if (!this.started && this.occupants.every((o) => o.sessionId !== null)) {
-      this.started = true;
-      this.lock();
+      this.lockTable();
       // The opening bidder is on the clock from the very first move — without
       // this, an AFK first player would hang the table forever.
       this.armTimer();
@@ -307,6 +307,24 @@ export class BelaRoom extends Room {
     if (this.table.phase !== 'MATCH_OVER' || !this.everyHumanVoted()) return false;
     this.beginRematch();
     return true;
+  }
+
+  /**
+   * Close the table and fix who is a human from here.
+   *
+   * A seat only plays as a human if somebody is actually SITTING in it and
+   * connected. Checking `sessionId === null` alone let a player who dropped in
+   * the lobby — whose seat is still occupied while we hold it for them — lock in
+   * as a human nobody was behind, so every one of that seat's turns burned the
+   * full 30 seconds for everyone else until the hold lapsed.
+   */
+  private lockTable(): void {
+    for (const s of SEATS) {
+      const o = this.occupants[s]!;
+      this.table.setSeatHuman(s, o.sessionId !== null && o.connected);
+    }
+    this.started = true;
+    this.lock();
   }
 
   /** Every connected human still at the table has asked for another match. */
@@ -390,17 +408,17 @@ export class BelaRoom extends Room {
       // plays as a bot from here on. The table locks exactly as it does when
       // a fourth human sits down.
       if (client.sessionId !== this.hostId || this.started) return;
-      for (const s of SEATS) {
-        if (this.occupants[s]!.sessionId === null) this.table.setSeatHuman(s, false);
-      }
-      this.started = true;
-      this.lock();
+      this.lockTable();
       this.afterMove();
       return;
     }
 
     if (packet.type === 'rematch' || packet.type === 'rematchCancel') {
       if (this.table.phase !== 'MATCH_OVER') return;
+      // Each one republishes to every client, so it needs the same gap `sit` has.
+      const votedAt = Date.now();
+      if (votedAt - (this.lastVoteAt.get(client.sessionId) ?? 0) < SIT_GAP_MS) return;
+      this.lastVoteAt.set(client.sessionId, votedAt);
       if (packet.type === 'rematch') this.rematchVotes.add(seat);
       else this.rematchVotes.delete(seat);
       if (packet.type === 'rematch' && this.everyHumanVoted()) this.beginRematch();
@@ -522,6 +540,9 @@ export class BelaRoom extends Room {
    * Events are drained ONCE and shared; views are per seat.
    */
   private publish(): void {
+    const votes = [...this.rematchVotes].filter(
+      (s) => this.occupants[s]!.sessionId !== null && this.occupants[s]!.connected,
+    );
     // `declarationSkipped` is only ever emitted for a seat that HAD something to
     // declare — completeDeal settles the empty-handed ones silently — so
     // broadcasting it tells the table exactly what staying quiet is meant to
@@ -543,7 +564,10 @@ export class BelaRoom extends Room {
       ...(this.hard ? { hard: true } : {}),
       series: [this.series[0], this.series[1]],
       matchNumber: this.matchNumber,
-      ...(this.rematchVotes.size > 0 ? { rematchVotes: [...this.rematchVotes] } : {}),
+      // Only votes from people still on the line: a dropped player's vote left
+      // the client's outstanding count pinned at 0, so it hid both "Play again"
+      // and "Start anyway" while a real non-voter was still sitting there.
+      ...(votes.length > 0 ? { rematchVotes: votes } : {}),
       ...(this.hostId !== null && this.seatOf(this.hostId) !== null
         ? { hostSeat: this.seatOf(this.hostId)! }
         : {}),
