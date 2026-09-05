@@ -60,6 +60,13 @@ export type TableEvent =
   | { kind: 'matchStarted'; matchNumber: number };
 
 export interface TableOptions {
+  /**
+   * The randomness behind the shuffle AND the bots, superseding `seed`. A
+   * server passes a crypto-backed generator: a seeded table is reproducible,
+   * and anything reproducible from 32 bits is recoverable by an opponent who
+   * can see six of its cards.
+   */
+  rng?: Rng;
   /** Seats a person controls. Empty means every seat is a bot (demo / auto-play). */
   humanSeats?: Seat[];
   botLevel?: BotLevel;
@@ -76,15 +83,24 @@ export class Table {
   private readonly humans: Set<Seat>;
   private matchNumber = 0;
   private moves = 0;
+  /** Injected randomness, kept so a rematch is seeded the same way. */
+  private readonly injected: Rng | null;
   readonly botLevel: BotLevel;
 
   constructor(opts: TableOptions = {}) {
     const seed = opts.seed ?? (Date.now() & 0x7fffffff);
     this.humans = new Set(opts.humanSeats ?? []);
     this.botLevel = opts.botLevel ?? 'medium';
-    this.rng = makeRng(seed ^ 0x9e3779b9);
+    this.injected = opts.rng ?? null;
+    // Bot choices are as predictable as the deck when both come from one seed.
+    this.rng = this.injected ?? makeRng(seed ^ 0x9e3779b9);
 
-    this.s = createMatch({ seed, dealer: opts.dealer, config: opts.config });
+    this.s = createMatch({
+      seed,
+      rng: this.injected ?? undefined,
+      dealer: opts.dealer,
+      config: opts.config,
+    });
     this.s = startDeal(this.s);
     this.queued.push({ kind: 'dealStarted', dealNumber: this.s.dealNumber, dealer: this.s.dealer });
     this.runBots();
@@ -193,6 +209,7 @@ export class Table {
     this.matchNumber += 1;
     this.s = createMatch({
       seed: opts.seed ?? (Date.now() & 0x7fffffff),
+      rng: this.injected ?? undefined,
       dealer: opts.dealer ?? this.s.dealer,
       config: this.s.config,
     });

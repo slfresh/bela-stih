@@ -31,6 +31,12 @@ import { loadProfile, saveProfile, type Settings } from '../storage';
 
 export const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? 'ws://localhost:2567';
 const ROOM_NAME = 'bela';
+/**
+ * How long the server holds a dropped seat (BelaRoom's RECONNECT_SECONDS). The
+ * retry loop has to cover the whole window: the room locks when the match
+ * starts, so the reconnection token is the only way back in.
+ */
+const RECONNECT_HOLD_MS = 60_000;
 
 export type NetStatus =
   | 'idle'
@@ -274,13 +280,25 @@ export function useNetGame(settings: Settings) {
     const token = reconnectTokenRef.current;
     if (!token || reconnectingRef.current) return;
     reconnectingRef.current = true;
+    // Keep trying for as long as the server actually holds the seat. Giving up
+    // early and dropping the token stranded anyone whose link came back inside
+    // the window: the room locks on start, so this token is the only way in.
+    const deadline = Date.now() + RECONNECT_HOLD_MS;
     try {
-      for (const wait of [0, 1000, 2000, 4000, 8000, 12_000]) {
+      for (let wait = 0; Date.now() < deadline; wait = Math.min(5000, wait + 1000)) {
         if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-        // The player gave up and walked away while we were trying.
+        // The player gave up and walked away while we were waiting.
         if (reconnectTokenRef.current !== token) return;
         try {
           const room = await new Client(SERVER_URL).reconnect(token);
+          // They may have left while this attempt was in flight. Joining now
+          // would seat a room nothing will ever leave: the server sees a live
+          // human on the seat, never bots it, and every one of that seat's
+          // turns costs the other three the full clock.
+          if (reconnectTokenRef.current !== token) {
+            void room.leave(true).catch(() => {});
+            return;
+          }
           // Rebuild the animation from the authoritative view rather than
           // resuming a director that missed however many events we were away
           // for; the server publishes the current view on join.
@@ -293,7 +311,7 @@ export function useNetGame(settings: Settings) {
           setStatus('connecting');
         }
       }
-      // The hold window has lapsed: the seat is a bot and the room is locked.
+      // The hold really has lapsed: the seat is a bot and the room is locked.
       reconnectTokenRef.current = null;
       setStatus('disconnected');
     } finally {

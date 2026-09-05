@@ -1,7 +1,8 @@
-import { randomInt } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { Room, type Client } from '@colyseus/core';
 import type { Action, Seat } from '@belot/engine';
-import { HARD_CONFIG_OVERRIDES, SEATS } from '@belot/engine';
+import { HARD_CONFIG_OVERRIDES, RANKS, SEATS, SUITS } from '@belot/engine';
+import type { Card, Rank, Rng, Suit } from '@belot/engine';
 import { Table } from '@belot/table';
 import {
   EMOTE_GAP_MS,
@@ -26,6 +27,71 @@ import {
  *  - **A dropped player becomes a bot.** `Table` treats a seat as human-or-bot,
  *    so play carries on and the seat is handed back on reconnect.
  */
+
+/**
+ * Randomness with no seed behind it.
+ *
+ * Seeding a 32-bit generator from crypto does not help: mulberry32's whole
+ * state is 32 bits, so the deal it produces is still one of 2^32 — a table an
+ * opponent can precompute once and then look up from their own six cards. The
+ * only fix is for the server's shuffle not to come from a small seed at all.
+ */
+function cryptoRng(): Rng {
+  let pool = randomBytes(4096);
+  let at = 0;
+  return () => {
+    if (at + 4 > pool.length) {
+      pool = randomBytes(4096);
+      at = 0;
+    }
+    const v = pool.readUInt32BE(at);
+    at += 4;
+    return v / 4294967296;
+  };
+}
+
+const isSuit = (v: unknown): v is Suit => typeof v === 'string' && SUITS.includes(v as Suit);
+const isRank = (v: unknown): v is Rank => typeof v === 'string' && RANKS.includes(v as Rank);
+
+/**
+ * Rebuild an action from a client message using only values this server names
+ * itself.
+ *
+ * Validating in place is not enough: the engine stores what it is given, and a
+ * `structuredClone` or a msgpack encode of an attacker-shaped object throws far
+ * away from any handler that could catch it. Everything below is a fresh
+ * literal built from checked primitives, so the client's object is dropped on
+ * the floor whatever it contained.
+ */
+function cleanAction(raw: unknown, seat: Seat): Action | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const a = raw as Record<string, unknown>;
+  // A client may only ever move its own seat.
+  if (a.seat !== seat) return null;
+  switch (a.type) {
+    case 'BID_PASS':
+    case 'DOUBLE_KONTRA':
+    case 'DOUBLE_REKONTRA':
+    case 'DOUBLE_PASS':
+    case 'DECLARE_ANNOUNCE':
+    case 'DECLARE_SKIP':
+      return { type: a.type, seat };
+    case 'BID_CALL':
+      return isSuit(a.suit) ? { type: 'BID_CALL', seat, suit: a.suit } : null;
+    case 'PLAY_CARD': {
+      const c = a.card;
+      if (typeof c !== 'object' || c === null) return null;
+      const { suit, rank } = c as Record<string, unknown>;
+      if (!isSuit(suit) || !isRank(rank)) return null;
+      const card: Card = { suit, rank };
+      return a.announceBela === true
+        ? { type: 'PLAY_CARD', seat, card, announceBela: true }
+        : { type: 'PLAY_CARD', seat, card };
+    }
+    default:
+      return null;
+  }
+}
 
 const TURN_MS = 30_000;
 /** Shortest gap between two accepted seat changes from one connection. */
@@ -91,11 +157,11 @@ export class BelaRoom extends Room {
     this.table = new Table({
       humanSeats: [...SEATS],
       config: this.hard ? HARD_CONFIG_OVERRIDES : undefined,
-      // Table's default is `Date.now()`, which is fine for the CLI and for
-      // offline play (dealer and player are the same device) and catastrophic
-      // here: a seated client can recover a 31-bit timestamp seed from its own
-      // six cards in about a second and then read every hand of every deal.
-      seed: randomInt(0x7fffffff),
+      // No seed at all. Table's default is `Date.now()`, which is fine for the
+      // CLI and offline play (dealer and player are the same device) and
+      // catastrophic here — but so is any 32-bit seed, crypto or not, because
+      // the generator behind it only has 32 bits of state to hide in.
+      rng: cryptoRng(),
     });
     this.table.drainEvents();
 
@@ -189,21 +255,28 @@ export class BelaRoom extends Room {
       this.publish();
     }
 
-    // Their departure may have been the last vote anybody was waiting on.
-    if (this.maybeRematch()) return;
-
-    // A deliberate leave frees the seat at once; a dropped connection is worth
-    // holding it open for.
+    // A deliberate leave frees the seat at once (release() re-checks the vote);
+    // a dropped connection is worth holding open for.
     if (consented === true) {
       this.release(seat);
       return;
     }
+
+    // Their dropping out may have been the last vote anybody was waiting on —
+    // everyHumanVoted() counts only CONNECTED humans, and this one no longer is.
+    // Deliberately NOT an early return: leaving here would skip the hold below,
+    // so the seat would stay occupied by a session that has gone, with no
+    // reconnect window and, if they were the host, no way to pass the crown.
+    this.maybeRematch();
+
     try {
       await this.allowReconnection(client, RECONNECT_SECONDS);
       this.occupants[seat]!.connected = true;
       this.occupants[seat]!.sessionId = client.sessionId;
       this.table.setSeatHuman(seat, true);
-      this.publish();
+      // Coming back changes the connected-human set exactly as leaving did, so
+      // a vote that was waiting on somebody else can now be complete.
+      if (!this.maybeRematch()) this.publish();
     } catch {
       this.release(seat);
     }
@@ -254,7 +327,9 @@ export class BelaRoom extends Room {
     }
     this.rematchVotes.clear();
     this.matchNumber += 1;
-    this.table.newMatch({ seed: randomInt(0x7fffffff) });
+    // The Table keeps the injected generator, so the new deck is drawn the
+    // same way the first one was.
+    this.table.newMatch();
     this.afterMove();
   }
 
@@ -269,11 +344,14 @@ export class BelaRoom extends Room {
       // third joiner can bid before the fourth player exists, and the fourth
       // arrives bound to a contract they never saw.
       if (!this.started) return;
-      const action = (packet.message as { action?: Action } | undefined)?.action;
-      if (!action) return;
-      // The sender may only ever move its own seat.
-      if (action.seat !== seat) {
-        client.send(MSG.error, { reason: 'not your seat' });
+      const raw = (packet.message as { action?: unknown } | undefined)?.action;
+      // Rebuilt field by field from primitives, so no object a client sent can
+      // reach the engine or the authoritative state by reference. A well-typed
+      // action carrying a hostile VALUE was enough to poison a room and, at the
+      // next publish, take the whole process down.
+      const action = cleanAction(raw, seat);
+      if (!action) {
+        client.send(MSG.error, { reason: 'malformed action' });
         return;
       }
       try {
@@ -444,7 +522,12 @@ export class BelaRoom extends Room {
    * Events are drained ONCE and shared; views are per seat.
    */
   private publish(): void {
-    const events = this.table.drainEvents();
+    // `declarationSkipped` is only ever emitted for a seat that HAD something to
+    // declare — completeDeal settles the empty-handed ones silently — so
+    // broadcasting it tells the table exactly what staying quiet is meant to
+    // hide. Nothing renders it (the CLI returns null for it by design), so it
+    // simply does not go on the wire.
+    const events = this.table.drainEvents().filter((e) => e.kind !== 'declarationSkipped');
     const room: RoomMessage = {
       seats: this.seatInfo(),
       status:

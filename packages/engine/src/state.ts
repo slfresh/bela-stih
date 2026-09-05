@@ -97,8 +97,19 @@ export interface GameState {
 
 export interface CreateMatchOptions {
   config?: Partial<EngineConfig>;
-  /** Seed the deterministic RNG. Pass fresh entropy per match (server: crypto; client: random). */
+  /**
+   * Seed the deterministic RNG. Reproducible, and therefore RECOVERABLE: the
+   * generator's state is 32 bits, so a whole match's deal is a function of a
+   * number an opponent who sees six cards can search for. Fine for the CLI,
+   * offline play and tests, where the dealer and the player are the same
+   * device. NOT fine for an authoritative server — pass `rng` there.
+   */
   seed?: number;
+  /**
+   * The shuffle generator itself, superseding `seed`. A server passes one
+   * backed by crypto so there is no seed to recover in the first place.
+   */
+  rng?: Rng;
   dealer?: Seat;
 }
 
@@ -107,7 +118,7 @@ export function createMatch(opts: CreateMatchOptions = {}): GameState {
   const seed = opts.seed ?? 0x1234abcd;
   return {
     config,
-    rng: makeRng(seed),
+    rng: opts.rng ?? makeRng(seed),
     phase: 'IDLE',
     dealer: opts.dealer ?? 0,
     dealNumber: 0,
@@ -314,6 +325,12 @@ function applyBidPass(s: GameState, seat: Seat): GameState {
 function applyBidCall(s: GameState, seat: Seat, suit: Suit): GameState {
   expectPhase(s, 'BID');
   expectSeat(seat, s.bidTurn);
+  // The TYPE being known says nothing about the VALUE. This goes straight into
+  // authoritative state and then onto every wire, so an unchecked `suit` let a
+  // single socket frame name a trump that does not exist — 32 card points
+  // vanish from the deal — or park an arbitrary object in the state that
+  // nothing downstream can clone or serialise.
+  if (!SUITS.includes(suit)) throw new Error(`unknown suit ${String(suit)}`);
   s.context = { contractType: 'SUIT', trumpSuit: suit };
   s.callerSeat = seat;
   s.multiplier = 1;
@@ -605,16 +622,17 @@ function belaStillOpen(s: GameState): boolean {
   if (s.config.belaMode !== 'announce' || s.belaAnnouncedSeat !== null) return false;
   const trump = s.context.trumpSuit;
   if (trump === null) return false;
-  let seen = 0;
+  // ONE is enough to end it: announcing requires holding the king AND the queen
+  // (canAnnounceBelaWith), so the moment either is on the table nobody can.
   for (const t of s.completedTricks) {
     for (const c of t.cards) {
-      if (c.suit === trump && (c.rank === 'K' || c.rank === 'Q')) seen += 1;
+      if (c.suit === trump && (c.rank === 'K' || c.rank === 'Q')) return false;
     }
   }
   for (const p of s.currentTrick) {
-    if (p.card.suit === trump && (p.card.rank === 'K' || p.card.rank === 'Q')) seen += 1;
+    if (p.card.suit === trump && (p.card.rank === 'K' || p.card.rank === 'Q')) return false;
   }
-  return seen < 2;
+  return true;
 }
 
 function applyRenons(s: GameState, offender: Seat): GameState {
