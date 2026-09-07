@@ -315,10 +315,15 @@ export function TableScreen(props: TableScreenProps) {
   );
 
   // Running zvanja record (bubbles are transient; this stays).
+  // Once the winner's cards are on the table, their chip is saying the same
+  // thing twice. The losing side's chips stay: they said their number out loud
+  // and that is the only record of it.
+  const revealedSeats = new Set(view.revealedDeclarations.map((d) => d.seat));
+  const spokenCalls = view.announcedDeclarations.filter((d) => !revealedSeats.has(d.seat));
   const calls =
-    view.announcedDeclarations.length > 0 || view.belaAnnouncedBy !== null ? (
+    spokenCalls.length > 0 || view.belaAnnouncedBy !== null ? (
       <View style={[styles.callsRow, land && styles.callsCol]}>
-        {view.announcedDeclarations.map((d, i) => (
+        {spokenCalls.map((d, i) => (
           <View key={i} style={styles.callChip}>
             <Text style={styles.callChipText}>
               {meta(d.seat).name}: {lang.declaration(d)}
@@ -413,16 +418,27 @@ export function TableScreen(props: TableScreenProps) {
       <EmoteStrip lang={lang} open={trayOpen} dimmed={myTurn} vertical={land} onSend={sendEmote} />
     ) : null;
 
+  // Does the marking actually form one of the zvanja this hand holds? In normal
+  // play the app already knows them, so it arms the button only on a real
+  // combination rather than letting the engine bounce a mistake back as an
+  // error. In blind mode it stays armed regardless — the app refuses to spot
+  // them for you there, so an honest miss is the whole point.
+  const markedKey = [...marked].sort().join('|');
+  const markingIsZvanje =
+    hardMode ||
+    view.myDeclarations.some(
+      (d) => d.cards.map((c) => cardId(c)).sort().join('|') === markedKey,
+    );
+
   // "Prijavi" / "Nemam" — the two answers, and nothing else while the table is
-  // waiting on you. A marking under three cards cannot be any zvanje, so the
-  // confirm stays disabled until it could at least be one.
+  // waiting on you.
   const declareButtons = declaring ? (
     <>
       <Button
         label={lang.s.declareMarked}
-        tone={marked.length >= 3 ? 'strong' : 'plain'}
+        tone={marked.length >= 3 && markingIsZvanje ? 'strong' : 'plain'}
         onPress={() => {
-          if (marked.length < 3) return;
+          if (marked.length < 3 || !markingIsZvanje) return;
           const cards = hand.cards.filter((c) => marked.includes(cardId(c)));
           onAction({ type: 'DECLARE_ANNOUNCE', seat: mySeat, cards });
         }}
