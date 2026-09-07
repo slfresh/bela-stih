@@ -22,10 +22,14 @@ export function decideAction(view: PublicView, rng: () => number, level: BotLeve
   if (actions.length === 0) throw new Error('bot asked to act with no legal actions');
   if (actions.length === 1) return actions[0]!;
 
-  // Blind (hard) mode offers a voluntary claim ALONGSIDE the cards. A bot never
-  // overlooks its zvanja — it claims first, at every level, then plays.
-  const blindClaim = actions.find((a) => a.type === 'DECLARE_ANNOUNCE');
-  if (blindClaim && actions.some((a) => a.type === 'PLAY_CARD')) return blindClaim;
+  // Answering "ima zvanja?" comes before the difficulty split: a bot never
+  // overlooks its zvanja at any level. Staying silent only pays if you can
+  // exploit the information you withheld, which a rule-based opponent cannot,
+  // and announcing is the only way the points can ever score. Omitting `cards`
+  // lets the engine announce exactly what the hand holds — the bot's equivalent
+  // of spotting them, which in blind mode it does perfectly.
+  const claim = actions.find((a) => a.type === 'DECLARE_ANNOUNCE');
+  if (claim) return claim;
 
   if (level === 'easy') return pick(actions, rng);
 
@@ -35,12 +39,7 @@ export function decideAction(view: PublicView, rng: () => number, level: BotLeve
     // conservative: never double in v1
     return actions.find((a) => a.type === 'DOUBLE_PASS') ?? actions[0]!;
   }
-  if (head === 'DECLARE_ANNOUNCE' || head === 'DECLARE_SKIP') {
-    // Always speak up. Staying silent only pays if you can exploit the
-    // information you withheld, which a rule-based opponent cannot; announcing
-    // is the only way the points can ever score.
-    return actions.find((a) => a.type === 'DECLARE_ANNOUNCE') ?? actions[0]!;
-  }
+  if (head === 'DECLARE_SKIP') return actions[0]!; // nothing to declare
   return decidePlay(
     view,
     preferBela(actions.filter((a): a is PlayCardAction => a.type === 'PLAY_CARD')),

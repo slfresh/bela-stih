@@ -83,6 +83,14 @@ export interface GameState {
   announcedDeclarations: Declaration[][];
   /** Per seat: has its trick-1 announce-or-skip decision been settled? */
   declared: boolean[];
+  /**
+   * Whose turn it is to answer "ima zvanja?". Non-null only during the zvanja
+   * round, which sits between the talon and the opening lead.
+   */
+  declareTurn: Seat | null;
+  /** The winning side's combinations, face up once the round closes. */
+  revealedDeclarations: Declaration[];
+  declarationWinner: TeamId | null;
   /** Who was DEALT the trump K+Q. Hidden information — never send this to a client. */
   belaHolderSeat: Seat | null;
   /** Who actually called bela. Only this scores; public once called. */
@@ -136,6 +144,9 @@ export function createMatch(opts: CreateMatchOptions = {}): GameState {
     availableDeclarations: [[], [], [], []],
     announcedDeclarations: [[], [], [], []],
     declared: [false, false, false, false],
+    declareTurn: null,
+    revealedDeclarations: [],
+    declarationWinner: null,
     belaHolderSeat: null,
     belaAnnouncedSeat: null,
     trickLeader: null,
@@ -190,6 +201,9 @@ export function startDeal(prev: GameState): GameState {
   s.availableDeclarations = [[], [], [], []];
   s.announcedDeclarations = [[], [], [], []];
   s.declared = [false, false, false, false];
+  s.declareTurn = null;
+  s.revealedDeclarations = [];
+  s.declarationWinner = null;
   s.belaHolderSeat = null;
   s.belaAnnouncedSeat = null;
   s.trickLeader = null;
@@ -211,7 +225,10 @@ export function currentActor(s: GameState): Seat | null {
     case 'DOUBLE':
       return s.doubleTurn;
     case 'PLAY':
-      return s.turn;
+      // The zvanja round runs inside PLAY rather than as a phase of its own: a
+      // new phase falls through every `default` in this file, which would leave
+      // the table with nobody on turn and the server's clock stopped.
+      return s.declareTurn ?? s.turn;
     default:
       return null;
   }
@@ -244,14 +261,20 @@ export function legalActions(s: GameState): Action[] {
       return [];
     }
     case 'PLAY': {
-      const seat = s.turn!;
-      // Announce-or-forfeit: a seat holding zvanja settles them before it plays.
-      if (owesDeclaration(s, seat)) {
-        return [
-          { type: 'DECLARE_ANNOUNCE', seat },
-          { type: 'DECLARE_SKIP', seat },
-        ];
+      // Nobody plays a card until the asking is done.
+      if (s.declareTurn !== null) {
+        const asked = s.declareTurn;
+        // In blind mode the offer is unconditional: showing the announce option
+        // only to seats that hold something would answer the question for them.
+        const holds = s.config.declarationMode === 'blind' || s.availableDeclarations[asked]!.length > 0;
+        return holds
+          ? [
+              { type: 'DECLARE_ANNOUNCE', seat: asked },
+              { type: 'DECLARE_SKIP', seat: asked },
+            ]
+          : [{ type: 'DECLARE_SKIP', seat: asked }];
       }
+      const seat = s.turn!;
       const blind = s.config.declarationMode === 'blind';
       const acts: Action[] = legalPlays({
         hand: s.hands[seat]!,
@@ -268,11 +291,6 @@ export function legalActions(s: GameState): Action[] {
         const offerBela = blind ? couldTryBelaWith(s, card) : canAnnounceBelaWith(s, seat, card);
         return offerBela ? [play, { type: 'PLAY_CARD', seat, card, announceBela: true }] : [play];
       });
-      // Blind mode: declaring is optional and never forced — you may claim
-      // zvanja before your first card, or just play and forfeit them.
-      if (blind && s.completedTricks.length === 0 && !s.declared[seat]) {
-        acts.push({ type: 'DECLARE_ANNOUNCE', seat });
-      }
       return acts;
     }
     default:
@@ -292,6 +310,7 @@ export function applyAction(prev: GameState, action: Action): GameState {
     case 'DOUBLE_PASS':
       return applyDouble(s, action.type, action.seat);
     case 'DECLARE_ANNOUNCE':
+      return applyDeclare(s, action.type, action.seat, action.cards);
     case 'DECLARE_SKIP':
       return applyDeclare(s, action.type, action.seat);
     case 'PLAY_CARD':
@@ -400,22 +419,17 @@ function completeDeal(s: GameState): GameState {
   s.stock = [];
 
   // What each seat holds is fixed by the completed 8-card hands; what each seat
-  // SCORES depends on whether it speaks up during trick 1.
+  // SCORES depends on whether it speaks up when asked, before the opening lead.
   s.availableDeclarations = SEATS.map((seat) => detectDeclarations(s.hands[seat]!, seat));
   if (s.config.declarationMode === 'auto') {
     s.announcedDeclarations = s.availableDeclarations.map((d) => d.slice());
     s.declared = [true, true, true, true];
   } else {
     s.announcedDeclarations = [[], [], [], []];
-    if (s.config.declarationMode === 'blind') {
-      // Blind (hard) mode: EVERY seat keeps its claim window open, holdings or
-      // not — pre-settling the empty-handed would tell them they hold nothing.
-      s.declared = [false, false, false, false];
-    } else {
-      // A seat with nothing to declare has no decision to make, so it is never
-      // prompted. That leaks nothing: legalActions are private to the seat on turn.
-      s.declared = SEATS.map((seat) => s.availableDeclarations[seat]!.length === 0);
-    }
+    // EVERY seat answers, holdings or not. Skipping the empty-handed would be
+    // quicker, but being asked at all would then mean "this seat holds zvanja",
+    // which is precisely what the round is supposed to keep private until spoken.
+    s.declared = [false, false, false, false];
   }
 
   s.belaHolderSeat = detectBelaSeat(s.hands, s.context);
@@ -426,7 +440,31 @@ function completeDeal(s: GameState): GameState {
   s.turn = s.trickLeader;
   s.currentTrick = [];
   s.completedTricks = [];
+  // The asking starts with the seat that bid first and will lead — the same seat
+  // the tie-break favours, so the round runs in the order the rule assumes.
+  s.declareTurn = s.config.declarationMode === 'auto' ? null : s.trickLeader;
+  if (s.declareTurn === null) closeDeclarationRound(s);
   return s;
+}
+
+/**
+ * The round is over: resolve the contest and lay the winning side's cards out.
+ *
+ * The losing side's combinations stay in hand. They said their number out loud
+ * and that much is public, but their CARDS are not — showing them would give the
+ * table a quarter of the remaining hand to play against.
+ */
+function closeDeclarationRound(s: GameState): void {
+  s.declareTurn = null;
+  const resolved = resolveDeclarations(
+    s.announcedDeclarations,
+    teamOf,
+    s.config,
+    dealFirstLeader(s),
+  );
+  s.declarationWinner = resolved.winningTeam;
+  s.revealedDeclarations = resolved.winningDeclarations.slice();
+  s.turn = s.trickLeader;
 }
 
 function detectBelaSeat(hands: Card[][], ctx: PlayContext): Seat | null {
@@ -444,12 +482,17 @@ function detectBelaSeat(hands: Card[][], ctx: PlayContext): Seat | null {
  * Does this seat still owe an announce-or-skip call? Only during trick 1, only
  * under 'announce' mode, and only for a seat that actually holds something.
  */
-function owesDeclaration(s: GameState, seat: Seat): boolean {
-  return (
-    s.phase === 'PLAY' &&
-    s.config.declarationMode === 'announce' &&
-    s.completedTricks.length === 0 &&
-    !s.declared[seat]
+/**
+ * Does the marked selection actually form one of this seat's zvanja?
+ *
+ * The player points at cards; the engine is the judge. A selection that is not a
+ * real combination can never be talked up into one, which is what makes marking
+ * safe to accept from a client at all.
+ */
+function matchesHeldDeclaration(s: GameState, seat: Seat, picked: Card[]): boolean {
+  const want = picked.map(cardId).sort().join('|');
+  return s.availableDeclarations[seat]!.some(
+    (d) => d.cards.map(cardId).sort().join('|') === want,
   );
 }
 
@@ -457,31 +500,34 @@ function applyDeclare(
   s: GameState,
   type: 'DECLARE_ANNOUNCE' | 'DECLARE_SKIP',
   seat: Seat,
+  picked?: Card[],
 ): GameState {
   expectPhase(s, 'PLAY');
-  expectSeat(seat, s.turn);
-
-  // Blind (hard) mode: a voluntary claim before the first card. The engine
-  // announces exactly what the hand actually holds — claiming with nothing is
-  // a legal, slightly embarrassing no-op, just like at a real table.
-  if (s.config.declarationMode === 'blind') {
-    if (type !== 'DECLARE_ANNOUNCE') throw new Error('nothing to skip in blind mode');
-    if (s.completedTricks.length !== 0 || s.declared[seat]) {
-      throw new Error('too late to declare');
-    }
-    s.declared[seat] = true;
-    s.announcedDeclarations[seat] = s.availableDeclarations[seat]!.slice();
-    return s;
-  }
-
-  if (!owesDeclaration(s, seat)) throw new Error('no declaration is owed');
+  if (s.declareTurn === null) throw new Error('the zvanja round is over');
+  expectSeat(seat, s.declareTurn);
 
   s.declared[seat] = true;
   if (type === 'DECLARE_ANNOUNCE') {
-    // You announce exactly what you hold -- the engine never lets you overstate it.
-    s.announcedDeclarations[seat] = s.availableDeclarations[seat]!.slice();
+    // Marking cards is how a player claims, so the marking is what gets checked.
+    // A pick that is not a real combination announces nothing — in blind mode
+    // that is a legal, slightly embarrassing miss, exactly as at a real table;
+    // in announce mode the client had the list and has no excuse.
+    const valid = picked === undefined || matchesHeldDeclaration(s, seat, picked);
+    if (!valid && s.config.declarationMode !== 'blind') {
+      throw new Error('those cards are not a zvanje');
+    }
+    if (valid) {
+      // What is announced is the whole holding, not just the marked combination:
+      // the side that wins the contest scores every zvanje both partners hold.
+      // The engine never lets a claim overstate the hand.
+      s.announcedDeclarations[seat] = s.availableDeclarations[seat]!.slice();
+    }
   }
-  // The turn does not move: this seat still has a card to play.
+
+  // Round the table, in the order the tie-break assumes.
+  const next = ((seat + 1) % 4) as Seat;
+  s.declareTurn = next === s.trickLeader ? null : next;
+  if (s.declareTurn === null) closeDeclarationRound(s);
   return s;
 }
 
@@ -520,8 +566,8 @@ function couldTryBelaWith(s: GameState, card: Card): boolean {
 function applyPlay(s: GameState, seat: Seat, card: Card, announceBela: boolean): GameState {
   expectPhase(s, 'PLAY');
   expectSeat(seat, s.turn);
-  if (owesDeclaration(s, seat)) {
-    throw new Error('must announce or skip zvanja before playing in trick 1');
+  if (s.declareTurn !== null) {
+    throw new Error('the table is still being asked about zvanja');
   }
   const blind = s.config.declarationMode === 'blind';
   // Blind mode: playing your first card without claiming forfeits your zvanja.
@@ -724,17 +770,20 @@ export function publicView(s: GameState, seat: Seat): PublicView {
     // nothing — EXCEPT in blind (hard) mode, where spotting them is the game.
     myDeclarations:
       s.config.declarationMode === 'blind' ? [] : s.availableDeclarations[seat]!.slice(),
-    mustDeclare: toAct === seat && owesDeclaration(s, seat),
-    canDeclare:
-      s.config.declarationMode === 'blind' &&
-      s.phase === 'PLAY' &&
-      toAct === seat &&
-      s.completedTricks.length === 0 &&
-      !s.declared[seat],
+    declareTurn: s.declareTurn,
+    // Only the winning side's cards, and only once the asking is over.
+    revealedDeclarations: s.revealedDeclarations.slice(),
+    // It is this seat's turn to answer "ima zvanja?", and it has something.
+    mustDeclare:
+      s.declareTurn === seat &&
+      s.config.declarationMode !== 'blind' &&
+      s.availableDeclarations[seat]!.length > 0,
+    // Blind mode: your turn to answer, and the app will not tell you what you hold.
+    canDeclare: s.config.declarationMode === 'blind' && s.declareTurn === seat,
     canAnnounceBela:
       toAct === seat &&
       s.phase === 'PLAY' &&
-      !owesDeclaration(s, seat) &&
+      s.declareTurn === null &&
       legalActions(s).some((a) => a.type === 'PLAY_CARD' && a.announceBela === true),
     belaAnnouncedBy: s.belaAnnouncedSeat,
     // Public by construction: won tricks, heard announcements and a called bela

@@ -96,10 +96,29 @@ function checkDeal(s: GameState, r: DealScoreResult, inv: Invariants): void {
   }
 
   // Conservation across the whole deal, multiplier included.
+  //
+  // Over what was PAYABLE, not over face value. A pair that took no trick cannot
+  // bank its own zvanja; when the contract stands there is no transfer to carry
+  // them across either, so those points genuinely leave the deal. The harness
+  // runs with kontraSuccessSweeps off, so a made contract is always the
+  // keep-your-own branch.
   const valatTotal = r.valatBonus[0] + r.valatBonus[1];
-  const flatTotal = r.declarationPoints[0] + r.declarationPoints[1] + r.bela[0] + r.bela[1];
+  const declPayable = r.callerMade
+    ? (tricksWon[0] > 0 ? r.declarationPoints[0] : 0) +
+      (tricksWon[1] > 0 ? r.declarationPoints[1] : 0)
+    : r.declarationPoints[0] + r.declarationPoints[1];
+  const flatTotal = declPayable + r.bela[0] + r.bela[1];
   const expectedTotal = (162 + valatTotal) * s.multiplier + flatTotal;
   expect(r.finalScore[0] + r.finalScore[1]).toBe(expectedTotal);
+
+  // And the rule itself, stated directly: nought tricks, nothing banked.
+  for (const t of [0, 1] as const) {
+    if (tricksWon[t] === 0 && r.callerMade) {
+      expect(r.finalScore[t]).toBe(
+        r.bela[t] * (s.config.kontraScope === 'all' ? s.multiplier : 1),
+      );
+    }
+  }
 
   expect(r.finalScore[0]).toBeGreaterThanOrEqual(0);
   expect(r.finalScore[1]).toBeGreaterThanOrEqual(0);
@@ -115,11 +134,37 @@ function assertPure(before: GameState, action: Action): void {
 
 /**
  * The security property, stated exactly: a seat's view may never contain a card
- * that is right now in SOMEBODY ELSE's hand. Cards already played are public, and
- * a seat's own cards (held or played) are its own business — only another
- * player's unplayed holding is a secret worth protecting.
+ * that is right now in SOMEBODY ELSE's UNREVEALED hand. Cards already played are
+ * public, a seat's own cards are its own business, and the winning side's zvanja
+ * are laid face up by the rules — everyone at a real table sees them, and they
+ * stay in the owner's hand until played.
+ *
+ * That exemption is only as safe as the reveal itself, so the reveal is checked
+ * first and harder: nothing may be in it that was not announced, and nothing may
+ * be in it from the side that LOST the contest. A losing player's cards staying
+ * secret is the whole reason the reveal is scoped to the winner.
  */
 function assertNoLeak(s: GameState): void {
+  for (const d of s.revealedDeclarations) {
+    // Announced by that seat...
+    expect(
+      s.announcedDeclarations[d.seat]!.some(
+        (a) => a.kind === d.kind && a.value === d.value && a.topRank === d.topRank,
+      ),
+    ).toBe(true);
+    // ...and that seat is on the side that won.
+    expect(s.declarationWinner).not.toBeNull();
+    expect(teamOf(d.seat)).toBe(s.declarationWinner);
+    // ...and every card of it is genuinely that seat's, held or already played.
+    const mine = new Set([
+      ...s.hands[d.seat]!.map(cardId),
+      ...s.completedTricks.flatMap((t) => t.cards).map(cardId),
+      ...s.currentTrick.map((p) => cardId(p.card)),
+    ]);
+    for (const c of d.cards) expect(mine.has(cardId(c))).toBe(true);
+  }
+
+  const revealed = new Set(s.revealedDeclarations.flatMap((d) => d.cards.map(cardId)));
   for (const seat of [0, 1, 2, 3] as Seat[]) {
     const others = new Set(
       ([0, 1, 2, 3] as Seat[])
@@ -128,7 +173,7 @@ function assertNoLeak(s: GameState): void {
     );
     const leaked = collectCards(publicView(s, seat))
       .map(cardId)
-      .filter((id) => others.has(id));
+      .filter((id) => others.has(id) && !revealed.has(id));
     expect(leaked).toEqual([]);
   }
 }

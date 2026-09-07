@@ -213,6 +213,15 @@ interface Strings {
   claimZvanja: string;
   claimZvanjaHint: string;
   noZvanja: string;
+  /** The asking, spoken by the seat that leads: "do you have zvanja?" */
+  askZvanja: string;
+  /** What the winning side does when the asking is over. */
+  showsZvanja: string;
+  /** Answering with nothing. */
+  noneToDeclare: string;
+  /** Mark the cards, then confirm. */
+  markZvanjaHint: string;
+  declareMarked: string;
   /** Difficulty setting. */
   difficulty: string;
   difficultyEasy: string;
@@ -356,6 +365,11 @@ const hr: Strings = {
   claimZvanja: 'Zovem zvanje',
   claimZvanjaHint: 'Imate li zvanje? Sami pazite — tko ne zove, propada mu.',
   noZvanja: 'Nemate ništa za zvati',
+  askZvanja: 'Imate li zvanja?',
+  showsZvanja: 'pokazuje zvanja',
+  noneToDeclare: 'Nemam',
+  markZvanjaHint: 'Označite karte koje čine zvanje',
+  declareMarked: 'Prijavi',
   difficulty: 'Težina',
   difficultyEasy: 'Lagana',
   difficultyHard: 'Prava bela',
@@ -556,6 +570,11 @@ const srCyrl: Strings = {
   claimZvanja: 'Зовем звање',
   claimZvanjaHint: 'Имате ли звање? Сами пазите — ко не зове, пропада му.',
   noZvanja: 'Немате ништа за звати',
+  askZvanja: 'Имате ли звања?',
+  showsZvanja: 'показује звања',
+  noneToDeclare: 'Немам',
+  markZvanjaHint: 'Означите карте које чине звање',
+  declareMarked: 'Пријави',
   difficulty: 'Тежина',
   difficultyEasy: 'Лагана',
   difficultyHard: 'Права бела',
@@ -752,6 +771,11 @@ const en: Strings = {
   claimZvanja: 'Declare',
   claimZvanjaHint: 'Got a declaration? Spot it yourself — unclaimed is forfeited.',
   noZvanja: 'Nothing to declare',
+  askZvanja: 'Any declarations?',
+  showsZvanja: 'shows declarations',
+  noneToDeclare: 'Nothing',
+  markZvanjaHint: 'Mark the cards that make up your declaration',
+  declareMarked: 'Declare',
   difficulty: 'Difficulty',
   difficultyEasy: 'Casual',
   difficultyHard: 'True bela',

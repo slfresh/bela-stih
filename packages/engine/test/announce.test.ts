@@ -62,41 +62,56 @@ describe('being asked to declare', () => {
     expect(types(state)).toEqual(['DECLARE_ANNOUNCE', 'DECLARE_SKIP']);
   });
 
-  it('refuses a card while the announcement is still owed', () => {
+  it('refuses any card until the whole table has been asked', () => {
     const { state, seat } = seedWithDeclarationOnLead();
     const card = state.hands[seat]![0]!;
     expect(() => applyAction(state, { type: 'PLAY_CARD', seat, card })).toThrow(
-      /announce or skip/,
+      /still being asked/,
     );
   });
 
-  it('never prompts a seat that holds nothing — it just plays', () => {
-    // Seat on lead with no zvanja is auto-settled, so its actions are cards.
+  it('asks a seat holding nothing too — it may only answer "nemam"', () => {
+    // Everyone is asked. Skipping the empty-handed would be quicker, but being
+    // asked would then mean "this seat holds zvanja", which is the one thing the
+    // round is supposed to keep private until somebody says it out loud.
     let found = false;
     for (let seed = 1; seed < 400 && !found; seed++) {
       const s = intoPlay({}, seed);
-      const seat = s.turn!;
+      const seat = s.declareTurn!;
       if (s.availableDeclarations[seat]!.length === 0) {
-        expect(s.declared[seat]).toBe(true);
-        expect(types(s).every((t) => t === 'PLAY_CARD')).toBe(true);
+        expect(currentActor(s)).toBe(seat);
+        expect(types(s)).toEqual(['DECLARE_SKIP']);
         found = true;
       }
     }
     expect(found).toBe(true);
   });
 
-  it('keeps the turn with the same seat after it declares', () => {
-    const { state, seat } = seedWithDeclarationOnLead();
-    const after = applyAction(state, { type: 'DECLARE_ANNOUNCE', seat });
-    expect(after.turn).toBe(seat); // still owes a card
-    expect(types(after).every((t) => t === 'PLAY_CARD')).toBe(true);
+  it('passes the question round the table, then lets the leader play', () => {
+    const { state } = seedWithDeclarationOnLead();
+    const first = state.declareTurn!;
+    let s = state;
+    // Four answers, in play order from the seat that leads.
+    for (let i = 0; i < 4; i++) {
+      const asked = s.declareTurn!;
+      expect(asked).toBe(((first + i) % 4) as Seat);
+      const can = types(s);
+      s = applyAction(s, {
+        type: can.includes('DECLARE_ANNOUNCE') ? 'DECLARE_ANNOUNCE' : 'DECLARE_SKIP',
+        seat: asked,
+      } as Action);
+    }
+    // The round is over and the opening lead belongs to the first seat asked.
+    expect(s.declareTurn).toBeNull();
+    expect(s.turn).toBe(first);
+    expect(types(s).every((t) => t === 'PLAY_CARD')).toBe(true);
   });
 
-  it('will not accept a second declaration from the same seat', () => {
+  it('will not accept a second answer from a seat that has spoken', () => {
     const { state, seat } = seedWithDeclarationOnLead();
     const after = applyAction(state, { type: 'DECLARE_SKIP', seat });
     expect(() => applyAction(after, { type: 'DECLARE_ANNOUNCE', seat })).toThrow(
-      /no declaration is owed/,
+      /acted out of turn/,
     );
   });
 });
@@ -203,7 +218,7 @@ describe('auto mode', () => {
   it('rejects a declaration action outright', () => {
     const s = intoPlay({ declarationMode: 'auto' }, 7);
     expect(() => applyAction(s, { type: 'DECLARE_ANNOUNCE', seat: s.turn! })).toThrow(
-      /no declaration is owed/,
+      /round is over/,
     );
   });
 });

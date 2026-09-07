@@ -141,6 +141,17 @@ export function TableScreen(props: TableScreenProps) {
   const slots = useMemo(() => slotOffsets(slot.slotW, slot.slotH), [slot.slotW, slot.slotH]);
 
   const [arranging, setArranging] = useState(false);
+  // The zvanja round: you mark the cards that make up your combination, then
+  // confirm. The engine is the judge — a marking that is not a real zvanje
+  // announces nothing, so this can never claim more than the hand holds.
+  const [marked, setMarked] = useState<string[]>([]);
+  const declaring = !settled && view.declareTurn === mySeat;
+  const toggleMark = (id: string) =>
+    setMarked((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id]));
+  // A fresh question gets a clean slate.
+  useEffect(() => {
+    if (!declaring) setMarked([]);
+  }, [declaring, view.dealer, view.declareTurn]);
   const hand = useHandOrder(view.hand, view.context.trumpSuit, handSort, onHandSortChange ?? (() => {}));
 
   // The tray closes on send; the cooldown mirrors the server's rate limit so
@@ -327,7 +338,13 @@ export function TableScreen(props: TableScreenProps) {
   // Prompts that need words, not just buttons.
   const prompts = (
     <>
-      {!settled && view.mustDeclare && view.myDeclarations.length > 0 && (
+      {declaring && (
+        <View style={styles.promptRow}>
+          <Text style={styles.promptText}>{lang.s.askZvanja}</Text>
+          <Text style={styles.promptHint}>{lang.s.markZvanjaHint}</Text>
+        </View>
+      )}
+      {!settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0 && (
         <View style={styles.promptRow}>
           <Text style={styles.promptText}>
             {lang.s.declarations}:{' '}
@@ -375,6 +392,9 @@ export function TableScreen(props: TableScreenProps) {
           maxCardW={m.handCardMax}
           arranging={arranging}
           onSwap={hand.swap}
+          marking={declaring}
+          marked={marked}
+          onToggleMark={toggleMark}
           confirmPlay={confirmPlay}
         />
       </Pressable>
@@ -393,6 +413,28 @@ export function TableScreen(props: TableScreenProps) {
       <EmoteStrip lang={lang} open={trayOpen} dimmed={myTurn} vertical={land} onSend={sendEmote} />
     ) : null;
 
+  // "Prijavi" / "Nemam" — the two answers, and nothing else while the table is
+  // waiting on you. A marking under three cards cannot be any zvanje, so the
+  // confirm stays disabled until it could at least be one.
+  const declareButtons = declaring ? (
+    <>
+      <Button
+        label={lang.s.declareMarked}
+        tone={marked.length >= 3 ? 'strong' : 'plain'}
+        onPress={() => {
+          if (marked.length < 3) return;
+          const cards = hand.cards.filter((c) => marked.includes(cardId(c)));
+          onAction({ type: 'DECLARE_ANNOUNCE', seat: mySeat, cards });
+        }}
+      />
+      <Button
+        label={lang.s.noneToDeclare}
+        tone="plain"
+        onPress={() => onAction({ type: 'DECLARE_SKIP', seat: mySeat })}
+      />
+    </>
+  ) : null;
+
   const emoteToggle = onEmote ? (
     <Pressable
       onPress={() => setTrayOpen((o) => !o)}
@@ -402,6 +444,26 @@ export function TableScreen(props: TableScreenProps) {
       <Text style={styles.emoteToggleText}>😄</Text>
     </Pressable>
   ) : null;
+
+  // The winning side's combinations, laid out for everyone. Only ever the
+  // winner's: the losing side said its number and keeps its cards.
+  const revealRow =
+    view.revealedDeclarations.length > 0 ? (
+      <View style={styles.revealRow}>
+        {view.revealedDeclarations.map((d, i) => (
+          <View key={i} style={styles.revealGroup}>
+            <Text style={styles.revealLabel}>
+              {meta(d.seat).name}: {lang.declaration(d)}
+            </Text>
+            <View style={styles.revealCards}>
+              {d.cards.map((c) => (
+                <PlayingCard key={cardId(c)} card={c} width={Math.round(m.slotW * 0.72)} />
+              ))}
+            </View>
+          </View>
+        ))}
+      </View>
+    ) : null;
 
   const awardRow = banner ? (
     <View style={styles.awardRow}>
@@ -464,6 +526,7 @@ export function TableScreen(props: TableScreenProps) {
               <View style={styles.centre}>
                 {status ? <Text style={styles.status}>{status}</Text> : null}
                 {felt}
+                {revealRow}
                 {awardRow}
                 {prompts}
                 {handBlock}
@@ -474,7 +537,9 @@ export function TableScreen(props: TableScreenProps) {
                 <View style={styles.railGap} />
                 {!settled && (
                   <View style={styles.actionsCol}>
-                    <NonCardActions options={options} lang={lang} onChoose={onAction} />
+                    {declareButtons ?? (
+                      <NonCardActions options={options} lang={lang} onChoose={onAction} />
+                    )}
                     {emoteToggle}
                   </View>
                 )}
@@ -496,6 +561,7 @@ export function TableScreen(props: TableScreenProps) {
 
               {felt}
               {calls}
+              {revealRow}
               {awardRow}
               {prompts}
               {handBlock}
@@ -505,7 +571,9 @@ export function TableScreen(props: TableScreenProps) {
               {!settled && (
                 <View style={styles.actionsRow}>
                   {emoteToggle}
-                  <NonCardActions options={options} lang={lang} onChoose={onAction} />
+                  {declareButtons ?? (
+                    <NonCardActions options={options} lang={lang} onChoose={onAction} />
+                  )}
                   <Button label={finishLabel} tone="plain" onPress={tap(onFinish)} />
                 </View>
               )}
@@ -616,6 +684,9 @@ function Hand({
   width,
   maxCardW,
   arranging = false,
+  marking = false,
+  marked = [],
+  onToggleMark,
   onSwap,
   confirmPlay = 'ambiguous',
 }: {
@@ -632,6 +703,10 @@ function Hand({
   /** Arrange mode: taps swap cards and can never play one. */
   arranging?: boolean;
   onSwap?: (idA: string, idB: string) => void;
+  /** Zvanja round: taps mark cards for a declaration and can never play one. */
+  marking?: boolean;
+  marked?: string[];
+  onToggleMark?: (id: string) => void;
   confirmPlay?: ConfirmPlay;
 }) {
   const plays = options.filter(
@@ -687,12 +762,16 @@ function Hand({
           (freePlay && inPlayMoment
             ? ({ type: 'PLAY_CARD', seat: plays[0]!.seat, card } as Action)
             : undefined);
-        const playable = !arranging && enabled && chosen !== undefined;
+        const playable = !arranging && !marking && enabled && chosen !== undefined;
         const illegalNow = !freePlay && !arranging && enabled && inPlayMoment && !playable;
-        const isArmed = arranging ? arrangePick === id : armed === id;
+        const isArmed = marking ? marked.includes(id) : arranging ? arrangePick === id : armed === id;
         const off = i - mid;
 
         const press = () => {
+          if (marking) {
+            onToggleMark?.(id);
+            return;
+          }
           if (arranging) {
             if (arrangePick === null) setArrangePick(id);
             else {
@@ -713,7 +792,7 @@ function Hand({
         return (
           <Pressable
             key={id}
-            disabled={!playable && !arranging}
+            disabled={!playable && !arranging && !marking}
             onPress={press}
             // Vertical only: horizontal slop would overlap the neighbouring
             // card in touch space and make mis-taps MORE likely, not less.
@@ -726,7 +805,7 @@ function Hand({
                   {
                     translateY:
                       Math.pow(Math.abs(off), 1.6) * 3.2 * fit.scale -
-                      (playable || (arranging && isArmed) ? lift : 0),
+                      (playable || ((arranging || marking) && isArmed) ? lift : 0),
                   },
                   { rotateZ: `${off * 4.5}deg` },
                 ],
@@ -1015,6 +1094,10 @@ const styles = StyleSheet.create({
   myTimer: { position: 'absolute', right: 8, top: -20, width: 36, height: 36 },
 
   callsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  revealRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
+  revealGroup: { alignItems: 'center', gap: 2 },
+  revealLabel: { color: theme.accent, fontSize: 11, fontWeight: '700' },
+  revealCards: { flexDirection: 'row', gap: 2 },
   callsCol: { flexDirection: 'column', flexWrap: 'nowrap', alignSelf: 'stretch' },
   callChip: {
     backgroundColor: 'rgba(0,0,0,0.28)',

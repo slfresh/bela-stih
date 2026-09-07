@@ -90,6 +90,20 @@ export function scoreDeal(input: DealScoreInput): DealScoreResult {
     declarations.perTeamValue[0],
     declarations.perTeamValue[1],
   ];
+  /**
+   * "Zvanje se ne priznaje kartaškom paru ukoliko nisu pokupili barem jedan
+   * štih" — a pair that takes no trick cannot BANK its own zvanja.
+   *
+   * It stops them keeping the points; it does not delete the points from the
+   * deal. When the table changes hands wholesale — a pad, or a doubled contract
+   * that sweeps — the full announced value still travels to the side that won,
+   * because that side did take tricks. So this narrower figure is used only
+   * where each side keeps what it declared.
+   */
+  const bankable: [number, number] = [
+    tricksWon[0] > 0 ? declarationPoints[0] : 0,
+    tricksWon[1] > 0 ? declarationPoints[1] : 0,
+  ];
 
   // 4. bela (always scores for its holder)
   const bela: [number, number] = [0, 0];
@@ -120,8 +134,8 @@ export function scoreDeal(input: DealScoreInput): DealScoreResult {
   } else if (callerMade) {
     trickPart[0] = trickPoints[0] + valatBonus[0];
     trickPart[1] = trickPoints[1] + valatBonus[1];
-    flatPart[0] = declarationPoints[0] + bela[0];
-    flatPart[1] = declarationPoints[1] + bela[1];
+    flatPart[0] = bankable[0] + bela[0];
+    flatPart[1] = bankable[1] + bela[1];
   } else {
     // pad: the failing caller falls; defenders take the whole table.
     trickPart[other] = trickPoints[0] + trickPoints[1] + valatBonus[0] + valatBonus[1];
@@ -201,6 +215,9 @@ export function computeDealProgress(input: DealProgressInput): DealProgress {
 
   const lastTrickTeam = tricks.length === 8 ? teamOf(tricks[7]!.winnerSeat) : null;
 
+  // Face value, matching the rawTotal that scoreDeal judges the contract on. The
+  // no-trick rule only limits what a side may BANK at payout, so it does not
+  // belong in the running count.
   const declarationPoints: [number, number] = [
     declarations.perTeamValue[0],
     declarations.perTeamValue[1],

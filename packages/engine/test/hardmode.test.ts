@@ -100,8 +100,9 @@ describe('blind zvanja under declarationMode blind', () => {
         // A voluntary claim is offered regardless of holdings.
         expect(view.canDeclare).toBe(true);
         expect(legalActions(s).some((a) => a.type === 'DECLARE_ANNOUNCE')).toBe(true);
-        // But cards are immediately playable too.
-        expect(legalActions(s).some((a) => a.type === 'PLAY_CARD')).toBe(true);
+        // The question is asked of everyone, so no card is playable until it is
+        // answered — you cannot slip past the asking by leading.
+        expect(legalActions(s).some((a) => a.type === 'PLAY_CARD')).toBe(false);
         return;
       }
     }
@@ -123,24 +124,48 @@ describe('blind zvanja under declarationMode blind', () => {
     throw new Error('no seed dealt the actor zvanja');
   });
 
-  it('playing the first card without claiming forfeits silently', () => {
+  it('answering "nemam" forfeits silently, holdings or not', () => {
     for (let seed = 1; seed < 100; seed++) {
       const s = intoPlay(HARD, seed);
       const seat = currentActor(s)!;
       if (s.availableDeclarations[seat]!.length === 0) continue;
-      const play = legalActions(s).find((a) => a.type === 'PLAY_CARD')!;
-      const after = applyAction(s, play);
+      const after = applyAction(s, { type: 'DECLARE_SKIP', seat });
       expect(after.announcedDeclarations[seat]).toEqual([]);
-      // Too late now — the claim window closed with the card.
+      // The question has moved on; this seat does not get asked twice.
       expect(() => applyAction(after, { type: 'DECLARE_ANNOUNCE', seat })).toThrow();
       return;
     }
     throw new Error('no seed dealt the actor zvanja');
   });
 
+  it('a claim that marks the wrong cards simply finds nothing', () => {
+    // Blind mode is the mode where the app refuses to spot zvanja for you, so a
+    // wrong pick is the authentic embarrassment rather than an error dialog.
+    for (let seed = 1; seed < 100; seed++) {
+      const s = intoPlay(HARD, seed);
+      const seat = currentActor(s)!;
+      if (s.availableDeclarations[seat]!.length === 0) continue;
+      const notAZvanje = s.hands[seat]!.slice(0, 3);
+      const after = applyAction(s, { type: 'DECLARE_ANNOUNCE', seat, cards: notAZvanje });
+      expect(after.announcedDeclarations[seat]).toEqual([]);
+      expect(after.declareTurn).not.toBe(seat); // the round moved on regardless
+      return;
+    }
+    throw new Error('no seed dealt the actor zvanja');
+  });
+
+  /** Answer "nemam" all the way round, so the cards become playable. */
+  function pastTheAsking(start: GameState): GameState {
+    let s = start;
+    while (s.declareTurn !== null) {
+      s = applyAction(s, { type: 'DECLARE_SKIP', seat: s.declareTurn });
+    }
+    return s;
+  }
+
   it('offers the bela try on any trump K/Q and ignores a false call', () => {
     for (let seed = 1; seed < 300; seed++) {
-      const s = intoPlay(HARD, seed);
+      const s = pastTheAsking(intoPlay(HARD, seed));
       const seat = currentActor(s)!;
       const hand = s.hands[seat]!;
       const hasK = hand.some((c) => c.suit === 'spades' && c.rank === 'K');

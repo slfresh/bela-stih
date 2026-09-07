@@ -147,6 +147,14 @@ export function renderEvent(e: TableEvent, humanSeat: Seat | null): string | nul
       );
     case 'declarationSkipped':
       return null; // silence is the whole point; do not announce it
+    case 'declarationsRevealed':
+      // The winning side lays its combinations down for everyone to see.
+      return cyan(
+        `${lang.team(e.team, humanSeat)} ${lang.s.showsZvanja}: ` +
+          e.declarations
+            .map((d) => `${lang.declaration(d)} (${d.cards.map(renderCard).join(' ')})`)
+            .join(', '),
+      );
     case 'belaCalled':
       return bold(yellow(`${who(e.seat)}: ${lang.s.bela.toUpperCase()}! (20)`));
     case 'cardPlayed':

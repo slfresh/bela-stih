@@ -245,6 +245,15 @@ export function applyEventEnd(
           : view.dealProgress,
       });
 
+    case 'declarationsRevealed':
+      // Statics only: the winner's cards are now public, and the running count
+      // picks up their value from the authoritative view at the same moment.
+      return suppress({
+        ...view,
+        revealedDeclarations: e.declarations,
+        dealProgress: syncProgress(view, finalView),
+      });
+
     case 'dealScored':
       return suppress({
         ...view,

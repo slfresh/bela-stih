@@ -56,6 +56,9 @@ export const DEFAULT_TIMINGS: Timings = {
   handsCompleted: { dur: 700, gap: 200 },
   declared: { dur: 1100, gap: 150 },
   declarationSkipped: { dur: 150, gap: 60 },
+  // The cards go face up and stay up long enough to read — this is the one beat
+  // in the deal where everyone is looking at somebody else's hand.
+  declarationsRevealed: { dur: 2200, gap: 300 },
   belaCalled: { dur: 1100, gap: 100 },
   cardPlayed: { dur: 260, gap: 140 },
   trickWon: { dur: 1000, gap: 200 },

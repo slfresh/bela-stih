@@ -2,6 +2,7 @@ import type {
   Action,
   Card,
   DealScoreResult,
+  Declaration,
   DeclarationSummary,
   EngineConfig,
   GameState,
@@ -51,6 +52,12 @@ export type TableEvent =
   | { kind: 'handsCompleted'; trumpSuit: Suit; callerSeat: Seat; multiplier: 1 | 2 | 4 }
   | { kind: 'declared'; seat: Seat; declarations: DeclarationSummary[] }
   | { kind: 'declarationSkipped'; seat: Seat }
+  /**
+   * The asking is over and the winning side lays its combinations face up —
+   * cards and all, which is the one place cards legitimately leave a hand
+   * before being played. Only the winner's; the losing side keeps theirs.
+   */
+  | { kind: 'declarationsRevealed'; team: TeamId; declarations: Declaration[] }
   | { kind: 'belaCalled'; seat: Seat }
   | { kind: 'cardPlayed'; seat: Seat; card: Card }
   | { kind: 'trickWon'; seat: Seat; trickNumber: number; points: number; isLastTrick: boolean }
@@ -274,6 +281,17 @@ export class Table {
 
   // --- event derivation ----------------------------------------------------
 
+  /** Did this action end the asking? Then the winner's cards go on the table. */
+  private pushRevealIfRoundClosed(before: GameState, after: GameState): void {
+    if (before.declareTurn === null || after.declareTurn !== null) return;
+    if (after.declarationWinner === null) return; // cancelled tie: nobody shows
+    this.queued.push({
+      kind: 'declarationsRevealed',
+      team: after.declarationWinner,
+      declarations: after.revealedDeclarations.map((d) => ({ ...d, cards: d.cards.slice() })),
+    });
+  }
+
   private applyAndRecord(action: Action): void {
     const before = this.s;
     const after = applyAction(before, action);
@@ -311,9 +329,11 @@ export class Table {
             seat: d.seat,
           })),
         });
+        this.pushRevealIfRoundClosed(before, after);
         break;
       case 'DECLARE_SKIP':
         push({ kind: 'declarationSkipped', seat: action.seat });
+        this.pushRevealIfRoundClosed(before, after);
         break;
       case 'PLAY_CARD':
         // The call lands before the card, exactly as it is said at the table.

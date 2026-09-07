@@ -251,9 +251,19 @@ export type Action =
   | { type: 'DOUBLE_KONTRA'; seat: Seat }
   | { type: 'DOUBLE_REKONTRA'; seat: Seat }
   | { type: 'DOUBLE_PASS'; seat: Seat }
-  // Trick 1 only, and only for a seat that actually holds zvanja: announce them
-  // all, or stay silent and forfeit them. Taken BEFORE that seat plays its card.
-  | { type: 'DECLARE_ANNOUNCE'; seat: Seat }
+  /**
+   * The zvanja round, which happens BEFORE the opening lead — its own beat after
+   * the talon, going round from the dealer's right. Croatian bela settles zvanja
+   * here; binding them to a seat's first card is the French rule, and it let the
+   * fourth seat answer after watching three cards land.
+   *
+   * `cards` is the combination the player marked in their hand. The engine
+   * checks it against what they actually hold: it can never overstate a zvanje,
+   * and in blind mode a wrong pick is simply a claim that finds nothing. Omit it
+   * (bots, and any client that would rather not ask) and the engine announces
+   * whatever the hand really has.
+   */
+  | { type: 'DECLARE_ANNOUNCE'; seat: Seat; cards?: Card[] }
   | { type: 'DECLARE_SKIP'; seat: Seat }
   | {
       type: 'PLAY_CARD';
@@ -349,6 +359,22 @@ export interface PublicView {
   currentTrick: TrickPlay[];
   /** Whose turn it is to act, if any. */
   toAct: Seat | null;
+  /**
+   * Whose turn it is to answer "ima zvanja?", before anyone has led. Null once
+   * the round is over (or immediately, when the table plays zvanja automatically).
+   */
+  declareTurn: Seat | null;
+  /**
+   * The winning side's zvanja, laid face up once the round closes — cards and
+   * all, exactly as they go on the table.
+   *
+   * Only the side that WINS the contest shows; the losers say their number out
+   * loud and keep their cards. Revealing theirs would hand the table their hand
+   * for the rest of the deal. Both partners of the winning side show, and every
+   * one of their combinations counts, including ones weaker than the opponents'
+   * best — the strongest zvanje picks the SIDE, not the set.
+   */
+  revealedDeclarations: Declaration[];
   matchScores: [number, number];
   /**
    * Everything announced at this table so far, as public summaries WITHOUT cards.
