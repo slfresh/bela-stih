@@ -73,9 +73,24 @@ function cleanAction(raw: unknown, seat: Seat): Action | null {
     case 'DOUBLE_KONTRA':
     case 'DOUBLE_REKONTRA':
     case 'DOUBLE_PASS':
-    case 'DECLARE_ANNOUNCE':
     case 'DECLARE_SKIP':
       return { type: a.type, seat };
+    case 'DECLARE_ANNOUNCE': {
+      // The marked cards must survive the rebuild, or the engine cannot check
+      // the claim against the hand — and in blind mode a wrong marking would
+      // then succeed online while failing offline. Rebuilt card by card like
+      // any other, so nothing the client sent arrives by reference.
+      if (a.cards === undefined) return { type: 'DECLARE_ANNOUNCE', seat };
+      if (!Array.isArray(a.cards) || a.cards.length > 8) return null;
+      const cards: Card[] = [];
+      for (const raw of a.cards) {
+        if (typeof raw !== 'object' || raw === null) return null;
+        const { suit, rank } = raw as Record<string, unknown>;
+        if (!isSuit(suit) || !isRank(rank)) return null;
+        cards.push({ suit, rank });
+      }
+      return { type: 'DECLARE_ANNOUNCE', seat, cards };
+    }
     case 'BID_CALL':
       return isSuit(a.suit) ? { type: 'BID_CALL', seat, suit: a.suit } : null;
     case 'PLAY_CARD': {

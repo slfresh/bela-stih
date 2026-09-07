@@ -37,6 +37,8 @@ function collectCards(value: unknown, out: Card[] = []): Card[] {
 }
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Cards the winning side laid face up — public by the rules of the game. */
+const revealed = new Set<string>();
 
 async function main(): Promise<void> {
   const client = new Client(ENDPOINT);
@@ -61,6 +63,12 @@ async function main(): Promise<void> {
       seated.seat = msg.seat;
       seated.view = msg.view;
       for (const c of collectCards(msg)) seated.seen.add(cardId(c));
+      // The winning side lays its zvanja face up: those cards are public by the
+      // rules, and stay in the owner's hand until played. Everything else in a
+      // view is still a secret worth protecting.
+      for (const d of msg.view.revealedDeclarations) {
+        for (const c of d.cards) revealed.add(cardId(c));
+      }
     });
     room.onMessage(MSG.room, (msg: RoomMessage) => {
       for (const c of collectCards(msg.events)) seated.seen.add(cardId(c));
@@ -98,12 +106,15 @@ async function main(): Promise<void> {
 
   // --- the assertion that matters -----------------------------------------
   let leaks = 0;
+  if (revealed.size > 0) {
+    console.log(`[smoke] ${revealed.size} card(s) legitimately shown as zvanja`);
+  }
   for (const p of players) {
     const others = players.filter((q) => q !== p);
     for (const other of others) {
       const held = new Set((other.view?.hand ?? []).map(cardId));
       for (const id of p.seen) {
-        if (held.has(id)) {
+        if (held.has(id) && !revealed.has(id)) {
           console.error(`[smoke] LEAK: seat ${p.seat} was shown ${id}, held by seat ${other.seat}`);
           leaks++;
         }
