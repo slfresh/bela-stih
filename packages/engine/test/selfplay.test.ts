@@ -146,12 +146,14 @@ function assertPure(before: GameState, action: Action): void {
  */
 function assertNoLeak(s: GameState): void {
   for (const d of s.revealedDeclarations) {
-    // Announced by that seat...
-    expect(
-      s.announcedDeclarations[d.seat]!.some(
-        (a) => a.kind === d.kind && a.value === d.value && a.topRank === d.topRank,
-      ),
-    ).toBe(true);
+    // Announced by that seat — matched on the CARD SET, not on kind/value/top.
+    // Matching on the description only bounded what the reveal claimed to be,
+    // not what it actually carried, so a reveal that exposed more of the
+    // declarer's hand than the combination contains passed silently.
+    const key = (cs: Card[]) => cs.map(cardId).sort().join('|');
+    expect(s.announcedDeclarations[d.seat]!.some((a) => key(a.cards) === key(d.cards))).toBe(true);
+    // ...and it is the size the combination says it is.
+    expect(d.cards).toHaveLength(d.kind === 'carre' ? 4 : d.length);
     // ...and that seat is on the side that won.
     expect(s.declarationWinner).not.toBeNull();
     expect(teamOf(d.seat)).toBe(s.declarationWinner);

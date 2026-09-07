@@ -215,6 +215,8 @@ interface Strings {
   noZvanja: string;
   /** The asking, spoken by the seat that leads: "do you have zvanja?" */
   askZvanja: string;
+  /** Why a pair's announced zvanja are not in the recorded score. */
+  zvanjaVoidNoTrick: string;
   /** What the winning side does when the asking is over. */
   showsZvanja: string;
   /** Answering with nothing. */
@@ -366,6 +368,7 @@ const hr: Strings = {
   claimZvanjaHint: 'Imate li zvanje? Sami pazite — tko ne zove, propada mu.',
   noZvanja: 'Nemate ništa za zvati',
   askZvanja: 'Imate li zvanja?',
+  zvanjaVoidNoTrick: 'Bez štiha — zvanje se ne priznaje',
   showsZvanja: 'pokazuje zvanja',
   noneToDeclare: 'Nemam',
   markZvanjaHint: 'Označite karte koje čine zvanje',
@@ -571,6 +574,7 @@ const srCyrl: Strings = {
   claimZvanjaHint: 'Имате ли звање? Сами пазите — ко не зове, пропада му.',
   noZvanja: 'Немате ништа за звати',
   askZvanja: 'Имате ли звања?',
+  zvanjaVoidNoTrick: 'Без штиха — звање се не признаје',
   showsZvanja: 'показује звања',
   noneToDeclare: 'Немам',
   markZvanjaHint: 'Означите карте које чине звање',
@@ -772,6 +776,7 @@ const en: Strings = {
   claimZvanjaHint: 'Got a declaration? Spot it yourself — unclaimed is forfeited.',
   noZvanja: 'Nothing to declare',
   askZvanja: 'Any declarations?',
+  zvanjaVoidNoTrick: 'No trick taken — declarations do not count',
   showsZvanja: 'shows declarations',
   noneToDeclare: 'Nothing',
   markZvanjaHint: 'Mark the cards that make up your declaration',

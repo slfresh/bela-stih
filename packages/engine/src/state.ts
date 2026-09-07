@@ -264,15 +264,24 @@ export function legalActions(s: GameState): Action[] {
       // Nobody plays a card until the asking is done.
       if (s.declareTurn !== null) {
         const asked = s.declareTurn;
-        // In blind mode the offer is unconditional: showing the announce option
-        // only to seats that hold something would answer the question for them.
-        const holds = s.config.declarationMode === 'blind' || s.availableDeclarations[asked]!.length > 0;
-        return holds
-          ? [
-              { type: 'DECLARE_ANNOUNCE', seat: asked },
-              { type: 'DECLARE_SKIP', seat: asked },
-            ]
-          : [{ type: 'DECLARE_SKIP', seat: asked }];
+        if (s.config.declarationMode === 'blind') {
+          // Blind mode: the offer is unconditional and UNSPECIFIED. Enumerating
+          // the markings would hand the seat the very thing the mode withholds,
+          // so this is a template — send any marking and the engine judges it.
+          return [
+            { type: 'DECLARE_ANNOUNCE', seat: asked },
+            { type: 'DECLARE_SKIP', seat: asked },
+          ];
+        }
+        // Otherwise every marking the seat could legitimately make is spelled
+        // out, so the legal set is fully specified like any other. No leak: the
+        // seat's own zvanja are already in its view.
+        return [
+          ...s.availableDeclarations[asked]!.map(
+            (d): Action => ({ type: 'DECLARE_ANNOUNCE', seat: asked, cards: d.cards.slice() }),
+          ),
+          { type: 'DECLARE_SKIP', seat: asked },
+        ];
       }
       const seat = s.turn!;
       const blind = s.config.declarationMode === 'blind';
@@ -512,8 +521,14 @@ function applyDeclare(
     // A pick that is not a real combination announces nothing — in blind mode
     // that is a legal, slightly embarrassing miss, exactly as at a real table;
     // in announce mode the client had the list and has no excuse.
-    const valid = picked === undefined || matchesHeldDeclaration(s, seat, picked);
-    if (!valid && s.config.declarationMode !== 'blind') {
+    // Blind mode is the mode where the app refuses to spot zvanja for you, so
+    // the marking IS the claim: no marking means nothing was spotted. Treating a
+    // missing one as valid made the check opt-in and handed a perfect claim to
+    // anyone who simply omitted it — including the turn-timeout bot, which made
+    // saying nothing strictly better than answering.
+    const blind = s.config.declarationMode === 'blind';
+    const valid = picked === undefined ? !blind : matchesHeldDeclaration(s, seat, picked);
+    if (!valid && !blind) {
       throw new Error('those cards are not a zvanje');
     }
     if (valid) {
@@ -568,6 +583,14 @@ function applyPlay(s: GameState, seat: Seat, card: Card, announceBela: boolean):
   expectSeat(seat, s.turn);
   if (s.declareTurn !== null) {
     throw new Error('the table is still being asked about zvanja');
+  }
+  // The cards were laid out and are now picked up again: once the first card of
+  // the deal is led, they stop crossing the wire. Remembering them is the
+  // player's job, and leaving them in the view let a reconnect — or a deliberate
+  // drop — put them back on screen mid-deal. Scoring reads announcedDeclarations,
+  // so nothing downstream needs them after this point.
+  if (s.completedTricks.length === 0 && s.currentTrick.length === 0) {
+    s.revealedDeclarations = [];
   }
   const blind = s.config.declarationMode === 'blind';
   // Blind mode: playing your first card without claiming forfeits your zvanja.
@@ -706,6 +729,9 @@ function applyRenons(s: GameState, offender: Seat): GameState {
   const result: DealScoreResult = {
     cardPoints,
     trickPoints,
+    // A renons ends the deal early; the defenders are credited the whole table,
+    // so they are the side that "took" it for the purpose of the sheet.
+    tricksWon: defTeam === 0 ? [8, 0] : [0, 8],
     valatTeam: null,
     valatBonus: [0, 0],
     declarationPoints,

@@ -49,6 +49,11 @@ export interface DealScoreResult {
   valatTeam: TeamId | null;
   valatBonus: [number, number];
   declarationPoints: [number, number];
+  /**
+   * Tricks each pair took. On the sheet it is the reason a pair's announced
+   * zvanja can be absent from what was recorded: nought tricks, nothing banked.
+   */
+  tricksWon: [number, number];
   bela: [number, number];
   /** Each team's earned total at face value (pre-multiplier), used for the contract check. */
   rawTotal: [number, number];
@@ -154,6 +159,7 @@ export function scoreDeal(input: DealScoreInput): DealScoreResult {
   return {
     cardPoints,
     trickPoints,
+    tricksWon,
     valatTeam,
     valatBonus,
     declarationPoints,

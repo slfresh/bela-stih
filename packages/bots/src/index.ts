@@ -1,6 +1,6 @@
 import type { Action, Card, PublicView, Seat, Suit, TrickPlay } from '@belot/shared-types';
 import { SUITS } from '@belot/shared-types';
-import { isTrump, pointValue, trickWinnerIndex } from '@belot/engine';
+import { detectDeclarations, isTrump, pointValue, trickWinnerIndex } from '@belot/engine';
 
 /**
  * Bots, expressed as ONE pure decision function over a (hidden-hand-safe)
@@ -25,11 +25,23 @@ export function decideAction(view: PublicView, rng: () => number, level: BotLeve
   // Answering "ima zvanja?" comes before the difficulty split: a bot never
   // overlooks its zvanja at any level. Staying silent only pays if you can
   // exploit the information you withheld, which a rule-based opponent cannot,
-  // and announcing is the only way the points can ever score. Omitting `cards`
-  // lets the engine announce exactly what the hand holds — the bot's equivalent
-  // of spotting them, which in blind mode it does perfectly.
+  // and announcing is the only way the points can ever score.
+  //
+  // The bot MARKS, like everyone else. It works the combination out from its own
+  // hand rather than being handed it — which is what hard mode asks of a human,
+  // and the only way the engine's marking check can apply to a bot at all.
   const claim = actions.find((a) => a.type === 'DECLARE_ANNOUNCE');
-  if (claim) return claim;
+  if (claim) {
+    const spotted = detectDeclarations(view.hand, view.seat);
+    if (spotted.length === 0) {
+      // Nothing there after all — in blind mode the offer is made to every seat
+      // precisely so that answering does not reveal whether you hold anything.
+      return actions.find((a) => a.type === 'DECLARE_SKIP') ?? claim;
+    }
+    // Mark the best one; the engine credits the whole holding off a valid mark.
+    const best = spotted.reduce((a, b) => (b.value > a.value ? b : a));
+    return { type: 'DECLARE_ANNOUNCE', seat: view.seat, cards: best.cards };
+  }
 
   if (level === 'easy') return pick(actions, rng);
 

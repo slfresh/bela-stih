@@ -109,13 +109,22 @@ describe('blind zvanja under declarationMode blind', () => {
     throw new Error('no seed dealt zvanja');
   });
 
-  it('claiming announces exactly what the hand holds', () => {
+  it('a correct marking announces exactly what the hand holds', () => {
     for (let seed = 1; seed < 100; seed++) {
       const s = intoPlay(HARD, seed);
       const seat = currentActor(s)!;
       const held = s.availableDeclarations[seat]!;
       if (held.length === 0) continue;
-      const after = applyAction(s, { type: 'DECLARE_ANNOUNCE', seat });
+      // You must point at the cards: in blind mode the marking IS the claim, so
+      // a bare announce is somebody who spotted nothing.
+      expect(
+        applyAction(s, { type: 'DECLARE_ANNOUNCE', seat }).announcedDeclarations[seat],
+      ).toEqual([]);
+      const after = applyAction(s, {
+        type: 'DECLARE_ANNOUNCE',
+        seat,
+        cards: held[0]!.cards,
+      });
       expect(after.announcedDeclarations[seat]).toEqual(held);
       // Claiming again is rejected.
       expect(() => applyAction(after, { type: 'DECLARE_ANNOUNCE', seat })).toThrow();

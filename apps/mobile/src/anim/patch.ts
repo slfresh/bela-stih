@@ -29,6 +29,10 @@ export function suppress(view: PublicView): PublicView {
     ...view,
     toAct: null,
     legalActions: [],
+    // The asking is an input like any other: leaving declareTurn set mid-drain
+    // kept "Prijavi"/"Nemam" armed and the hand in marking mode while the table
+    // was still animating somebody else's answer.
+    declareTurn: null,
     mustDeclare: false,
     canDeclare: false,
     canAnnounceBela: false,
@@ -120,12 +124,19 @@ function bumpProgress(p: DealProgress, team: TeamId, points: number, isLast: boo
 
 export function applyEventStart(view: PublicView, e: TableEvent, mySeat: Seat): PublicView {
   switch (e.kind) {
+    case 'declarationsRevealed':
+      // At the START of the beat, so the cards are up for the whole hold rather
+      // than appearing as it ends — the table was freezing blank for five
+      // seconds and then playing on underneath them.
+      return suppress({ ...view, revealedDeclarations: e.declarations });
+
     case 'dealStarted':
       // The moment the deal begins, the table is swept clean: last deal's
       // trump, calls and trick vanish while the new backs fly. The cards
       // themselves arrive in `applyEventEnd`.
       return suppress({
         ...view,
+        revealedDeclarations: [],
         phase: 'BID',
         dealer: e.dealer,
         seat: mySeat,
@@ -243,15 +254,6 @@ export function applyEventEnd(
         dealProgress: view.dealProgress
           ? bumpProgress(view.dealProgress, teamOf(e.seat), e.points, e.isLastTrick)
           : view.dealProgress,
-      });
-
-    case 'declarationsRevealed':
-      // Statics only: the winner's cards are now public, and the running count
-      // picks up their value from the authoritative view at the same moment.
-      return suppress({
-        ...view,
-        revealedDeclarations: e.declarations,
-        dealProgress: syncProgress(view, finalView),
       });
 
     case 'dealScored':

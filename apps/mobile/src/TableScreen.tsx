@@ -944,6 +944,11 @@ function DealResult({
       {result.valatTeam !== null && row(lang.s.valat, result.valatBonus)}
       {result.declarationPoints[0] + result.declarationPoints[1] > 0 &&
         row(lang.s.declarations, result.declarationPoints)}
+      {/* Announced above, absent from "Upisano" below — say why, rather than
+          letting the reader hunt for a hundred and fifty missing points. */}
+      {result.tricksWon.some((t, i) => t === 0 && result.declarationPoints[i]! > 0) && (
+        <Text style={styles.voidNote}>{lang.s.zvanjaVoidNoTrick}</Text>
+      )}
       {result.bela[0] + result.bela[1] > 0 && row(lang.s.bela, result.bela)}
       {row(lang.s.total, result.rawTotal)}
       {renonsText ? (
@@ -1221,6 +1226,7 @@ const styles = StyleSheet.create({
   resultTitle: { color: theme.text, fontWeight: '800', fontSize: 16, marginBottom: 4 },
   resultRow: { flexDirection: 'row', justifyContent: 'space-between' },
   resultLabel: { color: theme.textDim, fontSize: 14 },
+  voidNote: { color: theme.danger, fontSize: 12, fontStyle: 'italic' },
   resultValue: { color: theme.text, fontSize: 14, fontVariant: ['tabular-nums'] },
   verdict: { fontSize: 14, fontWeight: '700', marginVertical: 6 },
   made: { color: theme.ok },
