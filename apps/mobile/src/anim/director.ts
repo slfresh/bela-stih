@@ -47,6 +47,15 @@ export interface EventTiming {
 
 export type Timings = Record<TableEvent['kind'], EventTiming>;
 
+/**
+ * How long the winning side's zvanja stay face up.
+ *
+ * They come DOWN again, and that is the point: remembering what was shown is
+ * part of playing well. Leaving them on screen would turn the memory into a
+ * reference sheet and quietly remove a skill from the game.
+ */
+export const REVEAL_MS = 5000;
+
 export const DEFAULT_TIMINGS: Timings = {
   dealStarted: { dur: 1400, gap: 200 },
   bidPassed: { dur: 500, gap: 120 },
@@ -56,9 +65,10 @@ export const DEFAULT_TIMINGS: Timings = {
   handsCompleted: { dur: 700, gap: 200 },
   declared: { dur: 1100, gap: 150 },
   declarationSkipped: { dur: 150, gap: 60 },
-  // The cards go face up and stay up long enough to read — this is the one beat
-  // in the deal where everyone is looking at somebody else's hand.
-  declarationsRevealed: { dur: 2200, gap: 300 },
+  // The one beat in the deal where everyone is looking at somebody else's hand.
+  // The table holds here for exactly as long as the cards are up, so nobody
+  // leads while you are still reading them.
+  declarationsRevealed: { dur: REVEAL_MS, gap: 300 },
   belaCalled: { dur: 1100, gap: 100 },
   cardPlayed: { dur: 260, gap: 140 },
   trickWon: { dur: 1000, gap: 200 },

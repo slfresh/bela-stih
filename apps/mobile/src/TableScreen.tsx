@@ -23,6 +23,7 @@ import type { Lang } from '@belot/i18n';
 import { levelProgress, type Award, type PlayerProfile } from '@belot/progression';
 import { Anchor, AnchorHost, type AnchorMap } from './anim/AnchorRegistry';
 import { EffectsOverlay } from './anim/EffectsOverlay';
+import { REVEAL_MS } from './anim/director';
 import { anchorId, type FxBus } from './anim/FxBus';
 import { SeatPuck } from './table/SeatPuck';
 import {
@@ -461,11 +462,25 @@ export function TableScreen(props: TableScreenProps) {
     </Pressable>
   ) : null;
 
+  // The cards come DOWN again after a few seconds. Remembering what was shown is
+  // part of playing the game well — leaving them up would turn that memory into
+  // a reference sheet. A tap puts them away early for anyone who reads faster.
+  const revealKey = view.revealedDeclarations
+    .flatMap((d) => d.cards.map((c) => cardId(c)))
+    .join('|');
+  const [revealDone, setRevealDone] = useState(false);
+  useEffect(() => {
+    if (revealKey === '') return;
+    setRevealDone(false);
+    const t = setTimeout(() => setRevealDone(true), REVEAL_MS);
+    return () => clearTimeout(t);
+  }, [revealKey]);
+
   // The winning side's combinations, laid out for everyone. Only ever the
   // winner's: the losing side said its number and keeps its cards.
   const revealRow =
-    view.revealedDeclarations.length > 0 ? (
-      <View style={styles.revealRow}>
+    view.revealedDeclarations.length > 0 && !revealDone ? (
+      <Pressable style={styles.revealRow} onPress={() => setRevealDone(true)}>
         {view.revealedDeclarations.map((d, i) => (
           <View key={i} style={styles.revealGroup}>
             <Text style={styles.revealLabel}>
@@ -478,7 +493,7 @@ export function TableScreen(props: TableScreenProps) {
             </View>
           </View>
         ))}
-      </View>
+      </Pressable>
     ) : null;
 
   const awardRow = banner ? (
