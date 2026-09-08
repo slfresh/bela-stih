@@ -42,7 +42,11 @@ docker compose up -d --build
 # compose sees no change, and "caddy reload" reloads the stale file it can see.
 # Recreate caddy only when what it has differs from what we just shipped, so an
 # unchanged deploy does not drop live websocket connections for nothing.
-if ! docker compose exec -T caddy cat /etc/caddy/Caddyfile 2>/dev/null | cmp -s - Caddyfile; then
+# </dev/null matters: this whole script is being fed to the remote bash on stdin
+# (ssh ... "bash -s" <<REMOTE), and compose attaches the caller's stdin to the
+# exec. Without it the command eats the next lines of the script, which bash has
+# already stopped being able to read -- silently, and with a zero exit code.
+if ! docker compose exec -T caddy cat /etc/caddy/Caddyfile </dev/null 2>/dev/null | cmp -s - Caddyfile; then
   echo "== Caddyfile changed; recreating caddy to pick it up"
   docker compose up -d --force-recreate caddy
 fi
@@ -52,9 +56,13 @@ docker image prune -f >/dev/null
 # which still covers a player who loaded the page moments before the deploy and
 # whose script request lands just after it.
 WEB=/opt/bela/deploy/site/igra/_expo/static/js/web
-if [ -d "\$WEB" ]; then
-  ls -1t "\$WEB"/index-*.js 2>/dev/null | tail -n +4 | xargs -r rm -f
-  echo "== web bundles on disk: \$(ls -1 "\$WEB"/index-*.js 2>/dev/null | wc -l)"
+KEEP=\$(grep -o 'index-[0-9a-f]*\.js' /opt/bela/deploy/site/igra/index.html 2>/dev/null | head -1 || true)
+if [ -d "\$WEB" ] && [ -n "\$KEEP" ]; then
+  # Keep the bundle index.html actually names, whatever its timestamp, plus the
+  # two next newest. Ranking purely by mtime could delete the very file just
+  # shipped, and a bare "ls" of an empty match aborts the deploy under pipefail.
+  ( ls -1t "\$WEB"/index-*.js 2>/dev/null || true ) | grep -vF "\$KEEP" | tail -n +3 | xargs -r rm -f
+  echo "== web bundles on disk: \$( ( ls -1 "\$WEB"/index-*.js 2>/dev/null || true ) | wc -l ), serving \$KEEP"
 fi
 docker compose ps
 REMOTE

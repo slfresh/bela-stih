@@ -35,7 +35,20 @@
 
 	# Invite links: /join/CODE all render the same static page, which reads
 	# the code from the URL and hands off to the app (or the Play listing).
-	handle /join/* {
+	# An error must never inherit the immutable header above. A 404 for a hashed
+	# asset would otherwise be pinned in the browser for a year, and "immutable"
+	# suppresses even a reload's revalidation — that browser could never load the
+	# app again. It is reachable, too: the deploy unpacks in place while Caddy is
+	# still serving, so a player can ask for a bundle in the moment between the
+	# new HTML landing and its script arriving.
+	handle_errors {
+		header Cache-Control "no-cache"
+		respond "{err.status_code} {err.status_text}" {err.status_code}
+	}
+
+	# Bare /join as well as /join/CODE: the short form is the one people type.
+	@join path /join /join/*
+	handle @join {
 		root * /srv/site
 		rewrite * /join.html
 		file_server
