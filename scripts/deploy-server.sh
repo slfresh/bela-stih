@@ -36,6 +36,16 @@ export DOMAIN=$DOMAIN
 # here later, and a hazard if they reach for "up -d" with an empty domain.
 echo "DOMAIN=$DOMAIN" > .env
 docker compose up -d --build
+# The Caddyfile is bind-mounted as a single FILE, and the upload above replaces
+# it rather than writing in place -- so the running container goes on holding
+# the old inode and quietly serving the previous config. Nothing reports this:
+# compose sees no change, and "caddy reload" reloads the stale file it can see.
+# Recreate caddy only when what it has differs from what we just shipped, so an
+# unchanged deploy does not drop live websocket connections for nothing.
+if ! docker compose exec -T caddy cat /etc/caddy/Caddyfile 2>/dev/null | cmp -s - Caddyfile; then
+  echo "== Caddyfile changed; recreating caddy to pick it up"
+  docker compose up -d --force-recreate caddy
+fi
 docker image prune -f >/dev/null
 # Every deploy adds a content-hashed bundle and nothing ever removed the old
 # ones: they had grown to 24MB of a 27MB site directory. Keep the newest three,
