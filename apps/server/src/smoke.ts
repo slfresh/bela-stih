@@ -49,6 +49,12 @@ import { MSG, ROOM_NAME, type RoomMessage } from './protocol';
  *     and requires a clean message NOT to be flagged. It runs first, so an edit
  *     that makes the assertions toothless fails loudly instead of going green.
  *
+ * Later rounds closed three more: a fabricated `cardPlayed` used to declare its
+ * own leak public (announcements are now paid for — a card really played leaves
+ * the hand that played it), a shared public set let a leak aimed at one seat
+ * launder itself through the other three (each client keeps its own now), and a
+ * whole hand concatenated into one string slipped past whole-string matching.
+ *
  * KNOWN GAP, stated rather than papered over: this exercises four clients that
  * each sit once. It does not walk a client around the free seats before the
  * table locks, so the pre-start redaction in BelaRoom (`this.started ? view :
@@ -67,12 +73,27 @@ interface Seated {
   room: Room;
   seat: Seat;
   view: PublicView | null;
+  /**
+   * What THIS client has been told is public.
+   *
+   * Per client, deliberately. A single shared set let a leak aimed at one seat
+   * launder itself through everybody else's verdict: the server could send one
+   * client a fabricated announcement and the card became "public" for all four.
+   */
+  publicCards: Set<string>;
+}
+
+/** A claim that a card was played, to be checked against the hands later. */
+interface Announcement {
+  seat: Seat;
+  card: string;
+  at: number;
 }
 
 /** One received message, with the world as it stood when it landed. */
 interface Received {
   seat: Seat;
-  kind: 'view' | 'room';
+  kind: 'view' | 'room' | 'other';
   payload: unknown;
   view: PublicView | null;
   /** Other seats' hands at the moment this arrived, from their own views. */
@@ -99,6 +120,7 @@ interface Received {
 function publicFor(log: Received[], i: number): Set<string> {
   const r = log[i]!;
   const pub = new Set(r.publicThen);
+  if (r.kind === 'other') return pub;
   if (r.kind === 'room') {
     for (const id of r.delta) pub.add(id);
     return pub;
@@ -128,10 +150,33 @@ function collectCards(value: unknown, out: Card[] = []): Card[] {
   return out;
 }
 
+/**
+ * Card ids expressed as a string rather than as objects.
+ *
+ * Whole-string equality is not enough: a hand concatenated into one field
+ * ("8S10SAS8D...") is perfectly readable and would slip past. So a string that
+ * can be tiled END TO END by two or more card ids counts as those cards.
+ * Requiring a complete tiling is what keeps random room ids — which do
+ * sometimes contain a pair of characters like "9D" — from being flagged.
+ */
+function tiledCardIds(text: string): string[] | null {
+  const out: string[] = [];
+  let i = 0;
+  while (i < text.length) {
+    const three = text.slice(i, i + 3);
+    const two = text.slice(i, i + 2);
+    if (ALL_CARD_IDS.has(three)) { out.push(three); i += 3; }
+    else if (ALL_CARD_IDS.has(two)) { out.push(two); i += 2; }
+    else return null;
+  }
+  return out.length >= 2 ? out : null;
+}
+
 /** Card ids hiding in plain strings — a leak does not have to arrive as objects. */
 function collectCardIds(value: unknown, out: Set<string> = new Set()): Set<string> {
   if (typeof value === 'string') {
     if (ALL_CARD_IDS.has(value)) out.add(value);
+    else for (const id of tiledCardIds(value) ?? []) out.add(id);
   } else if (Array.isArray(value)) {
     for (const v of value) collectCardIds(v, out);
   } else if (value && typeof value === 'object') {
@@ -236,6 +281,23 @@ export function checkView(r: Received, pub: Set<string>, everHeld: Map<Seat, Set
     bad.push(`hand holds ${view.hand.length} cards but handCounts says ${expected}`);
   }
   // 5. The promise itself.
+  bad.push(...heldElsewhere(r.seat, allCardIds(r.payload), r, pub));
+  return bad;
+}
+
+/**
+ * Anything arriving on a channel this test does not know about.
+ *
+ * Registering handlers for three message types and judging only those meant a
+ * fourth channel was a free hole: `client.send('peek', {hand})` delivered a
+ * whole hand and the run still printed PASS. MSG.emote is a real channel the
+ * test never subscribed to.
+ */
+export function checkOther(r: Received, pub: Set<string>): string[] {
+  const bad: string[] = [];
+  for (const id of allCardIds(r.payload)) {
+    if (!pub.has(id)) bad.push(`${id} arrived on an unwatched channel`);
+  }
   bad.push(...heldElsewhere(r.seat, allCardIds(r.payload), r, pub));
   return bad;
 }
@@ -439,7 +501,7 @@ async function main(): Promise<void> {
   const client = new Client(ENDPOINT);
   const players: Seated[] = [];
   const log: Received[] = [];
-  const publicCards = new Set<string>();
+  const announcements: Announcement[] = [];
   /** Live ground truth: each seat's hand, per that seat's own view. */
   const hands = new Map<Seat, Set<string>>();
   /** Everything a seat has held at any point — zvanja outlive the cards. */
@@ -458,7 +520,7 @@ async function main(): Promise<void> {
         ? await client.create(ROOM_NAME, { name: `Test ${i + 1}`, private: true })
         : await client.joinById(roomId, { name: `Test ${i + 1}` });
     roomId ??= room.roomId;
-    const seated: Seated = { room, seat: 0 as Seat, view: null };
+    const seated: Seated = { room, seat: 0 as Seat, view: null, publicCards: new Set() };
 
     room.onMessage(MSG.view, (msg: { seat: Seat; view: PublicView }) => {
       seated.seat = msg.seat;
@@ -471,7 +533,7 @@ async function main(): Promise<void> {
         payload: msg,
         view: msg.view,
         handsThen: new Map([...hands].map(([s, h]) => [s, new Set(h)])),
-        publicThen: new Set(publicCards),
+        publicThen: new Set(seated.publicCards),
         delta: new Set(),
       });
       hands.set(msg.seat, new Set(idsOf(msg.view.hand)));
@@ -486,14 +548,34 @@ async function main(): Promise<void> {
         payload: msg,
         view: null,
         handsThen: new Map([...hands].map(([s, h]) => [s, new Set(h)])),
-        publicThen: new Set(publicCards),
+        publicThen: new Set(seated.publicCards),
         delta: publicFromEvents(msg.events ?? [], new Set()),
       });
-      // The broadcast stream is the only thing that makes a card public.
-      publicFromEvents(msg.events ?? [], publicCards);
+      // The broadcast stream is the only thing that makes a card public — for
+      // THIS client. An announcement is a claim, recorded here and checked
+      // against the hands after the run.
+      for (const e of msg.events ?? []) {
+        if (e.kind === 'cardPlayed') {
+          announcements.push({ seat: e.seat, card: cardId(e.card), at: log.length - 1 });
+        }
+      }
+      publicFromEvents(msg.events ?? [], seated.publicCards);
     });
     room.onMessage(MSG.error, (msg: { reason: string }) => {
       console.log(`[smoke] seat ${seated.seat} rejected: ${msg.reason}`);
+    });
+    // Everything else. A channel nobody subscribed to is a channel nobody audits.
+    room.onMessage('*', (type: string | number, msg: unknown) => {
+      console.log(`[smoke] seat ${seated.seat} received an unwatched '${String(type)}' message`);
+      log.push({
+        seat: seated.seat,
+        kind: 'other',
+        payload: msg,
+        view: null,
+        handsThen: new Map([...hands].map(([s, h]) => [s, new Set(h)])),
+        publicThen: new Set(seated.publicCards),
+        delta: new Set(),
+      });
     });
 
     players.push(seated);
@@ -522,8 +604,9 @@ async function main(): Promise<void> {
 
   // A deal that never got going would pass every assertion by never testing one.
   const finished = players.some((p) => p.view?.phase === 'DEAL_OVER' || p.view?.phase === 'MATCH_OVER');
+  const announced = new Set(announcements.map((a) => a.card));
   console.log(
-    `[smoke] ${moves} moves, ${log.length} messages, ${publicCards.size} card(s) played or revealed`,
+    `[smoke] ${moves} moves, ${log.length} messages, ${announced.size} card(s) announced as played`,
   );
   if (!finished) {
     console.error('[smoke] FAIL — the deal never reached a conclusion, so nothing was really checked');
@@ -537,8 +620,31 @@ async function main(): Promise<void> {
   for (let i = 0; i < log.length; i++) {
     const r = log[i]!;
     const pub = publicFor(log, i);
-    for (const v of r.kind === 'view' ? checkView(r, pub, everHeld) : checkRoom(r, pub)) {
-      violations.push(`seat ${r.seat} (${r.kind}): ${v}`);
+    const found =
+      r.kind === 'view' ? checkView(r, pub, everHeld) : r.kind === 'room' ? checkRoom(r, pub) : checkOther(r, pub);
+    for (const v of found) violations.push(`seat ${r.seat} (${r.kind}): ${v}`);
+  }
+
+  /*
+   * An announcement is a claim, and until now the test simply believed it. That
+   * was the deepest hole left: "public" was read straight off the very stream
+   * being audited, so a server that broadcast a fabricated cardPlayed for a card
+   * it had just leaked thereby declared that card public and excused itself.
+   *
+   * A card that was really played leaves the hand that played it. So every
+   * announcement has to be paid for: after it, that seat must not still be
+   * holding the card.
+   */
+  for (const a of announcements) {
+    for (let i = a.at + 1; i < log.length; i++) {
+      const later = log[i]!;
+      if (later.kind !== 'view' || later.seat !== a.seat || !later.view) continue;
+      if (later.view.hand.some((c) => cardId(c) === a.card)) {
+        violations.push(
+          `seat ${a.seat}: ${a.card} was announced as played but is still in that hand afterwards`,
+        );
+      }
+      break; // the seat's next view settles it
     }
   }
   for (const v of violations.slice(0, 20)) console.error(`[smoke] LEAK — ${v}`);
