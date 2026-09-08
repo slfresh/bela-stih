@@ -5,6 +5,21 @@
 {$DOMAIN} {
 	encode gzip
 
+	# Cache policy. The web build content-hashes every asset filename, so those
+	# URLs change whenever their bytes do and may be kept forever. The HTML entry
+	# points must NOT be: the HTML is what names the current bundle hash, so a
+	# cached copy pins a returning player to the build it shipped with.
+	#
+	# Nothing here sent Cache-Control at all before, which left browsers to guess
+	# (heuristic freshness, about 10% of the file's age) and could go on serving
+	# the previous build for hours after a deploy. ETags are already correct, so
+	# no-cache costs a 304 and nothing more.
+	@hashed path /igra/_expo/* /igra/assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+
+	@unhashed not path /igra/_expo/* /igra/assets/*
+	header @unhashed Cache-Control "no-cache"
+
 	@game path /matchmake/* /health
 	handle @game {
 		reverse_proxy bela:2567
