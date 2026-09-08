@@ -9,30 +9,59 @@ import { MSG, ROOM_NAME, type RoomMessage } from './protocol';
  *
  * Four real clients join over websockets and play a whole deal. The point is not
  * that the rules work — the engine has 300+ tests for that — but that the
- * *transport* keeps its promise: no client may ever receive a card that is in
- * somebody else's hand.
+ * *transport* keeps its promise: no client may ever receive a card it is not
+ * entitled to see.
  *
  *   npm run start --workspace @belot/server     # in one terminal
  *   npm run smoke --workspace @belot/server     # in another
  *
- * WHY THIS FILE IS SHAPED THE WAY IT IS. The first version of this check
- * accumulated every card each client had ever seen, then at the end compared
- * that against the other seats' hands — as read from their FINAL views. By then
- * the deal is over and every hand is empty, so the comparison set was `[]` and
- * the leak counter could not be anything but zero. It printed PASS for months
- * while asserting nothing. Handing all four clients the entire 32-card deck
- * still produced "PASS".
+ * WHY THIS FILE IS SHAPED THE WAY IT IS.
  *
- * Two changes stop that recurring:
+ * The original version accumulated every card each client had seen and compared
+ * it, at the end, against the other seats' FINAL hands — which are empty once
+ * the deal is over. The comparison set was always [], so it printed PASS for
+ * months while asserting nothing at all.
  *
- *  1. Assertions run at MESSAGE-RECEIPT time, against hands as they are at that
- *     moment, never against end-of-deal state.
- *  2. `selfTest()` below plants known breaches and requires each one to be
- *     caught. It runs before the live check, so a future edit that makes the
- *     assertions vacuous fails here instead of printing a green PASS.
+ * The first rewrite fixed that but was still too trusting: it built each
+ * message's "entitled" whitelist FROM THAT SAME MESSAGE. Anything the server
+ * wrote into `currentTrick`, `revealedDeclarations` or `legalActions` therefore
+ * excused itself, and was then folded into the public set where it excused
+ * itself for every later message too. An adversarial pass planted six leaks and
+ * five sailed through: an opponent's whole hand delivered as a fake trick, as a
+ * fabricated revealed zvanje, as the talon inside `legalActions`, as an
+ * oversized hand, and as bare card-id strings.
+ *
+ * So the rules here are:
+ *
+ *  1. A card is public ONLY if it was announced on the BROADCAST event stream
+ *     (cardPlayed / declarationsRevealed), which every client receives alike.
+ *     Nothing a per-seat view says about itself can make a card public.
+ *  2. A view may carry a card only if that card is in its own hand or already
+ *     public. Each card-bearing field is additionally held to what it is FOR:
+ *     legalActions and myDeclarations must come out of the hand; currentTrick
+ *     and revealedDeclarations must already be public.
+ *  3. Cards are counted as ids as well as objects, so a leak in string form is
+ *     not invisible.
+ *  4. Verdicts use hands as they stood WHEN EACH MESSAGE ARRIVED, never
+ *     end-of-deal state. Messages are recorded with a snapshot and judged after
+ *     the run, once the broadcast stream has established what was public.
+ *  5. selfTest() plants known breaches and requires every one to be caught,
+ *     and requires a clean message NOT to be flagged. It runs first, so an edit
+ *     that makes the assertions toothless fails loudly instead of going green.
+ *
+ * KNOWN GAP, stated rather than papered over: this exercises four clients that
+ * each sit once. It does not walk a client around the free seats before the
+ * table locks, so the pre-start redaction in BelaRoom (`this.started ? view :
+ * {...view, hand: []}`) is NOT covered here. Breaking that would let one client
+ * read three quarters of the deck and this check would still pass.
  */
 
 const ENDPOINT = process.env.SERVER_URL ?? 'ws://localhost:2567';
+
+/** Every legal card id, so a leak in string form can be recognised. */
+const ALL_CARD_IDS = new Set(
+  SUITS.flatMap((s) => RANKS.map((r) => cardId({ suit: s, rank: r } as Card))),
+);
 
 interface Seated {
   room: Room;
@@ -40,24 +69,54 @@ interface Seated {
   view: PublicView | null;
 }
 
+/** One received message, with the world as it stood when it landed. */
+interface Received {
+  seat: Seat;
+  kind: 'view' | 'room';
+  payload: unknown;
+  view: PublicView | null;
+  /** Other seats' hands at the moment this arrived, from their own views. */
+  handsThen: Map<Seat, Set<string>>;
+  /** Cards the broadcast stream had already made public when this arrived. */
+  publicThen: Set<string>;
+  /** For a room message: the cards its own events announce. */
+  delta: Set<string>;
+}
+
 /**
- * What is actually true at this instant, assembled from the seats' own views.
+ * What counts as public FOR ONE MESSAGE.
  *
- * A card only ever leaves a hand by being played, and playing it makes it
- * public — so a slightly stale snapshot can never produce a false accusation.
+ * It has to be time-local. Evaluating against everything public by the end of
+ * the deal excuses every leak there is, because by then all 32 cards have been
+ * played -- which is exactly how a first attempt at this let three planted
+ * leaks through.
+ *
+ * The server sends each client its view and THEN broadcasts the events, so a
+ * card played this instant is legitimately in the view before the announcement
+ * arrives. Rather than guess a time window, allow precisely the cards the same
+ * client's very next broadcast announces: causal, and no clock involved.
  */
-interface Ground {
-  /** seat -> the cards it holds, according to that seat's OWN view. */
-  hands: Map<Seat, Set<string>>;
-  /** Cards that have legitimately become public: played, or laid face up as zvanja. */
-  publicCards: Set<string>;
+function publicFor(log: Received[], i: number): Set<string> {
+  const r = log[i]!;
+  const pub = new Set(r.publicThen);
+  if (r.kind === 'room') {
+    for (const id of r.delta) pub.add(id);
+    return pub;
+  }
+  for (let j = i + 1; j < log.length; j++) {
+    const n = log[j]!;
+    if (n.kind === 'room' && n.seat === r.seat) {
+      for (const id of n.delta) pub.add(id);
+      break;
+    }
+  }
+  return pub;
 }
 
-function newGround(): Ground {
-  return { hands: new Map(), publicCards: new Set() };
-}
+// ---------------------------------------------------------------------------
+// Reading cards out of a payload
+// ---------------------------------------------------------------------------
 
-/** Every card anywhere inside a value, however deeply nested. */
 function collectCards(value: unknown, out: Card[] = []): Card[] {
   if (Array.isArray(value)) {
     for (const v of value) collectCards(v, out);
@@ -69,109 +128,131 @@ function collectCards(value: unknown, out: Card[] = []): Card[] {
   return out;
 }
 
-const ids = (cards: Card[]): string[] => cards.map(cardId);
+/** Card ids hiding in plain strings — a leak does not have to arrive as objects. */
+function collectCardIds(value: unknown, out: Set<string> = new Set()): Set<string> {
+  if (typeof value === 'string') {
+    if (ALL_CARD_IDS.has(value)) out.add(value);
+  } else if (Array.isArray(value)) {
+    for (const v of value) collectCardIds(v, out);
+  } else if (value && typeof value === 'object') {
+    const o = value as Record<string, unknown>;
+    if (typeof o.suit === 'string' && typeof o.rank === 'string') return out; // a Card, counted elsewhere
+    for (const v of Object.values(o)) collectCardIds(v, out);
+  }
+  return out;
+}
+
+/** Every card in a payload, however it was expressed. */
+function allCardIds(payload: unknown): Set<string> {
+  const ids = new Set(collectCards(payload).map(cardId));
+  for (const id of collectCardIds(payload)) ids.add(id);
+  return ids;
+}
+
+const idsOf = (cards: Card[]): string[] => cards.map(cardId);
+
+// ---------------------------------------------------------------------------
+// What the broadcast stream says is public
+// ---------------------------------------------------------------------------
+
+/**
+ * Cards a broadcast event puts on the table for everybody.
+ *
+ * This is the ONLY way a card becomes public. Per-seat views are the thing
+ * under test and are never allowed to vouch for themselves.
+ */
+function publicFromEvents(events: TableEvent[], into: Set<string>): Set<string> {
+  for (const e of events) {
+    if (e.kind === 'cardPlayed') into.add(cardId(e.card));
+    else if (e.kind === 'declarationsRevealed') {
+      for (const d of e.declarations) for (const c of d.cards) into.add(cardId(c));
+    }
+  }
+  return into;
+}
 
 // ---------------------------------------------------------------------------
 // The assertions
 // ---------------------------------------------------------------------------
 
-/**
- * Cards a view is entitled to carry, listed by the POSITION they may appear in.
- *
- * Whitelisting by position rather than by value is what makes the check bite: a
- * card smuggled into any other field is not in this set, whatever it is.
- */
-function entitledInView(view: PublicView): Set<string> {
-  const ok = new Set<string>();
-  for (const c of view.hand) ok.add(cardId(c)); // this seat's own cards
-  for (const p of view.currentTrick) ok.add(cardId(p.card)); // played, face up
-  for (const d of view.revealedDeclarations) for (const c of d.cards) ok.add(cardId(c)); // laid out
-  for (const d of view.myDeclarations) for (const c of d.cards) ok.add(cardId(c)); // own, already in hand
-  for (const c of collectCards(view.legalActions)) ok.add(cardId(c)); // own cards, offered as moves
-  return ok;
-}
+const MAX_HAND = 8;
 
-/** Cards an event stream is entitled to carry. */
-function entitledInEvents(events: TableEvent[]): Set<string> {
-  const ok = new Set<string>();
-  for (const e of events) {
-    if (e.kind === 'cardPlayed') ok.add(cardId(e.card));
-    else if (e.kind === 'declarationsRevealed') {
-      for (const d of e.declarations) for (const c of d.cards) ok.add(cardId(c));
-    }
-  }
-  return ok;
-}
-
-/** Cards another seat is holding right now, and that are not public. */
-function heldElsewhere(seat: Seat, cards: Card[], g: Ground): string[] {
+function heldElsewhere(seat: Seat, ids: Set<string>, r: Received, pub: Set<string>): string[] {
   const bad: string[] = [];
-  for (const id of ids(cards)) {
-    if (g.publicCards.has(id)) continue;
-    for (const [other, held] of g.hands) {
-      if (other !== seat && held.has(id)) bad.push(`${id} is in seat ${other}'s hand`);
+  for (const id of ids) {
+    if (pub.has(id)) continue;
+    for (const [other, held] of r.handsThen) {
+      if (other !== seat && held.has(id)) bad.push(`${id} was in seat ${other}'s hand`);
     }
   }
   return bad;
 }
 
-/** Everything wrong with one view message. Empty means clean. */
-export function checkView(seat: Seat, msg: { seat: Seat; view: PublicView }, g: Ground): string[] {
+export function checkView(r: Received, pub: Set<string>, everHeld: Map<Seat, Set<string>>): string[] {
   const bad: string[] = [];
-  const view = msg.view;
-  const entitled = entitledInView(view);
+  const view = r.view!;
+  const hand = new Set(idsOf(view.hand));
 
-  for (const id of ids(collectCards(msg))) {
-    if (!entitled.has(id)) bad.push(`${id} appears somewhere a card has no business being`);
+  // 1. Nothing may appear that is neither yours nor already on the table.
+  for (const id of allCardIds(r.payload)) {
+    if (!hand.has(id) && !pub.has(id)) bad.push(`${id} is neither in this hand nor public`);
   }
-  // The public summaries promise to carry no cards at all — that is the whole
-  // reason DeclarationSummary exists alongside Declaration.
-  if (collectCards(view.announcedDeclarations).length > 0) {
+  // 2. Each field held to its purpose, so no field can be used as a smuggling route.
+  for (const id of idsOf(collectCards(view.legalActions))) {
+    if (!hand.has(id)) bad.push(`legalActions offers ${id}, which is not in this hand`);
+  }
+  // Your own zvanja stay on the record after you have played the cards, so the
+  // test is "did this seat ever hold it", not "is it still there".
+  const held = everHeld.get(view.seat) ?? hand;
+  for (const id of idsOf(collectCards(view.myDeclarations))) {
+    if (!held.has(id)) bad.push(`myDeclarations claims ${id}, never in this hand`);
+  }
+  for (const p of view.currentTrick) {
+    if (!pub.has(cardId(p.card))) bad.push(`currentTrick shows ${cardId(p.card)}, never played`);
+  }
+  for (const d of view.revealedDeclarations) {
+    for (const c of d.cards) {
+      if (!pub.has(cardId(c))) bad.push(`revealedDeclarations shows ${cardId(c)}, never revealed`);
+    }
+  }
+  // 3. Summaries promise to carry no cards — the whole reason the type exists.
+  if (allCardIds(view.announcedDeclarations).size > 0) {
     bad.push('announcedDeclarations carried cards; it is supposed to be summaries only');
   }
-  // A hand that IS shown must be the size the table publicly says it is.
-  // Without this, a server could hand over all 32 cards as `hand` and call them
-  // "your own", and every other check here would wave them through.
-  //
-  // Only when cards are actually shown: the waiting room deliberately sends an
-  // empty hand while `handCounts` already reports the six dealt cards, so that
-  // an early arrival cannot walk the free seats and read three quarters of the
-  // deck (BelaRoom.ts, `this.started ? view : {...view, hand: []}`). Being sent
-  // FEWER cards than you own is over-redaction, never a leak.
+  // 4. Sizes. A bela hand is eight cards; anything larger is the deck leaking in
+  //    under the name of "your own", which every check above would wave through.
+  if (view.hand.length > MAX_HAND) bad.push(`hand holds ${view.hand.length} cards, more than a deal`);
+  for (const [s, n] of view.handCounts.entries()) {
+    if (n < 0 || n > MAX_HAND) bad.push(`handCounts says seat ${s} holds ${n}`);
+  }
+  const total = view.handCounts.reduce((a, b) => a + b, 0);
+  if (total > SUITS.length * RANKS.length) bad.push(`handCounts total ${total} exceeds the deck`);
+  // A hand that IS shown must match the count the table publishes. Only when
+  // shown: the waiting room deliberately sends an empty hand while handCounts
+  // already reports the dealt cards, so nobody can walk the free seats and read
+  // the deck. Being sent fewer cards than you own is over-redaction, not a leak.
   const expected = view.handCounts[view.seat];
   if (view.hand.length > 0 && view.hand.length !== expected) {
     bad.push(`hand holds ${view.hand.length} cards but handCounts says ${expected}`);
   }
-  bad.push(...heldElsewhere(seat, collectCards(msg), g));
+  // 5. The promise itself.
+  bad.push(...heldElsewhere(r.seat, allCardIds(r.payload), r, pub));
   return bad;
 }
 
-/** Everything wrong with one room message. Empty means clean. */
-export function checkRoom(seat: Seat, msg: RoomMessage, g: Ground): string[] {
+export function checkRoom(r: Received, pub: Set<string>): string[] {
   const bad: string[] = [];
-  const events = msg.events ?? [];
-  const entitled = entitledInEvents(events);
-
-  for (const id of ids(collectCards(msg))) {
-    if (!entitled.has(id)) bad.push(`${id} rode in on the event stream from an unexpected field`);
+  const msg = r.payload as RoomMessage;
+  for (const id of allCardIds(msg)) {
+    if (!pub.has(id)) bad.push(`${id} rode in on the event stream without being played`);
   }
-  for (const e of events) {
-    if (e.kind === 'declared' && collectCards(e.declarations).length > 0) {
+  for (const e of msg.events ?? []) {
+    if (e.kind === 'declared' && allCardIds(e.declarations).size > 0) {
       bad.push(`the 'declared' event carried cards; only the number is public`);
     }
   }
-  bad.push(...heldElsewhere(seat, collectCards(msg), g));
+  bad.push(...heldElsewhere(r.seat, allCardIds(msg), r, pub));
   return bad;
-}
-
-/** Fold a message's legitimately-public cards into the ground truth. */
-function absorbView(view: PublicView, g: Ground): void {
-  for (const p of view.currentTrick) g.publicCards.add(cardId(p.card));
-  for (const d of view.revealedDeclarations) for (const c of d.cards) g.publicCards.add(cardId(c));
-}
-
-function absorbEvents(events: TableEvent[], g: Ground): void {
-  for (const id of entitledInEvents(events)) g.publicCards.add(id);
 }
 
 // ---------------------------------------------------------------------------
@@ -180,7 +261,6 @@ function absorbEvents(events: TableEvent[], g: Ground): void {
 
 const card = (suit: string, rank: string): Card => ({ suit, rank }) as unknown as Card;
 
-/** A minimal, entirely legitimate view for seat 0 holding two cards. */
 function sampleView(hand: Card[], handCounts: [number, number, number, number]): PublicView {
   return {
     phase: 'PLAY',
@@ -208,100 +288,142 @@ function sampleView(hand: Card[], handCounts: [number, number, number, number]):
   } as unknown as PublicView;
 }
 
-/**
- * Plant breaches we KNOW are breaches and require each to be caught.
- *
- * This is the guard against the failure that made the previous version of this
- * file useless: a check that cannot fail reports success forever.
- */
 function selfTest(): boolean {
   const mine = [card('hearts', 'A'), card('hearts', 'K')];
   const theirs = [card('spades', 'A'), card('spades', 'K')];
+  const stock = [card('clubs', '7'), card('clubs', '8')];
 
-  const ground = (): Ground => {
-    const g = newGround();
-    g.hands.set(0, new Set(ids(mine)));
-    g.hands.set(1, new Set(ids(theirs)));
-    return g;
-  };
+  const everHeld = new Map<Seat, Set<string>>([[0 as Seat, new Set(idsOf(mine))]]);
+  const received = (view: PublicView): Received => ({
+    seat: 0,
+    kind: 'view',
+    payload: { seat: 0, view },
+    view,
+    handsThen: new Map([
+      [0 as Seat, new Set(idsOf(mine))],
+      [1 as Seat, new Set(idsOf(theirs))],
+    ]),
+    publicThen: new Set(),
+    delta: new Set(),
+  });
+  const nothingPublic = () => new Set<string>();
 
+  const checkViewT = (r: Received, pub: Set<string>) => checkView(r, pub, everHeld);
   const cases: Array<[string, () => string[]]> = [
     [
-      "another seat's card smuggled into the hand",
-      () => checkView(0, { seat: 0, view: sampleView([...mine, theirs[0]!], [3, 2, 8, 8]) }, ground()),
+      "an opponent's card appended to the hand",
+      () => checkViewT(received(sampleView([...mine, theirs[0]!], [3, 2, 8, 8])), nothingPublic()),
     ],
     [
       'the whole deck handed over as "your own hand"',
       () => {
         const deck = SUITS.flatMap((s) => RANKS.map((r) => card(s, r)));
-        return checkView(0, { seat: 0, view: sampleView(deck, [8, 8, 8, 8]) }, ground());
+        return checkViewT(received(sampleView(deck, [8, 8, 8, 8])), nothingPublic());
       },
     ],
     [
-      'a card hidden in a field that should never hold one',
+      'an oversized hand with handCounts patched to agree',
+      () => checkViewT(received(sampleView([...mine, ...stock, ...theirs], [6, 6, 6, 6])), nothingPublic()),
+    ],
+    [
+      'a card parked in a field that should never hold one',
       () => {
         const view = sampleView(mine, [2, 2, 8, 8]);
         (view as unknown as Record<string, unknown>).spare = theirs[1];
-        return checkView(0, { seat: 0, view }, ground());
+        return checkViewT(received(view), nothingPublic());
       },
     ],
     [
-      'summaries carrying the cards they are supposed to hide',
+      "an opponent's hand dressed up as the current trick",
+      () => {
+        const view = sampleView(mine, [2, 2, 8, 8]);
+        (view.currentTrick as unknown as unknown[]).push({ seat: 1, card: theirs[0] });
+        return checkViewT(received(view), nothingPublic());
+      },
+    ],
+    [
+      "an opponent's hand dressed up as a revealed zvanje",
+      () => {
+        const view = sampleView(mine, [2, 2, 8, 8]);
+        (view.revealedDeclarations as unknown as unknown[]).push({
+          kind: 'TERCA', value: 20, length: 3, topRank: 'A', seat: 1, cards: theirs,
+        });
+        return checkViewT(received(view), nothingPublic());
+      },
+    ],
+    [
+      'the talon smuggled in through legalActions',
+      () => {
+        const view = sampleView(mine, [2, 2, 8, 8]);
+        (view.legalActions as unknown as unknown[]).push({ type: 'PLAY_CARD', seat: 0, card: stock[0] });
+        return checkViewT(received(view), nothingPublic());
+      },
+    ],
+    [
+      'summaries carrying the cards they exist to hide',
       () => {
         const view = sampleView(mine, [2, 2, 8, 8]);
         (view.announcedDeclarations as unknown as unknown[]).push({
-          kind: 'TERCA',
-          value: 20,
-          length: 3,
-          topRank: 'K',
-          seat: 1,
-          cards: theirs,
+          kind: 'TERCA', value: 20, length: 3, topRank: 'K', seat: 1, cards: theirs,
         });
-        return checkView(0, { seat: 0, view }, ground());
+        return checkViewT(received(view), nothingPublic());
       },
     ],
     [
-      "an unplayed card from another hand riding the event stream",
+      "an opponent's hand as bare card-id strings",
+      () => {
+        const view = sampleView(mine, [2, 2, 8, 8]);
+        (view as unknown as Record<string, unknown>).spy = idsOf(theirs);
+        return checkViewT(received(view), nothingPublic());
+      },
+    ],
+    [
+      'an unplayed card riding the broadcast event stream',
       () =>
         checkRoom(
-          0,
           {
-            seats: [],
-            status: 'playing',
-            events: [{ kind: 'cardPlayed', seat: 1, card: theirs[0]! } as TableEvent],
-            series: [0, 0],
-            matchNumber: 0,
-            // a second, unplayed card smuggled alongside the legitimate one
-            rematchVotes: [theirs[1] as unknown as Seat],
-          } as unknown as RoomMessage,
-          ground(),
+            seat: 0,
+            kind: 'room',
+            payload: {
+              seats: [], status: 'playing', series: [0, 0], matchNumber: 0,
+              events: [{ kind: 'cardPlayed', seat: 1, card: theirs[0]! } as TableEvent],
+              rematchVotes: [theirs[1] as unknown as Seat],
+            } as unknown as RoomMessage,
+            view: null,
+            handsThen: new Map([[1 as Seat, new Set(idsOf(theirs))]]),
+            publicThen: new Set(),
+            delta: new Set(),
+          },
+          nothingPublic(),
         ),
     ],
   ];
 
-  let allCaught = true;
+  let ok = true;
   for (const [name, run] of cases) {
-    const found = run();
-    if (found.length === 0) {
+    if (run().length === 0) {
       console.error(`[smoke] SELF-TEST FAILED — planted breach went undetected: ${name}`);
-      allCaught = false;
+      ok = false;
     }
   }
 
-  // ...and the converse: a clean message must NOT be flagged, or the check is
-  // just a tripwire that fires at everything and proves nothing either.
-  const clean = checkView(0, { seat: 0, view: sampleView(mine, [2, 2, 8, 8]) }, ground());
+  // The converse. A check that flags everything proves nothing either.
+  const pub = new Set(idsOf(theirs));
+  const legit = sampleView(mine, [2, 2, 8, 8]);
+  (legit.currentTrick as unknown as unknown[]).push({ seat: 1, card: theirs[0] });
+  (legit.legalActions as unknown as unknown[]).push({ type: 'PLAY_CARD', seat: 0, card: mine[0] });
+  const clean = checkViewT(received(legit), pub);
   if (clean.length > 0) {
     console.error(`[smoke] SELF-TEST FAILED — a legitimate view was flagged: ${clean.join('; ')}`);
-    allCaught = false;
+    ok = false;
   }
 
   console.log(
-    allCaught
-      ? `[smoke] self-test: ${cases.length} planted breaches all caught, clean view passed`
+    ok
+      ? `[smoke] self-test: ${cases.length} planted breaches all caught, legitimate view passed`
       : '[smoke] self-test: the assertions are not working',
   );
-  return allCaught;
+  return ok;
 }
 
 // ---------------------------------------------------------------------------
@@ -310,14 +432,18 @@ const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function main(): Promise<void> {
   if (!selfTest()) {
-    console.error('[smoke] FAIL — refusing to report on the server with assertions that do not bite');
+    console.error('[smoke] FAIL — refusing to vouch for the server with assertions that do not bite');
     process.exit(1);
   }
 
   const client = new Client(ENDPOINT);
   const players: Seated[] = [];
-  const g = newGround();
-  const violations: string[] = [];
+  const log: Received[] = [];
+  const publicCards = new Set<string>();
+  /** Live ground truth: each seat's hand, per that seat's own view. */
+  const hands = new Map<Seat, Set<string>>();
+  /** Everything a seat has held at any point — zvanja outlive the cards. */
+  const everHeld = new Map<Seat, Set<string>>();
 
   console.log(`[smoke] connecting four clients to ${ENDPOINT}`);
   // Create one PRIVATE room explicitly and join the rest BY ID. `joinOrCreate`
@@ -337,23 +463,34 @@ async function main(): Promise<void> {
     room.onMessage(MSG.view, (msg: { seat: Seat; view: PublicView }) => {
       seated.seat = msg.seat;
       seated.view = msg.view;
-      // Public cards first, so a card played this very tick is not mistaken for
-      // one still sitting in the player's hand.
-      absorbView(msg.view, g);
-      for (const v of checkView(msg.seat, msg, g)) {
-        violations.push(`seat ${msg.seat}: ${v}`);
-        console.error(`[smoke] LEAK — seat ${msg.seat}: ${v}`);
-      }
-      // Only now update this seat's own holdings, so the check above compared
-      // against the OTHER seats as they stood.
-      g.hands.set(msg.seat, new Set(ids(msg.view.hand)));
+      // Snapshot the OTHER seats as they stand right now; the verdict is taken
+      // later, but always against this moment.
+      log.push({
+        seat: msg.seat,
+        kind: 'view',
+        payload: msg,
+        view: msg.view,
+        handsThen: new Map([...hands].map(([s, h]) => [s, new Set(h)])),
+        publicThen: new Set(publicCards),
+        delta: new Set(),
+      });
+      hands.set(msg.seat, new Set(idsOf(msg.view.hand)));
+      const ever = everHeld.get(msg.seat) ?? new Set<string>();
+      for (const id of idsOf(msg.view.hand)) ever.add(id);
+      everHeld.set(msg.seat, ever);
     });
     room.onMessage(MSG.room, (msg: RoomMessage) => {
-      absorbEvents(msg.events ?? [], g);
-      for (const v of checkRoom(seated.seat, msg, g)) {
-        violations.push(`seat ${seated.seat}: ${v}`);
-        console.error(`[smoke] LEAK — seat ${seated.seat}: ${v}`);
-      }
+      log.push({
+        seat: seated.seat,
+        kind: 'room',
+        payload: msg,
+        view: null,
+        handsThen: new Map([...hands].map(([s, h]) => [s, new Set(h)])),
+        publicThen: new Set(publicCards),
+        delta: publicFromEvents(msg.events ?? [], new Set()),
+      });
+      // The broadcast stream is the only thing that makes a card public.
+      publicFromEvents(msg.events ?? [], publicCards);
     });
     room.onMessage(MSG.error, (msg: { reason: string }) => {
       console.log(`[smoke] seat ${seated.seat} rejected: ${msg.reason}`);
@@ -370,7 +507,6 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  // Play until the deal is scored, always taking the first legal action.
   let moves = 0;
   for (let step = 0; step < 200; step++) {
     const actor = players.find((p) => p.view && p.view.toAct === p.seat && p.view.legalActions.length);
@@ -384,19 +520,33 @@ async function main(): Promise<void> {
     if (players.some((p) => p.view?.phase === 'DEAL_OVER' || p.view?.phase === 'MATCH_OVER')) break;
   }
 
-  console.log(`[smoke] ${moves} moves played, ${g.publicCards.size} card(s) legitimately public`);
-
   // A deal that never got going would pass every assertion by never testing one.
-  const played = players.some((p) => p.view?.phase === 'DEAL_OVER' || p.view?.phase === 'MATCH_OVER');
-  if (!played) {
+  const finished = players.some((p) => p.view?.phase === 'DEAL_OVER' || p.view?.phase === 'MATCH_OVER');
+  console.log(
+    `[smoke] ${moves} moves, ${log.length} messages, ${publicCards.size} card(s) played or revealed`,
+  );
+  if (!finished) {
     console.error('[smoke] FAIL — the deal never reached a conclusion, so nothing was really checked');
     for (const p of players) await p.room.leave();
     process.exit(1);
   }
 
+  // Judge every message that was received, each against the hands as they stood
+  // when it arrived, and against the cards the broadcast stream made public.
+  const violations: string[] = [];
+  for (let i = 0; i < log.length; i++) {
+    const r = log[i]!;
+    const pub = publicFor(log, i);
+    for (const v of r.kind === 'view' ? checkView(r, pub, everHeld) : checkRoom(r, pub)) {
+      violations.push(`seat ${r.seat} (${r.kind}): ${v}`);
+    }
+  }
+  for (const v of violations.slice(0, 20)) console.error(`[smoke] LEAK — ${v}`);
+  if (violations.length > 20) console.error(`[smoke] ... and ${violations.length - 20} more`);
+
   console.log(
     violations.length === 0
-      ? `[smoke] PASS — ${moves} moves, no client was ever sent a card another seat was holding`
+      ? `[smoke] PASS — ${moves} moves, no client received a card it was not entitled to`
       : `[smoke] FAIL — ${violations.length} violation(s)`,
   );
 
