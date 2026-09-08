@@ -12,6 +12,19 @@ cd "$(dirname "${BASH_SOURCE[0]}")/.."
 SERVER=${1:?usage: deploy-server.sh user@host domain}
 DOMAIN=${2:?usage: deploy-server.sh user@host domain}
 
+# Never ship a web bundle that asks players' browsers to dial their own machine.
+# This lives here as well as in build-web.sh because deploy-server.sh ships
+# whatever is already sitting in deploy/site, and following the deploy docs
+# alone would happily re-send a stale pre-fix bundle.
+IDX=deploy/site/igra/index.html
+if [ -f "$IDX" ]; then
+  SERVED=$(grep -o 'index-[0-9a-f]*\.js' "$IDX" | head -1 || true)
+  if [ -n "$SERVED" ] && grep -q 'ws://localhost:2567' "deploy/site/igra/_expo/static/js/web/$SERVED"; then
+    echo "!! $SERVED points at ws://localhost:2567 -- rebuild with scripts/build-web.sh"
+    exit 1
+  fi
+fi
+
 echo "== packing"
 TAR=$(mktemp -t bela-deploy-XXXX.tgz 2>/dev/null || echo "${TMPDIR:-/tmp}/bela-deploy-$$.tgz")
 tar czf "$TAR" \
@@ -61,7 +74,11 @@ if [ -d "\$WEB" ] && [ -n "\$KEEP" ]; then
   # Keep the bundle index.html actually names, whatever its timestamp, plus the
   # two next newest. Ranking purely by mtime could delete the very file just
   # shipped, and a bare "ls" of an empty match aborts the deploy under pipefail.
-  ( ls -1t "\$WEB"/index-*.js 2>/dev/null || true ) | grep -vF "\$KEEP" | tail -n +3 | xargs -r rm -f
+  # Every stage needs its own guard: grep exits 1 when it selects NOTHING, and
+  # under pipefail that sinks the whole deploy. That is the fresh-box case
+  # exactly -- one bundle on disk and it is the one being served -- so the first
+  # deploy to a new box reported failure while having actually worked.
+  ( ls -1t "\$WEB"/index-*.js 2>/dev/null || true ) | { grep -vF "\$KEEP" || true; } | tail -n +3 | xargs -r rm -f
   echo "== web bundles on disk: \$( ( ls -1 "\$WEB"/index-*.js 2>/dev/null || true ) | wc -l ), serving \$KEEP"
 fi
 docker compose ps
