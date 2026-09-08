@@ -16,7 +16,7 @@
     },
     "production": {
       "autoIncrement": true,
-      "credentialsSource": "local",
+      "credentialsSource": "remote",
       "env": {
         "EXPO_PUBLIC_SERVER_URL": "wss://belastih.com"
       }
