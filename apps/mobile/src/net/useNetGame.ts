@@ -29,7 +29,35 @@ import { loadProfile, saveProfile, type Settings } from '../storage';
  * server-side and surfaced, never thrown.
  */
 
-export const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? 'ws://localhost:2567';
+/**
+ * Where the game server lives.
+ *
+ * A build-time env var wins — EAS sets it for the store builds. Failing that,
+ * a WEB build derives it from the page it was served from: Caddy fronts both
+ * the static site and the websocket on a single origin, so the page's own host
+ * is always the right answer, and it cannot drift the way a fixed default did.
+ *
+ * It drifted badly. `expo export --platform web` without the env var set kept
+ * the development default, so the deployed bundle asked the browser to open
+ * `ws://localhost:2567`; every online mode on belastih.com/igra failed the
+ * instant it was touched, and the invite page linked straight into it. Two
+ * consecutive web builds shipped that way, because nothing about it is visible
+ * until a real browser tries to connect.
+ *
+ * The localhost default stays for development, where the app is not served
+ * from the machine running the server.
+ */
+function resolveServerUrl(): string {
+  const configured = process.env.EXPO_PUBLIC_SERVER_URL;
+  if (configured) return configured;
+  const loc = typeof window !== 'undefined' ? window.location : undefined;
+  if (loc?.host && !/^(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(loc.host)) {
+    return `${loc.protocol === 'https:' ? 'wss:' : 'ws:'}//${loc.host}`;
+  }
+  return 'ws://localhost:2567';
+}
+
+export const SERVER_URL = resolveServerUrl();
 const ROOM_NAME = 'bela';
 /**
  * How long the server holds a dropped seat (BelaRoom's RECONNECT_SECONDS). The
