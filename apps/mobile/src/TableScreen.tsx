@@ -324,7 +324,7 @@ export function TableScreen(props: TableScreenProps) {
       </View>
     </View>
   ) : (
-    <View style={[styles.tableArea, { minHeight: m.feltMinHeight }]}>
+    <View style={[styles.tableArea, { minHeight: m.feltMinHeight, maxHeight: m.feltMaxHeight }]}>
       <View style={styles.topSeat}>{puck(at('top'))}</View>
       <View style={styles.midRow}>
         <View style={styles.sideSeat}>{puck(at('left'))}</View>

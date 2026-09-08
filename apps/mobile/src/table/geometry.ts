@@ -42,7 +42,14 @@ export const CARD_ASPECT = 1.45;
 
 /** Below this a mađarica's pips stop reading; above it the fan looks silly. */
 const MIN_CARD_W = 40;
-const MAX_CARD_W = 76;
+/**
+ * A ceiling, not a target — the caller's own budget is what normally decides.
+ * It used to sit at 76, which is right for a phone and became a straitjacket on
+ * anything bigger: the felt grew to fill the window while the cards stayed the
+ * size they are on a handset, so a desktop browser showed an enormous empty
+ * table ringed by postage stamps.
+ */
+export const MAX_CARD_W = 120;
 /** How much of each overlapped card must stay visible to be identifiable. */
 const MIN_REVEAL = 0.42;
 const MAX_REVEAL = 0.72;

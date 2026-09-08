@@ -5,6 +5,7 @@ import {
   fanHeight,
   fanWidth,
   fitHand,
+  MAX_CARD_W,
   POSITIONS,
   seatAt,
   seatPosition,
@@ -91,8 +92,19 @@ describe('fitHand', () => {
     for (const width of [280, 296, 360, 390, 520, 900]) {
       const fit = fitHand(width, 8);
       expect(fit.advance / fit.cardW).toBeGreaterThanOrEqual(0.42 - 1e-9);
-      expect(fit.cardW).toBeLessThanOrEqual(76);
+      expect(fit.cardW).toBeLessThanOrEqual(MAX_CARD_W);
       expect(fanWidth(fit, 8)).toBeLessThanOrEqual(width + 0.5);
+    }
+  });
+
+  it("honours the caller's own cap, which is what a phone actually passes", () => {
+    // The module ceiling exists for desktop, where the felt grows and postage
+    // -stamp cards look absurd. A handset passes its own, much lower, cap and
+    // that one has to win.
+    for (const width of [280, 360, 520, 900]) {
+      for (const cap of [44, 58, 76]) {
+        expect(fitHand(width, 8, cap).cardW).toBeLessThanOrEqual(cap);
+      }
     }
   });
 

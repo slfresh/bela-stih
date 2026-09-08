@@ -29,6 +29,11 @@ export interface TableMetrics {
   handCardMax: number;
   /** Floor for the table area, so the felt never collapses to nothing. */
   feltMinHeight: number;
+  /**
+   * Ceiling for it too. The felt is the only row that flexes, so without this it
+   * swallows every spare pixel — which on a big screen is most of them.
+   */
+  feltMaxHeight: number;
   slotW: number;
   slotH: number;
   puck: number;
@@ -81,7 +86,10 @@ export function useTableMetrics(): TableMetrics {
     // slice of the screen instead of the biggest card that fits across it.
     const handCardMax = landscape
       ? clamp(Math.floor(cardWidthForHeight(usableH * 0.34, 8)), 40, 76)
-      : 76;
+      : // Portrait: grow with the screen rather than staying at phone size. 76
+        // is the handset figure and `scale` is already 1 there, so phones are
+        // unchanged; a roomier window simply gets roomier cards.
+        Math.round(76 * scale);
     const fit = fitHand(handWidth, 8, handCardMax);
 
     return {
@@ -97,6 +105,9 @@ export function useTableMetrics(): TableMetrics {
       // felt is the only flexible row, so any floor it cannot meet is paid for
       // by pushing the hand off the bottom of the screen.
       feltMinHeight: landscape ? 0 : 260,
+      // Portrait: the table may take about half the height and no more. Beyond
+      // that it is just empty baize, and the cards are what people read.
+      feltMaxHeight: landscape ? usableH : Math.round(usableH * 0.48),
       slotW: Math.round(46 * scale),
       slotH: Math.round(67 * scale),
       puck: Math.round((landscape ? 44 : 54) * scale),
