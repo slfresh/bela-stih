@@ -12,6 +12,11 @@ services:
       context: ..
       dockerfile: apps/server/Dockerfile
     restart: unless-stopped
+    # PID 1 is npm, which does not reliably pass a stop signal on to the server
+    # underneath it — so a restart hit the timeout and killed it outright.
+    # tini sits in front and forwards the signal, letting Colyseus close the
+    # sockets properly instead of having them cut.
+    init: true
     expose:
       - "2567"
     # Container logs can incidentally contain connection metadata; cap them so

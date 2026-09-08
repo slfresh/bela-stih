@@ -31,8 +31,21 @@ cd /opt/bela
 tar xzf deploy.tgz && rm deploy.tgz
 cd deploy
 export DOMAIN=$DOMAIN
+# Leave DOMAIN on the box too. Without it a plain "docker compose ps" or "logs"
+# in this directory fails on the unset variable -- a trap for anyone debugging
+# here later, and a hazard if they reach for "up -d" with an empty domain.
+echo "DOMAIN=$DOMAIN" > .env
 docker compose up -d --build
 docker image prune -f >/dev/null
+# Every deploy adds a content-hashed bundle and nothing ever removed the old
+# ones: they had grown to 24MB of a 27MB site directory. Keep the newest three,
+# which still covers a player who loaded the page moments before the deploy and
+# whose script request lands just after it.
+WEB=/opt/bela/deploy/site/igra/_expo/static/js/web
+if [ -d "\$WEB" ]; then
+  ls -1t "\$WEB"/index-*.js 2>/dev/null | tail -n +4 | xargs -r rm -f
+  echo "== web bundles on disk: \$(ls -1 "\$WEB"/index-*.js 2>/dev/null | wc -l)"
+fi
 docker compose ps
 REMOTE
 
