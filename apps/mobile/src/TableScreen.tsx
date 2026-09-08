@@ -281,12 +281,19 @@ export function TableScreen(props: TableScreenProps) {
                 slots[pos],
                 // Whose card this is, at a glance — and whose empty slot,
                 // before anybody has played into it.
+                // NB: every property here must be a margin LONGHAND or none at
+                // all. `slots[pos]` above places this card with marginLeft /
+                // marginTop, and react-native-web emits a `margin` shorthand as
+                // real CSS, which resets both of them. A `margin: -2` here put
+                // all four played cards on the same pixel in the middle of the
+                // felt, each one hiding the last. Native was fine — Yoga gives
+                // the edge-specific value precedence over the shorthand — so it
+                // only ever showed up in the browser.
                 played
                   ? {
                       borderWidth: 2,
                       borderColor: seatTone(s, mySeat).edge,
                       borderRadius: radius.card,
-                      margin: -2,
                     }
                   : null,
               ]}
