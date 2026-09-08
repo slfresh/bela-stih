@@ -42,7 +42,8 @@
         "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
-      ]
+      ],
+      "versionCode": 13
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -53,7 +54,8 @@
     },
     "backgroundColor": "#0d2a1f",
     "plugins": [
-      "expo-audio"
+      "expo-audio",
+      "./plugins/withUploadSigning"
     ],
     "extra": {
       "eas": {
