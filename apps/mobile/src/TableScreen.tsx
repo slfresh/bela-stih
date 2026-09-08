@@ -28,6 +28,7 @@ import { anchorId, type FxBus } from './anim/FxBus';
 import { SeatPuck } from './table/SeatPuck';
 import {
   FAN_PAD,
+  fanArc,
   fitHand,
   fitTrickCross,
   seatAt,
@@ -147,6 +148,17 @@ export function TableScreen(props: TableScreenProps) {
   // announces nothing, so this can never claim more than the hand holds.
   const [marked, setMarked] = useState<string[]>([]);
   const declaring = !settled && view.declareTurn === mySeat;
+  // Does the marking actually form one of the zvanja this hand holds? In normal
+  // play the app already knows them, so it arms the button only on a real
+  // combination rather than letting the engine bounce a mistake back as an
+  // error. In blind mode it stays armed regardless — the app refuses to spot
+  // them for you there, so an honest miss is the whole point.
+  const markedKey = [...marked].sort().join('|');
+  const markingIsZvanje =
+    hardMode ||
+    view.myDeclarations.some(
+      (d) => d.cards.map((c) => cardId(c)).sort().join('|') === markedKey,
+    );
   const toggleMark = (id: string) =>
     setMarked((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id]));
   // A fresh question gets a clean slate.
@@ -347,7 +359,13 @@ export function TableScreen(props: TableScreenProps) {
       {declaring && (
         <View style={styles.promptRow}>
           <Text style={styles.promptText}>{lang.s.askZvanja}</Text>
-          <Text style={styles.promptHint}>{lang.s.markZvanjaHint}</Text>
+          <Text style={styles.promptHint}>
+            {marked.length === 0
+              ? lang.s.markZvanjaHint
+              : markingIsZvanje
+                ? lang.s.markingOk
+                : lang.s.markingNotZvanje}
+          </Text>
         </View>
       )}
       {!settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0 && (
@@ -419,18 +437,6 @@ export function TableScreen(props: TableScreenProps) {
       <EmoteStrip lang={lang} open={trayOpen} dimmed={myTurn} vertical={land} onSend={sendEmote} />
     ) : null;
 
-  // Does the marking actually form one of the zvanja this hand holds? In normal
-  // play the app already knows them, so it arms the button only on a real
-  // combination rather than letting the engine bounce a mistake back as an
-  // error. In blind mode it stays armed regardless — the app refuses to spot
-  // them for you there, so an honest miss is the whole point.
-  const markedKey = [...marked].sort().join('|');
-  const markingIsZvanje =
-    hardMode ||
-    view.myDeclarations.some(
-      (d) => d.cards.map((c) => cardId(c)).sort().join('|') === markedKey,
-    );
-
   // "Prijavi" / "Nemam" — the two answers, and nothing else while the table is
   // waiting on you.
   const declareButtons = declaring ? (
@@ -488,7 +494,7 @@ export function TableScreen(props: TableScreenProps) {
             </Text>
             <View style={styles.revealCards}>
               {d.cards.map((c) => (
-                <PlayingCard key={cardId(c)} card={c} width={Math.round(m.slotW * 0.72)} />
+                <PlayingCard key={cardId(c)} card={c} width={Math.round(m.slotW * 1.1)} />
               ))}
             </View>
           </View>
@@ -779,9 +785,13 @@ function Hand({
   const fit = fitHand(width, cards.length, maxCardW);
   const mid = (cards.length - 1) / 2;
   const lift = 14 * fit.scale;
+  // The arc pushes the outer cards DOWN, and `alignItems: flex-end` had already
+  // put them on the floor of the row — so they hung out of the bottom of the
+  // hand and under the emote strip, covering the faces you are choosing between.
+  const drop = fanArc(cards.length) * fit.scale;
 
   return (
-    <View style={styles.fan}>
+    <View style={[styles.fan, { paddingBottom: drop }]}>
       {cards.map((card, i) => {
         const id = cardId(card);
         const inPlayMoment = plays.length > 0;
@@ -1121,6 +1131,9 @@ const styles = StyleSheet.create({
 
   slot: { position: 'absolute', width: 46, height: 67 },
   slotGhost: {
+    // Barely there: four hard-edged boxes on an empty felt read as placeholders
+    // that failed to load rather than as places a card will go.
+    opacity: 0.35,
     flex: 1,
     borderRadius: radius.card,
     borderWidth: 1,

@@ -223,6 +223,8 @@ interface Strings {
   noneToDeclare: string;
   /** Mark the cards, then confirm. */
   markZvanjaHint: string;
+  markingOk: string;
+  markingNotZvanje: string;
   declareMarked: string;
   /** Difficulty setting. */
   difficulty: string;
@@ -372,6 +374,8 @@ const hr: Strings = {
   showsZvanja: 'pokazuje zvanja',
   noneToDeclare: 'Nemam',
   markZvanjaHint: 'Označite karte koje čine zvanje',
+  markingOk: 'To je zvanje — pritisnite Prijavi',
+  markingNotZvanje: 'Označene karte nisu zvanje',
   declareMarked: 'Prijavi',
   difficulty: 'Težina',
   difficultyEasy: 'Lagana',
@@ -578,6 +582,8 @@ const srCyrl: Strings = {
   showsZvanja: 'показује звања',
   noneToDeclare: 'Немам',
   markZvanjaHint: 'Означите карте које чине звање',
+  markingOk: 'То је звање — притисните Пријави',
+  markingNotZvanje: 'Означене карте нису звање',
   declareMarked: 'Пријави',
   difficulty: 'Тежина',
   difficultyEasy: 'Лагана',
@@ -780,6 +786,8 @@ const en: Strings = {
   showsZvanja: 'shows declarations',
   noneToDeclare: 'Nothing',
   markZvanjaHint: 'Mark the cards that make up your declaration',
+  markingOk: 'That is a declaration — press Declare',
+  markingNotZvanje: 'Those cards are not a declaration',
   declareMarked: 'Declare',
   difficulty: 'Difficulty',
   difficultyEasy: 'Casual',

@@ -3,6 +3,7 @@ import type { Seat } from '@belot/engine';
 import {
   cardWidthForHeight,
   fanHeight,
+  fanWidth,
   fitHand,
   POSITIONS,
   seatAt,
@@ -71,9 +72,19 @@ describe('fitHand', () => {
     // 320dp minus the root padding. Overflowing here is what produced the
     // two-row hand players complain about in rival apps.
     const fit = fitHand(320 - 24, 8);
-    const span = fit.cardW + fit.advance * 7;
-    expect(span).toBeLessThanOrEqual(320 - 24 + 0.5);
+    expect(fanWidth(fit, 8)).toBeLessThanOrEqual(320 - 24 + 0.5);
     expect(fit.cardW).toBeGreaterThanOrEqual(40);
+  });
+
+  it('counts the width the TURNED outer cards sweep, not just the upright span', () => {
+    // The cards are rotated, so a fan is wider than the sum of its parts.
+    // Measuring the upright span let the outermost cards run off both edges of
+    // a real phone while every test stayed green.
+    for (const width of [296, 366, 390, 420]) {
+      const fit = fitHand(width, 8);
+      expect(fanWidth(fit, 8)).toBeGreaterThan(fit.cardW + fit.advance * 7);
+      expect(fanWidth(fit, 8)).toBeLessThanOrEqual(width + 0.5);
+    }
   });
 
   it('never hides more than half a card, and never grows past the cap', () => {
@@ -81,7 +92,7 @@ describe('fitHand', () => {
       const fit = fitHand(width, 8);
       expect(fit.advance / fit.cardW).toBeGreaterThanOrEqual(0.42 - 1e-9);
       expect(fit.cardW).toBeLessThanOrEqual(76);
-      expect(fit.cardW + fit.advance * 7).toBeLessThanOrEqual(width + 0.5);
+      expect(fanWidth(fit, 8)).toBeLessThanOrEqual(width + 0.5);
     }
   });
 

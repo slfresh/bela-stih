@@ -70,14 +70,18 @@ export function fitHand(available: number, count: number, maxCardW = MAX_CARD_W)
   // Turned sideways there is width to spare and no height at all, so the cap
   // that matters is the caller's, not the fan's own.
   const cap = clamp(maxCardW, MIN_CARD_W, MAX_CARD_W);
+  // The rotated outer cards need room too, or they hang off the screen edges.
+  const spread = 1 + (count - 1) * 0.62 + tiltAllowance(count);
   const cardW =
-    count <= 1
-      ? Math.min(cap, available)
-      : clamp(available / (1 + (count - 1) * 0.62), MIN_CARD_W, cap);
+    count <= 1 ? Math.min(cap, available) : clamp(available / spread, MIN_CARD_W, cap);
   const advance =
     count <= 1
       ? 0
-      : clamp((available - cardW) / (count - 1), cardW * MIN_REVEAL, cardW * MAX_REVEAL);
+      : clamp(
+          (available - cardW * (1 + tiltAllowance(count))) / (count - 1),
+          cardW * MIN_REVEAL,
+          cardW * MAX_REVEAL,
+        );
 
   return {
     cardW,
@@ -104,8 +108,34 @@ export function fanHeight(cardW: number, count: number): number {
 }
 
 /** The outer card's drop, in reference (58px card) pixels. Mirrors `Hand`. */
-function fanArc(count: number): number {
+export function fanArc(count: number): number {
   return Math.pow(Math.max(0, (count - 1) / 2), 1.6) * 3.2;
+}
+
+/** Degrees the outermost card is turned. Mirrors `Hand`'s `off * 4.5`. */
+function fanTilt(count: number): number {
+  return (Math.max(0, count - 1) / 2) * 4.5;
+}
+
+/**
+ * How much WIDER the fan is than the sum of its cards, because the outer ones
+ * are rotated.
+ *
+ * A turned card's bounding box grows by its own height as well as its width, so
+ * budgeting only for the upright card ran the outermost ones off both edges of
+ * the screen. Expressed as a multiple of the card width, since the height is a
+ * fixed ratio of it.
+ */
+export function fanWidth(fit: HandFit, count: number): number {
+  // What the fan ACTUALLY occupies: the upright span plus the extra the rotated
+  // outer cards sweep out on each side.
+  const span = count <= 1 ? fit.cardW : fit.cardW + fit.advance * (count - 1);
+  return span + fit.cardW * tiltAllowance(count);
+}
+
+function tiltAllowance(count: number): number {
+  const t = (fanTilt(count) * Math.PI) / 180;
+  return Math.max(0, CARD_ASPECT * Math.sin(t) + Math.cos(t) - 1);
 }
 
 /**

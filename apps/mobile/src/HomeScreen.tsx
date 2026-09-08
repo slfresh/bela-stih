@@ -110,9 +110,13 @@ export function HomeScreen({
           >
             {/* identity header */}
             <View style={styles.headerRow}>
-              <Pressable onPress={open(onOpenProfile)} style={styles.identity} hitSlop={6}>
+              <Pressable
+                onPress={open(onOpenProfile)}
+                style={[styles.identity, styles.identityFlex]}
+                hitSlop={6}
+              >
                 <Avatar id={profile.selectedAvatar} size={42} />
-                <View style={styles.identityText}>
+                <View style={[styles.identityText, styles.identityFlex]}>
                   <Text style={styles.headerName} numberOfLines={1}>
                     {settings.nickname.trim() || ui.profile}
                   </Text>
@@ -121,7 +125,7 @@ export function HomeScreen({
                   </Text>
                 </View>
               </Pressable>
-              <View style={styles.fill} />
+
               <Pressable onPress={open(onOpenShop)} hitSlop={6}>
                 <Anchor id={anchorId.wallet}>
                   <View style={styles.coinChip}>
@@ -251,6 +255,9 @@ const styles = StyleSheet.create({
   scroll: { padding: 20, gap: 16, paddingBottom: 40 },
 
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  // The name gets the room the row actually has: it was being squeezed into its
+  // own text width and truncated to two letters while half the row sat empty.
+  identityFlex: { flex: 1, minWidth: 0 },
   identity: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 },
   identityText: { flexShrink: 1, minWidth: 0 },
   headerName: { color: theme.text, fontSize: 15, fontWeight: '700' },
