@@ -109,6 +109,19 @@ export function scoreDeal(input: DealScoreInput): DealScoreResult {
     tricksWon[0] > 0 ? declarationPoints[0] : 0,
     tricksWon[1] > 0 ? declarationPoints[1] : 0,
   ];
+  /**
+   * Zvanja a pair announced and cannot keep, having taken no trick.
+   *
+   * Taking no trick IS a štiglja against you — the other pair took all eight —
+   * so these points do not evaporate off the table: they go to the pair that
+   * swept. Both branches below that move the table wholesale already hand the
+   * winner both sides' zvanja, so this only brings the swept-but-contract-made
+   * case into line with them.
+   */
+  const forfeited: [number, number] = [
+    declarationPoints[0] - bankable[0],
+    declarationPoints[1] - bankable[1],
+  ];
 
   // 4. bela (always scores for its holder)
   const bela: [number, number] = [0, 0];
@@ -139,8 +152,9 @@ export function scoreDeal(input: DealScoreInput): DealScoreResult {
   } else if (callerMade) {
     trickPart[0] = trickPoints[0] + valatBonus[0];
     trickPart[1] = trickPoints[1] + valatBonus[1];
-    flatPart[0] = bankable[0] + bela[0];
-    flatPart[1] = bankable[1] + bela[1];
+    // What a swept pair could not bank crosses to the pair that swept.
+    flatPart[0] = bankable[0] + forfeited[1] + bela[0];
+    flatPart[1] = bankable[1] + forfeited[0] + bela[1];
   } else {
     // pad: the failing caller falls; defenders take the whole table.
     trickPart[other] = trickPoints[0] + trickPoints[1] + valatBonus[0] + valatBonus[1];

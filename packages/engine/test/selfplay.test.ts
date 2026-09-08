@@ -97,16 +97,12 @@ function checkDeal(s: GameState, r: DealScoreResult, inv: Invariants): void {
 
   // Conservation across the whole deal, multiplier included.
   //
-  // Over what was PAYABLE, not over face value. A pair that took no trick cannot
-  // bank its own zvanja; when the contract stands there is no transfer to carry
-  // them across either, so those points genuinely leave the deal. The harness
-  // runs with kontraSuccessSweeps off, so a made contract is always the
-  // keep-your-own branch.
+  // Over FACE VALUE now, because nothing leaves the deal any more. A pair that
+  // took no trick still cannot bank its own zvanja, but taking no trick is a
+  // štiglja against you, and those points cross to the pair that swept instead
+  // of evaporating. So every announced point is paid to somebody.
   const valatTotal = r.valatBonus[0] + r.valatBonus[1];
-  const declPayable = r.callerMade
-    ? (tricksWon[0] > 0 ? r.declarationPoints[0] : 0) +
-      (tricksWon[1] > 0 ? r.declarationPoints[1] : 0)
-    : r.declarationPoints[0] + r.declarationPoints[1];
+  const declPayable = r.declarationPoints[0] + r.declarationPoints[1];
   const flatTotal = declPayable + r.bela[0] + r.bela[1];
   const expectedTotal = (162 + valatTotal) * s.multiplier + flatTotal;
   expect(r.finalScore[0] + r.finalScore[1]).toBe(expectedTotal);

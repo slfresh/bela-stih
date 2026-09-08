@@ -171,6 +171,69 @@ describe('valat', () => {
   });
 });
 
+/**
+ * Štiglja (valat): all eight tricks to one pair.
+ *
+ * The swept pair took no trick, so it cannot bank what it announced — and those
+ * points do not simply leave the table. They cross to the pair that swept, the
+ * same way a pad hands the defenders everything.
+ */
+describe('zvanja when one pair is štiglja-ed', () => {
+  it('gives the sweeping pair the zvanja the swept pair could not bank', () => {
+    // The caller sweeps; the defenders announced 40 and took nothing at all.
+    const r = score({
+      tricks: SWEEP_BY_TEAM_1,
+      callerTeam: 1,
+      declarations: declarationsWorth(0, 40),
+    });
+    expect(r.valatTeam).toBe(1);
+    expect(r.tricksWon).toEqual([0, 8]);
+    expect(r.callerMade).toBe(true);
+    // Still ANNOUNCED by team 0 — the result sheet shows what was called.
+    expect(r.declarationPoints).toEqual([40, 0]);
+    // 162 + 90 valat + the defenders' 40, rather than 252 with 40 evaporating.
+    expect(r.finalScore).toEqual([0, 292]);
+  });
+
+  it('leaves nothing on the table', () => {
+    for (const value of [20, 50, 100, 150, 200]) {
+      const r = score({
+        tricks: SWEEP_BY_TEAM_1,
+        callerTeam: 1,
+        declarations: declarationsWorth(0, value),
+      });
+      expect(r.finalScore[0] + r.finalScore[1]).toBe(162 + 90 + value);
+    }
+  });
+
+  it('leaves the sweeping pair its own zvanja alone', () => {
+    const r = score({
+      tricks: SWEEP_BY_TEAM_1,
+      callerTeam: 1,
+      declarations: declarationsWorth(1, 50),
+    });
+    expect(r.finalScore).toEqual([0, 302]);
+  });
+
+  it('does not move zvanja when both pairs took a trick', () => {
+    const r = score({ tricks: EVEN_SPLIT, callerTeam: 0, declarations: declarationsWorth(0, 20) });
+    expect(r.tricksWon.every((t) => t > 0)).toBe(true);
+    expect(r.callerMade).toBe(true);
+    expect(r.finalScore).toEqual([101, 81]);
+  });
+
+  it('is unchanged when the sweeper also broke the contract', () => {
+    // The pad branch already handed the defenders both sides' zvanja.
+    const r = score({
+      tricks: SWEEP_BY_TEAM_1,
+      callerTeam: 0,
+      declarations: declarationsWorth(0, 50),
+    });
+    expect(r.callerMade).toBe(false);
+    expect(r.finalScore).toEqual([0, 302]);
+  });
+});
+
 /** Bela (trump K+Q) always belongs to its holder, whatever else happens. */
 describe('bela', () => {
   it('still scores for the calling team on a failed contract', () => {

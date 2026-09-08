@@ -216,7 +216,7 @@ interface Strings {
   /** The asking, spoken by the seat that leads: "do you have zvanja?" */
   askZvanja: string;
   /** Why a pair's announced zvanja are not in the recorded score. */
-  zvanjaVoidNoTrick: string;
+  zvanjaNoTrickToOpponents: string;
   /** What the winning side does when the asking is over. */
   showsZvanja: string;
   /** Answering with nothing. */
@@ -241,6 +241,10 @@ interface Strings {
   dealHeading: (n: number, dealer: string) => string;
   dealResult: string;
   cardsAndLastTrick: string;
+  /**
+   * Shown as "Štiglja" — the name the table actually uses. The engine calls the
+   * same thing `valatTeam` / `valatBonus`, which is the international term.
+   */
   valat: string;
   total: string;
   recorded: string;
@@ -370,7 +374,7 @@ const hr: Strings = {
   claimZvanjaHint: 'Imate li zvanje? Sami pazite — tko ne zove, propada mu.',
   noZvanja: 'Nemate ništa za zvati',
   askZvanja: 'Imate li zvanja?',
-  zvanjaVoidNoTrick: 'Bez štiha — zvanje se ne priznaje',
+  zvanjaNoTrickToOpponents: 'Bez štiha — zvanje ide protivniku',
   showsZvanja: 'pokazuje zvanja',
   noneToDeclare: 'Nemam',
   markZvanjaHint: 'Označite karte koje čine zvanje',
@@ -391,7 +395,7 @@ const hr: Strings = {
   dealHeading: (n, dealer) => `Dijeljenje ${n} — djeli ${dealer}`,
   dealResult: 'Obračun dijeljenja',
   cardsAndLastTrick: 'Karte + zadnji štih',
-  valat: 'Valat',
+  valat: 'Štiglja',
   total: 'Ukupno',
   recorded: 'Upisano',
   matchScore: 'Rezultat meča',
@@ -445,7 +449,7 @@ const hr: Strings = {
     statDeals: 'Dijeljenja',
     statZvanja: 'Zvanja',
     statBela: 'Bele',
-    statValat: 'Valati',
+    statValat: 'Štiglje',
     statBestDeal: 'Najbolje dijeljenje',
     coinsDisclaimer: 'Novčići služe samo za igru. Nema uplata ni isplata pravog novca.',
     back: 'Natrag',
@@ -578,7 +582,7 @@ const srCyrl: Strings = {
   claimZvanjaHint: 'Имате ли звање? Сами пазите — ко не зове, пропада му.',
   noZvanja: 'Немате ништа за звати',
   askZvanja: 'Имате ли звања?',
-  zvanjaVoidNoTrick: 'Без штиха — звање се не признаје',
+  zvanjaNoTrickToOpponents: 'Без штиха — звање иде противнику',
   showsZvanja: 'показује звања',
   noneToDeclare: 'Немам',
   markZvanjaHint: 'Означите карте које чине звање',
@@ -599,7 +603,7 @@ const srCyrl: Strings = {
   dealHeading: (n, dealer) => `Дељење ${n} — дели ${dealer}`,
   dealResult: 'Обрачун дељења',
   cardsAndLastTrick: 'Карте + последњи штих',
-  valat: 'Валат',
+  valat: 'Штиглја',
   total: 'Укупно',
   recorded: 'Уписано',
   matchScore: 'Резултат меча',
@@ -653,7 +657,7 @@ const srCyrl: Strings = {
     statDeals: 'Дељења',
     statZvanja: 'Звања',
     statBela: 'Беле',
-    statValat: 'Валати',
+    statValat: 'Штиглје',
     statBestDeal: 'Најбоље дељење',
     coinsDisclaimer: 'Новчићи служе само за игру. Нема уплата ни исплата правог новца.',
     back: 'Назад',
@@ -782,7 +786,7 @@ const en: Strings = {
   claimZvanjaHint: 'Got a declaration? Spot it yourself — unclaimed is forfeited.',
   noZvanja: 'Nothing to declare',
   askZvanja: 'Any declarations?',
-  zvanjaVoidNoTrick: 'No trick taken — declarations do not count',
+  zvanjaNoTrickToOpponents: 'No trick taken — declarations go to the opponents',
   showsZvanja: 'shows declarations',
   noneToDeclare: 'Nothing',
   markZvanjaHint: 'Mark the cards that make up your declaration',
@@ -803,7 +807,7 @@ const en: Strings = {
   dealHeading: (n, dealer) => `Deal ${n} — dealt by ${dealer}`,
   dealResult: 'Deal result',
   cardsAndLastTrick: 'Cards + last trick',
-  valat: 'Valat',
+  valat: 'Štiglja',
   total: 'Total',
   recorded: 'Recorded',
   matchScore: 'Match score',
@@ -857,7 +861,7 @@ const en: Strings = {
     statDeals: 'Deals',
     statZvanja: 'Declarations',
     statBela: 'Belas',
-    statValat: 'Valats',
+    statValat: 'Štiglje',
     statBestDeal: 'Best deal',
     coinsDisclaimer: 'Coins are for play only. No real-money deposits or payouts.',
     back: 'Back',
