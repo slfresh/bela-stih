@@ -160,6 +160,8 @@ describe('anchors measure on demand', () => {
     expect(t).toMatch(/const xp = useLaggedNumber\(profile\.xp, lag, 1\);/);
     expect(t).toMatch(/levelProgress\(xp\)/);
     expect(t).not.toMatch(/levelProgress\(profile\.xp\)/);
+  });
+
   it('the felt is drawn by FeltArt under a transparent, pinned frame', () => {
     const t = src('TableScreen.tsx');
     // The frame's numbers position the trick cross; FeltArt paints under them.
