@@ -346,10 +346,12 @@ const styles = StyleSheet.create({
   modeRow: { flexDirection: 'row', gap: space.sm + 2, alignItems: 'stretch' },
   tile: {
     flex: 1,
-    flexDirection: 'row',
-    // The icon sits with the first line, not floating beside two of them.
+    // A column, not a row: side by side on a 360 dp phone a row left the
+    // text ~90 dp and clipped both tiles' own titles. Stacked, the words get
+    // the tile's full width and no locale has to be abbreviated.
+    flexDirection: 'column',
     alignItems: 'flex-start',
-    gap: space.sm + 2,
+    gap: space.sm,
     backgroundColor: surface.panel,
     borderRadius: radius.md,
     borderWidth: 1,
@@ -365,7 +367,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tileText: { flex: 1, minWidth: 0, gap: 1 },
+  tileText: { alignSelf: 'stretch', minWidth: 0, gap: 1 },
   tileTitle: { color: ink.hi, ...type.sub, fontFamily: font.bold },
   tileSub: { color: ink.mid, ...type.caption },
 
