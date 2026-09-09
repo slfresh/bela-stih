@@ -295,9 +295,14 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowLabel: { color: theme.text, fontSize: 15 },
 
-  localeRow: { flexDirection: 'row', gap: 8 },
+  // The chips share the row equally, but never below the width their own
+  // words need: four of them in a 320 dp column gave each 72 dp, which turned
+  // "Mađarice" into a circle and broke "Jednostavne" across two lines. Below
+  // the minimum the row wraps instead, and each chip grows to fill its line.
+  localeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   localeChip: {
     flex: 1,
+    minWidth: 88,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: theme.line,
