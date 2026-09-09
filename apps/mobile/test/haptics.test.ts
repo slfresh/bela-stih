@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy', Soft: 'soft', Rigid: 'rigid' },
@@ -6,13 +6,16 @@ vi.mock('expo-haptics', () => ({
   impactAsync: vi.fn(() => Promise.resolve()),
   notificationAsync: vi.fn(() => Promise.resolve()),
   selectionAsync: vi.fn(() => Promise.resolve()),
+  performAndroidHapticsAsync: vi.fn(() => Promise.resolve()),
 }));
 
 import * as Haptics from 'expo-haptics';
-import { PATTERNS, pattern, setHapticsEnabled } from '../src/haptics';
+import { PATTERNS, pattern, setAndroidHaptics, setHapticsEnabled } from '../src/haptics';
 
 /** The vocabulary: short, few steps, and behind one gate. */
 describe('the haptic patterns', () => {
+  beforeEach(() => vi.clearAllMocks());
+
   it('are all at most 300 ms and a handful of steps, starting now', () => {
     for (const [name, steps] of Object.entries(PATTERNS)) {
       expect(steps.length, name).toBeGreaterThan(0);
@@ -24,6 +27,20 @@ describe('the haptic patterns', () => {
 
   it('escalate from the five-second clock to the two-second one', () => {
     expect(PATTERNS.clock2.length).toBeGreaterThan(PATTERNS.clock5.length);
+  });
+
+  it('use the named Android constant where one fits, and the iOS pattern elsewhere', () => {
+    setHapticsEnabled(true);
+    setAndroidHaptics(true);
+    pattern('dealMade');
+    expect(Haptics.performAndroidHapticsAsync).toHaveBeenCalledWith('confirm');
+    pattern('trumpMine'); // no constant fits a rigid tap: the impact plays
+    expect(Haptics.impactAsync).toHaveBeenCalledWith('rigid');
+    setAndroidHaptics(false);
+    vi.mocked(Haptics.performAndroidHapticsAsync).mockClear();
+    pattern('dealMade');
+    expect(Haptics.performAndroidHapticsAsync).not.toHaveBeenCalled();
+    expect(Haptics.notificationAsync).toHaveBeenCalledWith('success');
   });
 
   it('are silent when Settings says so', () => {

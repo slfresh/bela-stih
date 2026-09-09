@@ -22,7 +22,7 @@ import {
 } from './src/storage';
 import { preloadSfx, setMasterVolume, setSoundEnabled } from './src/audio';
 import { AudioUnlockChip } from './src/ui/AudioUnlockChip';
-import { setHapticsEnabled } from './src/haptics';
+import { setAndroidHaptics, setHapticsEnabled } from './src/haptics';
 import { setCosmetics, setDeckStyle } from './src/cosmetics';
 import { ErrorBoundary } from './src/ui/ErrorBoundary';
 import { useMotionPolicy } from './src/anim/useMotionPolicy';
@@ -75,6 +75,7 @@ export default function App() {
   useEffect(() => {
     setSoundEnabled(settings.sound);
     setHapticsEnabled(settings.haptics);
+    setAndroidHaptics(Platform.OS === 'android');
     setMasterVolume(settings.volume);
   }, [settings.sound, settings.haptics, settings.volume]);
 
