@@ -12,6 +12,7 @@ import Animated, {
 import type { Card, Suit } from '@belot/engine';
 import { cosmetics } from '../cosmetics';
 import { CardBackFace, CardFace, SuitPip } from '../deck';
+import { EmoteFace } from '../emoteArt';
 import { garb } from '../deck/palette';
 import { counters } from '../dev/counters';
 import { radius, signal, theme } from '../theme';
@@ -129,6 +130,7 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
           duration={fx.duration}
           speed={fx.speed}
           big={fx.big}
+          art={fx.art}
           pip={fx.pip}
           weight={fx.weight}
           fade={fx.fade}
@@ -632,6 +634,7 @@ function Bubble({
   duration,
   speed,
   big = false,
+  art,
   pip,
   weight = 1,
   fade = false,
@@ -643,6 +646,8 @@ function Bubble({
   speed: number;
   /** Emoji emotes read at reaction size, not caption size. */
   big?: boolean;
+  /** A drawn face in place of the text. */
+  art?: string;
   pip?: Suit;
   weight?: 1 | 2 | 3 | 4;
   fade?: boolean;
@@ -703,6 +708,9 @@ function Bubble({
           ]}
         >
           {pip !== undefined && <SuitPip suit={pip} size={18} />}
+          {art !== undefined ? (
+            <EmoteFace id={art} size={34} />
+          ) : (
           <Text
             style={[
               styles.bubbleText,
@@ -716,6 +724,7 @@ function Bubble({
           >
             {text}
           </Text>
+          )}
         </View>
         <View style={[styles.bubbleTail, tone === 'gold' && styles.bubbleTailGold]} />
       </Animated.View>

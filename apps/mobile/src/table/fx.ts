@@ -16,6 +16,7 @@ import {
   flightDuration,
   LAST_TRICK_CHIP_MS,
 } from '../anim/lifetimes';
+import { hasEmoteFace } from '../emoteIds';
 import { emoteText, isGlyphEmote } from '../emotes';
 import { declarationWeight } from './cues';
 import { cardWidthForHeight, fitHand, MAX_CARD_W } from './geometry';
@@ -67,6 +68,8 @@ export function spawnEmote(
     duration: 1800,
     speed: 1,
     big: isGlyphEmote(id),
+    // The six faces are drawn; a phrase is its text.
+    art: hasEmoteFace(id) ? id : undefined,
     // Reduce-motion: no pop, just there and then not.
     fade: opts.reduced?.() ?? false,
   });

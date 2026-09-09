@@ -73,6 +73,8 @@ export type Fx =
       /** The director's pace, so the pop and fade shrink with the beat. */
       speed: number;
       big?: boolean;
+      /** A drawn emote instead of the text: the id of one of the six faces. */
+      art?: string;
       /** A suit pip before the text: the trump being called. */
       pip?: Suit;
       /** A zvanje's weight, 1–4: bigger and gold-edged as it grows. */

@@ -100,10 +100,7 @@ describe('the design tokens', () => {
     // only the emotes (until they are drawn too) may use them.
     const emoji = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     // Known debts, each removed with the milestone that redraws it.
-    const allow: Record<string, string[]> = {
-      // The emote-strip toggle (M5.9 draws the emotes).
-      'TableScreen.tsx': ['😄'],
-    };
+    const allow: Record<string, string[]> = {};
     for (const f of files) {
       if (PALETTE_FILES.has(f.rel)) continue;
       let text = f.text;

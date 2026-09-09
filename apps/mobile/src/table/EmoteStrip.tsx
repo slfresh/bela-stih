@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { PressScale } from '../ui/PressScale';
 import type { Lang } from '@belot/i18n';
 import { EMOTES, emoteText } from '../emotes';
+import { EmoteFace, hasEmoteFace } from '../emoteArt';
 import { radius, theme } from '../theme';
 
 /**
@@ -47,8 +48,15 @@ export function EmoteStrip({
       {/* The bubble's pop is the sound of an emote; no click on top of it. */}
       <View style={[styles.row, vertical && styles.col, dimmed && styles.faded]}>
         {GLYPHS.map((e) => (
-          <PressScale key={e.id} onPress={() => onSend(e.id)} style={styles.chip} hitSlop={4} sound={null}>
-            <Text style={styles.glyph}>{emoteText(lang, e.id)}</Text>
+          <PressScale
+            key={e.id}
+            onPress={() => onSend(e.id)}
+            style={styles.chip}
+            hitSlop={4}
+            sound={null}
+            accessibilityLabel={e.id}
+          >
+            {hasEmoteFace(e.id) ? <EmoteFace id={e.id} size={26} /> : <Text style={styles.glyph}>{emoteText(lang, e.id)}</Text>}
           </PressScale>
         ))}
       </View>

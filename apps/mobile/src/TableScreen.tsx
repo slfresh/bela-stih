@@ -81,6 +81,7 @@ import { playSfx } from './audio';
 import { pattern } from './haptics';
 import { Button } from './ui/Button';
 import { Coin, Crown, Star } from './ui/icons';
+import { EmoteFace } from './emoteArt';
 import { PressScale } from './ui/PressScale';
 import { ink, num, radius, space, stroke, surface, team, theme, type } from './theme';
 import { isPartner, seatTone } from './table/teamColour';
@@ -774,7 +775,7 @@ export function TableScreen(props: TableScreenProps) {
       hitSlop={8}
       style={[styles.emoteToggle, trayOpen && styles.emoteToggleOn]}
     >
-      <Text style={styles.emoteToggleText}>😄</Text>
+      <EmoteFace id="smile" size={24} />
     </PressScale>
   ) : null;
 
@@ -2077,7 +2078,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emoteToggleOn: { borderColor: theme.accent },
-  emoteToggleText: { fontSize: 20 },
 
 
   resultBackdrop: {
