@@ -107,7 +107,7 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
         setTimeout(() => {
           spawnEmote({ anchors, bus: fxBus, lang }, seat, id);
           playSfx('pop');
-        }, 700);
+        }, 800);
       }
     },
     // Anchors re-measure as each batch starts (the measurement lands a frame

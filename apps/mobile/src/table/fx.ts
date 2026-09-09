@@ -174,8 +174,22 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
         bubble(e.seat, `${lang.s.bela.toUpperCase()}! (20)`, 'gold', 1000, speed);
         break;
 
-      // dealScored / matchOver feedback is the result panel, coins and
-      // confetti — driven by the screens off banner/winner state, not here.
+      case 'dealScored': {
+        // The dealer's button passes to the right as the deal is scored: the
+        // engine rotates it at this beat's end, and the badge flies there over
+        // the beat so the switch lands as the sprite does.
+        const dealer = view()?.dealer;
+        if (dealer === undefined) break;
+        const from = anchors.centre(anchorId.seat(dealer));
+        const to = anchors.centre(anchorId.seat(((dealer + 1) % 4) as Seat));
+        if (from && to) {
+          bus.emit({ kind: 'badge', from, to, duration: DEFAULT_TIMINGS.dealScored.dur * speed });
+        }
+        break;
+      }
+
+      // The rest of dealScored / matchOver feedback is the result panel,
+      // coins and confetti — driven by the screens off banner/winner state.
       default:
         break;
     }

@@ -85,6 +85,14 @@ describe('anchors measure on demand', () => {
     expect(src('screens/SettingsScreen.tsx').match(/playSfx\('tap'\)/g)?.length ?? 0).toBe(1);
   });
 
+  it('screens and the table enter; nothing ever exits', () => {
+    // There is no router to hold the old screen for an exit animation, and a
+    // rematch remount would show two tables.
+    expect(readFileSync(join(here, '../App.tsx'), 'utf8')).not.toMatch(/exiting=/);
+    expect(src('TableScreen.tsx')).not.toMatch(/exiting=/);
+    expect(src('TableScreen.tsx')).toMatch(/entering=\{reduced \? undefined : feltEntering\}/);
+  });
+
   it('the home screen no longer re-renders on every scroll event', () => {
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/setScrollTick/);

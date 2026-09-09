@@ -122,6 +122,8 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
       );
     case 'pulse':
       return <Pulse at={local(fx.at)} speed={fx.speed} />;
+    case 'badge':
+      return <Badge from={local(fx.from)} to={local(fx.to)} duration={fx.duration} />;
     case 'coins':
       return <Coins from={local(fx.from)} to={local(fx.to)} count={fx.count} />;
     case 'confetti':
@@ -358,6 +360,33 @@ function Pulse({ at, speed }: { at: XY; speed: number }) {
   return <Animated.View style={[styles.sprite, styles.pulse, style]} />;
 }
 
+// --- the dealer's button -------------------------------------------------------
+
+const BADGE = 18;
+
+/** The "D" hopping from the old dealer's puck to the new one. */
+function Badge({ from, to, duration }: { from: XY; to: XY; duration: number }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    p.value = withTiming(1, { duration, easing: Easing.inOut(Easing.cubic) });
+  }, [p, duration]);
+  const style = useAnimatedStyle(() => {
+    const arc = Math.sin(Math.PI * p.value);
+    return {
+      transform: [
+        { translateX: from.x + (to.x - from.x) * p.value - BADGE / 2 },
+        { translateY: from.y + (to.y - from.y) * p.value - BADGE / 2 - arc * 18 },
+        { scale: 1 + 0.25 * arc },
+      ],
+    };
+  });
+  return (
+    <Animated.View style={[styles.sprite, styles.badge, style]}>
+      <Text style={styles.badgeText}>D</Text>
+    </Animated.View>
+  );
+}
+
 // --- speech bubble -----------------------------------------------------------
 
 function Bubble({
@@ -536,6 +565,18 @@ function ConfettiPiece({
 // -----------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  // Mirrors SeatPuck's dealer badge, so the hop lands on its own likeness.
+  badge: {
+    width: BADGE,
+    height: BADGE,
+    borderRadius: BADGE / 2,
+    backgroundColor: theme.cardFace,
+    borderWidth: 1,
+    borderColor: garb.goldDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { color: garb.ink, fontSize: 11, fontWeight: '800' },
   pulse: {
     width: PULSE_SIZE,
     height: PULSE_SIZE,

@@ -10,12 +10,18 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
+  cancelAnimation,
+  Easing,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withRepeat,
+  withSequence,
   withSpring,
   withTiming,
+  ZoomIn,
 } from 'react-native-reanimated';
+import { useCountUp } from './anim/useCountUp';
 import type {
   Action,
   Card,
@@ -221,6 +227,9 @@ export function TableScreen(props: TableScreenProps) {
     };
 
   const puck = (s: Seat) => (
+    <Animated.View
+      entering={reduced ? undefined : ZoomIn.delay(((s - mySeat + 4) % 4) * 60).duration(220)}
+    >
     <SeatPuck
       seat={s}
       name={meta(s).name}
@@ -238,6 +247,7 @@ export function TableScreen(props: TableScreenProps) {
       thinking={spotlightSeat === s}
       reduced={reduced}
     />
+    </Animated.View>
   );
 
   // A ring of light bursts from the hand as a cue lands — the sound's
@@ -342,7 +352,8 @@ export function TableScreen(props: TableScreenProps) {
   );
 
   const feltBody = (
-    <View
+    <Animated.View
+      entering={reduced ? undefined : feltEntering}
       style={[
         styles.felt,
         { backgroundColor: baize.felt, borderColor: baize.rim },
@@ -406,13 +417,17 @@ export function TableScreen(props: TableScreenProps) {
                   />
                 </>
               ) : (
-                <View style={[styles.slotGhost, { borderColor: seatTone(s, mySeat).dim }]} />
+                <SlotGhost
+                  colour={seatTone(s, mySeat).dim}
+                  breathing={spotlightSeat === s}
+                  reduced={reduced}
+                />
               )}
             </Anchor>
           );
         })}
       </View>
-    </View>
+    </Animated.View>
   );
 
   // Rows that appear for a moment — the zvanja reveal, the award — float
@@ -686,6 +701,7 @@ export function TableScreen(props: TableScreenProps) {
                   matchScores={matchScores}
                   progress={view.dealProgress}
                   vertical
+                  reduced={reduced}
                 />
                 {plaque}
                 {calls}
@@ -725,6 +741,7 @@ export function TableScreen(props: TableScreenProps) {
                 mySeat={mySeat}
                 matchScores={matchScores}
                 progress={view.dealProgress}
+                reduced={reduced}
               />
 
               {felt}
@@ -772,6 +789,7 @@ const TableHeader = memo(function TableHeader({
   matchScores,
   progress,
   vertical = false,
+  reduced = false,
 }: {
   lang: Lang;
   mySeat: Seat;
@@ -779,9 +797,15 @@ const TableHeader = memo(function TableHeader({
   progress: DealProgress | null;
   /** Landscape puts the whole strip in the left rail, stacked. */
   vertical?: boolean;
+  reduced?: boolean;
 }) {
   const us = teamOf(mySeat);
   const them = (1 - us) as TeamId;
+  // Scores count to their new value instead of jumping.
+  const usScore = useCountUp(matchScores[us], 500, { reduced });
+  const themScore = useCountUp(matchScores[them], 500, { reduced });
+  const usRun = useCountUp(progress?.running[us] ?? 0, 350, { reduced });
+  const themRun = useCountUp(progress?.running[them] ?? 0, 350, { reduced });
 
   // While trick 1 is open a later zvanje can still move the target, so the
   // count is shown dimmed rather than hidden — it is honest, just not final.
@@ -796,20 +820,20 @@ const TableHeader = memo(function TableHeader({
       <View style={[styles.pillRow, vertical && styles.pillCol]}>
         <View style={[styles.teamPill, { backgroundColor: team.usDim, borderColor: team.usEdge }]}>
           <Text style={styles.pillLabel}>{lang.team(us, mySeat)}</Text>
-          <Text style={[styles.pillValue, { color: team.usInk }]}>{matchScores[us]}</Text>
+          <Text style={[styles.pillValue, { color: team.usInk }]}>{usScore}</Text>
         </View>
         <View style={[styles.teamPill, { backgroundColor: team.themDim, borderColor: team.themEdge }]}>
           {/* Side by side the two pills mirror each other around the centre;
               stacked in a rail there is no centre, so both read label, value. */}
           {vertical && <Text style={styles.pillLabel}>{lang.team(them, mySeat)}</Text>}
-          <Text style={[styles.pillValue, { color: team.themInk }]}>{matchScores[them]}</Text>
+          <Text style={[styles.pillValue, { color: team.themInk }]}>{themScore}</Text>
           {!vertical && <Text style={styles.pillLabel}>{lang.team(them, mySeat)}</Text>}
         </View>
       </View>
 
       {progress ? (
         <Text style={[live!, vertical && styles.centreText]}>
-          {progress.running[us]} : {progress.running[them]}
+          {usRun} : {themRun}
           <Text style={styles.subDim}>
             {vertical ? '\n' : '   '}
             {progress.callerNeeds === 0
@@ -829,6 +853,7 @@ const TableHeader = memo(function TableHeader({
   a.lang === b.lang &&
   a.mySeat === b.mySeat &&
   a.vertical === b.vertical &&
+  a.reduced === b.reduced &&
   a.matchScores[0] === b.matchScores[0] &&
   a.matchScores[1] === b.matchScores[1] &&
   (a.progress === null) === (b.progress === null) &&
@@ -1160,6 +1185,52 @@ const FanCard = memo(
     a.onPress === b.onPress,
 );
 
+/**
+ * The table zooms in from a hair under full size as it mounts: an entrance,
+ * not a cut. A worklet, as reanimated requires of a custom entering animation.
+ */
+const feltEntering = () => {
+  'worklet';
+  return {
+    initialValues: { opacity: 0, transform: [{ scale: 0.96 }] },
+    animations: {
+      opacity: withTiming(1, { duration: 240 }),
+      transform: [{ scale: withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }) }],
+    },
+  };
+};
+
+/** An empty slot; the one whose seat is acting breathes a little. */
+const SlotGhost = memo(function SlotGhost({
+  colour,
+  breathing,
+  reduced,
+}: {
+  colour: string;
+  breathing: boolean;
+  reduced: boolean;
+}) {
+  const o = useSharedValue(0.7);
+  useEffect(() => {
+    if (breathing && !reduced) {
+      o.value = withRepeat(
+        withSequence(
+          withTiming(0.95, { duration: 700, easing: Easing.inOut(Easing.sin) }),
+          withTiming(0.55, { duration: 700, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        false,
+      );
+    } else {
+      cancelAnimation(o);
+      o.value = withTiming(0.7, { duration: 200 });
+    }
+    return () => cancelAnimation(o);
+  }, [o, breathing, reduced]);
+  const style = useAnimatedStyle(() => ({ opacity: o.value }));
+  return <Animated.View style={[styles.slotGhost, { borderColor: colour }, style]} />;
+});
+
 /** Bidding, declaring, and the explicit bela call. */
 function NonCardActions({
   options,
@@ -1368,9 +1439,9 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   pillLabel: { color: theme.textDim, fontSize: 12, fontWeight: '600' },
-  pillValue: { fontSize: 17, fontWeight: '800' },
-  dealCount: { color: theme.accent, fontSize: 13, fontWeight: '700' },
-  dealCountDim: { color: theme.textDim, fontSize: 13, fontWeight: '700' },
+  pillValue: { fontSize: 17, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  dealCount: { color: theme.accent, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  dealCountDim: { color: theme.textDim, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
 
   tableArea: { flex: 1 },
   topSeat: { alignItems: 'center' },
@@ -1426,7 +1497,7 @@ const styles = StyleSheet.create({
     // A place a card will go, marked the way a table mat is: a dashed outline
     // in the seat's colour over a shade of shadow. Four hard-edged boxes read
     // as placeholders that failed to load; four faint ones read as nothing.
-    opacity: 0.7,
+    // (Opacity is animated: the acting seat's slot breathes.)
     flex: 1,
     borderRadius: radius.card,
     borderWidth: 1.5,

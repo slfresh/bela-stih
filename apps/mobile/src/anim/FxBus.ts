@@ -64,6 +64,8 @@ export type Fx =
     }
   /** A ring of light bursting from a point — the "your turn" cue's visible twin. */
   | { kind: 'pulse'; at: XY; speed: number }
+  /** The dealer's button passing to the next seat over the scoring beat. */
+  | { kind: 'badge'; from: XY; to: XY; duration: number }
   | { kind: 'coins'; from: XY; to: XY; count: number }
   | { kind: 'confetti' };
 

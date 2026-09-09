@@ -119,6 +119,8 @@ export function motionOf(fx: Fx): number {
       return Math.max(fx.duration, BUBBLE_MIN_MS * fx.speed);
     case 'pulse':
       return PULSE_MS * fx.speed;
+    case 'badge':
+      return fx.duration;
     case 'coins':
       return coinsLandedMs(fx.count);
     case 'confetti':
@@ -139,6 +141,8 @@ export function lifetimeOf(fx: Fx): number {
       return motionOf(fx) + BUBBLE_SETTLE_MS;
     case 'pulse':
       return motionOf(fx) + 50;
+    case 'badge':
+      return motionOf(fx) + 60;
     case 'coins':
       return motionOf(fx) + 250;
     case 'confetti':

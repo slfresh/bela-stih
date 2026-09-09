@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Linking, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Lang } from '@belot/i18n';
 import type { PlayerProfile } from '@belot/progression';
@@ -23,6 +24,7 @@ import { preloadSfx, setSoundEnabled } from './src/audio';
 import { setHapticsEnabled } from './src/haptics';
 import { setCosmetics, setDeckStyle } from './src/cosmetics';
 import { ErrorBoundary } from './src/ui/ErrorBoundary';
+import { useMotionPolicy } from './src/anim/useMotionPolicy';
 
 /** The menu stack, one level deep: home, or one of its satellite screens. */
 type MenuScreen = 'home' | 'shop' | 'settings' | 'profile';
@@ -38,6 +40,7 @@ export default function App() {
   const [launch, setLaunch] = useState<Launch | null>(null);
   const [menu, setMenu] = useState<MenuScreen>('home');
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
+  const motion = useMotionPolicy(settings.motion);
 
   // Warm the sound bank once, so even the session's first effect is audible.
   useEffect(() => preloadSfx(), []);
@@ -153,6 +156,11 @@ export default function App() {
       />
     );
 
+  // Screens fade in rather than cutting — entering only: there is no router
+  // to hold the old screen for an exit, and a rematch remount would otherwise
+  // show two tables. The key remounts the wrapper on every screen change.
+  const screenKey = launch ? `game:${launch.mode}` : `menu:${menu}`;
+
   // A render error anywhere below lands on a branded panel whose one button
   // leads home — not a blank page. The boundary sits inside the shell so the
   // panel keeps the web column and the safe-area insets.
@@ -161,13 +169,19 @@ export default function App() {
       title={lang.s.ui.crashTitle}
       body={lang.s.ui.crashBody}
       action={lang.s.ui.back}
-      resetKey={launch ? launch.mode : menu}
+      resetKey={screenKey}
       onReset={() => {
         setMenu('home');
         exitToHome();
       }}
     >
-      {content}
+      <Animated.View
+        key={screenKey}
+        entering={motion === 'reduced' ? undefined : FadeIn.duration(180)}
+        style={{ flex: 1 }}
+      >
+        {content}
+      </Animated.View>
     </ErrorBoundary>
   );
 
