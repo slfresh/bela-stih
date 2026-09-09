@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import { teamOf } from '@belot/engine';
 import { anchorId } from './anim/FxBus';
@@ -45,7 +46,11 @@ function OfflineMatch({
   onExit: () => void;
   onRematch: () => void;
 }) {
-  useKeepAwake();
+  // Not on the web: the Wake Lock API needs a gesture and a secure context,
+  // and deactivating a lock that never activated rejects with
+  // ERR_KEEP_AWAKE_TAG_INVALID on every exit. The platform never changes at
+  // runtime, so the hook order is stable.
+  if (Platform.OS !== 'web') useKeepAwake(); // eslint-disable-line react-hooks/rules-of-hooks
   const g = useGame(settings);
 
   const settled = g.view.phase === 'DEAL_OVER' || g.view.phase === 'MATCH_OVER';

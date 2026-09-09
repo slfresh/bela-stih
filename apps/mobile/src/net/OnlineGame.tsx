@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   Share,
@@ -40,7 +41,11 @@ export function OnlineGame({
   joinCode?: string;
   onExit: () => void;
 }) {
-  useKeepAwake();
+  // Not on the web: the Wake Lock API needs a gesture and a secure context,
+  // and deactivating a lock that never activated rejects with
+  // ERR_KEEP_AWAKE_TAG_INVALID on every exit. The platform never changes at
+  // runtime, so the hook order is stable.
+  if (Platform.OS !== 'web') useKeepAwake(); // eslint-disable-line react-hooks/rules-of-hooks
   const net = useNetGame(settings);
   const { status, quickPlay, createPrivate, joinById } = net;
 

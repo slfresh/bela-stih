@@ -37,6 +37,10 @@ function preDealView(v: PublicView): PublicView {
     mustDeclare: false,
     canDeclare: false,
     canAnnounceBela: false,
+    // The constructor has already run the bots to my first decision, which
+    // may be the zvanja question: without this the prompt showed for the
+    // 350 ms before the deal animation began.
+    declareTurn: null,
   };
 }
 
