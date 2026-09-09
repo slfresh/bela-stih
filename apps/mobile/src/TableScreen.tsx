@@ -453,7 +453,7 @@ export function TableScreen(props: TableScreenProps) {
       </View>
       {view.callerSeat !== null && (
         <Text style={styles.plaqueCaller} numberOfLines={1}>
-          {lang.s.calledBy(meta(view.callerSeat).name)}
+          {view.callerSeat === mySeat ? lang.s.calledByYou : lang.s.calledBy(meta(view.callerSeat).name)}
         </Text>
       )}
     </Anchor>
@@ -516,7 +516,7 @@ export function TableScreen(props: TableScreenProps) {
             >
               {played ? (
                 <>
-                  <PlayingCard card={played.card} width={slot.slotW} deckStyle={deck} />
+                  <PlayingCard card={played.card} width={slot.slotW} deckStyle={deck} locale={lang.id} />
                   {/* Whose card this is, at a glance. Drawn OUTSIDE the card: a
                       border on the slot itself sat under the card's own edge
                       and was never actually seen. */}
@@ -703,6 +703,7 @@ export function TableScreen(props: TableScreenProps) {
           onToggleMark={toggleMark}
           confirmPlay={confirmPlay}
           deckStyle={deck}
+          locale={lang.id}
           reduced={reduced}
           armCaption={lang.s.ui.play}
           glow={cue?.kind === 'glow' ? cue : null}
@@ -816,7 +817,9 @@ export function TableScreen(props: TableScreenProps) {
         winnerLabel={winnerTeam !== null ? lang.team(winnerTeam, mySeat) : ''}
         renonsText={
           lastDealResult?.renonsSeat != null
-            ? lang.s.renonsBy(meta(lastDealResult.renonsSeat).name)
+            ? lastDealResult.renonsSeat === mySeat
+              ? lang.s.renonsByYou
+              : lang.s.renonsBy(meta(lastDealResult.renonsSeat).name)
             : null
         }
         series={series}
@@ -1126,6 +1129,7 @@ function Hand({
   onSwap,
   confirmPlay = 'ambiguous',
   deckStyle,
+  locale,
   reduced = false,
   armCaption,
   glow = null,
@@ -1149,6 +1153,7 @@ function Hand({
   onToggleMark?: (id: string) => void;
   confirmPlay?: ConfirmPlay;
   deckStyle: DeckStyle;
+  locale?: string;
   /** Reduce-motion: the cards step up instead of springing. */
   reduced?: boolean;
   /** What the second tap on an armed card does, on the card. */
@@ -1286,6 +1291,7 @@ function Hand({
             card={card}
             width={fit.cardW}
             deckStyle={deckStyle}
+            locale={locale}
             marginLeft={i === 0 ? 0 : fit.overlap}
             baseY={Math.pow(Math.abs(off), 1.6) * 3.2 * fit.scale}
             lift={playable || (picking && isArmed) ? -lift : 0}
@@ -1321,6 +1327,7 @@ const FanCard = memo(
     card,
     width,
     deckStyle,
+    locale,
     marginLeft,
     baseY,
     lift,
@@ -1341,6 +1348,7 @@ const FanCard = memo(
     card: Card;
     width: number;
     deckStyle: DeckStyle;
+    locale?: string;
     marginLeft: number;
     /** The fan's arc: where this card sits when it is not lifted. */
     baseY: number;
@@ -1432,6 +1440,7 @@ const FanCard = memo(
             card={card}
             width={width}
             deckStyle={deckStyle}
+            locale={locale}
             dimmed={dimmed}
             highlight={highlight}
             selected={selected}
@@ -1450,6 +1459,7 @@ const FanCard = memo(
     a.card.rank === b.card.rank &&
     a.width === b.width &&
     a.deckStyle === b.deckStyle &&
+    a.locale === b.locale &&
     a.marginLeft === b.marginLeft &&
     a.baseY === b.baseY &&
     a.lift === b.lift &&

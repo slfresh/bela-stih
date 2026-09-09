@@ -82,7 +82,8 @@ export const CardFace = memo(CardFaceImpl, (a, b) =>
   a.card.rank === b.card.rank &&
   a.width === b.width &&
   a.style === b.style &&
-  a.index === b.index,
+  a.index === b.index &&
+  a.locale === b.locale,
 );
 
 function CardFaceImpl({
@@ -90,12 +91,19 @@ function CardFaceImpl({
   width,
   style,
   index = true,
+  locale: _locale,
 }: {
   card: Card;
   width: number;
   style: DeckStyle;
   /** The corner index: on by default; the gallery may show the bare printing. */
   index?: boolean;
+  /**
+   * The locale the labels are set in. Read through cardLang() during render;
+   * passed as a prop only so the memo re-renders a mounted face when the
+   * language changes (the settings preview kept the old locale otherwise).
+   */
+  locale?: string;
 }) {
   counters.cardFace++;
   const height = width * 1.45;

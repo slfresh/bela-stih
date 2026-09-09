@@ -194,6 +194,8 @@ interface Strings {
   /** The plaque while the trump is being called: a question, two words at most. */
   trumpQuestion: string;
   calledBy: (who: string) => string;
+  /** The same, when the caller is the viewer: "zvao si ti", not "zvao Ti". */
+  calledByYou: string;
   score: string;
   trick: string;
   emptyTrick: string;
@@ -230,6 +232,8 @@ interface Strings {
   /** Renons/auzmeš — the hard-mode misplay call. */
   renonsTitle: string;
   renonsBy: (who: string) => string;
+  /** The same, when the offender is the viewer, without a gendered verb. */
+  renonsByYou: string;
   /** Hard-mode blind claim button + empty-claim toast. */
   claimZvanja: string;
   claimZvanjaHint: string;
@@ -336,8 +340,8 @@ const HR_COSMETICS: Record<string, string> = {
 const HR_QUESTS: Record<QuestKind, string> = {
   playDeals: 'Odigraj dijeljenja',
   winDeals: 'Osvoji dijeljenja',
-  callZvanja: 'Zovite zvanja',
-  callBela: 'Zovite belu',
+  callZvanja: 'Zovi zvanja',
+  callBela: 'Zovi belu',
   winMatch: 'Pobijedi u partiji',
 };
 
@@ -356,7 +360,7 @@ const hr: Strings = {
     A: 'asa',
   },
 
-  seat: ['Vi', 'Desni', 'Partner', 'Lijevi'],
+  seat: ['Ti', 'Desni', 'Partner', 'Lijevi'],
   seatAbsolute: (seat) => `Igrač ${seat}`,
   us: 'Mi',
   them: 'Oni',
@@ -367,6 +371,7 @@ const hr: Strings = {
   trumpUndecided: 'adut još nije određen',
   trumpQuestion: 'adut?',
   calledBy: (who) => `zvao ${who}`,
+  calledByYou: 'zvao si ti',
   score: 'Rezultat',
   trick: 'Štih',
   emptyTrick: '(prazan)',
@@ -395,29 +400,30 @@ const hr: Strings = {
   carre: (rank) => `četiri ${rank}`,
   renonsTitle: 'Auzmeš!',
   renonsBy: (who) => `${who} je pogriješio — cijelo dijeljenje ide protivnicima`,
+  renonsByYou: 'Tvoj auzmeš — cijelo dijeljenje ide protivnicima',
   claimZvanja: 'Zovem zvanje',
-  claimZvanjaHint: 'Imaš li zvanje? Sam pazi — tko ne zove, propada mu.',
-  noZvanja: 'Nemate ništa za zvati',
+  claimZvanjaHint: 'Imaš li zvanje? Pazi — tko ne zove, propada mu.',
+  noZvanja: 'Nemaš ništa za zvati',
   askZvanja: 'Imaš li zvanja?',
   zvanjaNoTrickToOpponents: 'Bez štiha — zvanje ide protivniku',
   showsZvanja: 'pokazuje zvanja',
   noneToDeclare: 'Nemam',
   markZvanjaHint: 'Označi karte koje čine zvanje',
-  markingOk: 'To je zvanje — pritisnite Prijavi',
+  markingOk: 'To je zvanje — pritisni Prijavi',
   markingNotZvanje: 'Označene karte nisu zvanje',
   declareMarked: 'Prijavi',
   difficulty: 'Težina',
   difficultyEasy: 'Lagana',
   difficultyHard: 'Prava bela',
   difficultyHardHint:
-    'Prava bela: aplikacija ne čuva pravila umjesto vas. Zvanja tražite sami, a kriva karta je auzmeš — protivnici pišu sve.',
+    'Prava bela: aplikacija ne čuva pravila umjesto tebe. Zvanja tražiš bez pomoći, a kriva karta je auzmeš — protivnici pišu sve.',
   deckStyleLabel: 'Karte',
   deckMadarice: 'Mađarice',
   deckStarinske: 'Starinske',
   deckFrancuske: 'Francuske',
   deckSimple: 'Jednostavne',
 
-  dealHeading: (n, dealer) => `Dijeljenje ${n} — djeli ${dealer}`,
+  dealHeading: (n, dealer) => `Dijeljenje ${n} — dijeli ${dealer}`,
   dealResult: 'Obračun dijeljenja',
   cardsAndLastTrick: 'Karte + zadnji štih',
   valat: 'Štiglja',
@@ -440,7 +446,7 @@ const hr: Strings = {
     playBots: 'Igraj protiv botova',
     privateTable: 'Napravi privatni stol',
     modeBotsSub: 'Odmah, i bez interneta',
-    modePrivateSub: 'Pozovi prijatelje kodom',
+    modePrivateSub: 'Pozovi prijatelje šifrom',
     daily: 'Dnevno',
     joinByCode: 'Pridruži se šifrom',
     tableCode: 'šifra stola',
@@ -472,7 +478,7 @@ const hr: Strings = {
     haptics: 'Vibracija',
     language: 'Jezik',
     resetProgress: 'Izbriši napredak',
-    resetConfirm: 'Sigurno? Pritisnite opet',
+    resetConfirm: 'Sigurno? Pritisni opet',
     version: 'Verzija',
     statMatches: 'Partije',
     statWinRate: 'Postotak pobjeda',
@@ -496,7 +502,7 @@ const hr: Strings = {
     waitingForPlayers: (seated) => `Čekamo igrače… ${seated}/4`,
     shareCode: 'Pošalji je prijateljima da ti se pridruže.',
     leaveTable: 'Napusti stol',
-    botPlaysFor: (names) => `${names} — bot igra umjesto njih`,
+    botPlaysFor: (names) => `${names} — igra bot`,
     startWithBots: 'Počni s botovima',
     sitHere: 'sjedni ovdje',
     retry: 'Pokušaj ponovno',
@@ -525,7 +531,7 @@ const hr: Strings = {
     volumeLoud: 'Glasno',
     soundBlocked: 'Zvuk je isključen — dodirni za uključivanje',
     invite: 'Pozovi prijatelje',
-    inviteText: (url) => `Zaigraj Belu sa mnom! Pridruži se mom stolu: ${url}`,
+    inviteText: (url) => `Zaigraj belu sa mnom! Pridruži se mom stolu: ${url}`,
   },
 };
 
@@ -560,8 +566,8 @@ const SR_COSMETICS: Record<string, string> = {
 const SR_QUESTS: Record<QuestKind, string> = {
   playDeals: 'Одиграј дељења',
   winDeals: 'Освоји дељења',
-  callZvanja: 'Зовите звања',
-  callBela: 'Зовите белу',
+  callZvanja: 'Зови звања',
+  callBela: 'Зови белу',
   winMatch: 'Победи у партији',
 };
 
@@ -582,7 +588,7 @@ const srCyrl: Strings = {
     A: 'аса',
   },
 
-  seat: ['Ви', 'Десни', 'Партнер', 'Леви'],
+  seat: ['Ти', 'Десни', 'Партнер', 'Леви'],
   seatAbsolute: (seat) => `Играч ${seat}`,
   us: 'Ми',
   them: 'Они',
@@ -593,6 +599,7 @@ const srCyrl: Strings = {
   trumpUndecided: 'адут још није одређен',
   trumpQuestion: 'адут?',
   calledBy: (who) => `звао ${who}`,
+  calledByYou: 'звао си ти',
   score: 'Резултат',
   trick: 'Штих',
   emptyTrick: '(празан)',
@@ -621,22 +628,23 @@ const srCyrl: Strings = {
   carre: (rank) => `четири ${rank}`,
   renonsTitle: 'Аузмеш!',
   renonsBy: (who) => `${who} је погрешио — цело дељење иде противницима`,
+  renonsByYou: 'Твој аузмеш — цело дељење иде противницима',
   claimZvanja: 'Зовем звање',
-  claimZvanjaHint: 'Имаш ли звање? Сам пази — ко не зове, пропада му.',
-  noZvanja: 'Немате ништа за звати',
+  claimZvanjaHint: 'Имаш ли звање? Пази — ко не зове, пропада му.',
+  noZvanja: 'Немаш ништа за звати',
   askZvanja: 'Имаш ли звања?',
   zvanjaNoTrickToOpponents: 'Без штиха — звање иде противнику',
   showsZvanja: 'показује звања',
   noneToDeclare: 'Немам',
   markZvanjaHint: 'Означи карте које чине звање',
-  markingOk: 'То је звање — притисните Пријави',
+  markingOk: 'То је звање — притисни Пријави',
   markingNotZvanje: 'Означене карте нису звање',
   declareMarked: 'Пријави',
   difficulty: 'Тежина',
   difficultyEasy: 'Лагана',
   difficultyHard: 'Права бела',
   difficultyHardHint:
-    'Права бела: апликација не чува правила уместо вас. Звања тражите сами, а крива карта је аузмеш — противници пишу све.',
+    'Права бела: апликација не чува правила уместо тебе. Звања тражиш без помоћи, а крива карта је аузмеш — противници пишу све.',
   deckStyleLabel: 'Карте',
   deckMadarice: 'Мађарице',
   deckStarinske: 'Старинске',
@@ -646,7 +654,7 @@ const srCyrl: Strings = {
   dealHeading: (n, dealer) => `Дељење ${n} — дели ${dealer}`,
   dealResult: 'Обрачун дељења',
   cardsAndLastTrick: 'Карте + последњи штих',
-  valat: 'Штиглја',
+  valat: 'Штигља',
   total: 'Укупно',
   recorded: 'Уписано',
   matchScore: 'Резултат меча',
@@ -666,7 +674,7 @@ const srCyrl: Strings = {
     playBots: 'Играј против ботова',
     privateTable: 'Направи приватни сто',
     modeBotsSub: 'Одмах, и без интернета',
-    modePrivateSub: 'Позови пријатеље кодом',
+    modePrivateSub: 'Позови пријатеље шифром',
     daily: 'Дневно',
     joinByCode: 'Придружи се шифром',
     tableCode: 'шифра стола',
@@ -698,14 +706,14 @@ const srCyrl: Strings = {
     haptics: 'Вибрација',
     language: 'Језик',
     resetProgress: 'Избриши напредак',
-    resetConfirm: 'Сигурно? Притисните поново',
+    resetConfirm: 'Сигурно? Притисни поново',
     version: 'Верзија',
     statMatches: 'Партије',
     statWinRate: 'Проценат победа',
     statDeals: 'Дељења',
     statZvanja: 'Звања',
     statBela: 'Беле',
-    statValat: 'Штиглје',
+    statValat: 'Штигље',
     statBestDeal: 'Најбоље дељење',
     coinsDisclaimer: 'Новчићи служе само за игру. Нема уплата ни исплата правог новца.',
     back: 'Назад',
@@ -722,7 +730,7 @@ const srCyrl: Strings = {
     waitingForPlayers: (seated) => `Чекамо играче… ${seated}/4`,
     shareCode: 'Пошаљи је пријатељима да ти се придруже.',
     leaveTable: 'Напусти сто',
-    botPlaysFor: (names) => `${names} — бот игра уместо њих`,
+    botPlaysFor: (names) => `${names} — игра бот`,
     startWithBots: 'Почни са ботовима',
     sitHere: 'седни овде',
     retry: 'Покушај поново',
@@ -795,14 +803,14 @@ const en: Strings = {
   ...hr,
   suit: { clubs: 'acorns', spades: 'leaves', hearts: 'hearts', diamonds: 'bells' },
   season: { hearts: 'Spring', diamonds: 'Summer', spades: 'Autumn', clubs: 'Winter' },
-  rankShort: { ...ROMAN, J: 'U', Q: 'O', K: 'K', A: 'A' },
+  rankShort: { ...ROMAN, J: 'J', Q: 'Q', K: 'K', A: 'A' },
   rankName: {
     '7': 'seven',
     '8': 'eight',
     '9': 'nine',
     '10': 'ten',
-    J: 'under',
-    Q: 'over',
+    J: 'jack',
+    Q: 'queen',
     K: 'king',
     A: 'ace',
   },
@@ -818,6 +826,7 @@ const en: Strings = {
   trumpUndecided: 'trump not yet chosen',
   trumpQuestion: 'trump?',
   calledBy: (who) => `called by ${who}`,
+  calledByYou: 'called by you',
   score: 'Score',
   trick: 'Trick',
   emptyTrick: '(empty)',
@@ -843,6 +852,7 @@ const en: Strings = {
   carre: (rank) => `four ${rank}s`,
   renonsTitle: 'Renons!',
   renonsBy: (who) => `${who} broke the rules of play — the whole deal goes to the opponents`,
+  renonsByYou: 'Your renons — the whole deal goes to the opponents',
   claimZvanja: 'Declare',
   claimZvanjaHint: 'Got a declaration? Spot it yourself — unclaimed is forfeited.',
   noZvanja: 'Nothing to declare',
@@ -873,9 +883,9 @@ const en: Strings = {
   recorded: 'Recorded',
   matchScore: 'Match score',
   callerMade: 'The caller made it.',
-  callerFailed: 'PAD — the caller failed; everything goes to the opponents.',
+  callerFailed: 'Down — the caller failed; everything goes to the opponents.',
   madeShort: 'Made',
-  failedShort: 'Fell',
+  failedShort: 'Down',
   winner: (team) => `${team} wins`,
   nextDeal: 'Next deal',
   newMatch: 'New match',

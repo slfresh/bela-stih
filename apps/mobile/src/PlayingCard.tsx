@@ -24,6 +24,7 @@ export const PlayingCard = memo(
     size = 'md',
     width,
     deckStyle,
+    locale,
     dimmed = false,
     highlight = false,
     selected = false,
@@ -35,6 +36,8 @@ export const PlayingCard = memo(
     /** Exact width, for the hand — it sizes itself to the screen. Wins over `size`. */
     width?: number;
     deckStyle: DeckStyle;
+    /** Re-renders the memoised face when the language changes. */
+    locale?: string;
     dimmed?: boolean;
     highlight?: boolean;
     /** Picked for a zvanja or an arrange swap: the green ring. */
@@ -50,7 +53,7 @@ export const PlayingCard = memo(
     return (
       <View style={[armed && styles.armedOutline, dimmed && styles.dimmed]}>
         <View style={[highlight && styles.highlight, selected && styles.selected, armed && styles.armed]}>
-          <CardFace card={card} width={width ?? WIDTHS[size]} style={deckStyle} />
+          <CardFace card={card} width={width ?? WIDTHS[size]} style={deckStyle} locale={locale} />
           {/* Illegal right now: readable, but clearly sunk into the felt. */}
           {dimmed && <View pointerEvents="none" style={styles.dimmedTint} />}
         </View>
@@ -67,7 +70,7 @@ export const PlayingCard = memo(
     a.card.rank === b.card.rank &&
     a.size === b.size &&
     a.width === b.width &&
-    a.deckStyle === b.deckStyle &&
+    a.deckStyle === b.deckStyle && a.locale === b.locale &&
     a.dimmed === b.dimmed &&
     a.highlight === b.highlight &&
     a.selected === b.selected &&

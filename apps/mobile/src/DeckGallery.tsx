@@ -34,7 +34,7 @@ export function DeckGallery({ onExit }: { onExit: () => void }) {
             <View style={styles.row}>
               {ORDER.map((rank) => (
                 <View key={rank} style={styles.card}>
-                  <CardFace card={{ suit, rank }} width={82} style={cosmetics().deckStyle} />
+                  <CardFace card={{ suit, rank }} width={82} style={cosmetics().deckStyle} locale={cardLang().id} />
                 </View>
               ))}
             </View>

@@ -108,9 +108,9 @@ describe('every locale is complete', () => {
 describe('seats are named from where you sit', () => {
   const lang = new Lang('hr');
 
-  it('calls your own seat "Vi" from every chair', () => {
+  it('calls your own seat "Ti" from every chair', () => {
     for (const seat of [0, 1, 2, 3] as Seat[]) {
-      expect(lang.seat(seat, seat)).toBe('Vi');
+      expect(lang.seat(seat, seat)).toBe('Ti');
     }
   });
 
@@ -239,23 +239,64 @@ describe('suit colours', () => {
  * "vaše"; "označi", not "označite". Formal plural crept in string by string
  * and read as a bank's letter next to the drawn cards. Every string in every
  * locale uses the typographic ellipsis, never three full stops.
+ *
+ * JS's \b is ASCII-only, so the Cyrillic set (and the Croatian one, for Č Ć
+ * Š Ž Đ) uses Unicode lookarounds instead.
  */
 describe('register and typography', () => {
-  const FORMAL_HR = [/Vaš[ea]?/, /vam/i, /zovete/, /Imate li/, /Sami pazite/, /[A-ZČĆŠŽĐ][a-zčćšžđ]+ite/];
-  const FORMAL_SR = [/Ваш[еа]?/, /вам/i, /зовете/, /Имате ли/, /Сами пазите/, /[А-ЯЂЈЉЊЋЏ][а-яђјљњћџ]+ите/];
+  const word = (core: string) => new RegExp(`(?<!\\p{L})(?:${core})(?!\\p{L})`, 'u');
+  const FORMAL_HR = [
+    word('[Vv]aš[aeu]?'),
+    word('[Vv]am'),
+    word('[Vv]as'),
+    word('Vi'),
+    word('ste'),
+    word('zovete'),
+    word('[Ii]mate|[Nn]emate'),
+    // Plural imperatives: pritisnite, označite, tražite, dodirnite, pošaljite…
+    /\p{L}{3,}(?:ite|ete|ajte|ijte|ujte)(?!\p{L})/u,
+    word('[Ss]ami'),
+  ];
+  const FORMAL_SR = [
+    word('[Вв]аш[аеу]?'),
+    word('[Вв]ам'),
+    word('[Вв]ас'),
+    word('Ви'),
+    word('сте'),
+    word('зовете'),
+    word('[Ии]мате|[Нн]емате'),
+    /\p{L}{3,}(?:ите|ете|ајте|ијте|ујте)(?!\p{L})/u,
+    word('[Сс]ами'),
+  ];
+  const QUESTS = ['playDeals', 'winDeals', 'winMatch', 'callZvanja', 'callBela'];
+  const IDS = ['djed', 'classic', 'green', 'smile', 'bravo', 'hvala'];
 
   function strings(l: Lang): string[] {
     const out: string[] = [];
-    const walk = (v: unknown) => {
+    const push = (v: unknown) => {
+      if (typeof v === 'string') out.push(v);
+    };
+    const walk = (v: unknown, key = '') => {
       if (typeof v === 'string') out.push(v);
       else if (typeof v === 'function') {
+        const f = v as (...a: unknown[]) => unknown;
         try {
-          const r = (v as (...a: unknown[]) => unknown)(2, 2, 2);
-          if (typeof r === 'string') out.push(r);
+          // Each function gets the arguments its key implies; the rest a
+          // string and some numbers, so no branch is left unrendered.
+          if (key === 'questLabel') QUESTS.forEach((q) => push(f(q)));
+          else if (key === 'cosmeticName' || key === 'emotePhrase') IDS.forEach((id) => push(f(id)));
+          else {
+            push(f('Ana', 'Ana', 'Ana'));
+            push(f(1, 1, 1));
+            push(f(2, 2, 2));
+            push(f(5, 5, 5));
+          }
         } catch {
           /* a function that needs richer arguments: skip */
         }
-      } else if (v && typeof v === 'object') Object.values(v as object).forEach(walk);
+      } else if (v && typeof v === 'object') {
+        for (const [k, x] of Object.entries(v as object)) walk(x, k);
+      }
     };
     walk(l.s);
     return out;
@@ -273,9 +314,26 @@ describe('register and typography', () => {
     }
   });
 
+  it('the guard itself can fail', () => {
+    // A copy of the old strings must trip it, or the tests above are vacuous.
+    expect(FORMAL_HR.some((re) => re.test('Sigurno? Pritisnite opet'))).toBe(true);
+    expect(FORMAL_HR.some((re) => re.test('Vaše karte'))).toBe(true);
+    expect(FORMAL_HR.some((re) => re.test('Tražili ste novu partiju'))).toBe(true);
+    expect(FORMAL_HR.some((re) => re.test('zvao Vi'))).toBe(true);
+    expect(FORMAL_HR.some((re) => re.test('Odigraj dijeljenja'))).toBe(false);
+    expect(FORMAL_HR.some((re) => re.test('Tvoje karte'))).toBe(false);
+    expect(FORMAL_SR.some((re) => re.test('Сигурно? Притисните поново'))).toBe(true);
+    expect(FORMAL_SR.some((re) => re.test('Твоје карте'))).toBe(false);
+  });
+
   it('never types three full stops', () => {
     for (const id of LOCALE_IDS) {
       for (const str of strings(new Lang(id))) expect(str, `${id}: ${str}`).not.toContain('...');
     }
+  });
+
+  it('writes Serbian digraphs as single Cyrillic letters', () => {
+    // л+ј is a transliteration slip: Cyrillic has љ (and њ, џ) for it.
+    for (const str of strings(new Lang('sr-Cyrl'))) expect(str, str).not.toMatch(/лј|нј|дж/i);
   });
 });
