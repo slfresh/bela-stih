@@ -22,6 +22,7 @@ import {
 import { preloadSfx, setSoundEnabled } from './src/audio';
 import { setHapticsEnabled } from './src/haptics';
 import { setCosmetics, setDeckStyle } from './src/cosmetics';
+import { ErrorBoundary } from './src/ui/ErrorBoundary';
 
 /** The menu stack, one level deep: home, or one of its satellite screens. */
 type MenuScreen = 'home' | 'shop' | 'settings' | 'profile';
@@ -151,11 +152,28 @@ export default function App() {
       />
     );
 
+  // A render error anywhere below lands on a branded panel whose one button
+  // leads home — not a blank page. The boundary sits inside the shell so the
+  // panel keeps the web column and the safe-area insets.
+  const guarded = (
+    <ErrorBoundary
+      title={lang.s.ui.crashTitle}
+      body={lang.s.ui.crashBody}
+      action={lang.s.ui.back}
+      onReset={() => {
+        setMenu('home');
+        exitToHome();
+      }}
+    >
+      {content}
+    </ErrorBoundary>
+  );
+
   return (
     <SafeAreaProvider>
       <StatusBar style="light" />
       {/* On the web the app lives in a centred column; phones get the viewport. */}
-      {Platform.OS === 'web' ? <WebShell>{content}</WebShell> : content}
+      {Platform.OS === 'web' ? <WebShell>{guarded}</WebShell> : guarded}
     </SafeAreaProvider>
   );
 }

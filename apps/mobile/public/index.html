@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="hr">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>%WEB_TITLE%</title>
+    <!--
+      The first frame. The bundle is 1.7 MB and parses for a good while on a
+      phone; without these the page sat white with nothing on it, and the
+      browser dressed the text inputs in light-mode chrome on a dark app.
+    -->
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0d2a1f" />
+    <meta name="description" content="Bela Štih — prava bela s prijateljima. Besplatno, bez prijave." />
+    <meta property="og:title" content="Bela Štih" />
+    <meta property="og:description" content="Prava bela s prijateljima — protiv botova ili online za istim stolom." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://belastih.com/igra/" />
+    <meta property="og:image" content="https://belastih.com/og.png" />
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      html,
+      body,
+      #root {
+        background: #0d2a1f;
+      }
+      /* Shown until React mounts and replaces the root's contents. */
+      #boot {
+        margin: auto;
+        text-align: center;
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: #f2efe6;
+      }
+      #boot .mark {
+        font-size: 34px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+      }
+      #boot .mark b {
+        color: #d8a531;
+        font-weight: 800;
+      }
+      #boot .sub {
+        margin-top: 6px;
+        font-size: 13px;
+        color: rgba(242, 239, 230, 0.62);
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Use static rendering with Expo Router to support running without JavaScript. -->
+    <noscript>
+      Za igru je potrebno omogućiti JavaScript. · You need to enable JavaScript to run this app.
+    </noscript>
+    <!-- The root element for your Expo app. -->
+    <div id="root">
+      <div id="boot">
+        <div class="mark">Bela <b>Štih</b></div>
+        <div class="sub">učitavanje…</div>
+      </div>
+    </div>
+  </body>
+</html>

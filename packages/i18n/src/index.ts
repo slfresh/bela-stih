@@ -111,6 +111,9 @@ export interface UiStrings {
   statBestDeal: string;
   coinsDisclaimer: string;
   back: string;
+  /** The branded screen a render error lands on, instead of a blank one. */
+  crashTitle: string;
+  crashBody: string;
 
   privacyPolicy: string;
 
@@ -453,6 +456,8 @@ const hr: Strings = {
     statBestDeal: 'Najbolje dijeljenje',
     coinsDisclaimer: 'Novčići služe samo za igru. Nema uplata ni isplata pravog novca.',
     back: 'Natrag',
+    crashTitle: 'Nešto je pošlo po zlu',
+    crashBody: 'Aplikacija je naletjela na grešku. Vrati se na početni ekran i pokušaj ponovno.',
     privacyPolicy: 'Pravila privatnosti',
 
     emotePhrase: (id) => HR_EMOTES[id] ?? id,
@@ -661,6 +666,8 @@ const srCyrl: Strings = {
     statBestDeal: 'Најбоље дељење',
     coinsDisclaimer: 'Новчићи служе само за игру. Нема уплата ни исплата правог новца.',
     back: 'Назад',
+    crashTitle: 'Нешто је пошло по злу',
+    crashBody: 'Апликација је наишла на грешку. Врати се на почетни екран и покушај поново.',
     privacyPolicy: 'Правила приватности',
 
     emotePhrase: (id) => SR_EMOTES[id] ?? id,
@@ -865,6 +872,8 @@ const en: Strings = {
     statBestDeal: 'Best deal',
     coinsDisclaimer: 'Coins are for play only. No real-money deposits or payouts.',
     back: 'Back',
+    crashTitle: 'Something went wrong',
+    crashBody: 'The app hit an error. Go back to the home screen and try again.',
     privacyPolicy: 'Privacy policy',
 
     emotePhrase: (id) => EN_EMOTES[id] ?? id,

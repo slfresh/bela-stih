@@ -359,14 +359,20 @@ export function TableScreen(props: TableScreenProps) {
       <View style={[styles.callsRow, land && styles.callsCol]}>
         {spokenCalls.map((d, i) => (
           <View key={i} style={styles.callChip}>
-            <Text style={styles.callChipText}>
+            <Text
+              style={[styles.callChipText, land && styles.callChipTextLand]}
+              numberOfLines={land ? 2 : undefined}
+            >
               {meta(d.seat).name}: {lang.declaration(d)}
             </Text>
           </View>
         ))}
         {view.belaAnnouncedBy !== null && (
           <View style={[styles.callChip, styles.callChipGold]}>
-            <Text style={styles.callChipText}>
+            <Text
+              style={[styles.callChipText, land && styles.callChipTextLand]}
+              numberOfLines={land ? 2 : undefined}
+            >
               {meta(view.belaAnnouncedBy).name}: {lang.s.bela} (20)
             </Text>
           </View>
@@ -466,6 +472,7 @@ export function TableScreen(props: TableScreenProps) {
       <Button
         label={lang.s.declareMarked}
         tone={marked.length >= 3 && markingIsZvanje ? 'strong' : 'plain'}
+        compact={land}
         onPress={() => {
           if (marked.length < 3 || !markingIsZvanje) return;
           const cards = hand.cards.filter((c) => marked.includes(cardId(c)));
@@ -475,6 +482,7 @@ export function TableScreen(props: TableScreenProps) {
       <Button
         label={lang.s.noneToDeclare}
         tone="plain"
+        compact={land}
         onPress={() => onAction({ type: 'DECLARE_SKIP', seat: mySeat })}
       />
     </>
@@ -585,7 +593,7 @@ export function TableScreen(props: TableScreenProps) {
                 />
                 {calls}
                 <View style={styles.railGap} />
-                <Button label={finishLabel} tone="plain" onPress={tap(onFinish)} />
+                <Button label={finishLabel} tone="plain" compact onPress={tap(onFinish)} />
               </View>
 
               <View style={styles.centre}>
@@ -603,7 +611,7 @@ export function TableScreen(props: TableScreenProps) {
                 {!settled && (
                   <View style={styles.actionsCol}>
                     {declareButtons ?? (
-                      <NonCardActions options={options} lang={lang} onChoose={onAction} />
+                      <NonCardActions options={options} lang={lang} onChoose={onAction} compact />
                     )}
                     {emoteToggle}
                   </View>
@@ -698,8 +706,11 @@ const TableHeader = memo(function TableHeader({
           <Text style={[styles.pillValue, { color: team.usInk }]}>{matchScores[us]}</Text>
         </View>
         <View style={[styles.teamPill, { backgroundColor: team.themDim, borderColor: team.themEdge }]}>
+          {/* Side by side the two pills mirror each other around the centre;
+              stacked in a rail there is no centre, so both read label, value. */}
+          {vertical && <Text style={styles.pillLabel}>{lang.team(them, mySeat)}</Text>}
           <Text style={[styles.pillValue, { color: team.themInk }]}>{matchScores[them]}</Text>
-          <Text style={styles.pillLabel}>{lang.team(them, mySeat)}</Text>
+          {!vertical && <Text style={styles.pillLabel}>{lang.team(them, mySeat)}</Text>}
         </View>
       </View>
 
@@ -1019,10 +1030,12 @@ function NonCardActions({
   options,
   lang,
   onChoose,
+  compact = false,
 }: {
   options: Action[];
   lang: Lang;
   onChoose: (a: Action) => void;
+  compact?: boolean;
 }) {
   const buttons = options.filter((a) => a.type !== 'PLAY_CARD' || a.announceBela === true);
   return (
@@ -1035,6 +1048,7 @@ function NonCardActions({
             key={i}
             label={lang.action(a)}
             tone={isBela ? 'bela' : strong ? 'strong' : 'plain'}
+            compact={compact}
             onPress={() => onChoose(a)}
           />
         );
@@ -1158,19 +1172,32 @@ export function Button({
   label,
   onPress,
   tone = 'plain',
+  compact = false,
 }: {
   label: string;
   onPress: () => void;
   tone?: 'plain' | 'strong' | 'bela';
+  /** Landscape rail size: caption type, tighter padding, a label wraps at most once. */
+  compact?: boolean;
 }) {
   const toneStyle: StyleProp<ViewStyle> =
     tone === 'strong' ? styles.btnStrong : tone === 'bela' ? styles.btnBela : styles.btnPlain;
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.btn, toneStyle, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.btn,
+        toneStyle,
+        compact && styles.btnCompact,
+        pressed && styles.pressed,
+      ]}
     >
-      <Text style={styles.btnText}>{label}</Text>
+      <Text
+        style={[styles.btnText, compact && styles.btnTextCompact]}
+        numberOfLines={compact ? 2 : undefined}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -1302,6 +1329,9 @@ const styles = StyleSheet.create({
   },
   callChipGold: { borderWidth: 1, borderColor: theme.accent },
   callChipText: { color: theme.text, fontSize: 12 },
+  // The rail is 96dp wide: caption type, and a long call wraps once rather
+  // than pushing the rail open.
+  callChipTextLand: { fontSize: 11 },
 
   awardRow: { alignItems: 'center' },
   awardText: { color: theme.ok, fontWeight: '800', fontSize: 15 },
@@ -1363,6 +1393,8 @@ const styles = StyleSheet.create({
   btnStrong: { backgroundColor: theme.wood, borderColor: theme.accent },
   btnBela: { backgroundColor: theme.accent, borderColor: theme.accent },
   btnText: { color: theme.text, fontSize: 14, fontWeight: '600' },
+  btnCompact: { paddingHorizontal: 8, paddingVertical: 7 },
+  btnTextCompact: { fontSize: 11, textAlign: 'center' },
 
   resultBackdrop: {
     position: 'absolute',

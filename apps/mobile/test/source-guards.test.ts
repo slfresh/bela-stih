@@ -69,3 +69,32 @@ describe('sprite timing has one source of truth', () => {
     expect(src('table/fx.ts')).not.toMatch(/from 'react-native/);
   });
 });
+
+describe('the first frame and the last resort', () => {
+  it('every screen renders inside the error boundary', () => {
+    // A thrown render used to leave a blank page with no way back. The
+    // boundary must wrap the screen switch itself, not sit inside one branch.
+    const app = readFileSync(join(here, '../App.tsx'), 'utf8');
+    const open = app.indexOf('<ErrorBoundary');
+    const close = app.indexOf('</ErrorBoundary>');
+    expect(open).toBeGreaterThan(-1);
+    expect(app.slice(open, close)).toMatch(/\{content\}/);
+    expect(app.slice(open, close)).toMatch(/onReset=/);
+  });
+
+  it('the web template paints dark before the bundle parses', () => {
+    const html = readFileSync(join(here, '../public/index.html'), 'utf8');
+    expect(html).toMatch(/<html lang="hr">/);
+    expect(html).toMatch(/<meta name="color-scheme" content="dark"/);
+    expect(html).toMatch(/<meta name="theme-color" content="#0d2a1f"/);
+    expect(html).toMatch(/#root\s*\{[^}]*background:\s*#0d2a1f/);
+    expect(html).toMatch(/id="boot"/);
+    // Expo substitutes the title; a hard-coded one would silently drift from app.json.
+    expect(html).toMatch(/%WEB_TITLE%/);
+  });
+
+  it('metrics stay a pure function of the box, so the landscape invariant is testable', () => {
+    expect(src('table/metrics.ts')).not.toMatch(/from 'react-native/);
+    expect(src('table/useTableMetrics.ts')).toMatch(/computeTableMetrics\(usableW, usableH\)/);
+  });
+});

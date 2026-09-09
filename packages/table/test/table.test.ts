@@ -306,19 +306,27 @@ describe('starting a new match at the same table', () => {
     const t = finished();
     const humansBefore = [...t.humanSeats];
     const wonWith = Math.max(...t.matchScores);
-    t.newMatch();
+    // Seeded: an unseeded rematch draws from the clock, and a deal that lands
+    // a štiglja with zvanja on top made a fixed "one deal's worth" bound flaky.
+    t.newMatch({ seed: 11 });
 
     // An all-bot table plays its first deal out the moment it is dealt, so the
     // score is a single deal's worth rather than a literal 0:0 — what matters
     // is that the finished match's total is gone.
     expect(Math.max(...t.matchScores)).toBeLessThan(wonWith);
-    expect(t.matchScores[0] + t.matchScores[1]).toBeLessThanOrEqual(252);
     expect(t.phase).not.toBe('MATCH_OVER');
     expect([...t.humanSeats]).toEqual(humansBefore);
 
-    const kinds = t.drainEvents().map((e) => e.kind);
-    expect(kinds[0]).toBe('matchStarted');
-    expect(kinds[1]).toBe('dealStarted');
+    const events = t.drainEvents();
+    expect(events[0]?.kind).toBe('matchStarted');
+    expect(events[1]?.kind).toBe('dealStarted');
+    // The score is exactly what the new match's own deals reported — nothing
+    // carried over from the finished one.
+    const scored = events.filter(
+      (e): e is Extract<TableEvent, { kind: 'dealScored' }> => e.kind === 'dealScored',
+    );
+    const last = scored[scored.length - 1];
+    expect([...t.matchScores]).toEqual(last ? [...last.matchScores] : [0, 0]);
   });
 
   it('carries the dealer rotation on instead of snapping back', () => {
