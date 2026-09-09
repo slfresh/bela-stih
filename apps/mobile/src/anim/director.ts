@@ -42,9 +42,10 @@ export interface DirectorCallbacks {
    * Fired once per ANIMATED event as its end-commit lands — the moment a
    * sprite has arrived, so a landing sound or a stamp belongs here rather
    * than on a free timer. Never fired for a flushed event, and never after
-   * fastForward() has cleared the beat it belonged to.
+   * fastForward() has cleared the beat it belonged to. `speed` is the pace
+   * the beat ran at, so a flourish in the gap that follows shrinks with it.
    */
-  onEventEnd?(e: TableEvent): void;
+  onEventEnd?(e: TableEvent, speed: number): void;
   onIdle(idle: boolean): void;
   /** Some events were flushed past without animating: how many. */
   onSkip?(count: number): void;
@@ -85,7 +86,8 @@ export const DEFAULT_TIMINGS: Timings = {
   bidPassed: { dur: 500, gap: 120 },
   // The bubble (dur), then the pip stamps onto the plaque in the gap.
   bidCalled: { dur: 700, gap: 350 },
-  doubled: { dur: 900, gap: 150 },
+  // The same: the ×2 stamps onto the plaque in the gap.
+  doubled: { dur: 900, gap: 350 },
   doublePassed: { dur: 250, gap: 80 },
   // The talon lands, then the fan re-sorts in the gap.
   handsCompleted: { dur: 800, gap: 250 },
@@ -99,7 +101,9 @@ export const DEFAULT_TIMINGS: Timings = {
   cardPlayed: { dur: 260, gap: 140 },
   // The four cards hold, then sweep to the winner (dur); the pile settles (gap).
   trickWon: { dur: 760, gap: 240 },
-  dealScored: { dur: 700, gap: 0 },
+  // The sheet slides up and the deal's stinger lands at the end; the gap
+  // keeps a match's fanfare (the next event) from starting in the same tick.
+  dealScored: { dur: 700, gap: 300 },
   matchOver: { dur: 600, gap: 0 },
   matchStarted: { dur: 600, gap: 200 },
 };
@@ -156,9 +160,19 @@ export class Director {
     private readonly mySeat: Seat,
     initialView: PublicView,
     private readonly cb: DirectorCallbacks,
-    private readonly timings: Timings = DEFAULT_TIMINGS,
+    private timings: Timings = DEFAULT_TIMINGS,
   ) {
     this.view = initialView;
+  }
+
+  /**
+   * Re-pace from the next beat on. The motion policy can change under a
+   * mounted table — the system switch resolves a tick after the first
+   * render, and the phone's setting can flip mid-match — and the sprites
+   * already follow it live; the beats must, or fades sit in full-length beats.
+   */
+  setTimings(t: Timings): void {
+    this.timings = t;
   }
 
   getView(): PublicView {
@@ -273,7 +287,10 @@ export class Director {
     this.current.nextIndex = nextIndex + 1;
 
     const t = this.timings[e.kind] ?? { dur: 300, gap: 100 };
-    const s = this.speed();
+    // With a batch waiting the beats halve — except the reveal, which is
+    // information: the row stays up for REVEAL_MS whatever the pace, and the
+    // director holds with it so nobody leads under cards still showing.
+    const s = e.kind === 'declarationsRevealed' ? 1 : this.speed();
 
     this.cb.onEventStart(e, false, s);
     this.view = applyEventStart(this.view, e, this.mySeat);
@@ -283,7 +300,7 @@ export class Director {
       if (!this.current) return; // fast-forwarded meanwhile
       this.view = applyEventEnd(this.view, e, batch.finalView, this.mySeat);
       this.cb.onView(this.view);
-      this.cb.onEventEnd?.(e);
+      this.cb.onEventEnd?.(e, s);
 
       if (this.current.nextIndex >= batch.events.length) {
         this.finishBatch();

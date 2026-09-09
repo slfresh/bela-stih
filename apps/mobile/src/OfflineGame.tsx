@@ -64,9 +64,15 @@ function OfflineMatch({
     // from the felt if there is no sheet (a UI timer, cancelled on unmount).
     const timers = [
       setTimeout(() => {
-        const from = g.anchors.centre(anchorId.sheetTotal) ?? g.anchors.centre(anchorId.deck);
-        const to = g.anchors.centre(anchorId.wallet);
-        if (from && to) g.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
+        // Measured again first: the sheet's total was measured as the sheet
+        // slid up, a viewport low on the web. No arc under reduce-motion —
+        // the wallet still counts, and the coins still ding.
+        if (g.motion === 'reduced') return;
+        void g.anchors.refresh().then(() => {
+          const from = g.anchors.centre(anchorId.sheetTotal) ?? g.anchors.centre(anchorId.deck);
+          const to = g.anchors.centre(anchorId.wallet);
+          if (from && to) g.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
+        });
       }, COIN_CASCADE_DELAY_MS),
       // One ding per coin as it lands, and the level-up run with the badge.
       ...coinDingTimers(COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS),
@@ -80,7 +86,7 @@ function OfflineMatch({
         : []),
     ];
     return () => timers.forEach(clearTimeout);
-  }, [g.banner, g.anchors, g.fxBus]);
+  }, [g.banner, g.anchors, g.fxBus, g.motion]);
 
   const cheered = useRef(false);
   useEffect(() => {
@@ -101,6 +107,7 @@ function OfflineMatch({
       view={g.view}
       spotlightSeat={g.spotlight}
       cue={g.cue}
+      dealerHop={g.dealerHop}
       reducedMotion={g.motion === 'reduced'}
       hardMode={settings.hardMode}
       handSort={settings.handSort}

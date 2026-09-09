@@ -69,6 +69,8 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
   // What the table itself does about an event: a nod, a shake, a glow.
   const [cue, setCue] = useState<TableCue | null>(null);
   const cueN = useRef(0);
+  // The dealer's button is in the air: the puck hides its own "D" meanwhile.
+  const [dealerHop, setDealerHop] = useState(false);
 
   const anchors = useMemo(() => new AnchorMap(), []);
   const fxBus = useMemo(() => new FxBus(), []);
@@ -90,7 +92,8 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     [anchors, fxBus, lang],
   );
 
-  // Pacing follows the motion policy; fixed for the life of this table.
+  // Pacing follows the motion policy, live: the director re-paces from the
+  // next beat when it changes (the system switch resolves a tick in).
   const motion = useMotionPolicy(settings.motion);
   motionRef.current = motion;
   const { view, idle, enqueue, getView } = useDirector(
@@ -114,14 +117,18 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
         // A seatless beat (the reveal, the deal, scoring) is nobody's move.
         setSpotlight('seat' in e ? e.seat : null);
         const c = cueFor(e, HUMAN, getViewRef.current(), ++cueN.current);
+        // A cue is played once, by its `n`; a new deal wipes the last one so
+        // nothing stale can replay when the table is rebuilt (a rotation).
         if (c) setCue(c);
+        else if (e.kind === 'dealStarted') setCue(null);
+        if (e.kind === 'dealScored' && motionRef.current !== 'reduced') setDealerHop(true);
       }
       // A bot that takes a trick occasionally gloats — the table talks back.
       if (!flushed && e.kind === 'trickWon' && e.seat !== HUMAN && Math.random() < 0.22) {
         const id = BOT_EMOTES[Math.floor(Math.random() * BOT_EMOTES.length)]!;
         const seat = e.seat;
         setTimeout(() => {
-          spawnEmote({ anchors, bus: fxBus, lang }, seat, id);
+          spawnEmote({ anchors, bus: fxBus, lang, reduced: () => motionRef.current === 'reduced' }, seat, id);
           playSfx('pop');
         }, 800);
       }
@@ -131,9 +138,10 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     () => anchors.bump(),
     {
       timings: timingsFor(motion),
-      onEventEnd: (e) => {
+      onEventEnd: (e, speed) => {
         landingSound(e, HUMAN);
-        fx.end(e);
+        fx.end(e, speed);
+        if (e.kind === 'dealScored') setDealerHop(false);
       },
       // A skip of any size is one short settle of air, not a hail of sounds.
       onSkip: (n) => {
@@ -144,7 +152,10 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
 
   getViewRef.current = getView;
   useEffect(() => {
-    if (idle) setSpotlight(null);
+    if (idle) {
+      setSpotlight(null);
+      setDealerHop(false);
+    }
   }, [idle]);
 
   // The constructor already ran the bots to the first human decision; feed that
@@ -187,7 +198,7 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
   // Offline there is no server round-trip: the bubble is the whole emote.
   const emote = useCallback(
     (id: string) => {
-      spawnEmote({ anchors, bus: fxBus, lang }, HUMAN, id);
+      spawnEmote({ anchors, bus: fxBus, lang, reduced: () => motionRef.current === 'reduced' }, HUMAN, id);
       playSfx('pop');
     },
     [anchors, fxBus, lang],
@@ -205,6 +216,7 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     myTurn: idle && view.toAct === HUMAN,
     spotlight,
     cue,
+    dealerHop,
     motion,
     submit,
     nextDeal,

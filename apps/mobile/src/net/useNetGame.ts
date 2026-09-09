@@ -138,9 +138,13 @@ export function useNetGame(settings: Settings) {
   // Whose move is being animated; cleared when the director goes idle.
   const [spotlight, setSpotlight] = useState<Seat | null>(null);
   const [cue, setCue] = useState<TableCue | null>(null);
+  const [dealerHop, setDealerHop] = useState(false);
   const cueN = useRef(0);
   useEffect(() => {
-    if (idle) setSpotlight(null);
+    if (idle) {
+      setSpotlight(null);
+      setDealerHop(false);
+    }
   }, [idle]);
   const [lastDealResult, setLastDealResult] = useState<DealScoreResult | null>(null);
   const [winnerTeam, setWinnerTeam] = useState<TeamId | null>(null);
@@ -167,9 +171,13 @@ export function useNetGame(settings: Settings) {
   // The director is built inside attach() once; it reaches the spawner by ref.
   const fxRef = useRef(fx);
   fxRef.current = fx;
-  // Pacing follows the motion policy as it stands when the table is joined.
+  // Pacing follows the motion policy, live: the director re-paces from the
+  // next beat when it changes.
   const motion = useMotionPolicy(settings.motion);
   motionRef.current = motion;
+  useEffect(() => {
+    directorRef.current?.setTimings(timingsFor(motion));
+  }, [motion]);
   // The socket callbacks are created once; a ref keeps their locale current.
   const langRef = useRef(lang);
   langRef.current = lang;
@@ -196,6 +204,8 @@ export function useNetGame(settings: Settings) {
         setSpotlight('seat' in e ? e.seat : null);
         const c = cueFor(e, mine, directorRef.current?.getView() ?? null, ++cueN.current);
         if (c) setCue(c);
+        else if (e.kind === 'dealStarted') setCue(null);
+        if (e.kind === 'dealScored' && motionRef.current !== 'reduced') setDealerHop(true);
       }
     },
     [fx],
@@ -259,10 +269,11 @@ export function useNetGame(settings: Settings) {
           {
             onView: setView,
             onEventStart: (e, f, s) => onEventRef.current(e, f, s),
-            onEventEnd: (e) => {
+            onEventEnd: (e, speed) => {
               const mine = mySeatRef.current;
               if (mine !== null) landingSound(e, mine);
-              fxRef.current.end(e);
+              fxRef.current.end(e, speed);
+              if (e.kind === 'dealScored') setDealerHop(false);
             },
             onSkip: (n) => {
               if (n >= 2) playSfx('settle');
@@ -332,7 +343,11 @@ export function useNetGame(settings: Settings) {
     });
 
     room.onMessage('emote', (msg: { seat: Seat; id: string }) => {
-      spawnEmote({ anchors, bus: fxBus, lang: langRef.current }, msg.seat, msg.id);
+      spawnEmote(
+        { anchors, bus: fxBus, lang: langRef.current, reduced: () => motionRef.current === 'reduced' },
+        msg.seat,
+        msg.id,
+      );
       playSfx('pop');
     });
 
@@ -508,6 +523,7 @@ export function useNetGame(settings: Settings) {
     lastDealResult,
     spotlight,
     cue,
+    dealerHop,
     motion,
     matchOver: view?.phase === 'MATCH_OVER',
     winnerTeam,

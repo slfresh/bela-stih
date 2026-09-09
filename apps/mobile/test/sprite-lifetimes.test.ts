@@ -205,10 +205,14 @@ describe('the sprites that replace real cards', () => {
       expect(deals.length).toBe(2); // the deal and the talon
       for (const { kind, fx } of deals) {
         const beat = DEFAULT_TIMINGS[kind as keyof typeof DEFAULT_TIMINGS];
-        // The last back has landed well into the beat, and has faded before
-        // the beat ends and the real cards appear under it.
+        // The last back has landed well into the beat but not at its end,
+        // and every back then HOLDS until the real cards mount at the
+        // end-commit — the fade runs across it, into the gap. No empty hand.
         expect(motionOf(fx)).toBeGreaterThanOrEqual(beat.dur * speed * 0.7);
-        expect(lifetimeOf(fx) - 100).toBeLessThanOrEqual(beat.dur * speed * DEAL_DONE_AT + 1);
+        expect(motionOf(fx)).toBeLessThanOrEqual(beat.dur * speed * DEAL_DONE_AT + 1);
+        expect(lifetimeOf(fx)).toBeGreaterThanOrEqual(beat.dur * speed);
+        expect(lifetimeOf(fx)).toBeLessThanOrEqual((beat.dur + beat.gap) * speed);
+        if (fx.kind === 'deal') expect(fx.beat).toBe(beat.dur);
       }
     }
   });
@@ -327,12 +331,42 @@ describe('the bidding beats', () => {
     fx.start(called!, 1);
     const bubble = out.find((f) => f.kind === 'bubble');
     expect(bubble?.kind === 'bubble' && bubble.pip).toBe(called!.kind === 'bidCalled' ? called!.suit : null);
-    fx.end(called!);
+    fx.end(called!, 1);
     const stamp = out.find((f) => f.kind === 'stamp');
     expect(stamp?.kind === 'stamp' && stamp.pip).toBe(called!.kind === 'bidCalled' ? called!.suit : null);
     expect(stamp?.kind === 'stamp' && stamp.at).toEqual({ x: 190, y: 110 });
     // The stamp fits the call's gap, where it lands.
     expect(motionOf(stamp!)).toBeLessThanOrEqual(DEFAULT_TIMINGS.bidCalled.gap);
+  });
+
+  it('the end-of-beat stamps fit their gaps at half pace too, and are off under reduce-motion', () => {
+    const doubled: TableEvent = { kind: 'doubled', seat: 1, multiplier: 2 };
+    const called: TableEvent = { kind: 'bidCalled', seat: 1, suit: 'HEARTS' as never };
+    for (const speed of [1, 0.5]) {
+      const bus = new FxBus();
+      const out: Fx[] = [];
+      bus.subscribe((fx) => out.push(fx));
+      const fx = makeFxSpawner({ anchors: fakeAnchors(), bus, lang: new Lang('hr'), mySeat: () => 0, view: () => null });
+      fx.end(called, speed);
+      fx.end(doubled, speed);
+      expect(out.map((f) => f.kind)).toEqual(['stamp', 'stamp']);
+      expect(motionOf(out[0]!)).toBeLessThanOrEqual(DEFAULT_TIMINGS.bidCalled.gap * speed);
+      expect(motionOf(out[1]!)).toBeLessThanOrEqual(DEFAULT_TIMINGS.doubled.gap * speed);
+    }
+    const bus = new FxBus();
+    const out: Fx[] = [];
+    bus.subscribe((fx) => out.push(fx));
+    const fx = makeFxSpawner({
+      anchors: fakeAnchors(),
+      bus,
+      lang: new Lang('hr'),
+      mySeat: () => 0,
+      view: () => null,
+      reduced: () => true,
+    });
+    fx.end(called, 1);
+    fx.end(doubled, 1);
+    expect(out).toEqual([]);
   });
 
   it('a zvanje bubble is weighted by its value', () => {
@@ -375,6 +409,30 @@ describe('the scoring beats', () => {
     expect(stamp?.kind === 'stamp' && stamp.tone).toBe('danger');
     expect(motionOf(stamp!)).toBeLessThanOrEqual(DEFAULT_TIMINGS.dealScored.dur);
   });
+
+  it('under reduce-motion a štiglja fades its word inside the short beat, at either pace', () => {
+    const table = new Table({ seed: 7, humanSeats: [] });
+    const scored = table.drainEvents().find((e): e is Extract<TableEvent, { kind: 'dealScored' }> => e.kind === 'dealScored');
+    for (const speed of [1, 0.5]) {
+      const bus = new FxBus();
+      const out: Fx[] = [];
+      bus.subscribe((fx) => out.push(fx));
+      const fx = makeFxSpawner({
+        anchors: fakeAnchors(),
+        bus,
+        lang: new Lang('hr'),
+        mySeat: () => 0,
+        view: () => table.view(0 as Seat),
+        reduced: () => true,
+      });
+      fx.start({ ...scored!, result: { ...scored!.result, valatTeam: 1 } }, speed);
+      const stamp = out.find((f) => f.kind === 'stamp');
+      expect(stamp?.kind === 'stamp' && stamp.fade).toBe(true);
+      expect(out.some((f) => f.kind === 'badge')).toBe(false);
+      const beat = REDUCED_TIMINGS.dealScored;
+      expect(motionOf(stamp!)).toBeLessThanOrEqual((beat.dur + beat.gap) * speed);
+    }
+  });
 });
 
 describe('reduce-motion sprites', () => {
@@ -388,6 +446,8 @@ describe('reduce-motion sprites', () => {
         expect(motionOf(fx), `${fx.kind} spawned by ${kind}`).toBeLessThanOrEqual((beat.dur + beat.gap) * speed);
         if (fx.kind === 'flight' || fx.kind === 'deal' || fx.kind === 'trickSweep') expect(fx.fade).toBe(true);
         expect(fx.kind).not.toBe('badge'); // the hops are off
+        // Nothing outlives the short beat plus its gap, fade tail included.
+        expect(lifetimeOf(fx), `${fx.kind} spawned by ${kind}`).toBeLessThanOrEqual((beat.dur + beat.gap) * speed + 40);
       }
     }
   });

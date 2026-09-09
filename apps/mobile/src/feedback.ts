@@ -81,6 +81,14 @@ export function landingSound(e: TableEvent, mySeat: Seat): void {
       pattern(won ? 'dealMade' : 'dealFailed');
       break;
     }
+    case 'matchOver': {
+      // The fanfare, as the sheet turns into the match's: a beat after the
+      // last deal's own stinger, never in the same breath as it.
+      const won = e.winner === teamOf(mySeat);
+      playSfx(won ? 'matchWon' : 'matchLost');
+      pattern(won ? 'matchWon' : 'matchLost');
+      break;
+    }
     default:
       break;
   }
@@ -226,9 +234,9 @@ export function processEvents({
       }
 
       case 'matchOver': {
+        // The fanfare is at the END of the beat (see `landingSound`); here
+        // only the outcome is applied.
         const won = e.winner === teamOf(mySeat);
-        sfx(won ? 'matchWon' : 'matchLost');
-        buzz(won ? 'matchWon' : 'matchLost');
         const r = applyMatchOutcome(next, won);
         next = r.profile;
         earned = mergeAward(earned, r.award);

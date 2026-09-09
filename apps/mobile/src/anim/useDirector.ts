@@ -24,10 +24,10 @@ export function useDirector(
    */
   onBatch?: () => void,
   opts: {
-    /** The pacing table, fixed at construction — a policy change retimes the next table, not this one. */
+    /** The pacing table; a change re-paces from the next beat on. */
     timings?: Timings;
     /** An animated event's end-commit has landed: landing sounds and stamps go here. */
-    onEventEnd?: (e: TableEvent) => void;
+    onEventEnd?: (e: TableEvent, speed: number) => void;
     /** The director flushed past `n` events without animating them. */
     onSkip?: (n: number) => void;
   } = {},
@@ -57,7 +57,7 @@ export function useDirector(
           setView(v);
         },
         onEventStart: (e, flushed, speed) => onEventRef.current(e, flushed, speed),
-        onEventEnd: (e) => onEventEndRef.current?.(e),
+        onEventEnd: (e, s) => onEventEndRef.current?.(e, s),
         onSkip: (n) => onSkipRef.current?.(n),
         onIdle: setIdle,
         onBatch: () => onBatchRef.current?.(),
@@ -65,6 +65,13 @@ export function useDirector(
       opts.timings ?? DEFAULT_TIMINGS,
     );
   }
+
+  // The system reduce-motion switch is read asynchronously, so the first
+  // render's table is always 'full'; this catches the real answer a tick later.
+  const timings = opts.timings ?? DEFAULT_TIMINGS;
+  useEffect(() => {
+    directorRef.current?.setTimings(timings);
+  }, [timings]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {

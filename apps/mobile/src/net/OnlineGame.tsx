@@ -65,9 +65,15 @@ export function OnlineGame({
     // from the felt if there is no sheet (a UI timer, cancelled on unmount).
     const timers = [
       setTimeout(() => {
-        const from = net.anchors.centre(anchorId.sheetTotal) ?? net.anchors.centre(anchorId.deck);
-        const to = net.anchors.centre(anchorId.wallet);
-        if (from && to) net.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
+        // Measured again first: the sheet's total was measured as the sheet
+        // slid up, a viewport low on the web. No arc under reduce-motion —
+        // the wallet still counts, and the coins still ding.
+        if (net.motion === 'reduced') return;
+        void net.anchors.refresh().then(() => {
+          const from = net.anchors.centre(anchorId.sheetTotal) ?? net.anchors.centre(anchorId.deck);
+          const to = net.anchors.centre(anchorId.wallet);
+          if (from && to) net.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
+        });
       }, COIN_CASCADE_DELAY_MS),
       // One ding per coin as it lands, and the level-up run with the badge.
       ...coinDingTimers(COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS),
@@ -81,7 +87,7 @@ export function OnlineGame({
         : []),
     ];
     return () => timers.forEach(clearTimeout);
-  }, [net.banner, net.anchors, net.fxBus]);
+  }, [net.banner, net.anchors, net.fxBus, net.motion]);
 
   // Everyone still connected has to accept; bots and empty seats never count.
   const seatedHumans = net.seats.filter((s) => s.connected && !s.bot).length;
@@ -137,6 +143,7 @@ export function OnlineGame({
       view={net.view}
       spotlightSeat={net.spotlight}
       cue={net.cue}
+      dealerHop={net.dealerHop}
       reducedMotion={net.motion === 'reduced'}
       hardMode={net.hard}
       handSort={settings.handSort}

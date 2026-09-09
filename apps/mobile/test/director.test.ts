@@ -34,6 +34,7 @@ interface Capture {
   batches: number;
   /** Events whose end-commit landed. */
   ended: TableEvent[];
+  endSpeeds: number[];
   /** Every onSkip count. */
   skips: number[];
 }
@@ -47,6 +48,7 @@ function makeDirector(initial: PublicView, timings = ZERO_TIMINGS) {
     speeds: [],
     batches: 0,
     ended: [],
+    endSpeeds: [],
     skips: [],
   };
   const d = new Director(SEAT, initial, {
@@ -62,7 +64,10 @@ function makeDirector(initial: PublicView, timings = ZERO_TIMINGS) {
     onBatch: () => {
       cap.batches += 1;
     },
-    onEventEnd: (e) => cap.ended.push(e),
+    onEventEnd: (e, speed) => {
+      cap.ended.push(e);
+      cap.endSpeeds.push(speed);
+    },
     onSkip: (n) => cap.skips.push(n),
   }, timings);
   return { d, cap };
@@ -358,6 +363,62 @@ describe('the end of a beat', () => {
     d.enqueue(c); // b is flushed instantly
     expect(cap.skips).toEqual([b.events.length]);
     d.dispose();
+  });
+});
+
+describe('the pace of a beat', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function deal(seed: number): { batch: Batch; initial: PublicView } {
+    const table = new Table({ seed, humanSeats: [] });
+    const batch = { events: table.drainEvents(), finalView: table.view(SEAT) };
+    return { batch, initial: batch.finalView };
+  }
+
+  it('halves with a batch waiting — except the reveal, which is information', () => {
+    // Two whole deals with a reveal in the first: the second is enqueued at
+    // once, so every beat of the first runs at half pace, bar the reveal.
+    const first = (() => {
+      for (let seed = 1; seed < 200; seed++) {
+        const t = new Table({ seed, humanSeats: [] });
+        const events = t.drainEvents();
+        if (events.some((e) => e.kind === 'declarationsRevealed')) return { seed, events, initial: t.view(SEAT) };
+      }
+      throw new Error('no reveal in 200 seeds');
+    })();
+    const { d, cap } = makeDirector(first.initial, DEFAULT_TIMINGS);
+    d.enqueue({ events: first.events, finalView: first.initial });
+    d.enqueue({ events: [], finalView: first.initial });
+    vi.advanceTimersByTime(200_000);
+    // The first beat started at the first enqueue, before anything waited.
+    for (let i = 1; i < cap.started.length; i++) {
+      const e = cap.started[i]!;
+      expect(cap.speeds[i], e.kind).toBe(e.kind === 'declarationsRevealed' ? 1 : 0.5);
+    }
+    // ...and the end of every beat says which pace it ran at.
+    expect(cap.endSpeeds).toEqual(cap.speeds);
+    d.dispose();
+  });
+
+  it('re-paces from the next beat when the timings change', () => {
+    const a = deal(61);
+    const { d, cap } = makeDirector(a.initial, DEFAULT_TIMINGS);
+    d.enqueue(a.batch);
+    expect(cap.started).toHaveLength(1); // the deal, 1400 ms at full pace
+    d.setTimings(REDUCED_TIMINGS);
+    vi.advanceTimersByTime(1400 + 200 + 5);
+    const afterFirst = cap.started.length;
+    expect(afterFirst).toBeGreaterThanOrEqual(2);
+    // From here every beat is at most 250 + 80: a second of the clock runs
+    // at least three of them, where the full pacing's bids would run one.
+    vi.advanceTimersByTime(1000);
+    expect(cap.started.length - afterFirst).toBeGreaterThanOrEqual(3);
+    d.dispose();
+  });
+
+  it('gives the deal stinger a gap before the match fanfare', () => {
+    expect(DEFAULT_TIMINGS.dealScored.gap).toBeGreaterThanOrEqual(250);
   });
 });
 

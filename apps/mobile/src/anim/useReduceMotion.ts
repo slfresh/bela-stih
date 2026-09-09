@@ -8,12 +8,17 @@ import { AccessibilityInfo } from 'react-native';
  * that setting exists to switch off. The Director's beats are NOT affected:
  * pacing is information (what happened, in what order); a loop is decoration.
  */
+// The last answer the system gave, so a table mounted later starts right
+// instead of waiting a tick for the query again.
+let known: boolean | null = null;
+
 export function useReduceMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
+  const [reduced, setReduced] = useState(known ?? false);
   useEffect(() => {
     let live = true;
     AccessibilityInfo.isReduceMotionEnabled()
       .then((on) => {
+        known = on;
         if (live) setReduced(on);
       })
       .catch(() => {});

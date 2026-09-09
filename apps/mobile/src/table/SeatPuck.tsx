@@ -1,4 +1,4 @@
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
@@ -119,8 +119,12 @@ export const SeatPuck = memo(function SeatPuck({
   // the team ring. `n` is what makes a repeat new.
   const nod = useSharedValue(0);
   const flare = useSharedValue(1);
+  // Only a gesture that arrived AFTER this puck mounted plays: the pucks are
+  // rebuilt on a rotation, and the last cue is still current then.
+  const seenGesture = useRef(gesture?.n ?? 0);
   useEffect(() => {
-    if (!gesture || reduced) return;
+    if (!gesture || reduced || gesture.n === seenGesture.current) return;
+    seenGesture.current = gesture.n;
     if (gesture.kind === 'nod') {
       nod.value = withSequence(withTiming(4, { duration: 90 }), withTiming(0, { duration: 110 }));
     } else {

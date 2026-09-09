@@ -90,7 +90,23 @@ describe('anchors measure on demand', () => {
     // rematch remount would show two tables.
     expect(readFileSync(join(here, '../App.tsx'), 'utf8')).not.toMatch(/exiting=/);
     expect(src('TableScreen.tsx')).not.toMatch(/exiting=/);
-    expect(src('TableScreen.tsx')).toMatch(/entering=\{reduced \? undefined : feltEntering\}/);
+    // Reanimated's web build cannot run a custom entering worklet (it warns
+    // and skips it): the web gets a preset, the phone the flip and the zoom.
+    expect(src('TableScreen.tsx')).toMatch(
+      /entering=\{reduced \? undefined : Platform\.OS === 'web' \? FadeIn\.duration\(240\) : feltEntering\}/,
+    );
+    expect(src('TableScreen.tsx')).toMatch(
+      /entering=\{reduced \? undefined : Platform\.OS === 'web' \? FadeIn\.duration\(180\) : cardEntering\}/,
+    );
+  });
+
+  it('the fan transition sits on its own view, not the one that carries the tilt', () => {
+    // On the web, LinearTransition writes a transform keyframe of its own;
+    // on the view with the fan's rotate/translate it flattened the whole hand
+    // for a frame on every play.
+    const fan = src('TableScreen.tsx');
+    expect(fan).toMatch(/style=\{\[styles\.fanCard, \{ marginLeft, zIndex \}\]\}/);
+    expect(fan).not.toMatch(/\[styles\.fanCard, \{ marginLeft, zIndex \}, motion\]/);
   });
 
   it('the spotlight clears on a seatless beat, and the countdown survives reduce-motion', () => {

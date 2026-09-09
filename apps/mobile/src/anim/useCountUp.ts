@@ -11,10 +11,15 @@ import { useEffect, useRef, useState } from 'react';
 export function useCountUp(
   target: number,
   durationMs = 400,
-  opts: { reduced?: boolean; onStep?: (value: number) => void } = {},
+  opts: {
+    reduced?: boolean;
+    onStep?: (value: number) => void;
+    /** Where to count from on mount; by default the number is simply shown. */
+    from?: number;
+  } = {},
 ): number {
-  const [shown, setShown] = useState(target);
-  const shownRef = useRef(target);
+  const [shown, setShown] = useState(opts.from ?? target);
+  const shownRef = useRef(opts.from ?? target);
   shownRef.current = shown;
   const onStepRef = useRef(opts.onStep);
   onStepRef.current = opts.onStep;

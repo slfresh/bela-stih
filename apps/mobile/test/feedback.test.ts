@@ -110,7 +110,7 @@ describe('every event kind is scored', () => {
       // it lands, from the end-of-beat (tested below). A scored deal's
       // stinger is at the end too, with the sheet.
       run([e.kind === 'cardPlayed' ? { ...e, seat: MY_SEAT } : e]);
-      if (kind === 'dealScored') landingSound(e, MY_SEAT);
+      if (kind === 'dealScored' || kind === 'matchOver') landingSound(e, MY_SEAT);
       expect(heard().length > 0).toBe(!SILENT_EVENTS.includes(kind));
       // ...and every name it asked for is a real file in the bank.
       for (const name of heard()) expect(Object.keys(manifest)).toContain(name);
@@ -180,14 +180,16 @@ describe('the sounds that carry meaning', () => {
     const won = over.winner === teamOf(MY_SEAT);
     const r = run([over]);
     expect(r.award?.coins ?? 0).toBeGreaterThan(0); // there ARE coins to ding for
-    expect(heard()).toContain(won ? 'matchWon' : 'matchLost');
-    expect(heard()).not.toContain('coin');
-    expect(heard()).not.toContain('levelup');
+    // The start of the beat is silent: the fanfare lands with the sheet's
+    // change, at the END — a beat after the last deal's own stinger.
+    expect(heard()).toEqual([]);
+    landingSound(over, MY_SEAT);
+    expect(heard()).toEqual([won ? 'matchWon' : 'matchLost']);
     expect(vi.mocked(Haptics.notificationAsync)).toHaveBeenCalled(); // won or lost, the phone says so
 
     sfx.mockClear();
     const lost = { ...over, winner: (over.winner === 0 ? 1 : 0) as typeof over.winner };
-    run([lost]);
+    landingSound(lost, MY_SEAT);
     expect(heard()).toContain(won ? 'matchLost' : 'matchWon');
   });
 

@@ -38,6 +38,8 @@ export const FLIGHT_FLIP_AT = 0.35;
 export const FADE_FLIGHT_MS = 200;
 export const FADE_SWEEP_MS = 250;
 export const FADE_DEAL_MS = 200;
+/** A stamp under reduce-motion: in and out, no drop, no ring. */
+export const FADE_STAMP_MS = 200;
 /** A bubble under reduce-motion: at most this long, fading in and out. */
 export const FADE_BUBBLE_MS = 300;
 export const FADE_BUBBLE_IN_MS = 60;
@@ -50,22 +52,27 @@ export function flightDuration(distancePx: number): number {
 // --- the deal ------------------------------------------------------------------
 
 export const DEAL_FLY_MS = 240;
-export const DEAL_HOLD_MS = 60;
 export const DEAL_FADE_MS = 120;
+/**
+ * The backs start fading this long before the beat ends, so they are half
+ * gone as the real cards mount at the end-commit and turn over — one
+ * continuous card, not an empty hand between the two.
+ */
+export const DEAL_FADE_LEAD_MS = 40;
 export const DEAL_STAGGER_MIN_MS = 40;
 export const DEAL_STAGGER_MAX_MS = 140;
-/** How far into its beat the last dealt back has finished fading. */
-export const DEAL_DONE_AT = 0.95;
+/** How far into its beat the last dealt back has LANDED; every back then holds to the end. */
+export const DEAL_DONE_AT = 0.85;
 
 /**
  * The gap between one dealt back and the next, derived from the beat so the
  * deal fills it: eight backs at a fixed 60 ms were done at 660 ms of a
  * 1400 ms beat, and the table sat empty for the rest. The last back has
- * faded before the beat ends and the real cards land.
+ * landed with room to sit before the beat ends and the real cards take over.
  */
 export function dealStagger(count: number, beatMs: number): number {
   if (count <= 1) return 0;
-  const lastStart = beatMs * DEAL_DONE_AT - DEAL_FLY_MS - DEAL_HOLD_MS - DEAL_FADE_MS;
+  const lastStart = beatMs * DEAL_DONE_AT - DEAL_FLY_MS;
   return clamp(lastStart / (count - 1), DEAL_STAGGER_MIN_MS, DEAL_STAGGER_MAX_MS);
 }
 
@@ -137,9 +144,12 @@ export const CONFETTI_MS = 2100;
 export const BURST_MS = 1400;
 /**
  * The coins set off from the sheet's total this long after the deal is
- * scored — the sheet slides up at the beat's end (700 ms) and settles first.
+ * scored: the sheet slides up at the beat's end (700 ms) over 280 ms and its
+ * totals count for 600 ms more. Later than the slide, or the total's anchor
+ * is measured mid-slide (a viewport low on the web) and the coins set off
+ * from nowhere; the screens re-measure once more before they emit.
  */
-export const COIN_CASCADE_DELAY_MS = 900;
+export const COIN_CASCADE_DELAY_MS = 1400;
 /** The last trick's +10 chip, from the felt to the running count. */
 export const LAST_TRICK_CHIP_MS = 600;
 
@@ -160,8 +170,9 @@ export function motionOf(fx: Fx): number {
     case 'flight':
       return fx.duration;
     case 'deal':
+      // Until the last back has landed; they then hold to the end of the beat.
       if (fx.fade) return FADE_DEAL_MS * fx.speed;
-      return ((fx.backs.length - 1) * fx.stagger + DEAL_FLY_MS + DEAL_HOLD_MS) * fx.speed;
+      return ((fx.backs.length - 1) * fx.stagger + DEAL_FLY_MS) * fx.speed;
     case 'trickSweep':
       if (fx.fade) return FADE_SWEEP_MS * fx.speed;
       return (SWEEP_HOLD_MS + (fx.cards.length - 1) * SWEEP_STAGGER_MS + SWEEP_FLY_MS) * fx.speed;
@@ -175,7 +186,7 @@ export function motionOf(fx: Fx): number {
     case 'badge':
       return fx.duration;
     case 'stamp':
-      return STAMP_MS * fx.speed;
+      return (fx.fade ? FADE_STAMP_MS : STAMP_MS) * fx.speed;
     case 'coins':
       return coinsLandedMs(fx.count);
     case 'confetti':
@@ -191,11 +202,15 @@ export function lifetimeOf(fx: Fx): number {
     case 'flight':
       return fx.duration + FLIGHT_SETTLE_MS * fx.speed;
     case 'deal':
-      return motionOf(fx) + DEAL_FADE_MS * fx.speed + 100;
+      // The backs fade out across the end of the beat (see DEAL_FADE_LEAD_MS);
+      // under reduce-motion they are gone by it.
+      if (fx.fade) return fx.beat * fx.speed + 40;
+      return (fx.beat - DEAL_FADE_LEAD_MS + DEAL_FADE_MS) * fx.speed + 40;
     case 'trickSweep':
-      return motionOf(fx) + SWEEP_SETTLE_MS;
+      return motionOf(fx) + SWEEP_SETTLE_MS * fx.speed;
     case 'bubble':
-      return motionOf(fx) + BUBBLE_SETTLE_MS;
+      // A fading bubble is gone when its motion is; the pop's tail is the settle.
+      return motionOf(fx) + (fx.fade ? 40 : BUBBLE_SETTLE_MS);
     case 'pulse':
       return motionOf(fx) + 50;
     case 'badge':

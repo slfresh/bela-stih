@@ -4,7 +4,7 @@ import type { TableEvent } from '@belot/table';
 import type { Lang } from '@belot/i18n';
 import type { AnchorMap } from '../anim/AnchorRegistry';
 import type { XY } from '../anim/FxBus';
-import { DEFAULT_TIMINGS } from '../anim/director';
+import { timingsFor } from '../anim/director';
 import { anchorId, type FxBus } from '../anim/FxBus';
 import {
   BACK_SCALE,
@@ -17,6 +17,7 @@ import {
 } from '../anim/lifetimes';
 import { emoteText, isGlyphEmote } from '../emotes';
 import { declarationWeight } from './cues';
+import { cardWidthForHeight, fitHand, MAX_CARD_W } from './geometry';
 
 /**
  * Maps table events to sprites. Shared by the offline and online screens, so a
@@ -50,7 +51,7 @@ export interface FxSpawnerOptions {
 
 /** An emote thrown across the table: a bubble over the sender's seat. */
 export function spawnEmote(
-  opts: { anchors: AnchorMap; bus: FxBus; lang: Lang },
+  opts: { anchors: AnchorMap; bus: FxBus; lang: Lang; reduced?: () => boolean },
   seat: Seat,
   id: string,
 ): void {
@@ -65,6 +66,8 @@ export function spawnEmote(
     duration: 1800,
     speed: 1,
     big: isGlyphEmote(id),
+    // Reduce-motion: no pop, just there and then not.
+    fade: opts.reduced?.() ?? false,
   });
 }
 
@@ -72,6 +75,8 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
   const { anchors, bus, lang, view } = opts;
   const mySeatOf = opts.mySeat;
   const isReduced = opts.reduced ?? (() => false);
+  /** The beats as the policy in force paces them: a sprite fills the beat it will actually get. */
+  const beats = () => timingsFor(isReduced() ? 'reduced' : 'full');
 
   /** The width of a card sitting in this seat's slot, or the fallback before the first layout. */
   const slotW = (seat: Seat): number => anchors.rect(anchorId.slot(seat))?.w ?? FALLBACK_CARD_W;
@@ -109,9 +114,11 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
 
   /**
    * Backs from the deck round the table, paced to fill the beat they decorate.
-   * Each opponent gets one back a round; MY seat gets one per card, spread
-   * across the fan where the real cards will appear — the first six across
-   * the hand, the talon's two on its right, where the fan will re-sort them.
+   * Each opponent gets one back a round; MY seat gets one per card, on the
+   * very spots the real cards will take — the same `fitHand` the hand lays
+   * itself out with, from the hand block's measured rect: the first six
+   * across a six-card fan, the talon's two at positions 6–7 of the eight-card
+   * fan, where the re-sort will put them.
    */
   const deal = (mySeat: Seat | null, rounds: number, perRound: number, beatMs: number, speed: number) => {
     const from = anchors.centre(anchorId.deck);
@@ -119,12 +126,17 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
     if (!from || seats.some((p) => p === null)) return;
     const hand = mySeat !== null ? anchors.rect(anchorId.seat(mySeat)) : null;
     const n = rounds * perRound;
-    const step = hand ? Math.min((hand.w * 0.68) / Math.max(1, n - 1), 46) : 0;
+    const total = perRound === 2 ? 8 : n;
+    // The hand's own height caps its cards in landscape; the block's rect carries that.
+    const fit = hand ? fitHand(hand.w, total, Math.min(MAX_CARD_W, cardWidthForHeight(hand.h, total))) : null;
     const mine = (k: number): XY => {
-      if (!hand) return seats[mySeat!]!;
-      const pos = perRound === 2 ? k + 6 : k; // the talon lands at positions 6–7 of 8
-      const centre = perRound === 2 ? 3.5 : (n - 1) / 2;
-      return { x: hand.x + hand.w / 2 + (pos - centre) * step, y: hand.y + hand.h * 0.6 };
+      if (!hand || !fit) return seats[mySeat!]!;
+      const pos = perRound === 2 ? k + 6 : k;
+      const span = fit.cardW + (total - 1) * fit.advance;
+      return {
+        x: hand.x + (hand.w - span) / 2 + pos * fit.advance + fit.cardW / 2,
+        y: hand.y + hand.h * 0.6,
+      };
     };
     const backs: XY[] = [];
     let k = 0;
@@ -139,6 +151,7 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
       from,
       backs,
       stagger: dealStagger(backs.length, beatMs),
+      beat: beatMs,
       speed,
       width: anySlotW() * BACK_SCALE,
       fade: isReduced(),
@@ -152,12 +165,12 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
     switch (e.kind) {
       case 'dealStarted':
         // Two rounds of three.
-        deal(mySeat, 2, 3, DEFAULT_TIMINGS.dealStarted.dur, speed);
+        deal(mySeat, 2, 3, beats().dealStarted.dur, speed);
         break;
 
       case 'handsCompleted':
         // The talon: after the contract, everyone receives two more cards.
-        deal(mySeat, 1, 2, DEFAULT_TIMINGS.handsCompleted.dur, speed);
+        deal(mySeat, 1, 2, beats().handsCompleted.dur, speed);
         break;
 
       case 'cardPlayed': {
@@ -263,13 +276,16 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
         const from = anchors.centre(anchorId.seat(dealer));
         const to = anchors.centre(anchorId.seat(((dealer + 1) % 4) as Seat));
         if (from && to && !reduced) {
-          bus.emit({ kind: 'badge', from, to, duration: DEFAULT_TIMINGS.dealScored.dur * speed });
+          bus.emit({ kind: 'badge', from, to, duration: beats().dealScored.dur * speed });
         }
-        // Štiglja: the word itself, stamped on the felt in the sweeping side's colour.
+        // Štiglja: the word itself, stamped on the felt in the sweeping side's
+        // colour — a plain fade under reduce-motion, inside the short beat.
         if (e.result.valatTeam !== null) {
           const at = anchors.centre(anchorId.deck);
           const ours = mySeat !== null && teamOf(mySeat) === e.result.valatTeam;
-          if (at) bus.emit({ kind: 'stamp', at, text: lang.s.valat, tone: ours ? 'ok' : 'danger', speed: 1 });
+          if (at) {
+            bus.emit({ kind: 'stamp', at, text: lang.s.valat, tone: ours ? 'ok' : 'danger', speed, fade: reduced });
+          }
         }
         break;
       }
@@ -282,20 +298,22 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
   };
 
   /**
-   * Sprites for an event's END: what lands as the beat closes. Fired from the
-   * director's onEventEnd, which never fires for a flushed event; always at
-   * full pace, since these are flourishes on something already committed.
+   * Sprites for an event's END: what lands as the beat closes, in the gap
+   * that follows. Fired from the director's onEventEnd, which never fires for
+   * a flushed event, at the pace the beat ran so the flourish fits the gap.
+   * Nothing under reduce-motion: the plaque already shows the pip.
    */
-  const end = (e: TableEvent): void => {
+  const end = (e: TableEvent, speed = 1): void => {
+    if (isReduced()) return;
     switch (e.kind) {
       case 'bidCalled': {
         const at = anchors.centre(anchorId.plaque);
-        if (at) bus.emit({ kind: 'stamp', at, pip: e.suit, tone: 'gold', speed: 1 });
+        if (at) bus.emit({ kind: 'stamp', at, pip: e.suit, tone: 'gold', speed });
         break;
       }
       case 'doubled': {
         const at = anchors.centre(anchorId.plaque);
-        if (at) bus.emit({ kind: 'stamp', at, text: `×${e.multiplier}`, tone: 'danger', speed: 1 });
+        if (at) bus.emit({ kind: 'stamp', at, text: `×${e.multiplier}`, tone: 'danger', speed });
         break;
       }
       default:

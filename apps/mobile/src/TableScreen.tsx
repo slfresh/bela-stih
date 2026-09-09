@@ -7,6 +7,7 @@ import {
   View,
   type StyleProp,
   type ViewStyle,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
@@ -49,6 +50,7 @@ import { useLaggedNumber } from './ui/useLaggedNumber';
 import { anchorId, type FxBus } from './anim/FxBus';
 import { SeatPuck } from './table/SeatPuck';
 import {
+  CARD_ASPECT,
   FAN_PAD,
   fanArc,
   fitHand,
@@ -122,6 +124,8 @@ export interface TableScreenProps {
   reducedMotion?: boolean;
   /** What the table does in reaction to the current beat: a nod, a shake, a glow. */
   cue?: TableCue | null;
+  /** The dealer's button is flying to the next puck: no puck shows its own "D" meanwhile. */
+  dealerHop?: boolean;
   anchors: AnchorMap;
   fxBus: FxBus;
   /** Absolute epoch deadline for the active seat's ring; null = soft ring. */
@@ -157,6 +161,7 @@ export function TableScreen(props: TableScreenProps) {
     matchScores, winnerTeam, profile, banner, seatMeta, status, anchors, fxBus, spotlightSeat = null,
     reducedMotion = false,
     cue = null,
+    dealerHop = false,
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
     hardMode = false, series, askedRematch, waitingFor, onRematch, onForceRematch,
     handSort = 'auto', onHandSortChange, confirmPlay = 'ambiguous',
@@ -176,13 +181,24 @@ export function TableScreen(props: TableScreenProps) {
   // scaled with the layout. Off under reduce-motion.
   const feltShake = useSharedValue(0);
   const feltShakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: feltShake.value }] }));
+  // Played once per cue, by its `n` alone: keyed on the layout scale as well,
+  // a rotation with the štiglja cue still current replayed the burst and the
+  // shake over the result sheet. Everything else is read through refs.
+  const cueRef = useRef(cue);
+  cueRef.current = cue;
+  const scaleRef = useRef(m.scale);
+  scaleRef.current = m.scale;
+  const reducedRef = useRef(reduced);
+  reducedRef.current = reduced;
   useEffect(() => {
-    if (cue?.kind === 'stiglja') {
+    const c = cueRef.current;
+    if (!c || reducedRef.current) return;
+    if (c.kind === 'stiglja') {
       const at = anchors.centre(anchorId.deck);
-      if (at && !reduced) fxBus.emit({ kind: 'burst', at, count: 40 });
+      if (at) fxBus.emit({ kind: 'burst', at, count: 40 });
     }
-    if ((cue?.kind !== 'shake' && cue?.kind !== 'stiglja') || reduced) return;
-    const a = (cue.kind === 'stiglja' ? 6 : cue.amp) * m.scale;
+    if (c.kind !== 'shake' && c.kind !== 'stiglja') return;
+    const a = (c.kind === 'stiglja' ? 6 : c.amp) * scaleRef.current;
     feltShake.value = withSequence(
       withTiming(a, { duration: 40 }),
       withTiming(-a, { duration: 80 }),
@@ -190,7 +206,7 @@ export function TableScreen(props: TableScreenProps) {
       withTiming(-a * 0.6, { duration: 80 }),
       withTiming(0, { duration: 60 }),
     );
-  }, [cue, feltShake, reduced, m.scale, anchors, fxBus]);
+  }, [cue?.n, feltShake, anchors, fxBus]);
 
   // The trick cross is sized against the felt it is drawn in, not the window:
   // a landscape felt is a short wide ellipse and window-sized cards hang out
@@ -264,7 +280,7 @@ export function TableScreen(props: TableScreenProps) {
       name={meta(s).name}
       avatar={meta(s).avatar}
       cards={view.handCounts[s]}
-      isDealer={view.dealer === s}
+      isDealer={view.dealer === s && !dealerHop}
       isBot={meta(s).bot}
       connected={meta(s).connected}
       active={view.toAct === s}
@@ -284,6 +300,7 @@ export function TableScreen(props: TableScreenProps) {
   // A ring of light bursts from the hand as a cue lands — the sound's
   // visible twin, fired from the very same edge so it can never be held on.
   const pulseHand = useCallback(() => {
+    if (reducedRef.current) return;
     const at = anchors.centre(anchorId.seat(mySeat));
     if (at) fxBus.emit({ kind: 'pulse', at, speed: 1 });
   }, [anchors, fxBus, mySeat]);
@@ -409,7 +426,7 @@ export function TableScreen(props: TableScreenProps) {
 
   const feltBody = (
     <Animated.View
-      entering={reduced ? undefined : feltEntering}
+      entering={reduced ? undefined : Platform.OS === 'web' ? FadeIn.duration(240) : feltEntering}
       style={[
         styles.felt,
         { backgroundColor: baize.felt, borderColor: baize.rim },
@@ -1122,7 +1139,15 @@ function Hand({
     );
   };
 
+  // The card just tapped measured itself into a transient rect (see
+  // FanCard). Only the LAST tap's rect may be live: a rect left from an
+  // earlier tap would send a server-driven play of that card (the clock
+  // running out online) off from where the card was several tricks ago.
+  const anchors = useAnchors();
+  const lastTap = useRef<string | null>(null);
   const press = (id: string) => {
+    if (lastTap.current !== null && lastTap.current !== id) anchors.delete(anchorId.card(lastTap.current));
+    lastTap.current = id;
     if (marking) {
       onToggleMark?.(id);
       return;
@@ -1247,8 +1272,12 @@ const FanCard = memo(
     onPress: (id: string) => void;
   }) {
     const glowV = useSharedValue(0);
+    // Only a glow that arrived AFTER this card mounted plays: a card dealt
+    // while an old bela cue is still current must not light up on arrival.
+    const seenGlow = useRef(glowN);
     useEffect(() => {
-      if (!glowN) return;
+      if (!glowN || glowN === seenGlow.current) return;
+      seenGlow.current = glowN;
       glowV.value = withSequence(
         withTiming(1, { duration: 150 }),
         withDelay(400, withTiming(0, { duration: 150 })),
@@ -1279,18 +1308,28 @@ const FanCard = memo(
         return;
       }
       node.measureInWindow((x, y, w, h) => {
-        if (Number.isFinite(x) && w > 0) anchors.set(anchorId.card(id), { x, y, w, h });
+        // The measurement is the bounding box of the TILTED card, wider than
+        // the card by up to a third at the fan's edge; its centre is right.
+        // The rect is the card's own size about that centre, so the flight
+        // sets off at the fan's size rather than popping from the box's.
+        if (Number.isFinite(x) && w > 0) {
+          const cardH = width * CARD_ASPECT;
+          anchors.set(anchorId.card(id), { x: x + w / 2 - width / 2, y: y + h / 2 - cardH / 2, w: width, h: cardH });
+        }
         onPress(id);
       });
     };
     return (
       <Animated.View
-        style={[styles.fanCard, { marginLeft, zIndex }, motion]}
+        style={[styles.fanCard, { marginLeft, zIndex }]}
         // The fan closes over a played card and re-sorts after the talon
-        // instead of snapping; a new card turns over as it arrives.
+        // instead of snapping; a new card turns over as it arrives. On its
+        // own view: reanimated's web transition writes a transform keyframe
+        // of its own, which flattened the fan's tilt and lift on every play.
         layout={reduced ? undefined : LinearTransition.duration(220)}
-        entering={reduced ? undefined : cardEntering}
+        entering={reduced ? undefined : Platform.OS === 'web' ? FadeIn.duration(180) : cardEntering}
       >
+       <Animated.View style={motion}>
         <Pressable
           ref={ref}
           disabled={disabled}
@@ -1311,6 +1350,7 @@ const FanCard = memo(
           />
           <Animated.View pointerEvents="none" style={[styles.cardGlow, glowStyle]} />
         </Pressable>
+       </Animated.View>
       </Animated.View>
     );
   },
@@ -1475,11 +1515,15 @@ function DealResult({
   // Rows arrive one after another; the totals count up to their values.
   let order = 0;
   const enter = () => (reduced ? undefined : FadeInDown.delay(order++ * 60).duration(220));
-  const row = (label: string, v: readonly [number, number], opts: { count?: boolean; anchor?: string } = {}) => (
+  const row = (
+    label: string,
+    v: readonly [number, number],
+    opts: { from?: readonly [number, number]; anchor?: string } = {},
+  ) => (
     <Animated.View style={styles.resultRow} key={label} entering={enter()}>
       <Text style={styles.resultLabel}>{label}</Text>
-      {opts.count ? (
-        <CountedPair a={v[0]} b={v[1]} reduced={reduced} anchor={opts.anchor} />
+      {opts.from ? (
+        <CountedPair a={v[0]} b={v[1]} from={opts.from} reduced={reduced} anchor={opts.anchor} />
       ) : (
         <Text style={styles.resultValue}>
           {v[0]} : {v[1]}
@@ -1524,8 +1568,16 @@ function DealResult({
           {result.callerMade ? lang.s.callerMade : lang.s.callerFailed}
         </Animated.Text>
       )}
-      {row(lang.s.recorded, result.finalScore, { count: true, anchor: anchorId.sheetTotal })}
-      {row(lang.s.matchScore, matchScores, { count: true })}
+      {/* The sheet mounts with the final numbers already in the view, so the
+          two totals count from where they were: nought, and the match score
+          before this deal was added to it. */}
+      {row(lang.s.recorded, result.finalScore, { from: [0, 0], anchor: anchorId.sheetTotal })}
+      {row(lang.s.matchScore, matchScores, {
+        from: [
+          Math.max(0, matchScores[0] - result.finalScore[0]),
+          Math.max(0, matchScores[1] - result.finalScore[1]),
+        ],
+      })}
 
       {matchOver ? (
         <>
@@ -1563,27 +1615,30 @@ function DealResult({
   );
 }
 
-/** "a : b", each counting up to its value; optionally the anchor coins set off from. */
+/** "a : b", each counting up from `from` to its value; optionally the anchor coins set off from. */
 function CountedPair({
   a,
   b,
+  from,
   reduced,
   anchor,
 }: {
   a: number;
   b: number;
+  from: readonly [number, number];
   reduced: boolean;
   anchor?: string;
 }) {
   const steps = useRef(0);
   const av = useCountUp(a, 600, {
     reduced,
+    from: from[0],
     // Every other step ticks, softly: a tally being written, not a rattle.
     onStep: () => {
       if (++steps.current % 2 === 0) playSfx('tick', { gain: 0.25, rate: 1.4 });
     },
   });
-  const bv = useCountUp(b, 600, { reduced });
+  const bv = useCountUp(b, 600, { reduced, from: from[1] });
   const text = (
     <Text style={styles.resultValue}>
       {av} : {bv}

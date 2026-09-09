@@ -45,6 +45,8 @@ export type Fx =
       backs: XY[];
       /** Gap between one back and the next at speed 1, derived from the beat. */
       stagger: number;
+      /** The beat this deal fills at speed 1: the backs hold until its end, where the real cards mount. */
+      beat: number;
       speed: number;
       width: number;
       /** Reduce-motion: the backs appear where they land and fade, all at once. */
@@ -79,7 +81,16 @@ export type Fx =
       fade?: boolean;
     }
   /** The pip (or the ×2) landing on the plaque as a call's beat ends. */
-  | { kind: 'stamp'; at: XY; pip?: Suit; text?: string; tone: 'gold' | 'danger' | 'ok'; speed: number }
+  | {
+      kind: 'stamp';
+      at: XY;
+      pip?: Suit;
+      text?: string;
+      tone: 'gold' | 'danger' | 'ok';
+      speed: number;
+      /** Reduce-motion: a plain fade in and out, no drop and no ring. */
+      fade?: boolean;
+    }
   /** A ring of light bursting from a point — the "your turn" cue's visible twin. */
   | { kind: 'pulse'; at: XY; speed: number }
   /** A small chip flying from one place to another: the dealer's button, the last trick's +10. */

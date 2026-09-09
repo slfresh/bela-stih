@@ -26,11 +26,13 @@ import {
   COIN_FLY_MS,
   COIN_STAGGER_MS,
   CONFETTI_MS,
+  DEAL_FADE_LEAD_MS,
   DEAL_FADE_MS,
   DEAL_FLY_MS,
-  DEAL_HOLD_MS,
   FADE_BUBBLE_IN_MS,
   FADE_BUBBLE_OUT_MS,
+  FADE_DEAL_MS,
+  FADE_STAMP_MS,
   FADE_SWEEP_MS,
   FLIGHT_FLIP_AT,
   PULSE_MS,
@@ -109,6 +111,7 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
           from={local(fx.from)}
           backs={fx.backs.map(local)}
           stagger={fx.stagger}
+          beat={fx.beat}
           speed={fx.speed}
           width={fx.width}
           fade={fx.fade}
@@ -131,7 +134,7 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
         />
       );
     case 'stamp':
-      return <Stamp at={local(fx.at)} pip={fx.pip} text={fx.text} tone={fx.tone} speed={fx.speed} />;
+      return <Stamp at={local(fx.at)} pip={fx.pip} text={fx.text} tone={fx.tone} speed={fx.speed} fade={fx.fade} />;
     case 'pulse':
       return <Pulse at={local(fx.at)} speed={fx.speed} />;
     case 'badge':
@@ -185,6 +188,18 @@ function Flight({
             { translateY: from.y + (to.y - from.y) * p.value - (w * 1.45) / 2 },
             { scale: startScale + (1 - startScale) * p.value },
             { rotateZ: `${(1 - p.value) * -8}deg` },
+            // An opponent's card turns over: edge-on at the flip, where the
+            // back gives way to the face. Mine is face up from the tap.
+            {
+              scaleX: fx.faceUp
+                ? 1
+                : Math.max(
+                    0.06,
+                    p.value < FLIGHT_FLIP_AT
+                      ? 1 - p.value / FLIGHT_FLIP_AT
+                      : (p.value - FLIGHT_FLIP_AT) / FLIGHT_FLIP_AT,
+                  ),
+            },
           ],
         },
   );
@@ -216,6 +231,7 @@ function Deal({
   from,
   backs,
   stagger,
+  beat,
   speed,
   width,
   fade = false,
@@ -223,6 +239,7 @@ function Deal({
   from: XY;
   backs: XY[];
   stagger: number;
+  beat: number;
   speed: number;
   width: number;
   fade?: boolean;
@@ -240,50 +257,61 @@ function Deal({
           from={fade ? f.to : from}
           to={f.to}
           delay={f.delay}
+          beat={beat}
           speed={speed}
           width={width}
+          fade={fade}
         />
       ))}
     </>
   );
 }
 
+/**
+ * One dealt back: flies in, then HOLDS where it landed until the beat ends
+ * and fades as the real card mounts over it. Under reduce-motion it appears
+ * in place and is gone by the end of the (short) beat.
+ */
 function DealBack({
   from,
   to,
   delay,
+  beat,
   speed,
   width,
+  fade,
 }: {
   from: XY;
   to: XY;
   delay: number;
+  beat: number;
   speed: number;
   width: number;
+  fade: boolean;
 }) {
-  const p = useSharedValue(0);
+  const p = useSharedValue(fade ? 1 : 0);
   const op = useSharedValue(0);
   useEffect(() => {
+    if (fade) {
+      const outAt = Math.max(FADE_DEAL_MS * 0.4, beat * speed - FADE_DEAL_MS * 0.5);
+      op.value = withSequence(
+        withTiming(1, { duration: FADE_DEAL_MS * 0.4 * speed }),
+        withDelay(Math.max(0, outAt - FADE_DEAL_MS * 0.4 * speed), withTiming(0, { duration: FADE_DEAL_MS * 0.5 })),
+      );
+      return;
+    }
     op.value = withDelay(delay, withTiming(1, { duration: 40 * speed }));
-    p.value = withDelay(
-      delay,
-      withSequence(
-        withTiming(1, { duration: DEAL_FLY_MS * speed, easing: Easing.out(Easing.quad) }),
-        withTiming(1, { duration: DEAL_HOLD_MS * speed }),
-      ),
-    );
-    op.value = withDelay(
-      delay + (DEAL_FLY_MS + DEAL_HOLD_MS) * speed,
-      withTiming(0, { duration: DEAL_FADE_MS * speed }),
-    );
-  }, [p, op, delay, speed]);
+    p.value = withDelay(delay, withTiming(1, { duration: DEAL_FLY_MS * speed, easing: Easing.out(Easing.quad) }));
+    const fadeAt = Math.max(delay + DEAL_FLY_MS * speed, (beat - DEAL_FADE_LEAD_MS) * speed);
+    op.value = withDelay(fadeAt, withTiming(0, { duration: DEAL_FADE_MS * speed }));
+  }, [p, op, delay, beat, speed, fade]);
 
   const style = useAnimatedStyle(() => ({
     opacity: op.value,
     transform: [
       { translateX: from.x + (to.x - from.x) * p.value - width / 2 },
       { translateY: from.y + (to.y - from.y) * p.value - (width * 1.45) / 2 },
-      { rotateZ: `${p.value * 180}deg` },
+      { rotateZ: fade ? '0deg' : `${p.value * 180}deg` },
     ],
   }));
 
@@ -363,17 +391,18 @@ function SweptCard({
     );
   }, [p, lift, winner, delay, speed, fade]);
 
+  // Reduce-motion: the card fades where it lies — no shrink, no turn-over.
   const style = useAnimatedStyle(() => ({
     opacity: fade ? 1 - p.value : 1 - 0.9 * Math.max(0, (p.value - 0.8) / 0.2),
     transform: [
       { translateX: from.x + (to.x - from.x) * p.value - width / 2 },
       { translateY: from.y + (to.y - from.y) * p.value - (width * 1.45) / 2 - lift.value * 6 },
-      { scale: 1 - (1 - BACK_SCALE) * p.value },
+      { scale: fade ? 1 : 1 - (1 - BACK_SCALE) * p.value },
     ],
   }));
   // Face for the first stretch of the flight, back for the rest.
-  const face = useAnimatedStyle(() => ({ opacity: p.value < SWEEP_FLIP_AT ? 1 : 0 }));
-  const back = useAnimatedStyle(() => ({ opacity: p.value < SWEEP_FLIP_AT ? 0 : 1 }));
+  const face = useAnimatedStyle(() => ({ opacity: fade || p.value < SWEEP_FLIP_AT ? 1 : 0 }));
+  const back = useAnimatedStyle(() => ({ opacity: !fade && p.value >= SWEEP_FLIP_AT ? 1 : 0 }));
 
   return (
     <Animated.View style={[styles.sprite, style]}>
@@ -381,9 +410,11 @@ function SweptCard({
         <CardFace card={card} width={width} style={cosmetics().deckStyle} />
         {winner && <View pointerEvents="none" style={styles.sweptRing} />}
       </Animated.View>
-      <Animated.View style={[StyleSheet.absoluteFill, back]}>
-        <CardBackFace width={width} variant={cosmetics().cardBack} />
-      </Animated.View>
+      {!fade && (
+        <Animated.View style={[StyleSheet.absoluteFill, back]}>
+          <CardBackFace width={width} variant={cosmetics().cardBack} />
+        </Animated.View>
+      )}
     </Animated.View>
   );
 }
@@ -517,24 +548,30 @@ function Stamp({
   text,
   tone,
   speed,
+  fade = false,
 }: {
   at: XY;
   pip?: Suit;
   text?: string;
   tone: 'gold' | 'danger' | 'ok';
   speed: number;
+  /** Reduce-motion: in and out, no drop and no ring. */
+  fade?: boolean;
 }) {
   const p = useSharedValue(0);
-  const drop = useSharedValue(1.6);
+  const drop = useSharedValue(fade ? 1 : 1.6);
   useEffect(() => {
-    drop.value = withSpring(1, { damping: 12, stiffness: 240, mass: 0.5 });
-    p.value = withTiming(1, { duration: STAMP_MS * speed, easing: Easing.out(Easing.cubic) });
-  }, [p, drop, speed]);
+    if (!fade) drop.value = withSpring(1, { damping: 12, stiffness: 240, mass: 0.5 });
+    p.value = withTiming(1, {
+      duration: (fade ? FADE_STAMP_MS : STAMP_MS) * speed,
+      easing: fade ? Easing.linear : Easing.out(Easing.cubic),
+    });
+  }, [p, drop, speed, fade]);
   // A word (Štiglja) needs a wider plate than a pip or a ×2.
   const wide = text !== undefined && text.length > 3;
   const w = wide ? STAMP_WIDE : STAMP_SIZE;
   const body = useAnimatedStyle(() => ({
-    opacity: 1 - Math.max(0, (p.value - 0.7) / 0.3),
+    opacity: fade ? Math.min(1, p.value * 3, (1 - p.value) * 3) : 1 - Math.max(0, (p.value - 0.7) / 0.3),
     transform: [
       { translateX: at.x - w / 2 },
       { translateY: at.y - STAMP_SIZE / 2 },
@@ -551,7 +588,7 @@ function Stamp({
   }));
   return (
     <>
-      {!wide && (
+      {!wide && !fade && (
         <Animated.View
           style={[
             styles.sprite,
