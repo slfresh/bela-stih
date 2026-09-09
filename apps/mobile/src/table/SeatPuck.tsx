@@ -1,13 +1,12 @@
 import { memo, useEffect, useRef } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
-  cancelAnimation,
   Easing,
   useAnimatedStyle,
   useSharedValue,
-  withRepeat,
   withSequence,
   withTiming,
+  type CSSAnimationProperties,
 } from 'react-native-reanimated';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import type { Seat } from '@belot/engine';
@@ -105,23 +104,7 @@ export const SeatPuck = memo(function SeatPuck({
   }, [ringOn, active]);
   const ringFade = useAnimatedStyle(() => ({ opacity: ringOn.value }));
 
-  const think = useSharedValue(1);
-  useEffect(() => {
-    if (thinking && !reduced) {
-      think.value = withRepeat(
-        withSequence(
-          withTiming(1.06, { duration: 500, easing: Easing.inOut(Easing.sin) }),
-          withTiming(1, { duration: 500, easing: Easing.inOut(Easing.sin) }),
-        ),
-        -1,
-        false,
-      );
-    } else {
-      cancelAnimation(think);
-      think.value = withTiming(1, { duration: 150 });
-    }
-    return () => cancelAnimation(think);
-  }, [think, thinking, reduced]);
+
   // One-off gestures: a pass nods the whole puck; a big call or a bela flares
   // the team ring. `n` is what makes a repeat new.
   const nod = useSharedValue(0);
@@ -142,7 +125,7 @@ export const SeatPuck = memo(function SeatPuck({
     }
   }, [gesture, nod, flare, reduced]);
   const nodStyle = useAnimatedStyle(() => ({ transform: [{ translateY: nod.value }] }));
-  const flareStyle = useAnimatedStyle(() => ({ transform: [{ scale: think.value * flare.value }] }));
+  const flareStyle = useAnimatedStyle(() => ({ transform: [{ scale: flare.value }] }));
   // The name sits under the disc and needs room for a couple of words; a
   // smaller puck must give that room back, or a shrunk seat still costs 86px
   // of the table's width. 54 + 32 is exactly the old fixed width.
@@ -181,14 +164,21 @@ export const SeatPuck = memo(function SeatPuck({
         {/* Team ring: static, and deliberately NOT the countdown ring — that
             one means TIME (amber to red) and the two must never be confused. */}
         {tone && (
+          // The "thinking" pulse is a CSS animation on the outer view (the
+          // compositor's); the one-off flare stays a spring on the inner one.
           <Animated.View
-            style={[
-              styles.teamRing,
-              { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: tone.edge },
-              flareStyle,
-            ]}
+            style={[StyleSheet.absoluteFill, thinking && !reduced ? thinkPulse : undefined]}
             pointerEvents="none"
-          />
+          >
+            <Animated.View
+              style={[
+                styles.teamRing,
+                { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: tone.edge },
+                flareStyle,
+              ]}
+              pointerEvents="none"
+            />
+          </Animated.View>
         )}
 
         <Animated.View style={[StyleSheet.absoluteFill, ringFade]} pointerEvents="none">
@@ -235,6 +225,14 @@ export const SeatPuck = memo(function SeatPuck({
     </Animated.View>
   );
 });
+
+const thinkPulse: CSSAnimationProperties = {
+  animationName: { from: { transform: [{ scale: 1 }] }, to: { transform: [{ scale: 1.06 }] } },
+  animationDuration: 500,
+  animationIterationCount: 'infinite',
+  animationDirection: 'alternate',
+  animationTimingFunction: 'ease-in-out',
+};
 
 const styles = StyleSheet.create({
   root: { alignItems: 'center', gap: 2 },

@@ -11,7 +11,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
-  cancelAnimation,
   Easing,
   FadeIn,
   FadeInDown,
@@ -20,11 +19,11 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withRepeat,
   withSequence,
   withSpring,
   withTiming,
   ZoomIn,
+  type CSSAnimationProperties,
 } from 'react-native-reanimated';
 import { useCountUp } from './anim/useCountUp';
 import type { TableCue } from './table/cues';
@@ -1511,30 +1510,22 @@ const SlotGhost = memo(function SlotGhost({
   breathing: boolean;
   reduced: boolean;
 }) {
-  const o = useSharedValue(0.7);
-  useEffect(() => {
-    if (breathing && !reduced) {
-      o.value = withRepeat(
-        withSequence(
-          withTiming(0.95, { duration: 700, easing: Easing.inOut(Easing.sin) }),
-          withTiming(0.55, { duration: 700, easing: Easing.inOut(Easing.sin) }),
-        ),
-        -1,
-        false,
-      );
-    } else {
-      cancelAnimation(o);
-      o.value = withTiming(0.7, { duration: 200 });
-    }
-    return () => cancelAnimation(o);
-  }, [o, breathing, reduced]);
-  const style = useAnimatedStyle(() => ({ opacity: o.value }));
+  // The breath is a CSS animation: the compositor's on the web, the UI
+  // thread's natively, and nothing per frame in JS.
   return (
-    <Animated.View style={[styles.slotGhost, style]}>
+    <Animated.View style={[styles.slotGhost, breathing && !reduced ? ghostBreath : styles.slotGhostStill]}>
       <View style={[styles.slotTab, SLOT_TAB[side], { backgroundColor: colour }]} />
     </Animated.View>
   );
 });
+
+const ghostBreath: CSSAnimationProperties = {
+  animationName: { from: { opacity: 0.55 }, to: { opacity: 0.95 } },
+  animationDuration: 700,
+  animationIterationCount: 'infinite',
+  animationDirection: 'alternate',
+  animationTimingFunction: 'ease-in-out',
+};
 
 /** Where the mat's tab sits: on the edge nearest the seat. */
 const SLOT_TAB: Record<Position, ViewStyle> = {
@@ -1964,6 +1955,7 @@ const styles = StyleSheet.create({
     backgroundColor: surface.well,
     overflow: 'visible',
   },
+  slotGhostStill: { opacity: 0.7 },
   slotTab: { position: 'absolute', borderRadius: 2 },
   // Sits 3px outside the played card, so the card's own edge cannot cover it.
   slotRing: {

@@ -1,14 +1,5 @@
-import { useEffect } from 'react';
-import { AppState, StyleSheet } from 'react-native';
-import Animated, {
-  cancelAnimation,
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withRepeat,
-  withSequence,
-  withTiming,
-} from 'react-native-reanimated';
+import { StyleSheet } from 'react-native';
+import Animated, { type CSSAnimationProperties } from 'react-native-reanimated';
 import { signal } from '../theme';
 
 /**
@@ -21,53 +12,31 @@ import { signal } from '../theme';
  * frame. Under reduce-motion it holds still at a steady glow.
  */
 export function TurnBeacon({ reduced }: { reduced: boolean }) {
-  const o = useSharedValue(0);
-
-  useEffect(() => {
-    const breathe = () => {
-      o.value = withTiming(0.35, { duration: 220 }, (done) => {
-        if (done && !reduced) {
-          o.value = withRepeat(
-            withSequence(
-              withTiming(0.8, { duration: 1100, easing: Easing.inOut(Easing.sin) }),
-              withTiming(0.35, { duration: 1100, easing: Easing.inOut(Easing.sin) }),
-            ),
-            -1,
-            false,
-          );
-        }
-      });
-    };
-    if (reduced) o.value = withTiming(0.6, { duration: 220 });
-    else breathe();
-
-    // A loop in a backgrounded app is wasted battery; stop it and pick it up
-    // again on return.
-    const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') {
-        if (reduced) o.value = 0.6;
-        else breathe();
-      } else {
-        cancelAnimation(o);
-        o.value = 0.5;
-      }
-    });
-    return () => {
-      sub.remove();
-      cancelAnimation(o);
-    };
-  }, [o, reduced]);
-
-  const halo = useAnimatedStyle(() => ({ opacity: o.value * 0.35 }));
-  const line = useAnimatedStyle(() => ({ opacity: o.value }));
-
+  // A CSS animation: declared once, run by the compositor on the web and by
+  // the UI thread natively, paused by the platform when the app is hidden —
+  // no shared value, no JS per frame, nothing to cancel.
   return (
     <>
-      <Animated.View pointerEvents="none" style={[styles.halo, halo]} />
-      <Animated.View pointerEvents="none" style={[styles.line, line]} />
+      <Animated.View pointerEvents="none" style={[styles.halo, reduced ? styles.haloStill : breatheHalo]} />
+      <Animated.View pointerEvents="none" style={[styles.line, reduced ? styles.lineStill : breatheLine]} />
     </>
   );
 }
+
+const BREATH_MS = 1100;
+
+const breatheLine: CSSAnimationProperties = {
+  animationName: { from: { opacity: 0.35 }, to: { opacity: 0.8 } },
+  animationDuration: BREATH_MS,
+  animationIterationCount: 'infinite',
+  animationDirection: 'alternate',
+  animationTimingFunction: 'ease-in-out',
+};
+
+const breatheHalo: CSSAnimationProperties = {
+  ...breatheLine,
+  animationName: { from: { opacity: 0.35 * 0.35 }, to: { opacity: 0.8 * 0.35 } },
+};
 
 const styles = StyleSheet.create({
   halo: {
@@ -88,4 +57,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: signal.turn,
   },
+  // Reduce-motion: a steady glow.
+  haloStill: { opacity: 0.6 * 0.35 },
+  lineStill: { opacity: 0.6 },
 });

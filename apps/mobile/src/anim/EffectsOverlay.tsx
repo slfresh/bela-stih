@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -63,16 +63,23 @@ import {
  *    durations by the `speed` it was spawned with.
  */
 
+/** The most sprites ever alive at once: a storm of emotes drops the oldest rather than the frame rate. */
+export const MAX_LIVE_SPRITES = 40;
+
 export function EffectsOverlay({ bus }: { bus: FxBus }) {
   const [sprites, setSprites] = useState<FxWithId[]>([]);
   const selfRef = useRef<View>(null);
   const origin = useRef<XY>({ x: 0, y: 0 });
+  // The overlay's own box: bubbles clamp to it and confetti falls across it.
+  // Its own layout, never the window — on the web that is the browser, not
+  // the column the game lives in.
+  const [box, setBox] = useState({ w: 0, h: 0 });
 
   useEffect(
     () =>
       bus.subscribe((fx) => {
         counters.spriteMount++;
-        setSprites((s) => [...s, fx]);
+        setSprites((s) => (s.length >= MAX_LIVE_SPRITES ? [...s.slice(s.length - MAX_LIVE_SPRITES + 1), fx] : [...s, fx]));
         // lifetimeOf already carries each sprite's settle; a flat 200 ms on
         // top kept a landed flight drawn under the sweep that took its card.
         setTimeout(() => {
@@ -89,20 +96,22 @@ export function EffectsOverlay({ bus }: { bus: FxBus }) {
       pointerEvents="none"
       collapsable={false}
       style={StyleSheet.absoluteFill}
-      onLayout={() =>
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        setBox((b) => (b.w === width && b.h === height ? b : { w: width, h: height }));
         selfRef.current?.measureInWindow((x, y) => {
           origin.current = { x, y };
-        })
-      }
+        });
+      }}
     >
       {sprites.map((fx) => (
-        <Sprite key={fx.id} fx={fx} origin={origin.current} />
+        <Sprite key={fx.id} fx={fx} origin={origin.current} box={box} />
       ))}
     </View>
   );
 }
 
-function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
+function Sprite({ fx, origin, box }: { fx: FxWithId; origin: XY; box: { w: number; h: number } }) {
   const local = (p: XY): XY => ({ x: p.x - origin.x, y: p.y - origin.y });
   switch (fx.kind) {
     case 'flight':
@@ -134,6 +143,7 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
           pip={fx.pip}
           weight={fx.weight}
           fade={fx.fade}
+          maxX={box.w}
         />
       );
     case 'stamp':
@@ -151,11 +161,12 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
         />
       );
     case 'burst':
-      return <Burst at={local(fx.at)} count={fx.count} seed={fx.id} />;
+      // The web's compositor pays per piece: fewer, and nobody counts them.
+      return <Burst at={local(fx.at)} count={Platform.OS === 'web' ? Math.min(fx.count, 24) : fx.count} seed={fx.id} />;
     case 'coins':
       return <Coins from={local(fx.from)} to={local(fx.to)} count={fx.count} />;
     case 'confetti':
-      return <Confetti seed={fx.id} />;
+      return <Confetti seed={fx.id} width={box.w} height={box.h} />;
   }
 }
 
@@ -638,6 +649,7 @@ function Bubble({
   pip,
   weight = 1,
   fade = false,
+  maxX,
 }: {
   at: XY;
   text: string;
@@ -651,8 +663,9 @@ function Bubble({
   pip?: Suit;
   weight?: 1 | 2 | 3 | 4;
   fade?: boolean;
+  /** The overlay's width: a bubble never runs past its right edge. */
+  maxX: number;
 }) {
-  const { width: screenW } = useWindowDimensions();
   const s = useSharedValue(0);
   useEffect(() => {
     if (fade) {
@@ -693,7 +706,7 @@ function Bubble({
         {
           // Clamped: a puck near the edge would otherwise push the bubble off
           // the screen, which is exactly where the landscape rails put them.
-          left: Math.max(8, Math.min(at.x - 70, screenW - 148)),
+          left: Math.max(8, Math.min(at.x - 70, (maxX || 9999) - 148)),
           top: Math.max(8, at.y - 64),
         },
       ]}
@@ -777,13 +790,15 @@ function Coin({ from, to, delay, wobble }: { from: XY; to: XY; delay: number; wo
 
 const CONFETTI_COLOURS = [garb.red, garb.gold, garb.green, garb.blue, garb.cream];
 
-function Confetti({ seed }: { seed: number }) {
-  // Was hard-coded to a 360x700 phone, so in landscape the confetti fell down
-  // the left third of the screen and stopped halfway.
-  const { width, height } = useWindowDimensions();
+/** How many pieces rain on a won match: the web's compositor gets fewer. */
+export const CONFETTI_PIECES = Platform.OS === 'web' ? 18 : 26;
+
+function Confetti({ seed, width, height }: { seed: number; width: number; height: number }) {
+  // Falls across the overlay's own box (a 360x700 phone was once hard-coded,
+  // so in landscape the confetti fell down the left third and stopped halfway).
   const pieces = useMemo(
     () =>
-      Array.from({ length: 26 }).map((_, i) => ({
+      Array.from({ length: CONFETTI_PIECES }).map((_, i) => ({
         key: i,
         x: ((seed * 131 + i * 197) % 100) / 100,
         delay: (i * 53) % 500,

@@ -200,6 +200,18 @@ describe('anchors measure on demand', () => {
     expect(t).toMatch(/accessibilityLabel=\{lang\.action\(a\)\}/);
   });
 
+  it('the overlay sizes itself, caps its sprites, and the ambient loops are CSS animations', () => {
+    const overlay = src('anim/EffectsOverlay.tsx');
+    expect(overlay).not.toMatch(/useWindowDimensions/);
+    expect(overlay).toMatch(/MAX_LIVE_SPRITES = 40/);
+    expect(overlay).toMatch(/CONFETTI_PIECES = Platform\.OS === 'web' \? 18 : 26/);
+    // A loop on a shared value is a JS timer on the web; a CSS animation is the compositor's.
+    expect(src('table/TurnBeacon.tsx')).not.toMatch(/withRepeat/);
+    expect(src('table/TurnBeacon.tsx')).toMatch(/animationIterationCount: 'infinite'/);
+    expect(src('table/SeatPuck.tsx')).toMatch(/const thinkPulse: CSSAnimationProperties/);
+    expect(src('TableScreen.tsx')).toMatch(/const ghostBreath: CSSAnimationProperties/);
+  });
+
   it('the home screen no longer re-renders on every scroll event', () => {
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/setScrollTick/);
