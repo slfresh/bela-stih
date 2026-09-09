@@ -284,7 +284,7 @@ describe('the first frame and the last resort', () => {
     expect(build).toMatch(/EXPO_PUBLIC_SERVER_URL:-wss:\/\/belastih\.com/);
     expect(build).toMatch(/index\.android\.bundle/);
     expect(build).toMatch(/not shippable/);
-    expect(build).toMatch(/localhost\|127\\.0\\.0\\.1/);
+    expect(build).toMatch(/ws:\/\/localhost:2567" in blob/);
   });
 
   it('the web template paints dark before the bundle parses', () => {

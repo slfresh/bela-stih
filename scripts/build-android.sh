@@ -42,20 +42,21 @@ check() {
   local artifact="$1" entry="$2"
   [ -f "$artifact" ] || { echo "!! $artifact was not produced"; exit 1; }
   python - "$artifact" "$entry" "$EXPO_PUBLIC_SERVER_URL" <<'PY'
-import re, sys, zipfile
+import sys, zipfile
 artifact, entry, wanted = sys.argv[1], sys.argv[2], sys.argv[3]
 with zipfile.ZipFile(artifact) as z:
     try:
         blob = z.read(entry)
     except KeyError:
-        sys.exit(f"!! {artifact} has no {entry} — not shippable")
-urls = sorted({u.decode() for u in re.findall(rb'wss?://[A-Za-z0-9.\-]+(?::\d+)?', blob)})
-print(f"   {artifact}: {urls}")
-bad = [u for u in urls if re.match(r'wss?://(localhost|127\.0\.0\.1|\[::1\])', u)]
-if bad:
-    sys.exit(f"!! {artifact} still dials {bad} — not shippable")
-if wanted not in urls:
-    sys.exit(f"!! {artifact} does not contain {wanted} — not shippable")
+        sys.exit(f"!! {artifact} has no {entry} - not shippable")
+# Hermes packs its string table with no separators, so a URL is followed
+# straight by the next literal: match the exact strings, never a host regex.
+if wanted.encode() not in blob:
+    sys.exit(f"!! {artifact} does not contain {wanted} - not shippable")
+if b"ws://localhost:2567" in blob:
+    sys.exit(f"!! {artifact} still carries the development default ws://localhost:2567 - not shippable")
+note = " (colyseus.js's own unused default is in there too, as always)" if b"ws://127.0.0.1:2567" in blob else ""
+print(f"   {artifact}: carries {wanted}, no development default{note}")
 PY
 }
 

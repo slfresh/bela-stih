@@ -62,7 +62,11 @@ never be bought or cashed out.
 **Assets** (all in `apps/mobile/store/` + screenshots below):
 - App icon 512×512: `store/icon-512.png`
 - Feature graphic 1024×500: `store/feature-graphic.png`
-- Phone screenshots (1080×2400 PNG, need 2–8): `store/screens/*.png`
+- Phone screenshots (need 2–8): `store/screens-cropped/*.png`, 1080×2160, 24-bit PNG.
+  Play refuses a frame whose long side is more than twice its short side, so the
+  raw 1080×2400 captures in `store/screens/` are NOT uploadable: the cropped set
+  is the same frames with 120 px taken off the top and 120 off the bottom, which
+  removes both system bars and lands on exactly 1:2.
 
 **Category:** Games → Card. **Contact email:** slavkogrbic25@gmail.com.
 **Privacy policy URL:** `https://belastih.com`

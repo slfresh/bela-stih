@@ -45,9 +45,11 @@ for round in $(seq 1 "$MAX"); do
   done
 
   # Otherwise it is a card decision: sweep the fan, which arcs above the leave
-  # button ("Izađi" offline, "Napusti stol" online).
+  # button ("Natrag" offline, "Napusti stol" online — it was "Izađi" until the
+  # offline screen took the shared back label, and this anchor went stale
+  # without the script noticing: it just reported "no hand on screen").
   # Lifted (playable) cards sit higher, edge cards lower — three rows cover all.
-  base=$(ui_bounds "Izađi" 2>/dev/null | awk '{print $2}')
+  base=$(ui_bounds "Natrag" 2>/dev/null | awk '{print $2}')
   [ -z "$base" ] && base=$(ui_bounds "Napusti stol" 2>/dev/null | awk '{print $2}')
   if [ -z "$base" ]; then
     echo "round $round: no hand on screen"
