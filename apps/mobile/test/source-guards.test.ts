@@ -268,6 +268,25 @@ describe('the first frame and the last resort', () => {
     expect((tile.match(/numberOfLines=\{2\}/g) ?? []).length).toBe(2);
   });
 
+  it('a packaged build can reach the real server without an env var', () => {
+    // eas.json sets EXPO_PUBLIC_SERVER_URL; a local `gradlew bundleRelease`
+    // does not read eas.json, and versionCode 15 and 16 shipped to the Play
+    // track dialling ws://localhost:2567.
+    const net = src('net/useNetGame.ts');
+    expect(net).toMatch(/export const PRODUCTION_SERVER_URL = 'wss:\/\/belastih\.com';/);
+    expect(net).toMatch(/return dev \? 'ws:\/\/localhost:2567' : PRODUCTION_SERVER_URL;/);
+    // The localhost default survives only behind the development flag.
+    const hits = net.match(/'ws:\/\/localhost:2567'/g) ?? [];
+    expect(hits.length).toBe(1);
+
+    // …and the build refuses to hand over an artifact that still names it.
+    const build = readFileSync(join(here, '../../../scripts/build-android.sh'), 'utf8');
+    expect(build).toMatch(/EXPO_PUBLIC_SERVER_URL:-wss:\/\/belastih\.com/);
+    expect(build).toMatch(/index\.android\.bundle/);
+    expect(build).toMatch(/not shippable/);
+    expect(build).toMatch(/localhost\|127\\.0\\.0\\.1/);
+  });
+
   it('the web template paints dark before the bundle parses', () => {
     const html = readFileSync(join(here, '../public/index.html'), 'utf8');
     expect(html).toMatch(/<html lang="hr">/);

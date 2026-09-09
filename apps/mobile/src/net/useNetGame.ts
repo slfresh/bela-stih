@@ -47,9 +47,17 @@ import { loadProfile, saveProfile, type Settings } from '../storage';
  * consecutive web builds shipped that way, because nothing about it is visible
  * until a real browser tries to connect.
  *
- * The localhost default stays for development, where the app is not served
- * from the machine running the server.
+ * Then it drifted again, on Android. `eas.json` sets the env var, but the
+ * store builds are made locally with `gradlew bundleRelease` — which does not
+ * read eas.json — so versionCode 15 and 16 shipped to the internal track
+ * asking a player's phone to open `ws://localhost:2567`. Nothing surfaced it
+ * until an online mode was touched on a real device. A packaged build now
+ * falls back to the real server, and only a development build falls back to
+ * a developer's own machine; `scripts/build-android.sh` refuses to hand over
+ * a bundle that still names localhost.
  */
+export const PRODUCTION_SERVER_URL = 'wss://belastih.com';
+
 function resolveServerUrl(): string {
   const configured = process.env.EXPO_PUBLIC_SERVER_URL;
   if (configured) return configured;
@@ -57,7 +65,8 @@ function resolveServerUrl(): string {
   if (loc?.host && !/^(localhost|127\.0\.0\.1|\[::1\])(:|$)/.test(loc.host)) {
     return `${loc.protocol === 'https:' ? 'wss:' : 'ws:'}//${loc.host}`;
   }
-  return 'ws://localhost:2567';
+  const dev = typeof __DEV__ !== 'undefined' && __DEV__;
+  return dev ? 'ws://localhost:2567' : PRODUCTION_SERVER_URL;
 }
 
 export const SERVER_URL = resolveServerUrl();
