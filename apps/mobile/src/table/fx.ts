@@ -119,6 +119,7 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
             from,
             to,
             duration: flightDuration(Math.hypot(to.x - from.x, to.y - from.y)) * speed,
+            speed,
             faceUp: true,
             width: slotW(e.seat),
           });

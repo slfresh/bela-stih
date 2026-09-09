@@ -136,6 +136,7 @@ describe('the sounds that carry meaning', () => {
     expect(r.award?.coins ?? 0).toBeGreaterThan(0); // there ARE coins to ding for
     expect(heard()).toContain(won ? 'matchWon' : 'matchLost');
     expect(heard()).not.toContain('coin');
+    expect(heard()).not.toContain('levelup');
 
     sfx.mockClear();
     const lost = { ...over, winner: (over.winner === 0 ? 1 : 0) as typeof over.winner };

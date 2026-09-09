@@ -88,6 +88,18 @@ export interface PlayOptions {
 }
 
 const players = new Map<Sfx, AudioPlayer>();
+
+/**
+ * A rate change must change the PITCH — that is the whole point of the
+ * 1.25 tick and the 0.85 opponent's trick. Native players default to pitch
+ * correction (time-stretch, same note), which would make both cues
+ * inaudible on the phone; the web player already leaves pitch alone.
+ */
+function makePlayer(name: Sfx): AudioPlayer {
+  const player = createAudioPlayer(SOURCES[name]);
+  player.shouldCorrectPitch = false;
+  return player;
+}
 let enabled = true;
 let configured = false;
 
@@ -119,7 +131,7 @@ export function preloadSfx(): void {
   void configureOnce();
   for (const name of Object.keys(SOURCES) as Sfx[]) {
     try {
-      if (!players.has(name)) players.set(name, createAudioPlayer(SOURCES[name]));
+      if (!players.has(name)) players.set(name, makePlayer(name));
     } catch {
       // A player that fails to load simply stays silent; never block startup.
     }
@@ -132,7 +144,7 @@ export function playSfx(name: Sfx, opts: PlayOptions = {}): void {
   try {
     let player = players.get(name);
     if (!player) {
-      player = createAudioPlayer(SOURCES[name]);
+      player = makePlayer(name);
       players.set(name, player);
     }
     // Rewind first: the same effect often fires again before it has finished.

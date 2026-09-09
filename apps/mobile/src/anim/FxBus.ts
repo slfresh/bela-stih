@@ -21,7 +21,17 @@ export interface XY {
  * of popping from a fixed 46px.
  */
 export type Fx =
-  | { kind: 'flight'; card: Card; from: XY; to: XY; duration: number; faceUp: boolean; width: number }
+  | {
+      kind: 'flight';
+      card: Card;
+      from: XY;
+      to: XY;
+      /** Already scaled by the pace. */
+      duration: number;
+      speed: number;
+      faceUp: boolean;
+      width: number;
+    }
   | {
       kind: 'deal';
       from: XY;

@@ -161,6 +161,7 @@ export default function App() {
       title={lang.s.ui.crashTitle}
       body={lang.s.ui.crashBody}
       action={lang.s.ui.back}
+      resetKey={launch ? launch.mode : menu}
       onReset={() => {
         setMenu('home');
         exitToHome();

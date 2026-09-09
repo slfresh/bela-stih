@@ -256,7 +256,13 @@ export function TableScreen(props: TableScreenProps) {
   }, [revealKey]);
 
   // The winning side's combinations, laid out for everyone. Only ever the
-  // winner's: the losing side said its number and keeps its cards.
+  // winner's: the losing side said its number and keeps its cards. A group
+  // never wraps, so its cards shrink until the longest one fits the table.
+  const revealLongest = Math.max(1, ...view.revealedDeclarations.map((d) => d.cards.length));
+  const revealCardW = Math.min(
+    Math.round(m.slotW * 1.1),
+    Math.floor((m.width - 24 - 16 - 2 * (revealLongest - 1)) / revealLongest),
+  );
   const revealRow =
     view.revealedDeclarations.length > 0 && !revealDone ? (
       <Pressable style={styles.revealRow} onPress={() => setRevealDone(true)}>
@@ -267,12 +273,7 @@ export function TableScreen(props: TableScreenProps) {
             </Text>
             <View style={styles.revealCards}>
               {d.cards.map((c) => (
-                <PlayingCard
-                  key={cardId(c)}
-                  card={c}
-                  width={Math.round(m.slotW * 1.1)}
-                  deckStyle={deck}
-                />
+                <PlayingCard key={cardId(c)} card={c} width={revealCardW} deckStyle={deck} />
               ))}
             </View>
           </View>
@@ -367,21 +368,28 @@ export function TableScreen(props: TableScreenProps) {
             </Anchor>
           );
         })}
-
-        {/* Rows that appear for a moment — the zvanja reveal, the award —
-            float over the lower felt instead of pushing the hand down. */}
-        <View style={styles.feltFloat} pointerEvents="box-none">
-          {revealRow}
-          {awardRow}
-        </View>
       </View>
+    </View>
+  );
+
+  // Rows that appear for a moment — the zvanja reveal, the award — float
+  // over the lower table instead of pushing the hand down. Over the whole
+  // table area, not the felt: the felt's inner width on a phone is 140-184px
+  // and a four-card sequence needs 190.
+  const tableFloat = (
+    <View style={styles.tableFloat} pointerEvents="box-none">
+      {revealRow}
+      {awardRow}
     </View>
   );
 
   const felt = land ? (
     // Sideways there is no room for a row above the table AND a row below it,
     // so the partner sits on the far rim the way they would at a real table.
-    <View style={styles.tableArea}>
+    <View
+      style={[styles.tableArea, { maxHeight: m.feltMaxHeight }]}
+      onLayout={() => anchors.bump()}
+    >
       <View style={styles.midRow}>
         <View style={styles.sideSeat}>{puck(at('left'))}</View>
         {feltBody}
@@ -390,6 +398,7 @@ export function TableScreen(props: TableScreenProps) {
       <View style={styles.landTopSeat} pointerEvents="box-none">
         {puck(at('top'))}
       </View>
+      {tableFloat}
     </View>
   ) : (
     <View
@@ -404,6 +413,7 @@ export function TableScreen(props: TableScreenProps) {
         {feltBody}
         <View style={styles.sideSeat}>{puck(at('right'))}</View>
       </View>
+      {tableFloat}
     </View>
   );
 
@@ -418,21 +428,15 @@ export function TableScreen(props: TableScreenProps) {
     !settled && (spokenCalls.length > 0 || view.belaAnnouncedBy !== null) ? (
       <View style={[styles.callsRow, land && styles.callsCol]}>
         {spokenCalls.map((d, i) => (
-          <View key={i} style={styles.callChip}>
-            <Text
-              style={[styles.callChipText, land && styles.callChipTextLand]}
-              numberOfLines={land ? 2 : undefined}
-            >
+          <View key={i} style={[styles.callChip, land && styles.callChipLand]}>
+            <Text style={[styles.callChipText, land && styles.callChipTextLand]}>
               {meta(d.seat).name}: {lang.declaration(d)}
             </Text>
           </View>
         ))}
         {view.belaAnnouncedBy !== null && (
-          <View style={[styles.callChip, styles.callChipGold]}>
-            <Text
-              style={[styles.callChipText, land && styles.callChipTextLand]}
-              numberOfLines={land ? 2 : undefined}
-            >
+          <View style={[styles.callChip, styles.callChipGold, land && styles.callChipLand]}>
+            <Text style={[styles.callChipText, land && styles.callChipTextLand]}>
               {meta(view.belaAnnouncedBy).name}: {lang.s.bela} (20)
             </Text>
           </View>
@@ -564,13 +568,15 @@ export function TableScreen(props: TableScreenProps) {
   // is a ResizeObserver: a pure move fires nothing). Re-measure after each
   // such commit, so the next sprite flies to where things are now.
   const reflowKey = [
-    status ? 1 : 0,
-    calls ? 1 : 0,
+    // The text itself, not just its presence: a second line moves things too.
+    status ?? '',
+    spokenCalls.length,
+    view.belaAnnouncedBy ?? '-',
     declaring ? 1 : 0,
     !settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0 ? 1 : 0,
     arranging ? 1 : 0,
     !settled && view.canAnnounceBela && !hardMode ? 1 : 0,
-  ].join('');
+  ].join('|');
   useEffect(() => {
     anchors.bump();
   }, [anchors, reflowKey]);
@@ -1368,11 +1374,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.card + 2,
   },
   deckAnchor: { position: 'absolute', left: '50%', top: '50%', width: 0, height: 0 },
-  feltFloat: {
+  tableFloat: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: '6%',
+    bottom: '4%',
     alignItems: 'center',
     gap: 6,
   },
@@ -1393,9 +1399,11 @@ const styles = StyleSheet.create({
   },
   callChipGold: { borderWidth: 1, borderColor: theme.accent },
   callChipText: { color: theme.text, fontSize: 12 },
-  // The rail is 96dp wide: caption type, and a long call wraps once rather
-  // than pushing the rail open.
+  // The rail is 96dp wide: caption type and tighter padding. Never a line
+  // cap — the chip is the only record of what a side called, and the rank
+  // at the end of it is the tie-break.
   callChipTextLand: { fontSize: 11 },
+  callChipLand: { paddingHorizontal: 8, alignSelf: 'stretch' },
 
   awardRow: { alignItems: 'center' },
   awardText: { color: theme.ok, fontWeight: '800', fontSize: 15 },

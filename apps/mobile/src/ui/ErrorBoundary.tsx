@@ -21,6 +21,12 @@ export class ErrorBoundary extends Component<
     action: string;
     /** Called after the boundary resets; the app returns to the home screen. */
     onReset: () => void;
+    /**
+     * Which screen is behind the boundary. When it changes — the hardware
+     * back button leaving a game, say — the panel gives way to the new
+     * screen instead of sitting over it.
+     */
+    resetKey: string;
   },
   { error: Error | null }
 > {
@@ -28,6 +34,10 @@ export class ErrorBoundary extends Component<
 
   static getDerivedStateFromError(error: Error) {
     return { error };
+  }
+
+  componentDidUpdate(prev: { resetKey: string }) {
+    if (this.state.error && prev.resetKey !== this.props.resetKey) this.setState({ error: null });
   }
 
   componentDidCatch(error: Error) {

@@ -66,6 +66,9 @@ describe('sprite timing has one source of truth', () => {
     expect(overlay).not.toMatch(/withTiming\(1, \{ duration: 240/);
     expect(overlay).not.toMatch(/withTiming\(1, \{ duration: 320/);
     expect(overlay).toMatch(/from '\.\/lifetimes'/);
+    // The unmount timer is the lifetime, full stop.
+    expect(overlay).toMatch(/\}, lifetimeOf\(fx\)\);/);
+    expect(overlay).not.toMatch(/lifetimeOf\(fx\) \+ \d+/);
   });
 
   it('the spawner scales every duration by the speed it is given', () => {

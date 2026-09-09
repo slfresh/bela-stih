@@ -7,7 +7,7 @@ import { DEFAULT_TIMINGS } from '../src/anim/director';
 import { FxBus, type Fx } from '../src/anim/FxBus';
 import {
   BUBBLE_MIN_MS,
-  DEAL_LAND_AT,
+  DEAL_DONE_AT,
   FALLBACK_CARD_W,
   FLIGHT_MAX_MS,
   FLIGHT_MIN_MS,
@@ -194,7 +194,25 @@ describe('the sprites that replace real cards', () => {
       expect(deals.length).toBe(2); // the deal and the talon
       for (const { kind, fx } of deals) {
         const beat = DEFAULT_TIMINGS[kind as keyof typeof DEFAULT_TIMINGS];
-        expect(motionOf(fx)).toBeGreaterThanOrEqual(beat.dur * speed * (DEAL_LAND_AT - 0.1));
+        // The last back has landed well into the beat, and has faded before
+        // the beat ends and the real cards appear under it.
+        expect(motionOf(fx)).toBeGreaterThanOrEqual(beat.dur * speed * 0.7);
+        expect(lifetimeOf(fx) - 100).toBeLessThanOrEqual(beat.dur * speed * DEAL_DONE_AT + 1);
+      }
+    }
+  });
+});
+
+describe('a landed flight gives way to the sweep', () => {
+  it('is gone before a trick at half pace can start moving its card', () => {
+    // At speed 0.5 the trick sweep may begin as little as the cardPlayed gap
+    // after the card lands; the flight copy must not still be drawn then.
+    const gap = DEFAULT_TIMINGS.cardPlayed.gap;
+    for (const speed of [1, 0.5]) {
+      const flights = spritesOfADeal(speed).filter((s) => s.fx.kind === 'flight');
+      for (const { fx } of flights) {
+        if (fx.kind !== 'flight') continue;
+        expect(lifetimeOf(fx)).toBeLessThanOrEqual(fx.duration + gap * speed);
       }
     }
   });

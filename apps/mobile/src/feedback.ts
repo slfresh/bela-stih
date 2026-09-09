@@ -168,11 +168,13 @@ export function processEvents({
     }
   }
 
-  if (earned) {
+  // The match fanfare already says "you earned this": neither the coin ding
+  // nor the level-up run plays under it (a rising arpeggio under the falling
+  // "lost" motif was the worst of it). The scored deal that precedes a match
+  // end, a beat earlier, still dings its own coins — that is a separate call.
+  if (earned && !matchEnded) {
     if (earned.levelUp !== null) sfx('levelup');
-    // The match fanfare already says "you earned this"; a coin ding on top of
-    // it is clutter.
-    else if (earned.coins > 0 && !matchEnded) sfx('coin');
+    else if (earned.coins > 0) sfx('coin');
   }
   return { profile: next, award: earned };
 }

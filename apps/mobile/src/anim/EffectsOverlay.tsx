@@ -61,10 +61,12 @@ export function EffectsOverlay({ bus }: { bus: FxBus }) {
       bus.subscribe((fx) => {
         counters.spriteMount++;
         setSprites((s) => [...s, fx]);
+        // lifetimeOf already carries each sprite's settle; a flat 200 ms on
+        // top kept a landed flight drawn under the sweep that took its card.
         setTimeout(() => {
           counters.spriteUnmount++;
           setSprites((s) => s.filter((x) => x.id !== fx.id));
-        }, lifetimeOf(fx) + 200);
+        }, lifetimeOf(fx));
       }),
     [bus],
   );

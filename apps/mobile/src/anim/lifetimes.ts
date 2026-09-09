@@ -21,7 +21,12 @@ import type { Fx } from './FxBus';
 export const FLIGHT_MIN_MS = 180;
 export const FLIGHT_MAX_MS = 260;
 export const FLIGHT_PER_PX = 0.2;
-export const FLIGHT_SETTLE_MS = 150;
+/**
+ * How long a landed flight stays drawn over the committed card. Short, and
+ * scaled by the pace: the trick sweep can take that card off the felt as
+ * little as 70 ms later at half speed.
+ */
+export const FLIGHT_SETTLE_MS = 100;
 
 export function flightDuration(distancePx: number): number {
   return clamp(FLIGHT_MIN_MS + FLIGHT_PER_PX * distancePx, FLIGHT_MIN_MS, FLIGHT_MAX_MS);
@@ -34,17 +39,19 @@ export const DEAL_HOLD_MS = 60;
 export const DEAL_FADE_MS = 120;
 export const DEAL_STAGGER_MIN_MS = 40;
 export const DEAL_STAGGER_MAX_MS = 140;
-/** How far into its beat the last dealt back should land. */
-export const DEAL_LAND_AT = 0.79;
+/** How far into its beat the last dealt back has finished fading. */
+export const DEAL_DONE_AT = 0.95;
 
 /**
  * The gap between one dealt back and the next, derived from the beat so the
  * deal fills it: eight backs at a fixed 60 ms were done at 660 ms of a
- * 1400 ms beat, and the table sat empty for the rest.
+ * 1400 ms beat, and the table sat empty for the rest. The last back has
+ * faded before the beat ends and the real cards land.
  */
 export function dealStagger(count: number, beatMs: number): number {
   if (count <= 1) return 0;
-  return clamp((beatMs * DEAL_LAND_AT - DEAL_FLY_MS) / (count - 1), DEAL_STAGGER_MIN_MS, DEAL_STAGGER_MAX_MS);
+  const lastStart = beatMs * DEAL_DONE_AT - DEAL_FLY_MS - DEAL_HOLD_MS - DEAL_FADE_MS;
+  return clamp(lastStart / (count - 1), DEAL_STAGGER_MIN_MS, DEAL_STAGGER_MAX_MS);
 }
 
 // --- the trick -----------------------------------------------------------------
@@ -116,7 +123,7 @@ export function motionOf(fx: Fx): number {
 export function lifetimeOf(fx: Fx): number {
   switch (fx.kind) {
     case 'flight':
-      return fx.duration + FLIGHT_SETTLE_MS;
+      return fx.duration + FLIGHT_SETTLE_MS * fx.speed;
     case 'deal':
       return motionOf(fx) + DEAL_FADE_MS * fx.speed + 100;
     case 'trickSweep':
