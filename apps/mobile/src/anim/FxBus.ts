@@ -14,10 +14,16 @@ export interface XY {
   y: number;
 }
 
+/**
+ * `speed` is the director's current pace (1, or 0.5 with a batch waiting) so a
+ * sprite shrinks with the beat it fills; `width` is the measured card width at
+ * the destination, so a flight lands the size of the card it becomes instead
+ * of popping from a fixed 46px.
+ */
 export type Fx =
-  | { kind: 'flight'; card: Card; from: XY; to: XY; duration: number; faceUp: boolean }
-  | { kind: 'deal'; from: XY; to: XY[]; rounds: number }
-  | { kind: 'sweep'; from: XY[]; to: XY }
+  | { kind: 'flight'; card: Card; from: XY; to: XY; duration: number; faceUp: boolean; width: number }
+  | { kind: 'deal'; from: XY; to: XY[]; rounds: number; speed: number; width: number }
+  | { kind: 'sweep'; from: XY[]; to: XY; speed: number; width: number }
   | { kind: 'bubble'; at: XY; text: string; tone: 'plain' | 'gold'; duration: number; big?: boolean }
   | { kind: 'coins'; from: XY; to: XY; count: number }
   | { kind: 'confetti' };

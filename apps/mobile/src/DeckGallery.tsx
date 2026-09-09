@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Rank, Suit } from '@belot/engine';
 import { SUITS } from '@belot/engine';
 import { Lang } from '@belot/i18n';
+import { cosmetics } from './cosmetics';
 import { CardBackFace, CardFace } from './deck';
 import { Button } from './TableScreen';
 import { theme } from './theme';
@@ -34,7 +35,7 @@ export function DeckGallery({ onExit }: { onExit: () => void }) {
             <View style={styles.row}>
               {ORDER.map((rank) => (
                 <View key={rank} style={styles.card}>
-                  <CardFace card={{ suit, rank }} width={82} />
+                  <CardFace card={{ suit, rank }} width={82} style={cosmetics().deckStyle} />
                 </View>
               ))}
             </View>
@@ -43,7 +44,7 @@ export function DeckGallery({ onExit }: { onExit: () => void }) {
 
         <Text style={styles.suitLabel}>poleđina</Text>
         <View style={styles.row}>
-          <CardBackFace width={82} />
+          <CardBackFace width={82} variant={cosmetics().cardBack} />
         </View>
 
         <View style={styles.footer}>

@@ -8,10 +8,24 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import { cosmetics } from '../cosmetics';
 import { CardBackFace, CardFace } from '../deck';
 import { garb } from '../deck/palette';
+import { counters } from '../dev/counters';
 import { radius, theme } from '../theme';
 import type { FxBus, FxWithId, XY } from './FxBus';
+import {
+  COIN_FLY_MS,
+  COIN_STAGGER_MS,
+  CONFETTI_MS,
+  DEAL_FADE_MS,
+  DEAL_FLY_MS,
+  DEAL_HOLD_MS,
+  DEAL_STAGGER_MS,
+  SWEEP_FLY_MS,
+  SWEEP_STAGGER_MS,
+  lifetimeOf,
+} from './lifetimes';
 
 /**
  * The transient sprite layer: flying cards, dealt backs, trick sweeps, speech
@@ -25,26 +39,10 @@ import type { FxBus, FxWithId, XY } from './FxBus';
  *    so a dropped frame cannot stall anything.
  *  - Effects carry window coordinates; the overlay subtracts its own window
  *    origin, so it works wherever it sits in the tree.
+ *  - Timing constants live in `lifetimes.ts`, shared with the tests that bound
+ *    every sprite against the director's beat. Each sprite scales its own
+ *    durations by the `speed` it was spawned with.
  */
-
-const CARD_W = 46;
-
-function lifetimeOf(fx: FxWithId): number {
-  switch (fx.kind) {
-    case 'flight':
-      return fx.duration + 150;
-    case 'deal':
-      return fx.rounds * fx.to.length * 60 + 500;
-    case 'sweep':
-      return fx.from.length * 40 + 500;
-    case 'bubble':
-      return fx.duration + 250;
-    case 'coins':
-      return fx.count * 50 + 800;
-    case 'confetti':
-      return 2100;
-  }
-}
 
 export function EffectsOverlay({ bus }: { bus: FxBus }) {
   const [sprites, setSprites] = useState<FxWithId[]>([]);
@@ -54,11 +52,12 @@ export function EffectsOverlay({ bus }: { bus: FxBus }) {
   useEffect(
     () =>
       bus.subscribe((fx) => {
+        counters.spriteMount++;
         setSprites((s) => [...s, fx]);
-        setTimeout(
-          () => setSprites((s) => s.filter((x) => x.id !== fx.id)),
-          lifetimeOf(fx) + 200,
-        );
+        setTimeout(() => {
+          counters.spriteUnmount++;
+          setSprites((s) => s.filter((x) => x.id !== fx.id));
+        }, lifetimeOf(fx) + 200);
       }),
     [bus],
   );
@@ -88,9 +87,17 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
     case 'flight':
       return <Flight from={local(fx.from)} to={local(fx.to)} fx={fx} />;
     case 'deal':
-      return <Deal from={local(fx.from)} to={fx.to.map(local)} rounds={fx.rounds} />;
+      return (
+        <Deal
+          from={local(fx.from)}
+          to={fx.to.map(local)}
+          rounds={fx.rounds}
+          speed={fx.speed}
+          width={fx.width}
+        />
+      );
     case 'sweep':
-      return <Sweep from={fx.from.map(local)} to={local(fx.to)} />;
+      return <Sweep from={fx.from.map(local)} to={local(fx.to)} speed={fx.speed} width={fx.width} />;
     case 'bubble':
       return (
         <Bubble at={local(fx.at)} text={fx.text} tone={fx.tone} duration={fx.duration} big={fx.big} />
@@ -113,6 +120,7 @@ function Flight({
   to: XY;
   fx: Extract<FxWithId, { kind: 'flight' }>;
 }) {
+  const w = fx.width;
   const p = useSharedValue(0);
   useEffect(() => {
     p.value = withTiming(1, { duration: fx.duration, easing: Easing.out(Easing.cubic) });
@@ -120,8 +128,8 @@ function Flight({
 
   const style = useAnimatedStyle(() => ({
     transform: [
-      { translateX: from.x + (to.x - from.x) * p.value - CARD_W / 2 },
-      { translateY: from.y + (to.y - from.y) * p.value - (CARD_W * 1.45) / 2 },
+      { translateX: from.x + (to.x - from.x) * p.value - w / 2 },
+      { translateY: from.y + (to.y - from.y) * p.value - (w * 1.45) / 2 },
       { scale: 0.92 + 0.08 * p.value },
       { rotateZ: `${(1 - p.value) * -8}deg` },
     ],
@@ -129,93 +137,146 @@ function Flight({
 
   return (
     <Animated.View style={[styles.sprite, style]}>
-      {fx.faceUp ? <CardFace card={fx.card} width={CARD_W} /> : <CardBackFace width={CARD_W} />}
+      {fx.faceUp ? (
+        <CardFace card={fx.card} width={w} style={cosmetics().deckStyle} />
+      ) : (
+        <CardBackFace width={w} variant={cosmetics().cardBack} />
+      )}
     </Animated.View>
   );
 }
 
 // --- dealing backs -----------------------------------------------------------
 
-function Deal({ from, to, rounds }: { from: XY; to: XY[]; rounds: number }) {
+function Deal({
+  from,
+  to,
+  rounds,
+  speed,
+  width,
+}: {
+  from: XY;
+  to: XY[];
+  rounds: number;
+  speed: number;
+  width: number;
+}) {
   const flights = useMemo(() => {
     const list: { key: number; to: XY; delay: number }[] = [];
     let i = 0;
     for (let r = 0; r < rounds; r++) {
-      for (const t of to) list.push({ key: i, to: t, delay: i++ * 60 });
+      for (const t of to) list.push({ key: i, to: t, delay: i++ * DEAL_STAGGER_MS * speed });
     }
     return list;
-  }, [from, to, rounds]);
+  }, [from, to, rounds, speed]);
 
   return (
     <>
       {flights.map((f) => (
-        <DealBack key={f.key} from={from} to={f.to} delay={f.delay} />
+        <DealBack key={f.key} from={from} to={f.to} delay={f.delay} speed={speed} width={width} />
       ))}
     </>
   );
 }
 
-function DealBack({ from, to, delay }: { from: XY; to: XY; delay: number }) {
+function DealBack({
+  from,
+  to,
+  delay,
+  speed,
+  width,
+}: {
+  from: XY;
+  to: XY;
+  delay: number;
+  speed: number;
+  width: number;
+}) {
   const p = useSharedValue(0);
   const op = useSharedValue(0);
   useEffect(() => {
-    op.value = withDelay(delay, withTiming(1, { duration: 40 }));
+    op.value = withDelay(delay, withTiming(1, { duration: 40 * speed }));
     p.value = withDelay(
       delay,
       withSequence(
-        withTiming(1, { duration: 240, easing: Easing.out(Easing.quad) }),
-        withTiming(1, { duration: 60 }),
+        withTiming(1, { duration: DEAL_FLY_MS * speed, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: DEAL_HOLD_MS * speed }),
       ),
     );
-    op.value = withDelay(delay + 300, withTiming(0, { duration: 120 }));
-  }, [p, op, delay]);
+    op.value = withDelay(
+      delay + (DEAL_FLY_MS + DEAL_HOLD_MS) * speed,
+      withTiming(0, { duration: DEAL_FADE_MS * speed }),
+    );
+  }, [p, op, delay, speed]);
 
   const style = useAnimatedStyle(() => ({
     opacity: op.value,
     transform: [
-      { translateX: from.x + (to.x - from.x) * p.value - 15 },
-      { translateY: from.y + (to.y - from.y) * p.value - 22 },
+      { translateX: from.x + (to.x - from.x) * p.value - width / 2 },
+      { translateY: from.y + (to.y - from.y) * p.value - (width * 1.45) / 2 },
       { rotateZ: `${p.value * 180}deg` },
     ],
   }));
 
   return (
     <Animated.View style={[styles.sprite, style]}>
-      <CardBackFace width={30} />
+      <CardBackFace width={width} variant={cosmetics().cardBack} />
     </Animated.View>
   );
 }
 
 // --- trick sweep -------------------------------------------------------------
 
-function Sweep({ from, to }: { from: XY[]; to: XY }) {
+function Sweep({ from, to, speed, width }: { from: XY[]; to: XY; speed: number; width: number }) {
   return (
     <>
       {from.map((f, i) => (
-        <SweepBack key={i} from={f} to={to} delay={i * 40} />
+        <SweepBack
+          key={i}
+          from={f}
+          to={to}
+          delay={i * SWEEP_STAGGER_MS * speed}
+          speed={speed}
+          width={width}
+        />
       ))}
     </>
   );
 }
 
-function SweepBack({ from, to, delay }: { from: XY; to: XY; delay: number }) {
+function SweepBack({
+  from,
+  to,
+  delay,
+  speed,
+  width,
+}: {
+  from: XY;
+  to: XY;
+  delay: number;
+  speed: number;
+  width: number;
+}) {
   const p = useSharedValue(0);
   useEffect(() => {
-    p.value = withDelay(delay, withTiming(1, { duration: 320, easing: Easing.in(Easing.quad) }));
-  }, [p, delay]);
+    p.value = withDelay(
+      delay,
+      withTiming(1, { duration: SWEEP_FLY_MS * speed, easing: Easing.in(Easing.quad) }),
+    );
+  }, [p, delay, speed]);
 
   const style = useAnimatedStyle(() => ({
     opacity: 1 - p.value * 0.9,
     transform: [
-      { translateX: from.x + (to.x - from.x) * p.value - 15 },
-      { translateY: from.y + (to.y - from.y) * p.value - 22 },
+      { translateX: from.x + (to.x - from.x) * p.value - width / 2 },
+      { translateY: from.y + (to.y - from.y) * p.value - (width * 1.45) / 2 },
       { scale: 1 - 0.4 * p.value },
     ],
   }));
 
   return (
     <Animated.View style={[styles.sprite, style]}>
-      <CardBackFace width={30} />
+      <CardBackFace width={width} variant={cosmetics().cardBack} />
     </Animated.View>
   );
 }
@@ -290,7 +351,13 @@ function Coins({ from, to, count }: { from: XY; to: XY; count: number }) {
   return (
     <>
       {Array.from({ length: count }).map((_, i) => (
-        <Coin key={i} from={from} to={to} delay={i * 50} wobble={((i * 37) % 40) - 20} />
+        <Coin
+          key={i}
+          from={from}
+          to={to}
+          delay={i * COIN_STAGGER_MS}
+          wobble={((i * 37) % 40) - 20}
+        />
       ))}
     </>
   );
@@ -299,7 +366,10 @@ function Coins({ from, to, count }: { from: XY; to: XY; count: number }) {
 function Coin({ from, to, delay, wobble }: { from: XY; to: XY; delay: number; wobble: number }) {
   const p = useSharedValue(0);
   useEffect(() => {
-    p.value = withDelay(delay, withTiming(1, { duration: 550, easing: Easing.in(Easing.quad) }));
+    p.value = withDelay(
+      delay,
+      withTiming(1, { duration: COIN_FLY_MS, easing: Easing.in(Easing.quad) }),
+    );
   }, [p, delay]);
 
   const style = useAnimatedStyle(() => {
@@ -361,7 +431,10 @@ function ConfettiPiece({
 }) {
   const p = useSharedValue(0);
   useEffect(() => {
-    p.value = withDelay(delay, withTiming(1, { duration: 1600, easing: Easing.in(Easing.quad) }));
+    p.value = withDelay(
+      delay,
+      withTiming(1, { duration: CONFETTI_MS - 500, easing: Easing.in(Easing.quad) }),
+    );
   }, [p, delay]);
 
   const style = useAnimatedStyle(() => ({

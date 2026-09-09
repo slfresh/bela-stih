@@ -1,7 +1,9 @@
+import { memo } from 'react';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import type { Card, Rank, Suit } from '@belot/engine';
 import { Lang } from '@belot/i18n';
-import { cosmetics } from '../cosmetics';
+import type { DeckStyle } from '../cosmetics';
+import { counters } from '../dev/counters';
 import { PipShape, suitColour } from './pips';
 import { SeasonScene } from './scenes';
 import { CourtHalf } from './courts';
@@ -66,9 +68,27 @@ const HALF_LAYOUTS: Record<string, { top: Array<[number, number]>; bottom: Array
 
 const PIP_SCALE = 0.175;
 
-export function CardFace({ card, width }: { card: Card; width: number }) {
+/**
+ * Memoised on (card, width, style). A director tick re-renders the whole
+ * table, and before this every one of the twelve faces on it — eight in the
+ * fan, four in the trick — rebuilt its SVG tree every time, whether or not
+ * anything about it had changed. That was the frame budget on a mid-range
+ * Android spent before any animation was added.
+ *
+ * `style` is an explicit prop rather than a read of module state inside,
+ * because a memoised component that reads module state during render would
+ * freeze on the old deck when the player changes it in Settings.
+ */
+export const CardFace = memo(CardFaceImpl, (a, b) =>
+  a.card.suit === b.card.suit &&
+  a.card.rank === b.card.rank &&
+  a.width === b.width &&
+  a.style === b.style,
+);
+
+function CardFaceImpl({ card, width, style }: { card: Card; width: number; style: DeckStyle }) {
+  counters.cardFace++;
   const height = width * 1.45;
-  const style = cosmetics().deckStyle;
 
   // The vintage deck is photographic: a real printed card, rounded and framed.
   if (style === 'starinske') {
@@ -269,13 +289,16 @@ function Court({ rank, suit }: { rank: Rank; suit: Suit }) {
 }
 
 /**
- * The back of a card. Three shop designs; when no variant is passed, the
- * player's selected cosmetic applies — that keeps flight and deal sprites in
- * step with the hand without threading the profile everywhere.
+ * The back of a card. Three shop designs. `variant` is always passed by the
+ * caller — sprites and the hand read the selected back at their own render,
+ * so this memoised component never has to peek at module state and cannot
+ * fall out of step with the shop selection.
  */
-export function CardBackFace({ width, variant }: { width: number; variant?: string }) {
+export const CardBackFace = memo(CardBackFaceImpl);
+
+function CardBackFaceImpl({ width, variant }: { width: number; variant: string }) {
   const height = width * 1.45;
-  const kind = variant ?? cosmetics().cardBack;
+  const kind = variant;
   return (
     <Svg width={width} height={height} viewBox="0 0 100 145">
       {kind === 'oak' ? (

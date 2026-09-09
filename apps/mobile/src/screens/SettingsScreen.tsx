@@ -86,9 +86,9 @@ export function SettingsScreen({
         </View>
         {/* live preview in the selected style */}
         <View style={styles.previewRow}>
-          <PlayingCard card={{ suit: 'hearts', rank: 'A' }} size="lg" />
-          <PlayingCard card={{ suit: 'spades', rank: 'K' }} size="lg" />
-          <PlayingCard card={{ suit: 'clubs', rank: '10' }} size="lg" />
+          <PlayingCard card={{ suit: 'hearts', rank: 'A' }} size="lg" deckStyle={settings.deckStyle} />
+          <PlayingCard card={{ suit: 'spades', rank: 'K' }} size="lg" deckStyle={settings.deckStyle} />
+          <PlayingCard card={{ suit: 'clubs', rank: '10' }} size="lg" deckStyle={settings.deckStyle} />
         </View>
       </Panel>
 

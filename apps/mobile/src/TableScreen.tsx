@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -40,7 +40,8 @@ import { useTableMetrics } from './table/useTableMetrics';
 import { useHandOrder, type HandSort } from './table/useHandOrder';
 import type { ConfirmPlay } from './storage';
 import { TurnRing } from './anim/TurnRing';
-import { feltStyle } from './cosmetics';
+import { cosmetics, feltStyle, type DeckStyle } from './cosmetics';
+import { PerfProbe } from './dev/PerfProbe';
 import { EmoteStrip } from './table/EmoteStrip';
 import { useTurnCues } from './table/useTurnCues';
 import { PlayingCard } from './PlayingCard';
@@ -159,8 +160,11 @@ export function TableScreen(props: TableScreenProps) {
     view.myDeclarations.some(
       (d) => d.cards.map((c) => cardId(c)).sort().join('|') === markedKey,
     );
-  const toggleMark = (id: string) =>
-    setMarked((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id]));
+  const toggleMark = useCallback(
+    (id: string) =>
+      setMarked((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id])),
+    [],
+  );
   // A fresh question gets a clean slate.
   useEffect(() => {
     if (!declaring) setMarked([]);
@@ -226,6 +230,12 @@ export function TableScreen(props: TableScreenProps) {
 
   const trump = view.context.trumpSuit;
   const baize = feltStyle(profile.selectedFelt);
+  // Read once per render and passed down: the memoised cards must see a deck
+  // change as a changed prop, not peek at module state and miss it.
+  const deck = cosmetics().deckStyle;
+  // Dev-only frame/render probe, toggled by long-pressing the profile bar.
+  const [probe, setProbe] = useState(false);
+  const toggleProbe = useCallback(() => setProbe((p) => !p), []);
 
   // ---------------------------------------------------------------------
   // The pieces, built once and placed by whichever layout is in force. Both
@@ -250,6 +260,10 @@ export function TableScreen(props: TableScreenProps) {
           setFeltBox((b) =>
             Math.abs(b.w - width) < 1 && Math.abs(b.h - height) < 1 ? b : { w: width, h: height },
           );
+          // The felt is the only row that flexes: when a prompt or the result
+          // sheet resizes it, every slot and puck inside has moved without its
+          // own layout changing. Tell the anchors.
+          anchors.bump();
         }}
       >
         {/* centre plaque: trump + multiplier; doubles as the deck anchor */}
@@ -299,7 +313,7 @@ export function TableScreen(props: TableScreenProps) {
               ]}
             >
               {played ? (
-                <PlayingCard card={played.card} width={slot.slotW} />
+                <PlayingCard card={played.card} width={slot.slotW} deckStyle={deck} />
               ) : (
                 <View style={[styles.slotGhost, { borderColor: seatTone(s, mySeat).dim }]} />
               )}
@@ -427,6 +441,7 @@ export function TableScreen(props: TableScreenProps) {
           marked={marked}
           onToggleMark={toggleMark}
           confirmPlay={confirmPlay}
+          deckStyle={deck}
         />
       </Pressable>
       {/* online, my own turn is on the clock too — show it */}
@@ -501,7 +516,12 @@ export function TableScreen(props: TableScreenProps) {
             </Text>
             <View style={styles.revealCards}>
               {d.cards.map((c) => (
-                <PlayingCard key={cardId(c)} card={c} width={Math.round(m.slotW * 1.1)} />
+                <PlayingCard
+                  key={cardId(c)}
+                  card={c}
+                  width={Math.round(m.slotW * 1.1)}
+                  deckStyle={deck}
+                />
               ))}
             </View>
           </View>
@@ -547,14 +567,15 @@ export function TableScreen(props: TableScreenProps) {
   return (
     <AnchorHost map={anchors}>
       <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
-        <View style={[styles.root, land && styles.rootLand]}>
+        {/* A rotation or a window resize moves everything at once. */}
+        <View style={[styles.root, land && styles.rootLand]} onLayout={() => anchors.bump()}>
           {land ? (
             // Turned sideways there is no vertical room to stack chrome above
             // and below the felt, so everything that is not the table itself
             // moves into the two rails and the middle keeps its full height.
             <>
               <View style={[styles.rail, { width: m.railW }]}>
-                <ProfileBar profile={profile} vertical />
+                <ProfileBar profile={profile} vertical onLongPress={toggleProbe} />
                 <TableHeader
                   lang={lang}
                   mySeat={mySeat}
@@ -592,7 +613,7 @@ export function TableScreen(props: TableScreenProps) {
           ) : (
             <>
               {/* wallet / level strip */}
-              <ProfileBar profile={profile} />
+              <ProfileBar profile={profile} onLongPress={toggleProbe} />
               {status ? <Text style={styles.status}>{status}</Text> : null}
 
               {/* score strip: match score, plus this deal's running count */}
@@ -628,6 +649,7 @@ export function TableScreen(props: TableScreenProps) {
 
           {/* sprites, always last */}
           <EffectsOverlay bus={fxBus} />
+          {__DEV__ && probe && <PerfProbe />}
         </View>
       </SafeAreaView>
     </AnchorHost>
@@ -643,7 +665,7 @@ export function TableScreen(props: TableScreenProps) {
  * but which team is "us" depends on where you sit, so everything here is
  * ordered by `teamOf(mySeat)` and never by index 0/1.
  */
-function TableHeader({
+const TableHeader = memo(function TableHeader({
   lang,
   mySeat,
   matchScores,
@@ -696,27 +718,62 @@ function TableHeader({
       )}
     </View>
   );
-}
+},
+// The view hands over fresh arrays and progress objects every tick; compare
+// what the header actually prints, or memo would never hit.
+(a, b) =>
+  a.lang === b.lang &&
+  a.mySeat === b.mySeat &&
+  a.vertical === b.vertical &&
+  a.matchScores[0] === b.matchScores[0] &&
+  a.matchScores[1] === b.matchScores[1] &&
+  (a.progress === null) === (b.progress === null) &&
+  (a.progress === null ||
+    (a.progress.running[0] === b.progress!.running[0] &&
+      a.progress.running[1] === b.progress!.running[1] &&
+      a.progress.callerNeeds === b.progress!.callerNeeds &&
+      a.progress.provisional === b.progress!.provisional &&
+      a.progress.belaPending === b.progress!.belaPending)));
 
 /** Level, XP progress and the coin balance; the coins are the wallet anchor. */
-function ProfileBar({ profile, vertical = false }: { profile: PlayerProfile; vertical?: boolean }) {
-  const p = levelProgress(profile.xp);
-  return (
-    <View style={[styles.profileBar, vertical && styles.profileBarCol]}>
-      <View style={styles.levelBadge}>
-        <Text style={styles.levelText}>{p.level}</Text>
-      </View>
-      <View style={[styles.xpWrap, vertical && styles.xpWrapCol]}>
-        <View style={styles.xpTrack}>
-          <View style={[styles.xpFill, { width: `${Math.round(p.fraction * 100)}%` }]} />
+const ProfileBar = memo(
+  function ProfileBar({
+    profile,
+    vertical = false,
+    onLongPress,
+  }: {
+    profile: PlayerProfile;
+    vertical?: boolean;
+    /** Dev builds: toggles the frame/render probe. */
+    onLongPress?: () => void;
+  }) {
+    const p = levelProgress(profile.xp);
+    return (
+      <Pressable
+        onLongPress={onLongPress}
+        delayLongPress={600}
+        style={[styles.profileBar, vertical && styles.profileBarCol]}
+      >
+        <View style={styles.levelBadge}>
+          <Text style={styles.levelText}>{p.level}</Text>
         </View>
-      </View>
-      <Anchor id={anchorId.wallet}>
-        <Text style={styles.coins}>{profile.coins} ●</Text>
-      </Anchor>
-    </View>
-  );
-}
+        <View style={[styles.xpWrap, vertical && styles.xpWrapCol]}>
+          <View style={styles.xpTrack}>
+            <View style={[styles.xpFill, { width: `${Math.round(p.fraction * 100)}%` }]} />
+          </View>
+        </View>
+        <Anchor id={anchorId.wallet}>
+          <Text style={styles.coins}>{profile.coins} ●</Text>
+        </Anchor>
+      </Pressable>
+    );
+  },
+  (a, b) =>
+    a.profile.xp === b.profile.xp &&
+    a.profile.coins === b.profile.coins &&
+    a.vertical === b.vertical &&
+    a.onLongPress === b.onLongPress,
+);
 
 /** The hand as a fan. A card is tappable only when the engine says it is legal. */
 function Hand({
@@ -733,6 +790,7 @@ function Hand({
   onToggleMark,
   onSwap,
   confirmPlay = 'ambiguous',
+  deckStyle,
 }: {
   cards: Card[];
   options: Action[];
@@ -752,6 +810,7 @@ function Hand({
   marked?: string[];
   onToggleMark?: (id: string) => void;
   confirmPlay?: ConfirmPlay;
+  deckStyle: DeckStyle;
 }) {
   const plays = options.filter(
     (a): a is Extract<Action, { type: 'PLAY_CARD' }> => a.type === 'PLAY_CARD',
@@ -797,83 +856,163 @@ function Hand({
   // hand and under the emote strip, covering the faces you are choosing between.
   const drop = fanArc(cards.length) * fit.scale;
 
+  /** What a tap on this card means right now. Reads the latest render's state. */
+  const chosenFor = (card: Card) => {
+    const id = cardId(card);
+    const inPlayMoment = plays.length > 0;
+    // Hard mode: every card is submittable — the engine, not the UI, is
+    // the judge, and a wrong card is a renons.
+    return (
+      byCard.get(id) ??
+      (freePlay && inPlayMoment
+        ? ({ type: 'PLAY_CARD', seat: plays[0]!.seat, card } as Action)
+        : undefined)
+    );
+  };
+
+  const press = (id: string) => {
+    if (marking) {
+      onToggleMark?.(id);
+      return;
+    }
+    if (arranging) {
+      if (arrangePick === null) setArrangePick(id);
+      else {
+        if (arrangePick !== id) onSwap?.(arrangePick, id);
+        setArrangePick(null);
+      }
+      return;
+    }
+    const card = cards.find((c) => cardId(c) === id);
+    const chosen = card ? chosenFor(card) : undefined;
+    if (!chosen) return;
+    if (needsConfirm && armed !== id) {
+      setArmed(id);
+      return;
+    }
+    setArmed(null);
+    onPlay(chosen);
+  };
+  // One identity for the life of the hand, so a memoised card is not
+  // re-rendered just because its handler closed over a new render.
+  const pressRef = useRef(press);
+  pressRef.current = press;
+  const onPressCard = useCallback((id: string) => pressRef.current(id), []);
+
   return (
     <View style={[styles.fan, { paddingBottom: drop }]}>
       {cards.map((card, i) => {
         const id = cardId(card);
         const inPlayMoment = plays.length > 0;
-        const action = byCard.get(id);
-        // Hard mode: every card is submittable — the engine, not the UI, is
-        // the judge, and a wrong card is a renons.
-        const chosen =
-          action ??
-          (freePlay && inPlayMoment
-            ? ({ type: 'PLAY_CARD', seat: plays[0]!.seat, card } as Action)
-            : undefined);
-        const playable = !arranging && !marking && enabled && chosen !== undefined;
+        const playable = !arranging && !marking && enabled && chosenFor(card) !== undefined;
         const illegalNow = !freePlay && !arranging && enabled && inPlayMoment && !playable;
         const isArmed = marking ? marked.includes(id) : arranging ? arrangePick === id : armed === id;
         const off = i - mid;
-
-        const press = () => {
-          if (marking) {
-            onToggleMark?.(id);
-            return;
-          }
-          if (arranging) {
-            if (arrangePick === null) setArrangePick(id);
-            else {
-              if (arrangePick !== id) onSwap?.(arrangePick, id);
-              setArrangePick(null);
-            }
-            return;
-          }
-          if (!chosen) return;
-          if (needsConfirm && !isArmed) {
-            setArmed(id);
-            return;
-          }
-          setArmed(null);
-          onPlay(chosen);
-        };
-
         return (
-          <Pressable
+          <FanCard
             key={id}
+            id={id}
+            card={card}
+            width={fit.cardW}
+            deckStyle={deckStyle}
+            marginLeft={i === 0 ? 0 : fit.overlap}
+            translateY={
+              Math.pow(Math.abs(off), 1.6) * 3.2 * fit.scale -
+              (playable || ((arranging || marking) && isArmed) ? lift : 0)
+            }
+            rotate={off * 4.5}
+            zIndex={i}
+            dimmed={illegalNow}
+            highlight={playable && !freePlay && !isArmed}
+            selected={isArmed}
             disabled={!playable && !arranging && !marking}
-            onPress={press}
-            // Vertical only: horizontal slop would overlap the neighbouring
-            // card in touch space and make mis-taps MORE likely, not less.
-            hitSlop={{ top: 12, bottom: 8 }}
-            style={[
-              styles.fanCard,
-              {
-                marginLeft: i === 0 ? 0 : fit.overlap,
-                transform: [
-                  {
-                    translateY:
-                      Math.pow(Math.abs(off), 1.6) * 3.2 * fit.scale -
-                      (playable || ((arranging || marking) && isArmed) ? lift : 0),
-                  },
-                  { rotateZ: `${off * 4.5}deg` },
-                ],
-                zIndex: i,
-              },
-            ]}
-          >
-            <PlayingCard
-              card={card}
-              width={fit.cardW}
-              dimmed={illegalNow}
-              highlight={playable && !freePlay && !isArmed}
-              selected={isArmed}
-            />
-          </Pressable>
+            onPress={onPressCard}
+          />
         );
       })}
     </View>
   );
 }
+
+/**
+ * One card in the fan. Memoised so that a director tick — which re-renders the
+ * whole table — only re-renders the cards whose position, legality or state
+ * actually changed. Every prop is a primitive or a stable callback except the
+ * card itself, which is compared by identity of suit and rank.
+ */
+const FanCard = memo(
+  function FanCard({
+    id,
+    card,
+    width,
+    deckStyle,
+    marginLeft,
+    translateY,
+    rotate,
+    zIndex,
+    dimmed,
+    highlight,
+    selected,
+    disabled,
+    onPress,
+  }: {
+    id: string;
+    card: Card;
+    width: number;
+    deckStyle: DeckStyle;
+    marginLeft: number;
+    translateY: number;
+    rotate: number;
+    zIndex: number;
+    dimmed: boolean;
+    highlight: boolean;
+    selected: boolean;
+    disabled: boolean;
+    onPress: (id: string) => void;
+  }) {
+    return (
+      <Pressable
+        disabled={disabled}
+        onPress={() => onPress(id)}
+        // Vertical only: horizontal slop would overlap the neighbouring
+        // card in touch space and make mis-taps MORE likely, not less.
+        hitSlop={{ top: 12, bottom: 8 }}
+        style={[
+          styles.fanCard,
+          {
+            marginLeft,
+            transform: [{ translateY }, { rotateZ: `${rotate}deg` }],
+            zIndex,
+          },
+        ]}
+      >
+        <PlayingCard
+          card={card}
+          width={width}
+          deckStyle={deckStyle}
+          dimmed={dimmed}
+          highlight={highlight}
+          selected={selected}
+        />
+      </Pressable>
+    );
+  },
+  (a, b) =>
+    a.id === b.id &&
+    a.card.suit === b.card.suit &&
+    a.card.rank === b.card.rank &&
+    a.width === b.width &&
+    a.deckStyle === b.deckStyle &&
+    a.marginLeft === b.marginLeft &&
+    a.translateY === b.translateY &&
+    a.rotate === b.rotate &&
+    a.zIndex === b.zIndex &&
+    a.dimmed === b.dimmed &&
+    a.highlight === b.highlight &&
+    a.selected === b.selected &&
+    a.disabled === b.disabled &&
+    a.onPress === b.onPress,
+);
 
 /** Bidding, declaring, and the explicit bela call. */
 function NonCardActions({

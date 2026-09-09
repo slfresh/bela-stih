@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import type { PublicView, Seat } from '@belot/engine';
 import type { TableEvent } from '@belot/table';
+import { markTick } from '../dev/counters';
 import { Director, type Batch } from './director';
 
 /**
@@ -15,22 +16,36 @@ import { Director, type Batch } from './director';
 export function useDirector(
   mySeat: Seat,
   initialView: PublicView,
-  onEvent: (e: TableEvent, flushed: boolean) => void,
+  onEvent: (e: TableEvent, flushed: boolean, speed: number) => void,
+  /**
+   * Called the moment a batch starts animating, before its first sprite spawns.
+   * The table uses it to re-measure its anchors — the one place drift between a
+   * layout and the sprites flying to it could actually be seen.
+   */
+  onBusy?: () => void,
 ) {
   const [view, setView] = useState<PublicView>(initialView);
   const [idle, setIdle] = useState(true);
 
-  // The handler changes identity across renders; the director must always call
-  // the latest one without being rebuilt.
+  // The handlers change identity across renders; the director must always call
+  // the latest ones without being rebuilt.
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
+  const onBusyRef = useRef(onBusy);
+  onBusyRef.current = onBusy;
 
   const directorRef = useRef<Director | null>(null);
   if (directorRef.current === null) {
     directorRef.current = new Director(mySeat, initialView, {
-      onView: setView,
-      onEventStart: (e, flushed) => onEventRef.current(e, flushed),
-      onIdle: setIdle,
+      onView: (v) => {
+        markTick();
+        setView(v);
+      },
+      onEventStart: (e, flushed, speed) => onEventRef.current(e, flushed, speed),
+      onIdle: (i) => {
+        if (!i) onBusyRef.current?.();
+        setIdle(i);
+      },
     });
   }
 

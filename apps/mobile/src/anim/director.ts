@@ -32,9 +32,12 @@ export interface DirectorCallbacks {
   /**
    * Fired once per event when its animation begins. `flushed` is true when the
    * event is being skipped (fast-forward/compression): apply progression, but
-   * spawn no sprite and play no sound.
+   * spawn no sprite and play no sound. `speed` is the pace this beat will run
+   * at (1, or 0.5 with a batch waiting) so sprites can shrink to fit it — a
+   * flight timed for the full beat would otherwise still be in the air when
+   * the card was already committed to its slot.
    */
-  onEventStart(e: TableEvent, flushed: boolean): void;
+  onEventStart(e: TableEvent, flushed: boolean, speed: number): void;
   onIdle(idle: boolean): void;
 }
 
@@ -180,7 +183,7 @@ export class Director {
   }
 
   private flushEvents(events: TableEvent[], from: number): void {
-    for (let i = from; i < events.length; i++) this.cb.onEventStart(events[i]!, true);
+    for (let i = from; i < events.length; i++) this.cb.onEventStart(events[i]!, true, 1);
   }
 
   private schedule(ms: number, fn: () => void): void {
@@ -224,12 +227,12 @@ export class Director {
     const e = batch.events[nextIndex]!;
     this.current.nextIndex = nextIndex + 1;
 
-    this.cb.onEventStart(e, false);
-    this.view = applyEventStart(this.view, e, this.mySeat);
-    this.cb.onView(this.view);
-
     const t = this.timings[e.kind] ?? { dur: 300, gap: 100 };
     const s = this.speed();
+
+    this.cb.onEventStart(e, false, s);
+    this.view = applyEventStart(this.view, e, this.mySeat);
+    this.cb.onView(this.view);
 
     this.schedule(t.dur * s, () => {
       if (!this.current) return; // fast-forwarded meanwhile

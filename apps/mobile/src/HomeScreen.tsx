@@ -57,8 +57,6 @@ export function HomeScreen({
 }) {
   const ui = lang.s.ui;
   const [code, setCode] = useState('');
-  // Scrolling moves the anchors without a re-render; a cheap tick re-measures.
-  const [, setScrollTick] = useState(0);
   const anchors = useMemo(() => new AnchorMap(), []);
   const fxBus = useMemo(() => new FxBus(), []);
 
@@ -75,10 +73,15 @@ export function HomeScreen({
     fn();
   };
 
+  // Scrolling moves the anchors without any layout changing, so ask them to
+  // re-measure at the one moment it matters: just before the coins fly. This
+  // used to be a re-render of the whole lobby on every scroll event instead.
   const cascade = (fromKey: string, count: number) => {
-    const from = anchors.centre(fromKey);
-    const to = anchors.centre(anchorId.wallet);
-    if (from && to) fxBus.emit({ kind: 'coins', from, to, count });
+    void anchors.refresh().then(() => {
+      const from = anchors.centre(fromKey);
+      const to = anchors.centre(anchorId.wallet);
+      if (from && to) fxBus.emit({ kind: 'coins', from, to, count });
+    });
   };
 
   const collect = () => {
@@ -103,11 +106,7 @@ export function HomeScreen({
     <AnchorHost map={anchors}>
       <SafeAreaView style={styles.safe}>
         <View style={styles.fill}>
-          <ScrollView
-            contentContainerStyle={styles.scroll}
-            onScroll={() => setScrollTick((t) => t + 1)}
-            scrollEventThrottle={64}
-          >
+          <ScrollView contentContainerStyle={styles.scroll}>
             {/* identity header */}
             <View style={styles.headerRow}>
               <Pressable

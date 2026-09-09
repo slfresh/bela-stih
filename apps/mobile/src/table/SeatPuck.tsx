@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import type { Seat } from '@belot/engine';
@@ -21,7 +22,12 @@ import { radius, theme } from '../theme';
 // which is the thing that actually tells you whose side a seat is on.
 const AVATAR_COLOURS = [garb.blue, garb.brown, garb.steel, garb.grape];
 
-export function SeatPuck({
+/**
+ * Memoised: a director tick re-renders the table, and a puck whose seat,
+ * count, ring and badges have not changed has nothing to redraw. `tone` is a
+ * module constant per side, so the default shallow compare is exact.
+ */
+export const SeatPuck = memo(function SeatPuck({
   seat,
   name,
   avatar,
@@ -130,7 +136,7 @@ export function SeatPuck({
       </Text>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   root: { alignItems: 'center', gap: 2 },

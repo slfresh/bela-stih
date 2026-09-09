@@ -68,7 +68,7 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
   const { view, idle, enqueue } = useDirector(
     HUMAN,
     useMemo(() => preDealView(table.view(HUMAN)), [table]),
-    (e, flushed) => {
+    (e, flushed, speed) => {
       const r = processEvents({
         events: [e],
         profile: profileRef.current,
@@ -82,7 +82,7 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
         saveProfile(r.profile);
       }
       if (r.award) setBanner(r.award);
-      if (!flushed) spawn(e);
+      if (!flushed) spawn(e, speed);
       // A bot that takes a trick occasionally gloats — the table talks back.
       if (!flushed && e.kind === 'trickWon' && e.seat !== HUMAN && Math.random() < 0.22) {
         const id = BOT_EMOTES[Math.floor(Math.random() * BOT_EMOTES.length)]!;
@@ -93,6 +93,8 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
         }, 700);
       }
     },
+    // Anchors re-measure once per batch, just before its first sprite.
+    () => anchors.bump(),
   );
 
   // The constructor already ran the bots to the first human decision; feed that

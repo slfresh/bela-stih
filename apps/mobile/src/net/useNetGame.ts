@@ -148,7 +148,7 @@ export function useNetGame(settings: Settings) {
   langRef.current = lang;
 
   const onEvent = useCallback(
-    (e: TableEvent, flushed: boolean) => {
+    (e: TableEvent, flushed: boolean, speed: number) => {
       const mine = mySeatRef.current;
       if (mine === null) return;
       const r = processEvents({
@@ -164,7 +164,7 @@ export function useNetGame(settings: Settings) {
         saveProfile(r.profile);
       }
       if (r.award) setBanner(r.award);
-      if (!flushed) spawn(e);
+      if (!flushed) spawn(e, speed);
     },
     [spawn],
   );
@@ -223,8 +223,12 @@ export function useNetGame(settings: Settings) {
       if (!directorRef.current) {
         directorRef.current = new Director(msg.seat, msg.view, {
           onView: setView,
-          onEventStart: (e, f) => onEventRef.current(e, f),
-          onIdle: setIdle,
+          onEventStart: (e, f, s) => onEventRef.current(e, f, s),
+          onIdle: (i) => {
+            // Anchors re-measure once per batch, just before its first sprite.
+            if (!i) anchors.bump();
+            setIdle(i);
+          },
         });
         setView(msg.view);
       }

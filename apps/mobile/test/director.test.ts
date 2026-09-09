@@ -20,13 +20,21 @@ interface Capture {
   started: TableEvent[];
   flushed: TableEvent[];
   idleFlips: boolean[];
+  /** The pace each ANIMATED event was started at. */
+  speeds: number[];
 }
 
 function makeDirector(initial: PublicView, timings = ZERO_TIMINGS) {
-  const cap: Capture = { views: [], started: [], flushed: [], idleFlips: [] };
+  const cap: Capture = { views: [], started: [], flushed: [], idleFlips: [], speeds: [] };
   const d = new Director(SEAT, initial, {
     onView: (v) => cap.views.push(v),
-    onEventStart: (e, f) => (f ? cap.flushed.push(e) : cap.started.push(e)),
+    onEventStart: (e, f, speed) => {
+      if (f) cap.flushed.push(e);
+      else {
+        cap.started.push(e);
+        cap.speeds.push(speed);
+      }
+    },
     onIdle: (i) => cap.idleFlips.push(i),
   }, timings);
   return { d, cap };
@@ -221,6 +229,11 @@ describe('fast-forward and compression', () => {
     const duoAfter = cap2.started.length - duo;
 
     expect(duoAfter).toBeGreaterThan(soloAfter);
+    // And it SAYS so: every beat started while a batch waited was announced at
+    // half pace, so the sprites can shrink with it, while the solo run was
+    // announced at full pace throughout.
+    expect(cap.speeds.every((s) => s === 1)).toBe(true);
+    expect(cap2.speeds.slice(duo).every((s) => s === 0.5)).toBe(true);
     d.dispose();
     d2.dispose();
   });
