@@ -314,6 +314,25 @@ export function TableScreen(props: TableScreenProps) {
     </View>
   ) : null;
 
+  // Trump, multiplier and who called it: a plate on the baize in portrait,
+  // a row in the left rail in landscape (the trick cross fills a sideways
+  // felt from rim to rim, and a plate anywhere on it covered a slot).
+  const plaque = (
+    <Anchor id={anchorId.plaque} style={[styles.plaque, land ? styles.plaqueRail : styles.plaquePortrait]}>
+      {trump ? (
+        <>
+          <SuitPip suit={trump} size={land ? 22 : 30} />
+          {view.multiplier > 1 && <Text style={styles.plaqueMult}>×{view.multiplier}</Text>}
+        </>
+      ) : (
+        <Text style={[styles.subDim, land && styles.centreText]}>{lang.s.trumpUndecided}</Text>
+      )}
+      {view.callerSeat !== null && (
+        <Text style={styles.plaqueCaller}>{lang.s.calledBy(meta(view.callerSeat).name)}</Text>
+      )}
+    </Anchor>
+  );
+
   const feltBody = (
     <View
       style={[
@@ -338,28 +357,15 @@ export function TableScreen(props: TableScreenProps) {
         }}
       >
         {/* the light on the baize, under everything else on it */}
-        <FeltGlow width={feltBox.w} height={feltBox.h} felt={baize.felt} />
+        <FeltGlow width={feltBox.w - 2} height={feltBox.h - 2} felt={baize.felt} />
 
         {/* the deck: cards are dealt from the felt's centre, whichever way up
             the table is — the plaque moves to the left lobe in landscape. */}
         <Anchor id={anchorId.deck} style={styles.deckAnchor} />
 
-        {/* centre plaque: trump + multiplier */}
-        <Anchor id={anchorId.plaque} style={[styles.plaque, land ? styles.plaqueLand : styles.plaquePortrait]}>
-          {trump ? (
-            <>
-              <SuitPip suit={trump} size={30} />
-              {view.multiplier > 1 && <Text style={styles.plaqueMult}>×{view.multiplier}</Text>}
-            </>
-          ) : (
-            <Text style={styles.subDim}>{lang.s.trumpUndecided}</Text>
-          )}
-          {/* Sideways the plate is a single row along the bottom rim; the caller
-              line would double its height into the bottom slot. */}
-          {!land && view.callerSeat !== null && (
-            <Text style={styles.plaqueCaller}>{lang.s.calledBy(meta(view.callerSeat).name)}</Text>
-          )}
-        </Anchor>
+        {/* the plaque, in the felt's upper lobe; landscape has no lobe to spare
+            and shows it in the left rail instead */}
+        {!land && plaque}
 
         {/* one trick slot per seat, positioned by table side */}
         {([0, 1, 2, 3] as Seat[]).map((s) => {
@@ -665,6 +671,7 @@ export function TableScreen(props: TableScreenProps) {
                   progress={view.dealProgress}
                   vertical
                 />
+                {plaque}
                 {calls}
                 <View style={styles.railGap} />
                 <Button label={finishLabel} tone="plain" compact onPress={onFinish} />
@@ -1434,9 +1441,13 @@ const styles = StyleSheet.create({
   },
   // Sits in the felt's upper lobe, clear of the trick cross at the centre.
   plaquePortrait: { top: '5%' },
-  // Landscape parks the partner on the top rim and the trick cross fills the
-  // felt's width, so the plate lies along the bottom rim as one row.
-  plaqueLand: { bottom: '2%', flexDirection: 'row', gap: 6, paddingVertical: 3 },
+  // In the rail it is a row in the flow, the width of the rail.
+  plaqueRail: {
+    position: 'relative',
+    alignSelf: 'stretch',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
   plaqueMult: { color: theme.accent, fontSize: 13, fontWeight: '800' },
   plaqueCaller: { color: theme.textDim, fontSize: 12 },
 
