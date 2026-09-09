@@ -13,6 +13,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import type { Seat } from '@belot/engine';
 import { teamOf } from '@belot/engine';
 import { anchorId } from '../anim/FxBus';
+import { COIN_CASCADE_COUNT } from '../anim/lifetimes';
 import { Button, TableScreen, type SeatMeta } from '../TableScreen';
 import { radius, theme } from '../theme';
 import type { Settings } from '../storage';
@@ -55,7 +56,7 @@ export function OnlineGame({
     if (net.banner && net.banner !== lastBanner.current && net.banner.coins > 0) {
       const from = net.anchors.centre(anchorId.deck);
       const to = net.anchors.centre(anchorId.wallet);
-      if (from && to) net.fxBus.emit({ kind: 'coins', from, to, count: 6 });
+      if (from && to) net.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
     }
     lastBanner.current = net.banner;
   }, [net.banner, net.anchors, net.fxBus]);

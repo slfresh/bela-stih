@@ -70,7 +70,7 @@ describe('sprite timing has one source of truth', () => {
 
   it('the spawner scales every duration by the speed it is given', () => {
     const fx = src('table/fx.ts');
-    expect(fx).toMatch(/FLIGHT_MS \* speed/);
+    expect(fx).toMatch(/flightDuration\(.*\) \* speed/);
     expect(fx).not.toMatch(/duration: 260/);
   });
 

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cardId, type PublicView, type Seat } from '@belot/engine';
 import { Table, type TableEvent } from '@belot/table';
 import { DEFAULT_TIMINGS, Director, ZERO_TIMINGS, type Batch } from '../src/anim/director';
+import { applyEventEnd, applyEventStart } from '../src/anim/patch';
 
 /**
  * The director owns the view the screen renders, so its patch logic gets the
@@ -261,5 +262,29 @@ describe('fast-forward and compression', () => {
     d.enqueue({ events: [], finalView: b.finalView });
     expect(cap.batches).toBe(2);
     d.dispose();
+  });
+});
+
+describe('a won trick', () => {
+  it('leaves the slots the moment its sweep starts, not when it ends', () => {
+    // The sweep sprite carries the real four cards from here on; the faces
+    // used to stand still in their slots under it, then snap away at the end.
+    const table = new Table({ seed: 9, humanSeats: [] });
+    const events = table.drainEvents();
+    const wonAt = events.findIndex((e) => e.kind === 'trickWon');
+    const plays = events
+      .slice(0, wonAt)
+      .filter((e): e is Extract<TableEvent, { kind: 'cardPlayed' }> => e.kind === 'cardPlayed');
+    const before = {
+      ...table.view(SEAT),
+      currentTrick: plays.map((e) => ({ seat: e.seat, card: e.card })),
+    };
+    expect(before.currentTrick).toHaveLength(4);
+
+    const started = applyEventStart(before, events[wonAt]!, SEAT);
+    expect(started.currentTrick).toEqual([]);
+    expect(started.toAct).toBeNull();
+    const ended = applyEventEnd(started, events[wonAt]!, table.view(SEAT), SEAT);
+    expect(ended.currentTrick).toEqual([]);
   });
 });

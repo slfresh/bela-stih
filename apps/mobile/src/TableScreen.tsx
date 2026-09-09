@@ -24,6 +24,8 @@ import { levelProgress, type Award, type PlayerProfile } from '@belot/progressio
 import { Anchor, AnchorHost, type AnchorMap } from './anim/AnchorRegistry';
 import { EffectsOverlay } from './anim/EffectsOverlay';
 import { REVEAL_MS } from './anim/director';
+import { COIN_CASCADE_COUNT, coinsLandedMs } from './anim/lifetimes';
+import { useLaggedNumber } from './ui/useLaggedNumber';
 import { anchorId, type FxBus } from './anim/FxBus';
 import { SeatPuck } from './table/SeatPuck';
 import {
@@ -239,6 +241,54 @@ export function TableScreen(props: TableScreenProps) {
   // and a rotation cannot leave sprites flying to a slot that moved.
   // ---------------------------------------------------------------------
 
+  // The cards come DOWN again after a few seconds. Remembering what was shown is
+  // part of playing the game well — leaving them up would turn that memory into
+  // a reference sheet. A tap puts them away early for anyone who reads faster.
+  const revealKey = view.revealedDeclarations
+    .flatMap((d) => d.cards.map((c) => cardId(c)))
+    .join('|');
+  const [revealDone, setRevealDone] = useState(false);
+  useEffect(() => {
+    if (revealKey === '') return;
+    setRevealDone(false);
+    const t = setTimeout(() => setRevealDone(true), REVEAL_MS);
+    return () => clearTimeout(t);
+  }, [revealKey]);
+
+  // The winning side's combinations, laid out for everyone. Only ever the
+  // winner's: the losing side said its number and keeps its cards.
+  const revealRow =
+    view.revealedDeclarations.length > 0 && !revealDone ? (
+      <Pressable style={styles.revealRow} onPress={() => setRevealDone(true)}>
+        {view.revealedDeclarations.map((d, i) => (
+          <View key={i} style={styles.revealGroup}>
+            <Text style={styles.revealLabel}>
+              {meta(d.seat).name}: {lang.declaration(d)}
+            </Text>
+            <View style={styles.revealCards}>
+              {d.cards.map((c) => (
+                <PlayingCard
+                  key={cardId(c)}
+                  card={c}
+                  width={Math.round(m.slotW * 1.1)}
+                  deckStyle={deck}
+                />
+              ))}
+            </View>
+          </View>
+        ))}
+      </Pressable>
+    ) : null;
+
+  const awardRow = banner ? (
+    <View style={styles.awardRow}>
+      <Text style={styles.awardText}>
+        +{banner.xp} XP{banner.coins > 0 ? `   +${banner.coins} ●` : ''}
+        {banner.levelUp !== null ? `   ★ ${lang.s.ui.level} ${banner.levelUp}` : ''}
+      </Text>
+    </View>
+  ) : null;
+
   const feltBody = (
     <View
       style={[
@@ -262,8 +312,12 @@ export function TableScreen(props: TableScreenProps) {
           anchors.bump();
         }}
       >
-        {/* centre plaque: trump + multiplier; doubles as the deck anchor */}
-        <Anchor id={anchorId.deck} style={[styles.plaque, land && styles.plaqueLand]}>
+        {/* the deck: cards are dealt from the felt's centre, whichever way up
+            the table is — the plaque moves to the left lobe in landscape. */}
+        <Anchor id={anchorId.deck} style={styles.deckAnchor} />
+
+        {/* centre plaque: trump + multiplier */}
+        <Anchor id={anchorId.plaque} style={[styles.plaque, land && styles.plaqueLand]}>
           {trump ? (
             <>
               <SuitPip suit={trump} size={26} />
@@ -289,33 +343,37 @@ export function TableScreen(props: TableScreenProps) {
                 styles.slot,
                 { width: slot.slotW, height: slot.slotH },
                 slots[pos],
-                // Whose card this is, at a glance — and whose empty slot,
-                // before anybody has played into it.
-                // NB: every property here must be a margin LONGHAND or none at
-                // all. `slots[pos]` above places this card with marginLeft /
-                // marginTop, and react-native-web emits a `margin` shorthand as
-                // real CSS, which resets both of them. A `margin: -2` here put
-                // all four played cards on the same pixel in the middle of the
-                // felt, each one hiding the last. Native was fine — Yoga gives
-                // the edge-specific value precedence over the shorthand — so it
-                // only ever showed up in the browser.
-                played
-                  ? {
-                      borderWidth: 2,
-                      borderColor: seatTone(s, mySeat).edge,
-                      borderRadius: radius.card,
-                    }
-                  : null,
+                // NB: nothing else goes in this array. `slots[pos]` places the
+                // card with marginLeft / marginTop, and react-native-web emits
+                // a `margin` shorthand as real CSS, which resets both of them:
+                // a `margin: -2` composed here once put all four played cards
+                // on the same pixel in the browser. Decoration is a child.
               ]}
             >
               {played ? (
-                <PlayingCard card={played.card} width={slot.slotW} deckStyle={deck} />
+                <>
+                  <PlayingCard card={played.card} width={slot.slotW} deckStyle={deck} />
+                  {/* Whose card this is, at a glance. Drawn OUTSIDE the card: a
+                      border on the slot itself sat under the card's own edge
+                      and was never actually seen. */}
+                  <View
+                    pointerEvents="none"
+                    style={[styles.slotRing, { borderColor: seatTone(s, mySeat).edge }]}
+                  />
+                </>
               ) : (
                 <View style={[styles.slotGhost, { borderColor: seatTone(s, mySeat).dim }]} />
               )}
             </Anchor>
           );
         })}
+
+        {/* Rows that appear for a moment — the zvanja reveal, the award —
+            float over the lower felt instead of pushing the hand down. */}
+        <View style={styles.feltFloat} pointerEvents="box-none">
+          {revealRow}
+          {awardRow}
+        </View>
       </View>
     </View>
   );
@@ -355,8 +413,9 @@ export function TableScreen(props: TableScreenProps) {
   // and that is the only record of it.
   const revealedSeats = new Set(view.revealedDeclarations.map((d) => d.seat));
   const spokenCalls = view.announcedDeclarations.filter((d) => !revealedSeats.has(d.seat));
+  // Gone with the deal: the chips were still hanging over the result sheet.
   const calls =
-    spokenCalls.length > 0 || view.belaAnnouncedBy !== null ? (
+    !settled && (spokenCalls.length > 0 || view.belaAnnouncedBy !== null) ? (
       <View style={[styles.callsRow, land && styles.callsCol]}>
         {spokenCalls.map((d, i) => (
           <View key={i} style={styles.callChip}>
@@ -499,64 +558,14 @@ export function TableScreen(props: TableScreenProps) {
     </Pressable>
   ) : null;
 
-  // The cards come DOWN again after a few seconds. Remembering what was shown is
-  // part of playing the game well — leaving them up would turn that memory into
-  // a reference sheet. A tap puts them away early for anyone who reads faster.
-  const revealKey = view.revealedDeclarations
-    .flatMap((d) => d.cards.map((c) => cardId(c)))
-    .join('|');
-  const [revealDone, setRevealDone] = useState(false);
-  useEffect(() => {
-    if (revealKey === '') return;
-    setRevealDone(false);
-    const t = setTimeout(() => setRevealDone(true), REVEAL_MS);
-    return () => clearTimeout(t);
-  }, [revealKey]);
-
-  // The winning side's combinations, laid out for everyone. Only ever the
-  // winner's: the losing side said its number and keeps its cards.
-  const revealRow =
-    view.revealedDeclarations.length > 0 && !revealDone ? (
-      <Pressable style={styles.revealRow} onPress={() => setRevealDone(true)}>
-        {view.revealedDeclarations.map((d, i) => (
-          <View key={i} style={styles.revealGroup}>
-            <Text style={styles.revealLabel}>
-              {meta(d.seat).name}: {lang.declaration(d)}
-            </Text>
-            <View style={styles.revealCards}>
-              {d.cards.map((c) => (
-                <PlayingCard
-                  key={cardId(c)}
-                  card={c}
-                  width={Math.round(m.slotW * 1.1)}
-                  deckStyle={deck}
-                />
-              ))}
-            </View>
-          </View>
-        ))}
-      </Pressable>
-    ) : null;
-
-  const awardRow = banner ? (
-    <View style={styles.awardRow}>
-      <Text style={styles.awardText}>
-        +{banner.xp} XP{banner.coins > 0 ? `   +${banner.coins} ●` : ''}
-        {banner.levelUp !== null ? `   ★ ${lang.s.ui.level} ${banner.levelUp}` : ''}
-      </Text>
-    </View>
-  ) : null;
-
   // Every row that comes and goes around the felt — status line, zvanja
-  // chips, the reveal, the award, a prompt — moves the pucks, slots and hand
+  // chips, a prompt — moves the pucks, slots and hand
   // without any of them changing their own layout (and on the web onLayout
   // is a ResizeObserver: a pure move fires nothing). Re-measure after each
   // such commit, so the next sprite flies to where things are now.
   const reflowKey = [
     status ? 1 : 0,
     calls ? 1 : 0,
-    revealRow ? 1 : 0,
-    awardRow ? 1 : 0,
     declaring ? 1 : 0,
     !settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0 ? 1 : 0,
     arranging ? 1 : 0,
@@ -619,8 +628,6 @@ export function TableScreen(props: TableScreenProps) {
               <View style={styles.centre}>
                 {status ? <Text style={styles.status}>{status}</Text> : null}
                 {felt}
-                {revealRow}
-                {awardRow}
                 {prompts}
                 {handBlock}
               </View>
@@ -654,8 +661,6 @@ export function TableScreen(props: TableScreenProps) {
 
               {felt}
               {calls}
-              {revealRow}
-              {awardRow}
               {prompts}
               {handBlock}
               {emotes}
@@ -779,6 +784,9 @@ const ProfileBar = memo(
     onLongPress?: () => void;
   }) {
     const p = levelProgress(profile.xp);
+    // The total changes when the last coin lands on it, not when the deal is
+    // scored with the coins still in the air.
+    const coins = useLaggedNumber(profile.coins, coinsLandedMs(COIN_CASCADE_COUNT));
     return (
       <Pressable
         onLongPress={onLongPress}
@@ -794,7 +802,7 @@ const ProfileBar = memo(
           </View>
         </View>
         <Anchor id={anchorId.wallet}>
-          <Text style={styles.coins}>{profile.coins} ●</Text>
+          <Text style={styles.coins}>{coins} ●</Text>
         </Anchor>
       </Pressable>
     );
@@ -1339,13 +1347,34 @@ const styles = StyleSheet.create({
 
   slot: { position: 'absolute', width: 46, height: 67 },
   slotGhost: {
-    // Barely there: four hard-edged boxes on an empty felt read as placeholders
-    // that failed to load rather than as places a card will go.
-    opacity: 0.35,
+    // A place a card will go, marked the way a table mat is: a dashed outline
+    // in the seat's colour over a shade of shadow. Four hard-edged boxes read
+    // as placeholders that failed to load; four faint ones read as nothing.
+    opacity: 0.7,
     flex: 1,
     borderRadius: radius.card,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    backgroundColor: 'rgba(0,0,0,0.12)',
+  },
+  // Sits 3px outside the played card, so the card's own edge cannot cover it.
+  slotRing: {
+    position: 'absolute',
+    top: -3,
+    left: -3,
+    right: -3,
+    bottom: -3,
+    borderWidth: 2,
+    borderRadius: radius.card + 2,
+  },
+  deckAnchor: { position: 'absolute', left: '50%', top: '50%', width: 0, height: 0 },
+  feltFloat: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: '6%',
+    alignItems: 'center',
+    gap: 6,
   },
 
   myTimer: { position: 'absolute', right: 8, top: -20, width: 36, height: 36 },

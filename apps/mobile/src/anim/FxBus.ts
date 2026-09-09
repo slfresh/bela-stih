@@ -22,8 +22,25 @@ export interface XY {
  */
 export type Fx =
   | { kind: 'flight'; card: Card; from: XY; to: XY; duration: number; faceUp: boolean; width: number }
-  | { kind: 'deal'; from: XY; to: XY[]; rounds: number; speed: number; width: number }
-  | { kind: 'sweep'; from: XY[]; to: XY; speed: number; width: number }
+  | {
+      kind: 'deal';
+      from: XY;
+      to: XY[];
+      rounds: number;
+      /** Gap between one back and the next at speed 1, derived from the beat. */
+      stagger: number;
+      speed: number;
+      width: number;
+    }
+  /** The real cards of a won trick, from their slots to the winner's puck. */
+  | {
+      kind: 'trickSweep';
+      cards: { seat: Seat; card: Card; from: XY }[];
+      to: XY;
+      winner: Seat;
+      speed: number;
+      width: number;
+    }
   | {
       kind: 'bubble';
       at: XY;
@@ -62,5 +79,6 @@ export const anchorId = {
   seat: (s: Seat) => `seat:${s}`,
   slot: (s: Seat) => `slot:${s}`,
   deck: 'deck',
+  plaque: 'plaque',
   wallet: 'wallet',
 } as const;

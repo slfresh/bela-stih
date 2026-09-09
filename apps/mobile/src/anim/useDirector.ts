@@ -59,6 +59,8 @@ export function useDirector(
 
   const enqueue = useCallback((batch: Batch) => directorRef.current?.enqueue(batch), []);
   const fastForward = useCallback(() => directorRef.current?.fastForward(), []);
+  /** The director's own view, synchronously — `view` state lags it by a commit. */
+  const getView = useCallback(() => directorRef.current?.getView() ?? null, []);
 
-  return { view, idle, enqueue, fastForward };
+  return { view, idle, enqueue, fastForward, getView };
 }

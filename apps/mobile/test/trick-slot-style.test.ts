@@ -22,18 +22,30 @@ const source = readFileSync(join(here, '../src/TableScreen.tsx'), 'utf8');
  * through the `slots[pos]` variable, not as literal text. So pin the one style
  * object that is known to be composed over them.
  */
-describe('the played-card style composed over a trick slot', () => {
-  const played = source.match(/played\s*\?\s*\{([\s\S]*?)\}\s*:\s*null/);
+describe('the trick slot', () => {
+  const anchor = source.match(/<Anchor\s+key=\{s\}\s+id=\{anchorId\.slot\(s\)\}\s+style=\{\[([\s\S]*?)\]\}/);
+  const ring = source.match(/slotRing:\s*\{([\s\S]*?)\}/);
 
   it('is where this test thinks it is', () => {
-    expect(played).not.toBeNull();
+    expect(anchor).not.toBeNull();
+    expect(ring).not.toBeNull();
   });
 
-  it('sets no box-model shorthand that would reset the slot offsets', () => {
-    const keys = [...played![1]!.matchAll(/^\s*([A-Za-z]+)\s*:/gm)].map((m) => m[1]);
+  it('composes nothing inline over the slot offsets', () => {
+    // No ternary, no border, no box-model key of any kind: decoration is a
+    // child view, never another object in this array.
+    const body = anchor![1]!.replace(/\/\/[^\n]*/g, '');
+    expect(body).not.toMatch(/\?/);
+    expect(body).not.toMatch(/border|margin|padding|inset/);
+  });
+
+  it('draws the played-card ring as a child with no box-model shorthand', () => {
+    expect(source).toMatch(/<View\s+pointerEvents="none"\s+style=\{\[styles\.slotRing/);
+    const keys = [...ring![1]!.matchAll(/^\s*([A-Za-z]+)\s*:/gm)].map((m) => m[1]);
     expect(keys).not.toContain('margin');
     expect(keys).not.toContain('padding');
     expect(keys).not.toContain('inset');
+    expect(keys).toContain('borderWidth');
   });
 });
 

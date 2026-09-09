@@ -169,6 +169,11 @@ export function applyEventStart(view: PublicView, e: TableEvent, mySeat: Seat): 
             : view.hand,
       });
     }
+    case 'trickWon':
+      // The four cards leave the slots the moment the sweep starts: from here
+      // the sprite carries them to the winner. Clearing at the END left the
+      // real faces standing still under the flying backs, then snapping away.
+      return suppress({ ...view, currentTrick: [] });
     default:
       return suppress(view);
   }
@@ -242,9 +247,9 @@ export function applyEventEnd(
       });
 
     case 'trickWon':
+      // The slots were cleared at the start; the sweep has landed by now.
       return suppress({
         ...view,
-        currentTrick: [],
         trickLeader: e.seat,
         // Always count the trick. The tally is local and purely additive, and
         // syncProgress() deliberately KEEPS it while adopting only the statics

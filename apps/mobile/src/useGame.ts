@@ -63,9 +63,15 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
   const anchors = useMemo(() => new AnchorMap(), []);
   const fxBus = useMemo(() => new FxBus(), []);
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
-  const spawn = useMemo(() => makeFxSpawner({ anchors, bus: fxBus, lang }), [anchors, fxBus, lang]);
+  // The spawner is built before the director exists; it reads the view
+  // through a ref the director fills in just below.
+  const getViewRef = useRef<() => PublicView | null>(() => null);
+  const spawn = useMemo(
+    () => makeFxSpawner({ anchors, bus: fxBus, lang, view: () => getViewRef.current() }),
+    [anchors, fxBus, lang],
+  );
 
-  const { view, idle, enqueue } = useDirector(
+  const { view, idle, enqueue, getView } = useDirector(
     HUMAN,
     useMemo(() => preDealView(table.view(HUMAN)), [table]),
     (e, flushed, speed) => {
@@ -97,6 +103,8 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     // in; the table bumps them on every reflow as well).
     () => anchors.bump(),
   );
+
+  getViewRef.current = getView;
 
   // The constructor already ran the bots to the first human decision; feed that
   // opening batch (deal animation included) into the director exactly once.

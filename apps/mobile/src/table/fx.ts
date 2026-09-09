@@ -1,10 +1,11 @@
-import type { Seat } from '@belot/engine';
+import type { PublicView, Seat } from '@belot/engine';
 import { SEATS } from '@belot/engine';
 import type { TableEvent } from '@belot/table';
 import type { Lang } from '@belot/i18n';
 import type { AnchorMap } from '../anim/AnchorRegistry';
+import { DEFAULT_TIMINGS } from '../anim/director';
 import { anchorId, type FxBus } from '../anim/FxBus';
-import { BACK_SCALE, FALLBACK_CARD_W, FLIGHT_MS } from '../anim/lifetimes';
+import { BACK_SCALE, dealStagger, FALLBACK_CARD_W, flightDuration } from '../anim/lifetimes';
 import { emoteText, isGlyphEmote } from '../emotes';
 
 /**
@@ -20,6 +21,19 @@ import { emoteText, isGlyphEmote } from '../emotes';
  * when the director runs at half pace with a batch waiting; the width keeps a
  * flight the size of the card it becomes, so nothing pops on landing.
  */
+
+export interface FxSpawnerOptions {
+  anchors: AnchorMap;
+  bus: FxBus;
+  lang: Lang;
+  /**
+   * The presentation view as it stands when an event STARTS — before the
+   * director's start patch. The trick sweep reads the four cards on the felt
+   * from it, since the `trickWon` event itself names only the winner.
+   */
+  view: () => PublicView | null;
+}
+
 /** An emote thrown across the table: a bubble over the sender's seat. */
 export function spawnEmote(
   opts: { anchors: AnchorMap; bus: FxBus; lang: Lang },
@@ -40,8 +54,8 @@ export function spawnEmote(
   });
 }
 
-export function makeFxSpawner(opts: { anchors: AnchorMap; bus: FxBus; lang: Lang }) {
-  const { anchors, bus, lang } = opts;
+export function makeFxSpawner(opts: FxSpawnerOptions) {
+  const { anchors, bus, lang, view } = opts;
 
   /** The width of a card sitting in this seat's slot, or the fallback before the first layout. */
   const slotW = (seat: Seat): number => anchors.rect(anchorId.slot(seat))?.w ?? FALLBACK_CARD_W;
@@ -65,30 +79,35 @@ export function makeFxSpawner(opts: { anchors: AnchorMap; bus: FxBus; lang: Lang
     if (at) bus.emit({ kind: 'bubble', at, text, tone, duration: duration * speed, speed });
   };
 
+  /** Backs from the deck to every seat, paced to fill the beat they decorate. */
+  const deal = (rounds: number, beatMs: number, speed: number) => {
+    const from = anchors.centre(anchorId.deck);
+    const to = SEATS.map((s) => anchors.centre(anchorId.seat(s))).filter(
+      (p): p is NonNullable<typeof p> => p !== null,
+    );
+    if (from && to.length === 4) {
+      bus.emit({
+        kind: 'deal',
+        from,
+        to,
+        rounds,
+        stagger: dealStagger(rounds * 4, beatMs),
+        speed,
+        width: anySlotW() * BACK_SCALE,
+      });
+    }
+  };
+
   return (e: TableEvent, speed = 1): void => {
     switch (e.kind) {
-      case 'dealStarted': {
-        const from = anchors.centre(anchorId.deck);
-        const to = SEATS.map((s) => anchors.centre(anchorId.seat(s))).filter(
-          (p): p is NonNullable<typeof p> => p !== null,
-        );
-        if (from && to.length === 4) {
-          bus.emit({ kind: 'deal', from, to, rounds: 2, speed, width: anySlotW() * BACK_SCALE });
-        }
+      case 'dealStarted':
+        deal(2, DEFAULT_TIMINGS.dealStarted.dur, speed);
         break;
-      }
 
-      case 'handsCompleted': {
+      case 'handsCompleted':
         // The talon: after the contract, everyone receives two more cards.
-        const from = anchors.centre(anchorId.deck);
-        const to = SEATS.map((s) => anchors.centre(anchorId.seat(s))).filter(
-          (p): p is NonNullable<typeof p> => p !== null,
-        );
-        if (from && to.length === 4) {
-          bus.emit({ kind: 'deal', from, to, rounds: 1, speed, width: anySlotW() * BACK_SCALE });
-        }
+        deal(1, DEFAULT_TIMINGS.handsCompleted.dur, speed);
         break;
-      }
 
       case 'cardPlayed': {
         const from = anchors.centre(anchorId.seat(e.seat));
@@ -99,7 +118,7 @@ export function makeFxSpawner(opts: { anchors: AnchorMap; bus: FxBus; lang: Lang
             card: e.card,
             from,
             to,
-            duration: FLIGHT_MS * speed,
+            duration: flightDuration(Math.hypot(to.x - from.x, to.y - from.y)) * speed,
             faceUp: true,
             width: slotW(e.seat),
           });
@@ -108,12 +127,17 @@ export function makeFxSpawner(opts: { anchors: AnchorMap; bus: FxBus; lang: Lang
       }
 
       case 'trickWon': {
-        const from = SEATS.map((s) => anchors.centre(anchorId.slot(s))).filter(
-          (p): p is NonNullable<typeof p> => p !== null,
-        );
+        // The real four cards, in the order they were played, from the slots
+        // they sit in — the director clears those slots as this beat starts,
+        // so from here on the sprite is the trick.
+        const trick = view()?.currentTrick ?? [];
+        const cards = trick.flatMap((p) => {
+          const from = anchors.centre(anchorId.slot(p.seat));
+          return from ? [{ seat: p.seat, card: p.card, from }] : [];
+        });
         const to = anchors.centre(anchorId.seat(e.seat));
-        if (from.length > 0 && to) {
-          bus.emit({ kind: 'sweep', from, to, speed, width: anySlotW() * BACK_SCALE });
+        if (cards.length > 0 && to) {
+          bus.emit({ kind: 'trickSweep', cards, to, winner: e.seat, speed, width: anySlotW() });
         }
         break;
       }

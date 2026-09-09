@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest';
-import { SEATS } from '@belot/engine';
+import { SEATS, type PublicView, type Seat } from '@belot/engine';
 import { Lang } from '@belot/i18n';
 import { Table } from '@belot/table';
 import type { AnchorMap, AnchorRect } from '../src/anim/AnchorRegistry';
 import { DEFAULT_TIMINGS } from '../src/anim/director';
 import { FxBus, type Fx } from '../src/anim/FxBus';
-import { BUBBLE_MIN_MS, FALLBACK_CARD_W, lifetimeOf, motionOf } from '../src/anim/lifetimes';
+import {
+  BUBBLE_MIN_MS,
+  DEAL_LAND_AT,
+  FALLBACK_CARD_W,
+  FLIGHT_MAX_MS,
+  FLIGHT_MIN_MS,
+  lifetimeOf,
+  motionOf,
+} from '../src/anim/lifetimes';
 import { makeFxSpawner } from '../src/table/fx';
 
 /**
@@ -26,7 +34,8 @@ const SLOT_W = 60;
 function fakeAnchors(withSlots = true): AnchorMap {
   const rects = new Map<string, AnchorRect>();
   for (const s of SEATS) {
-    rects.set(`seat:${s}`, { x: 120 * s, y: 40, w: 54, h: 54 });
+    // Each seat a different distance from its slot, as on a real table.
+    rects.set(`seat:${s}`, { x: 120 * s, y: 40 + 50 * s, w: 54, h: 54 });
     if (withSlots) rects.set(`slot:${s}`, { x: 120 * s, y: 220, w: SLOT_W, h: SLOT_W * 1.45 });
   }
   rects.set('deck', { x: 180, y: 160, w: 10, h: 10 });
@@ -49,10 +58,21 @@ function spritesOfADeal(speed: number, anchors = fakeAnchors()) {
   const out: { kind: string; fx: Fx }[] = [];
   let current = '';
   bus.subscribe((fx) => out.push({ kind: current, fx }));
-  const spawn = makeFxSpawner({ anchors, bus, lang: new Lang('hr') });
+  // The view as the director holds it when each event STARTS: only the trick
+  // on the felt matters to the spawner, so that is all this follows.
+  const base = table.view(0 as Seat);
+  let trick: PublicView['currentTrick'] = [];
+  const spawn = makeFxSpawner({
+    anchors,
+    bus,
+    lang: new Lang('hr'),
+    view: () => ({ ...base, currentTrick: trick }),
+  });
   for (const e of events) {
     current = e.kind;
     spawn(e, speed);
+    if (e.kind === 'cardPlayed') trick = [...trick, { seat: e.seat, card: e.card }];
+    if (e.kind === 'trickWon') trick = [];
   }
   return out;
 }
@@ -130,5 +150,52 @@ describe('a bubble owns up to its fixed choreography', () => {
     expect(motionOf(bubble(100, 0.5))).toBe(BUBBLE_MIN_MS * 0.5);
     expect(motionOf(bubble(900, 1))).toBe(900);
     expect(lifetimeOf(bubble(100, 1))).toBeGreaterThan(BUBBLE_MIN_MS);
+  });
+});
+
+describe('the sprites that replace real cards', () => {
+  it('a won trick sweeps the four real cards, in play order, from their own slots', () => {
+    const sweeps = spritesOfADeal(1).filter((s) => s.fx.kind === 'trickSweep');
+    expect(sweeps.length).toBe(8);
+    for (const { fx } of sweeps) {
+      if (fx.kind !== 'trickSweep') continue;
+      expect(fx.cards.length).toBe(4);
+      expect(new Set(fx.cards.map((c) => c.seat)).size).toBe(4);
+      for (const c of fx.cards) {
+        // From the centre of that seat's slot — where the real card was.
+        expect(c.from).toEqual({ x: 120 * c.seat + SLOT_W / 2, y: 220 + (SLOT_W * 1.45) / 2 });
+      }
+      expect(fx.width).toBe(SLOT_W);
+      expect(fx.cards.some((c) => c.seat === fx.winner)).toBe(true);
+    }
+  });
+
+  it('a played card flies for a distance-scaled time that still lands inside its beat', () => {
+    // The card is committed to its slot at the end of the beat, not the gap:
+    // a sprite still in the air then is a second copy over the real card.
+    expect(FLIGHT_MAX_MS).toBeLessThanOrEqual(DEFAULT_TIMINGS.cardPlayed.dur);
+    for (const speed of [1, 0.5]) {
+      const flights = spritesOfADeal(speed).filter((s) => s.fx.kind === 'flight');
+      const durations = new Set<number>();
+      for (const { fx } of flights) {
+        if (fx.kind !== 'flight') continue;
+        expect(fx.duration).toBeGreaterThanOrEqual(FLIGHT_MIN_MS * speed);
+        expect(fx.duration).toBeLessThanOrEqual(DEFAULT_TIMINGS.cardPlayed.dur * speed);
+        durations.add(fx.duration);
+      }
+      // Four seats at four distances from their slots: not one fixed number.
+      expect(durations.size).toBeGreaterThan(1);
+    }
+  });
+
+  it('the deal fills its beat instead of finishing halfway through it', () => {
+    for (const speed of [1, 0.5]) {
+      const deals = spritesOfADeal(speed).filter((s) => s.fx.kind === 'deal');
+      expect(deals.length).toBe(2); // the deal and the talon
+      for (const { kind, fx } of deals) {
+        const beat = DEFAULT_TIMINGS[kind as keyof typeof DEFAULT_TIMINGS];
+        expect(motionOf(fx)).toBeGreaterThanOrEqual(beat.dur * speed * (DEAL_LAND_AT - 0.1));
+      }
+    }
   });
 });

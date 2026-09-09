@@ -139,7 +139,16 @@ export function useNetGame(settings: Settings) {
   const anchors = useMemo(() => new AnchorMap(), []);
   const fxBus = useMemo(() => new FxBus(), []);
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
-  const spawn = useMemo(() => makeFxSpawner({ anchors, bus: fxBus, lang }), [anchors, fxBus, lang]);
+  const spawn = useMemo(
+    () =>
+      makeFxSpawner({
+        anchors,
+        bus: fxBus,
+        lang,
+        view: () => directorRef.current?.getView() ?? null,
+      }),
+    [anchors, fxBus, lang],
+  );
 
   const hapticsRef = useRef(settings.haptics);
   hapticsRef.current = settings.haptics;

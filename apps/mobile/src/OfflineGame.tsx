@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useKeepAwake } from 'expo-keep-awake';
 import { teamOf } from '@belot/engine';
 import { anchorId } from './anim/FxBus';
+import { COIN_CASCADE_COUNT } from './anim/lifetimes';
 import { TableScreen } from './TableScreen';
 import { HUMAN, useGame } from './useGame';
 import type { Settings } from './storage';
@@ -55,7 +56,7 @@ function OfflineMatch({
     if (g.banner && g.banner !== lastBanner.current && g.banner.coins > 0) {
       const from = g.anchors.centre(anchorId.deck);
       const to = g.anchors.centre(anchorId.wallet);
-      if (from && to) g.fxBus.emit({ kind: 'coins', from, to, count: 6 });
+      if (from && to) g.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
     }
     lastBanner.current = g.banner;
   }, [g.banner, g.anchors, g.fxBus]);

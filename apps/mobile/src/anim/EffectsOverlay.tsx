@@ -8,6 +8,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
+import type { Card } from '@belot/engine';
 import { cosmetics } from '../cosmetics';
 import { CardBackFace, CardFace } from '../deck';
 import { garb } from '../deck/palette';
@@ -15,6 +16,7 @@ import { counters } from '../dev/counters';
 import { radius, theme } from '../theme';
 import type { FxBus, FxWithId, XY } from './FxBus';
 import {
+  BACK_SCALE,
   BUBBLE_IN_MS,
   BUBBLE_MIN_MS,
   BUBBLE_OUT_MS,
@@ -25,8 +27,9 @@ import {
   DEAL_FADE_MS,
   DEAL_FLY_MS,
   DEAL_HOLD_MS,
-  DEAL_STAGGER_MS,
+  SWEEP_FLIP_AT,
   SWEEP_FLY_MS,
+  SWEEP_HOLD_MS,
   SWEEP_STAGGER_MS,
   lifetimeOf,
 } from './lifetimes';
@@ -96,12 +99,13 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
           from={local(fx.from)}
           to={fx.to.map(local)}
           rounds={fx.rounds}
+          stagger={fx.stagger}
           speed={fx.speed}
           width={fx.width}
         />
       );
-    case 'sweep':
-      return <Sweep from={fx.from.map(local)} to={local(fx.to)} speed={fx.speed} width={fx.width} />;
+    case 'trickSweep':
+      return <TrickSweep fx={fx} local={local} />;
     case 'bubble':
       return (
         <Bubble
@@ -163,12 +167,14 @@ function Deal({
   from,
   to,
   rounds,
+  stagger,
   speed,
   width,
 }: {
   from: XY;
   to: XY[];
   rounds: number;
+  stagger: number;
   speed: number;
   width: number;
 }) {
@@ -176,10 +182,10 @@ function Deal({
     const list: { key: number; to: XY; delay: number }[] = [];
     let i = 0;
     for (let r = 0; r < rounds; r++) {
-      for (const t of to) list.push({ key: i, to: t, delay: i++ * DEAL_STAGGER_MS * speed });
+      for (const t of to) list.push({ key: i, to: t, delay: i++ * stagger * speed });
     }
     return list;
-  }, [from, to, rounds, speed]);
+  }, [from, to, rounds, stagger, speed]);
 
   return (
     <>
@@ -238,56 +244,90 @@ function DealBack({
 
 // --- trick sweep -------------------------------------------------------------
 
-function Sweep({ from, to, speed, width }: { from: XY[]; to: XY; speed: number; width: number }) {
+/**
+ * The four cards of a won trick, as they really are: they hold on the felt
+ * for a beat (the winner's lifts, gold-edged), then fly to the winner's puck
+ * in play order, turning face down and shrinking as they go. The director
+ * clears the slots the moment this starts, so for that moment these ARE the
+ * trick — before, card backs flew while the faces sat still in their slots
+ * and then snapped away a beat later.
+ */
+function TrickSweep({
+  fx,
+  local,
+}: {
+  fx: Extract<FxWithId, { kind: 'trickSweep' }>;
+  local: (p: XY) => XY;
+}) {
+  const to = local(fx.to);
   return (
     <>
-      {from.map((f, i) => (
-        <SweepBack
+      {fx.cards.map((c, i) => (
+        <SweptCard
           key={i}
-          from={f}
+          card={c.card}
+          from={local(c.from)}
           to={to}
-          delay={i * SWEEP_STAGGER_MS * speed}
-          speed={speed}
-          width={width}
+          winner={c.seat === fx.winner}
+          delay={(SWEEP_HOLD_MS + i * SWEEP_STAGGER_MS) * fx.speed}
+          speed={fx.speed}
+          width={fx.width}
         />
       ))}
     </>
   );
 }
 
-function SweepBack({
+function SweptCard({
+  card,
   from,
   to,
+  winner,
   delay,
   speed,
   width,
 }: {
+  card: Card;
   from: XY;
   to: XY;
+  winner: boolean;
   delay: number;
   speed: number;
   width: number;
 }) {
   const p = useSharedValue(0);
+  const lift = useSharedValue(0);
   useEffect(() => {
+    if (winner) {
+      lift.value = withTiming(1, { duration: 140 * speed, easing: Easing.out(Easing.quad) });
+    }
     p.value = withDelay(
       delay,
       withTiming(1, { duration: SWEEP_FLY_MS * speed, easing: Easing.in(Easing.quad) }),
     );
-  }, [p, delay, speed]);
+  }, [p, lift, winner, delay, speed]);
 
   const style = useAnimatedStyle(() => ({
-    opacity: 1 - p.value * 0.9,
+    opacity: 1 - 0.9 * Math.max(0, (p.value - 0.8) / 0.2),
     transform: [
       { translateX: from.x + (to.x - from.x) * p.value - width / 2 },
-      { translateY: from.y + (to.y - from.y) * p.value - (width * 1.45) / 2 },
-      { scale: 1 - 0.4 * p.value },
+      { translateY: from.y + (to.y - from.y) * p.value - (width * 1.45) / 2 - lift.value * 6 },
+      { scale: 1 - (1 - BACK_SCALE) * p.value },
     ],
   }));
+  // Face for the first stretch of the flight, back for the rest.
+  const face = useAnimatedStyle(() => ({ opacity: p.value < SWEEP_FLIP_AT ? 1 : 0 }));
+  const back = useAnimatedStyle(() => ({ opacity: p.value < SWEEP_FLIP_AT ? 0 : 1 }));
 
   return (
     <Animated.View style={[styles.sprite, style]}>
-      <CardBackFace width={width} variant={cosmetics().cardBack} />
+      <Animated.View style={face}>
+        <CardFace card={card} width={width} style={cosmetics().deckStyle} />
+        {winner && <View pointerEvents="none" style={styles.sweptRing} />}
+      </Animated.View>
+      <Animated.View style={[StyleSheet.absoluteFill, back]}>
+        <CardBackFace width={width} variant={cosmetics().cardBack} />
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -470,6 +510,17 @@ function ConfettiPiece({
 // -----------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  // The card that took the trick, marked while the four hold on the felt.
+  sweptRing: {
+    position: 'absolute',
+    top: -2,
+    left: -2,
+    right: -2,
+    bottom: -2,
+    borderWidth: 2,
+    borderColor: garb.gold,
+    borderRadius: radius.card + 2,
+  },
   sprite: { position: 'absolute', left: 0, top: 0 },
   bubble: { width: 140, alignItems: 'center' },
   bubbleGold: {},

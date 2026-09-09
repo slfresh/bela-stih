@@ -19,6 +19,12 @@ import { Avatar } from './avatars';
 import { Button } from './TableScreen';
 import type { Settings } from './storage';
 import { playSfx } from './audio';
+import { coinsLandedMs } from './anim/lifetimes';
+import { useLaggedNumber } from './ui/useLaggedNumber';
+
+/** Coins a claim sends flying to the wallet. */
+const BONUS_COINS = 8;
+const QUEST_COINS = 6;
 import { radius, theme } from './theme';
 
 /**
@@ -63,6 +69,8 @@ export function HomeScreen({
   const today = isoDay(new Date());
   const claimable = canClaimDaily(profile, today);
   const level = levelProgress(profile.xp);
+  // The wallet changes when the last coin of a claim lands on it.
+  const coins = useLaggedNumber(profile.coins, coinsLandedMs(BONUS_COINS));
 
   const go = (l: Launch) => onLaunch(l);
   // For the bare pressables (hero, gear, wallet); a Button clicks for itself.
@@ -92,7 +100,7 @@ export function HomeScreen({
     const r = claimDaily(profile, today);
     if (r.coins > 0) {
       playSfx('coin');
-      claim('bonus', 8, () => onProfileChange(r.profile));
+      claim('bonus', BONUS_COINS, () => onProfileChange(r.profile));
     }
   };
 
@@ -100,7 +108,7 @@ export function HomeScreen({
     const r = claimQuest(profile, index);
     if (r.coins > 0) {
       playSfx('coin');
-      claim(`quest:${index}`, 6, () => onProfileChange(r.profile));
+      claim(`quest:${index}`, QUEST_COINS, () => onProfileChange(r.profile));
     }
   };
 
@@ -130,7 +138,7 @@ export function HomeScreen({
               <Pressable onPress={open(onOpenShop)} hitSlop={6}>
                 <Anchor id={anchorId.wallet}>
                   <View style={styles.coinChip}>
-                    <Text style={styles.coinText}>{profile.coins} ●</Text>
+                    <Text style={styles.coinText}>{coins} ●</Text>
                   </View>
                 </Anchor>
               </Pressable>
