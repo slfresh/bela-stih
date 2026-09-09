@@ -33,6 +33,22 @@ describe('the brand paths', () => {
     }
   });
 
+  it('include the outlined wordmark, drawn by the home and the store art', () => {
+    const mark = JSON.parse(readFileSync(join(__dirname, '..', 'brand', 'wordmark.json'), 'utf8')) as {
+      unitsPerEm: number; ascent: number; descent: number; width: number; bela: string; stih: string;
+    };
+    expect(mark.unitsPerEm).toBe(1000);
+    expect(mark.ascent).toBeGreaterThan(0);
+    expect(mark.descent).toBeLessThan(0);
+    expect(mark.width).toBeGreaterThan(3000);
+    expect(mark.bela).toMatch(/^M/);
+    expect(mark.stih).toMatch(/^M/);
+    const src = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
+    expect(src('src/home/Wordmark.tsx')).toMatch(/from '\.\.\/\.\.\/brand\/wordmark\.json'/);
+    expect(src('src/home/Wordmark.tsx')).not.toMatch(/<Text/);
+    expect(readFileSync(join(__dirname, '..', '..', '..', 'scripts', 'brand.mjs'), 'utf8')).toMatch(/wordmark\.json/);
+  });
+
   it('are what the deck and both art scripts draw from', () => {
     const src = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
     expect(src('src/deck/pips.tsx')).toMatch(/from '\.\.\/\.\.\/brand\/paths\.json'/);

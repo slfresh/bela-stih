@@ -13,6 +13,20 @@ export const PATHS = JSON.parse(
   readFileSync(join(process.cwd(), 'apps', 'mobile', 'brand', 'paths.json'), 'utf8'),
 );
 
+/** The wordmark's outlines (Rubik Black), in font units: `bela` and `stih` paths, y up from the baseline. */
+export const MARK = JSON.parse(
+  readFileSync(join(process.cwd(), 'apps', 'mobile', 'brand', 'wordmark.json'), 'utf8'),
+);
+
+/** "Bela Štih" at `height` px with its left edge at (x, baselineY), as SVG markup. */
+export function wordmark({ x, baselineY, height, bela = CREAM, stih = GOLD }) {
+  const scale = height / (MARK.ascent - MARK.descent);
+  return `<g transform="translate(${x} ${baselineY}) scale(${scale})">
+    <path d="${MARK.bela}" fill="${bela}"/>
+    <path d="${MARK.stih}" fill="${stih}"/>
+  </g>`;
+}
+
 export const FELT_DEEP = '#0d2a1f';
 export const FELT = '#123a2b';
 export const FELT_LIGHT = '#1a4a37';

@@ -1,7 +1,7 @@
 import { Resvg } from '@resvg/resvg-js';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { CREAM, fan, feltDefs, GOLD, markSvg } from './brand.mjs';
+import { CREAM, fan, feltDefs, markSvg, wordmark } from './brand.mjs';
 
 /**
  * Play Store listing assets, drawn from the same hand as the app: felt, gold,
@@ -24,12 +24,11 @@ const feature = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="50
   <!-- the fan: all four suits of the mađarice -->
   ${fan(['acorns', 'leaves', 'hearts', 'bells'], { cx: 300, cy: 250, cardW: 150, spread: 42 })}
 
-  <!-- title block -->
+  <!-- the mark, outlined: the same shape as on the launcher and in the app -->
+  ${wordmark({ x: 560, baselineY: 262, height: 150 })}
   <g font-family="Segoe UI, Arial, sans-serif">
-    <text x="620" y="222" font-size="96" font-weight="800" fill="${CREAM}">Bela</text>
-    <text x="620" y="318" font-size="96" font-weight="800" fill="${GOLD}">Štih</text>
-    <text x="622" y="374" font-size="30" fill="${CREAM}" opacity="0.85">Prava bela s prijateljima</text>
-    <text x="622" y="412" font-size="24" fill="${CREAM}" opacity="0.6">besplatno · bez prijave · bez reklama</text>
+    <text x="562" y="330" font-size="30" fill="${CREAM}" opacity="0.85">Prava bela s prijateljima</text>
+    <text x="562" y="368" font-size="24" fill="${CREAM}" opacity="0.6">besplatno · bez prijave · bez reklama</text>
   </g>
 </svg>`;
 

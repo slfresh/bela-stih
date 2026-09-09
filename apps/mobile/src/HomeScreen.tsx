@@ -157,7 +157,7 @@ export function HomeScreen({
 
             {/* the brand — a long press opens the deck gallery: review harness and easter egg */}
             <View style={styles.brand}>
-              <Wordmark onLongPress={() => onLaunch({ mode: 'gallery' })} />
+              <Wordmark height={40} onLongPress={() => onLaunch({ mode: 'gallery' })} />
               <Text style={styles.sub}>{lang.s.gameToTarget(1001)}</Text>
             </View>
 
