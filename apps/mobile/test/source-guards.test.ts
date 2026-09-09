@@ -160,6 +160,17 @@ describe('anchors measure on demand', () => {
     expect(t).toMatch(/const xp = useLaggedNumber\(profile\.xp, lag, 1\);/);
     expect(t).toMatch(/levelProgress\(xp\)/);
     expect(t).not.toMatch(/levelProgress\(profile\.xp\)/);
+  it('the felt is drawn by FeltArt under a transparent, pinned frame', () => {
+    const t = src('TableScreen.tsx');
+    // The frame's numbers position the trick cross; FeltArt paints under them.
+    expect(t).toMatch(/felt: \{[^}]*backgroundColor: 'transparent'[^}]*borderWidth: 6[^}]*borderColor: 'transparent'[^}]*padding: 5[^}]*marginVertical: 4/s);
+    expect(t).toMatch(/<FeltArt[^>]*width=\{feltBox\.w \+ 2 \* \(RIM_W \+ FELT_PAD\)\}/);
+    expect(t).not.toMatch(/FeltGlow/);
+    // Every page reads the room, so a felt cosmetic recolours the whole app.
+    for (const f of ['HomeScreen.tsx', 'net/OnlineGame.tsx', 'screens/common.tsx', 'DeckGallery.tsx', 'WebShell.tsx']) {
+      expect(src(f), f).toMatch(/backgroundColor: room\(\)\.page/);
+    }
+    expect(t).toMatch(/backgroundColor: baize\.page/);
   });
 
   it('the home screen no longer re-renders on every scroll event', () => {

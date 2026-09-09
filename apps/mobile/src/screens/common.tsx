@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { room } from '../cosmetics';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PressScale } from '../ui/PressScale';
@@ -24,7 +25,7 @@ export function ScreenShell({
   children: ReactNode;
 }) {
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: room().page }]}>
       <View style={styles.header}>
         <PressScale onPress={onBack} hitSlop={12} style={styles.backButton}>
           <Chevron size={28} />

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { room } from './cosmetics';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Lang } from '@belot/i18n';
@@ -114,7 +115,7 @@ export function HomeScreen({
 
   return (
     <AnchorHost map={anchors}>
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: room().page }]}>
         <View style={styles.fill}>
           <ScrollView contentContainerStyle={styles.scroll}>
             {/* identity header */}

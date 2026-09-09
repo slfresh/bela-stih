@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Rank, Suit } from '@belot/engine';
 import { SUITS } from '@belot/engine';
 import { Lang } from '@belot/i18n';
-import { cosmetics } from './cosmetics';
+import { cosmetics, room } from './cosmetics';
 import { CardBackFace, CardFace } from './deck';
 import { Button } from './ui/Button';
 import { theme } from './theme';
@@ -23,7 +23,7 @@ const ORDER: Rank[] = ['A', '10', 'K', 'Q', 'J', '9', '8', '7'];
 
 export function DeckGallery({ onExit }: { onExit: () => void }) {
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: room().page }]}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Karte</Text>
 

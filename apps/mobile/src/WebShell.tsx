@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { room } from './cosmetics';
 import { StyleSheet, useWindowDimensions, View } from 'react-native';
 import { shellWidth } from './table/useTableMetrics';
 import { theme } from './theme';
@@ -22,7 +23,7 @@ export function WebShell({ children }: { children: ReactNode }) {
   // sized for the box it is actually drawn in.
   const maxWidth = shellWidth(width, height);
   return (
-    <View style={styles.desk}>
+    <View style={[styles.desk, { backgroundColor: room().page }]}>
       <View style={[styles.column, { maxWidth }]}>{children}</View>
     </View>
   );

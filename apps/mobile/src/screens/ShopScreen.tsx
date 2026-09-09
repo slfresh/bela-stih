@@ -14,7 +14,8 @@ import {
   type PlayerProfile,
 } from '@belot/progression';
 import { Avatar } from '../avatars';
-import { FELTS } from '../cosmetics';
+import { roomStyle } from '../cosmetics';
+import { FeltArt } from '../table/FeltArt';
 import { CardBackFace } from '../deck';
 import { playSfx } from '../audio';
 import { pattern } from '../haptics';
@@ -76,15 +77,9 @@ export function ShopScreen({
                   {kind === 'cardBack' ? (
                     <CardBackFace width={38} variant={c.id} />
                   ) : kind === 'felt' ? (
-                    <View
-                      style={[
-                        styles.feltSwatch,
-                        {
-                          backgroundColor: FELTS[c.id]?.felt ?? theme.felt,
-                          borderColor: FELTS[c.id]?.rim ?? theme.wood,
-                        },
-                      ]}
-                    />
+                    <View style={styles.feltSwatch}>
+                      <FeltArt width={46} height={46} room={roomStyle(c.id)} grain={false} rim={4} />
+                    </View>
                   ) : (
                     <Avatar id={c.id} size={46} />
                   )}
@@ -153,7 +148,7 @@ const styles = StyleSheet.create({
   },
   itemSelected: { borderColor: theme.accent },
   preview: { height: 56, justifyContent: 'center' },
-  feltSwatch: { width: 46, height: 46, borderRadius: 23, borderWidth: 5 },
+  feltSwatch: { width: 46, height: 46 },
   itemName: { color: theme.text, fontSize: 12, fontWeight: '600' },
   price: { color: theme.accent, fontSize: 12, fontWeight: '700' },
   select: { color: theme.text, fontSize: 12, fontWeight: '700' },

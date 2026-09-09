@@ -65,12 +65,15 @@ import { useTableMetrics } from './table/useTableMetrics';
 import { useHandOrder, type HandSort } from './table/useHandOrder';
 import type { ConfirmPlay } from './storage';
 import { TurnRing } from './anim/TurnRing';
-import { cosmetics, feltStyle, type DeckStyle } from './cosmetics';
+import { cosmetics, room, roomStyle, type DeckStyle } from './cosmetics';
 import { PerfProbe } from './dev/PerfProbe';
 import { EmoteStrip } from './table/EmoteStrip';
 import { useTurnCues } from './table/useTurnCues';
 import { TurnBeacon } from './table/TurnBeacon';
-import { FeltGlow } from './table/FeltGlow';
+import { FeltArt, RIM_W } from './table/FeltArt';
+
+/** `styles.felt` padding: the cloth's margin inside the rim. Pinned with the border and margin. */
+const FELT_PAD = 5;
 import { PlayingCard } from './PlayingCard';
 import { SuitPip } from './deck';
 import { playSfx } from './audio';
@@ -332,7 +335,7 @@ export function TableScreen(props: TableScreenProps) {
   });
 
   const trump = view.context.trumpSuit;
-  const baize = feltStyle(profile.selectedFelt);
+  const baize = roomStyle(profile.selectedFelt);
   // Read once per render and passed down: the memoised cards must see a deck
   // change as a changed prop, not peek at module state and miss it.
   const deck = cosmetics().deckStyle;
@@ -452,13 +455,19 @@ export function TableScreen(props: TableScreenProps) {
       entering={reduced ? undefined : Platform.OS === 'web' ? FadeIn.duration(240) : feltEntering}
       style={[
         styles.felt,
-        { backgroundColor: baize.felt, borderColor: baize.rim },
         feltShakeStyle,
         // Landscape hangs the partner over the far rim, so the felt starts
         // just below their disc rather than below their whole puck.
         land && { marginTop: Math.round(m.puck * 0.5) },
       ]}
     >
+      {/* the table itself, drawn under everything: rim, baize, bevel */}
+      <FeltArt
+        width={feltBox.w + 2 * (RIM_W + FELT_PAD)}
+        height={feltBox.h + 2 * (RIM_W + FELT_PAD)}
+        room={baize}
+        lit={myTurn && !settled}
+      />
       <View
         style={styles.feltInner}
         onLayout={(e) => {
@@ -472,9 +481,6 @@ export function TableScreen(props: TableScreenProps) {
           anchors.bump();
         }}
       >
-        {/* the light on the baize, under everything else on it */}
-        <FeltGlow width={feltBox.w - 2} height={feltBox.h - 2} felt={baize.felt} />
-
         {/* the deck: cards are dealt from the felt's centre, whichever way up
             the table is — the plaque moves to the left lobe in landscape. */}
         <Anchor id={anchorId.deck} style={styles.deckAnchor} />
@@ -795,7 +801,7 @@ export function TableScreen(props: TableScreenProps) {
 
   return (
     <AnchorHost map={anchors}>
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+      <SafeAreaView style={[styles.safe, { backgroundColor: baize.page }]} edges={['top', 'bottom', 'left', 'right']}>
         {/* A rotation or a window resize moves everything at once. */}
         <View style={[styles.root, land && styles.rootLand]} onLayout={() => anchors.bump()}>
           {land ? (
@@ -1584,7 +1590,7 @@ function DealResult({
   return (
     <Animated.View entering={reduced ? undefined : SlideInDown.duration(280)}>
     <ScrollView
-      style={[styles.resultPanel, { maxHeight }]}
+      style={[styles.resultPanel, { maxHeight, backgroundColor: room().page }]}
       contentContainerStyle={styles.resultContent}
     >
       <Text style={[styles.resultTitle, stiglja && styles.resultTitleStiglja]}>
@@ -1774,12 +1780,15 @@ const styles = StyleSheet.create({
   midRow: { flex: 1, flexDirection: 'row', alignItems: 'stretch', gap: 4 },
   sideSeat: { justifyContent: 'center' },
 
+  // The felt's frame is layout only — FeltArt paints the rim and the baize
+  // underneath it, sized from this very box. Border 6, padding 5, margin 4
+  // are pinned: the trick cross is derived from the measured inner box.
   felt: {
     flex: 1,
-    backgroundColor: theme.felt,
+    backgroundColor: 'transparent',
     borderRadius: 999,
     borderWidth: 6,
-    borderColor: theme.wood,
+    borderColor: 'transparent',
     padding: 5,
     marginVertical: 4,
   },
@@ -1787,7 +1796,7 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1956,7 +1965,7 @@ const styles = StyleSheet.create({
   // A lost match: the room dims a shade more, no vignette imagery.
   resultBackdropLost: { backgroundColor: 'rgba(0,0,0,0.55)' },
   resultPanel: {
-    backgroundColor: theme.feltDeep,
+    backgroundColor: theme.feltDeep, // overridden by the room's page inline
     borderTopLeftRadius: radius.panel + 6,
     borderTopRightRadius: radius.panel + 6,
     borderWidth: 1,

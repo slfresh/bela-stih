@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { room } from '../cosmetics';
 import {
   ActivityIndicator,
   Platform,
@@ -219,7 +220,7 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
           : ui.waitingForPlayers(seated);
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: room().page }]}>
       <ScrollView contentContainerStyle={styles.centre}>
         {net.status === 'connecting' || net.status === 'waiting' ? (
           <ActivityIndicator color={theme.accent} size="large" />
