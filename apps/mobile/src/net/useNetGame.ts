@@ -13,7 +13,7 @@ import { FxBus } from '../anim/FxBus';
 import { makeFxSpawner, spawnEmote } from '../table/fx';
 import { useMotionPolicy } from '../anim/useMotionPolicy';
 import { playSfx } from '../audio';
-import { emptyTally, processEvents } from '../feedback';
+import { emptyTally, landingSound, processEvents } from '../feedback';
 import { loadProfile, saveProfile, type Settings } from '../storage';
 
 /**
@@ -151,6 +151,7 @@ export function useNetGame(settings: Settings) {
         anchors,
         bus: fxBus,
         lang,
+        mySeat: () => mySeatRef.current,
         view: () => directorRef.current?.getView() ?? null,
       }),
     [anchors, fxBus, lang],
@@ -249,6 +250,10 @@ export function useNetGame(settings: Settings) {
           {
             onView: setView,
             onEventStart: (e, f, s) => onEventRef.current(e, f, s),
+            onEventEnd: (e) => {
+              const mine = mySeatRef.current;
+              if (mine !== null) landingSound(e, mine);
+            },
             onIdle: setIdle,
             // Anchors re-measure as each batch starts; the table bumps them too
             // whenever a row around the felt comes or goes.

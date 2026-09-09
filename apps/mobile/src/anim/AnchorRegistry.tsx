@@ -56,6 +56,11 @@ export class AnchorMap {
     this.rects.set(key, rect);
   }
 
+  /** For the one transient rect (the card just tapped): read once, then gone. */
+  delete(key: string): void {
+    this.rects.delete(key);
+  }
+
   /** Centre of an anchor in window space, or null when unknown. */
   centre(key: string): { x: number; y: number } | null {
     const r = this.rects.get(key);

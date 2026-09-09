@@ -1,8 +1,9 @@
 import type { PublicView, Seat } from '@belot/engine';
-import { SEATS } from '@belot/engine';
+import { cardId, SEATS } from '@belot/engine';
 import type { TableEvent } from '@belot/table';
 import type { Lang } from '@belot/i18n';
 import type { AnchorMap } from '../anim/AnchorRegistry';
+import type { XY } from '../anim/FxBus';
 import { DEFAULT_TIMINGS } from '../anim/director';
 import { anchorId, type FxBus } from '../anim/FxBus';
 import { BACK_SCALE, dealStagger, FALLBACK_CARD_W, flightDuration } from '../anim/lifetimes';
@@ -26,6 +27,8 @@ export interface FxSpawnerOptions {
   anchors: AnchorMap;
   bus: FxBus;
   lang: Lang;
+  /** The viewer's seat: their own card flies face up from the tap. */
+  mySeat: () => Seat | null;
   /**
    * The presentation view as it stands when an event STARTS — before the
    * director's start patch. The trick sweep reads the four cards on the felt
@@ -56,6 +59,7 @@ export function spawnEmote(
 
 export function makeFxSpawner(opts: FxSpawnerOptions) {
   const { anchors, bus, lang, view } = opts;
+  const mySeatOf = opts.mySeat;
 
   /** The width of a card sitting in this seat's slot, or the fallback before the first layout. */
   const slotW = (seat: Seat): number => anchors.rect(anchorId.slot(seat))?.w ?? FALLBACK_CARD_W;
@@ -79,38 +83,65 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
     if (at) bus.emit({ kind: 'bubble', at, text, tone, duration: duration * speed, speed });
   };
 
-  /** Backs from the deck to every seat, paced to fill the beat they decorate. */
-  const deal = (rounds: number, beatMs: number, speed: number) => {
+  /**
+   * Backs from the deck round the table, paced to fill the beat they decorate.
+   * Each opponent gets one back a round; MY seat gets one per card, spread
+   * across the fan where the real cards will appear — the first six across
+   * the hand, the talon's two on its right, where the fan will re-sort them.
+   */
+  const deal = (mySeat: Seat | null, rounds: number, perRound: number, beatMs: number, speed: number) => {
     const from = anchors.centre(anchorId.deck);
-    const to = SEATS.map((s) => anchors.centre(anchorId.seat(s))).filter(
-      (p): p is NonNullable<typeof p> => p !== null,
-    );
-    if (from && to.length === 4) {
-      bus.emit({
-        kind: 'deal',
-        from,
-        to,
-        rounds,
-        stagger: dealStagger(rounds * 4, beatMs),
-        speed,
-        width: anySlotW() * BACK_SCALE,
-      });
+    const seats = SEATS.map((s) => anchors.centre(anchorId.seat(s)));
+    if (!from || seats.some((p) => p === null)) return;
+    const hand = mySeat !== null ? anchors.rect(anchorId.seat(mySeat)) : null;
+    const n = rounds * perRound;
+    const step = hand ? Math.min((hand.w * 0.68) / Math.max(1, n - 1), 46) : 0;
+    const mine = (k: number): XY => {
+      if (!hand) return seats[mySeat!]!;
+      const pos = perRound === 2 ? k + 6 : k; // the talon lands at positions 6–7 of 8
+      const centre = perRound === 2 ? 3.5 : (n - 1) / 2;
+      return { x: hand.x + hand.w / 2 + (pos - centre) * step, y: hand.y + hand.h * 0.6 };
+    };
+    const backs: XY[] = [];
+    let k = 0;
+    for (let r = 0; r < rounds; r++) {
+      for (const s of SEATS) {
+        if (s === mySeat) for (let c = 0; c < perRound; c++) backs.push(mine(k++));
+        else backs.push(seats[s]!);
+      }
     }
+    bus.emit({
+      kind: 'deal',
+      from,
+      backs,
+      stagger: dealStagger(backs.length, beatMs),
+      speed,
+      width: anySlotW() * BACK_SCALE,
+    });
   };
 
   return (e: TableEvent, speed = 1): void => {
+    const mySeat = mySeatOf();
     switch (e.kind) {
       case 'dealStarted':
-        deal(2, DEFAULT_TIMINGS.dealStarted.dur, speed);
+        // Two rounds of three.
+        deal(mySeat, 2, 3, DEFAULT_TIMINGS.dealStarted.dur, speed);
         break;
 
       case 'handsCompleted':
         // The talon: after the contract, everyone receives two more cards.
-        deal(1, DEFAULT_TIMINGS.handsCompleted.dur, speed);
+        deal(mySeat, 1, 2, DEFAULT_TIMINGS.handsCompleted.dur, speed);
         break;
 
       case 'cardPlayed': {
-        const from = anchors.centre(anchorId.seat(e.seat));
+        const mine = e.seat === mySeat;
+        // My own card sets off from where I tapped it, at the fan's size; the
+        // rect was measured at press time and is read exactly once.
+        const tapped = mine ? anchors.rect(anchorId.card(cardId(e.card))) : null;
+        if (tapped) anchors.delete(anchorId.card(cardId(e.card)));
+        const from = tapped
+          ? { x: tapped.x + tapped.w / 2, y: tapped.y + tapped.h / 2 }
+          : anchors.centre(anchorId.seat(e.seat));
         const to = anchors.centre(anchorId.slot(e.seat));
         if (from && to) {
           bus.emit({
@@ -120,8 +151,11 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
             to,
             duration: flightDuration(Math.hypot(to.x - from.x, to.y - from.y)) * speed,
             speed,
-            faceUp: true,
+            // An opponent's card leaves their hand face down and turns over
+            // in flight, the way a card is actually thrown on the table.
+            faceUp: mine,
             width: slotW(e.seat),
+            fromWidth: tapped ? tapped.w : undefined,
           });
         }
         break;

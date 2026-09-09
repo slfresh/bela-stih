@@ -29,14 +29,18 @@ export type Fx =
       /** Already scaled by the pace. */
       duration: number;
       speed: number;
+      /** Face up throughout (my own card), or face down until `flipAt`. */
       faceUp: boolean;
+      /** Card width at the destination slot. */
       width: number;
+      /** Width where it sets off — the fan's card, for my own — if different. */
+      fromWidth?: number;
     }
   | {
       kind: 'deal';
       from: XY;
-      to: XY[];
-      rounds: number;
+      /** Where each back lands, in the order it is dealt. */
+      backs: XY[];
       /** Gap between one back and the next at speed 1, derived from the beat. */
       stagger: number;
       speed: number;
@@ -95,4 +99,11 @@ export const anchorId = {
   deck: 'deck',
   plaque: 'plaque',
   wallet: 'wallet',
+  /**
+   * The one card just tapped in the fan — set by the card at press time and
+   * deleted by the spawner on its one read. The single exception to "no
+   * per-card anchors": a fan of eight measured anchors would cost a layout
+   * pass per tick, and only the tapped card's rect is ever wanted.
+   */
+  card: (id: string) => `card:${id}`,
 } as const;

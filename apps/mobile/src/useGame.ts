@@ -12,7 +12,7 @@ import { timingsFor } from './anim/director';
 import { useMotionPolicy } from './anim/useMotionPolicy';
 import { BOT_EMOTES } from './emotes';
 import { playSfx } from './audio';
-import { emptyTally, processEvents } from './feedback';
+import { emptyTally, landingSound, processEvents } from './feedback';
 import { loadProfile, saveProfile, type Settings } from './storage';
 
 /** Offline, the person always sits south. */
@@ -73,7 +73,14 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
   // through a ref the director fills in just below.
   const getViewRef = useRef<() => PublicView | null>(() => null);
   const spawn = useMemo(
-    () => makeFxSpawner({ anchors, bus: fxBus, lang, view: () => getViewRef.current() }),
+    () =>
+      makeFxSpawner({
+        anchors,
+        bus: fxBus,
+        lang,
+        mySeat: () => HUMAN,
+        view: () => getViewRef.current(),
+      }),
     [anchors, fxBus, lang],
   );
 
@@ -113,7 +120,7 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     // Anchors re-measure as each batch starts (the measurement lands a frame
     // in; the table bumps them on every reflow as well).
     () => anchors.bump(),
-    { timings: timingsFor(motion) },
+    { timings: timingsFor(motion), onEventEnd: (e) => landingSound(e, HUMAN) },
   );
 
   getViewRef.current = getView;

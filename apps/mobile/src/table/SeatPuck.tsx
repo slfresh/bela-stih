@@ -18,6 +18,7 @@ import type { TeamTone } from './teamColour';
 import { Avatar, hasAvatar } from '../avatars';
 import { garb } from '../deck/palette';
 import { radius, theme } from '../theme';
+import { useCountUp } from '../anim/useCountUp';
 
 /**
  * One seat at the table, the social-poker way: a person, not a text label.
@@ -80,6 +81,8 @@ export const SeatPuck = memo(function SeatPuck({
   reduced?: boolean;
 }) {
   const initial = (name.trim()[0] ?? '?').toUpperCase();
+  // The chip ticks up as the deal lands (0 → 6 → 8) rather than jumping.
+  const shownCards = useCountUp(cards, 300, { reduced });
 
   // The turn ring stays mounted and fades, instead of unmounting on every
   // intermediate view of a drain — which blinked it off and on per event.
@@ -176,9 +179,9 @@ export const SeatPuck = memo(function SeatPuck({
             <Text style={styles.dealerText}>D</Text>
           </View>
         )}
-        {cards > 0 && (
+        {shownCards > 0 && (
           <View style={styles.count}>
-            <Text style={styles.countText}>{cards}</Text>
+            <Text style={styles.countText}>{shownCards}</Text>
           </View>
         )}
       </View>

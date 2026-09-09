@@ -27,6 +27,8 @@ export const FLIGHT_PER_PX = 0.2;
  * little as 70 ms later at half speed.
  */
 export const FLIGHT_SETTLE_MS = 100;
+/** Where along the flight an opponent's card turns face up. */
+export const FLIGHT_FLIP_AT = 0.35;
 
 export function flightDuration(distancePx: number): number {
   return clamp(FLIGHT_MIN_MS + FLIGHT_PER_PX * distancePx, FLIGHT_MIN_MS, FLIGHT_MAX_MS);
@@ -110,7 +112,7 @@ export function motionOf(fx: Fx): number {
     case 'flight':
       return fx.duration;
     case 'deal':
-      return ((fx.rounds * fx.to.length - 1) * fx.stagger + DEAL_FLY_MS + DEAL_HOLD_MS) * fx.speed;
+      return ((fx.backs.length - 1) * fx.stagger + DEAL_FLY_MS + DEAL_HOLD_MS) * fx.speed;
     case 'trickSweep':
       return (SWEEP_HOLD_MS + (fx.cards.length - 1) * SWEEP_STAGGER_MS + SWEEP_FLY_MS) * fx.speed;
     case 'bubble':

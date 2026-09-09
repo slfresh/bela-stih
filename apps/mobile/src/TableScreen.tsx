@@ -19,6 +19,7 @@ import Animated, {
   withSequence,
   withSpring,
   withTiming,
+  LinearTransition,
   ZoomIn,
 } from 'react-native-reanimated';
 import { useCountUp } from './anim/useCountUp';
@@ -34,7 +35,7 @@ import type {
 import { cardId, teamOf } from '@belot/engine';
 import type { Lang } from '@belot/i18n';
 import { levelProgress, type Award, type PlayerProfile } from '@belot/progression';
-import { Anchor, AnchorHost, type AnchorMap } from './anim/AnchorRegistry';
+import { Anchor, AnchorHost, useAnchors, type AnchorMap } from './anim/AnchorRegistry';
 import { EffectsOverlay } from './anim/EffectsOverlay';
 import { REVEAL_MS } from './anim/director';
 import { COIN_CASCADE_COUNT, coinsLandedMs } from './anim/lifetimes';
@@ -1140,11 +1141,34 @@ const FanCard = memo(
     const motion = useAnimatedStyle(() => ({
       transform: [{ translateY: baseY + liftV.value }, { rotateZ: `${rotate}deg` }],
     }));
+    // Where this card is on screen at the moment of the tap: the flight sets
+    // off from here, at this size. One transient rect, read once by the
+    // spawner — never a per-card anchor that re-measures every tick.
+    const anchors = useAnchors();
+    const ref = useRef<View>(null);
+    const press = () => {
+      const node = ref.current;
+      if (!node) {
+        onPress(id);
+        return;
+      }
+      node.measureInWindow((x, y, w, h) => {
+        if (Number.isFinite(x) && w > 0) anchors.set(anchorId.card(id), { x, y, w, h });
+        onPress(id);
+      });
+    };
     return (
-      <Animated.View style={[styles.fanCard, { marginLeft, zIndex }, motion]}>
+      <Animated.View
+        style={[styles.fanCard, { marginLeft, zIndex }, motion]}
+        // The fan closes over a played card and re-sorts after the talon
+        // instead of snapping; a new card turns over as it arrives.
+        layout={reduced ? undefined : LinearTransition.duration(220)}
+        entering={reduced ? undefined : cardEntering}
+      >
         <Pressable
+          ref={ref}
           disabled={disabled}
-          onPress={() => onPress(id)}
+          onPress={press}
           // Vertical only: horizontal slop would overlap the neighbouring
           // card in touch space and make mis-taps MORE likely, not less.
           hitSlop={{ top: 12, bottom: 8 }}
@@ -1196,6 +1220,21 @@ const feltEntering = () => {
     animations: {
       opacity: withTiming(1, { duration: 240 }),
       transform: [{ scale: withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }) }],
+    },
+  };
+};
+
+/** A card arriving in the fan turns over from its back: scaleX 0 → 1, a lift settling. */
+const cardEntering = () => {
+  'worklet';
+  return {
+    initialValues: { opacity: 0, transform: [{ scaleX: 0.2 }, { translateY: 10 }] },
+    animations: {
+      opacity: withTiming(1, { duration: 120 }),
+      transform: [
+        { scaleX: withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) }) },
+        { translateY: withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) }) },
+      ],
     },
   };
 };

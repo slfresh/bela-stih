@@ -49,6 +49,14 @@ export function mergeAward(a: Award | null, b: Award): Award {
   };
 }
 
+/**
+ * The sound of an event's end-of-beat, if it has one — played by the games
+ * from the director's onEventEnd, which never fires for a flushed event.
+ */
+export function landingSound(e: TableEvent, mySeat: Seat): void {
+  if (e.kind === 'cardPlayed' && e.seat !== mySeat) playSfx('play', { rate: 0.95 });
+}
+
 export interface ProcessOptions {
   events: TableEvent[];
   profile: PlayerProfile;
@@ -95,8 +103,13 @@ export function processEvents({
         break;
 
       case 'cardPlayed':
-        sfx('play');
-        if (e.seat === mySeat) buzz(Haptics.ImpactFeedbackStyle.Light);
+        // My own card sounds as it leaves my hand; an opponent's sounds as it
+        // LANDS, which the game plays from the director's end-of-beat
+        // (see `landingSound`) — a face-down card in flight makes no noise.
+        if (e.seat === mySeat) {
+          sfx('play');
+          buzz(Haptics.ImpactFeedbackStyle.Light);
+        }
         break;
 
       case 'trickWon': {

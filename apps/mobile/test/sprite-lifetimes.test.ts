@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { SEATS, type PublicView, type Seat } from '@belot/engine';
+import { cardId, SEATS, type PublicView, type Seat } from '@belot/engine';
 import { Lang } from '@belot/i18n';
-import { Table } from '@belot/table';
+import { Table, type TableEvent } from '@belot/table';
 import type { AnchorMap, AnchorRect } from '../src/anim/AnchorRegistry';
 import { DEFAULT_TIMINGS } from '../src/anim/director';
 import { FxBus, type Fx } from '../src/anim/FxBus';
@@ -46,6 +46,12 @@ function fakeAnchors(withSlots = true): AnchorMap {
       const r = rects.get(k);
       return r ? { x: r.x + r.w / 2, y: r.y + r.h / 2 } : null;
     },
+    set: (k: string, r: AnchorRect) => {
+      rects.set(k, r);
+    },
+    delete: (k: string) => {
+      rects.delete(k);
+    },
   };
   return map as unknown as AnchorMap;
 }
@@ -67,6 +73,7 @@ function spritesOfADeal(speed: number, anchors = fakeAnchors()) {
     anchors,
     bus,
     lang: new Lang('hr'),
+    mySeat: () => 0,
     view: () => ({ ...base, currentTrick: trick }),
   });
   for (const e of events) {
@@ -225,5 +232,75 @@ describe('the turn pulse', () => {
     expect(motionOf(pulse(1))).toBe(PULSE_MS);
     expect(motionOf(pulse(0.5))).toBe(PULSE_MS / 2);
     expect(lifetimeOf(pulse(1))).toBeGreaterThanOrEqual(PULSE_MS);
+  });
+});
+
+describe('a played card sets off from the right place, the right way up', () => {
+  it('flies from the tapped card, at the fan size, and forgets the rect', () => {
+    const anchors = fakeAnchors();
+    const table = new Table({ seed: 7, humanSeats: [] });
+    const mine = table
+      .drainEvents()
+      .find((e): e is Extract<TableEvent, { kind: 'cardPlayed' }> => e.kind === 'cardPlayed' && e.seat === 0);
+    expect(mine).toBeDefined();
+    const key = `card:${cardId(mine!.card)}`;
+    anchors.set(key, { x: 300, y: 500, w: 62, h: 90 });
+    const bus = new FxBus();
+    const out: Fx[] = [];
+    bus.subscribe((fx) => out.push(fx));
+    const spawn = makeFxSpawner({
+      anchors,
+      bus,
+      lang: new Lang('hr'),
+      mySeat: () => 0,
+      view: () => table.view(0 as Seat),
+    });
+    spawn(mine!, 1);
+    const flight = out.find((f) => f.kind === 'flight');
+    expect(flight?.kind).toBe('flight');
+    if (flight?.kind !== 'flight') return;
+    expect(flight.from).toEqual({ x: 331, y: 545 });
+    expect(flight.fromWidth).toBe(62);
+    expect(flight.faceUp).toBe(true);
+    // Read once: the next flight for the same card must not find it.
+    expect(anchors.rect(key)).toBeNull();
+  });
+
+  it("an opponent's card leaves face down from their puck; my own face up", () => {
+    const flights = spritesOfADeal(1).filter((s) => s.fx.kind === 'flight');
+    let up = 0;
+    let down = 0;
+    for (const { fx } of flights) {
+      if (fx.kind !== 'flight') continue;
+      if (fx.faceUp) up += 1;
+      else down += 1;
+      expect(fx.fromWidth).toBeUndefined(); // nothing was tapped in a bot deal
+    }
+    // Seat 0 is "me" to the spawner: its eight cards fly face up, the other
+    // twenty-four face down.
+    expect(up).toBe(8);
+    expect(down).toBe(24);
+  });
+});
+
+describe('the deal', () => {
+  it('spreads my backs across the hand and sends one a round to each opponent', () => {
+    const deals = spritesOfADeal(1).filter((s) => s.fx.kind === 'deal');
+    const [first, talon] = deals.map((d) => d.fx);
+    if (first?.kind !== 'deal' || talon?.kind !== 'deal') throw new Error('no deal');
+    // Two rounds: three opponents once each plus three for me, twice.
+    expect(first.backs.length).toBe(12);
+    // The talon: one each for the opponents, two for me.
+    expect(talon.backs.length).toBe(5);
+    // My backs land at six distinct points across the hand, not on one spot;
+    // an opponent's land on its puck centre (x = 120·seat + 27 in the fake).
+    const puckXs = new Set(SEATS.map((s) => 120 * s + 27));
+    const mine = first.backs.filter((b) => !puckXs.has(b.x));
+    expect(mine.length).toBe(6);
+    expect(new Set(mine.map((b) => b.x)).size).toBe(6);
+    // The talon's two land on the right of the fan, where the new cards go.
+    const talonMine = talon.backs.filter((b) => !puckXs.has(b.x));
+    expect(talonMine.length).toBe(2);
+    expect(Math.min(...talonMine.map((b) => b.x))).toBeGreaterThan(Math.max(...mine.map((b) => b.x)) - 1);
   });
 });

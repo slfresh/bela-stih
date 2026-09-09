@@ -27,6 +27,7 @@ import {
   DEAL_FADE_MS,
   DEAL_FLY_MS,
   DEAL_HOLD_MS,
+  FLIGHT_FLIP_AT,
   PULSE_MS,
   SWEEP_FLIP_AT,
   SWEEP_FLY_MS,
@@ -100,8 +101,7 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
       return (
         <Deal
           from={local(fx.from)}
-          to={fx.to.map(local)}
-          rounds={fx.rounds}
+          backs={fx.backs.map(local)}
           stagger={fx.stagger}
           speed={fx.speed}
           width={fx.width}
@@ -143,6 +143,8 @@ function Flight({
   fx: Extract<FxWithId, { kind: 'flight' }>;
 }) {
   const w = fx.width;
+  // From the fan's size to the slot's, when it set off from the fan.
+  const startScale = fx.fromWidth ? fx.fromWidth / w : 0.92;
   const p = useSharedValue(0);
   useEffect(() => {
     p.value = withTiming(1, { duration: fx.duration, easing: Easing.out(Easing.cubic) });
@@ -152,17 +154,27 @@ function Flight({
     transform: [
       { translateX: from.x + (to.x - from.x) * p.value - w / 2 },
       { translateY: from.y + (to.y - from.y) * p.value - (w * 1.45) / 2 },
-      { scale: 0.92 + 0.08 * p.value },
+      { scale: startScale + (1 - startScale) * p.value },
       { rotateZ: `${(1 - p.value) * -8}deg` },
     ],
+  }));
+  // An opponent's card turns over part-way; mine is face up from the tap.
+  const face = useAnimatedStyle(() => ({
+    opacity: fx.faceUp || p.value >= FLIGHT_FLIP_AT ? 1 : 0,
+  }));
+  const back = useAnimatedStyle(() => ({
+    opacity: fx.faceUp || p.value >= FLIGHT_FLIP_AT ? 0 : 1,
   }));
 
   return (
     <Animated.View style={[styles.sprite, style]}>
-      {fx.faceUp ? (
+      <Animated.View style={face}>
         <CardFace card={fx.card} width={w} style={cosmetics().deckStyle} />
-      ) : (
-        <CardBackFace width={w} variant={cosmetics().cardBack} />
+      </Animated.View>
+      {!fx.faceUp && (
+        <Animated.View style={[StyleSheet.absoluteFill, back]}>
+          <CardBackFace width={w} variant={cosmetics().cardBack} />
+        </Animated.View>
       )}
     </Animated.View>
   );
@@ -172,27 +184,21 @@ function Flight({
 
 function Deal({
   from,
-  to,
-  rounds,
+  backs,
   stagger,
   speed,
   width,
 }: {
   from: XY;
-  to: XY[];
-  rounds: number;
+  backs: XY[];
   stagger: number;
   speed: number;
   width: number;
 }) {
-  const flights = useMemo(() => {
-    const list: { key: number; to: XY; delay: number }[] = [];
-    let i = 0;
-    for (let r = 0; r < rounds; r++) {
-      for (const t of to) list.push({ key: i, to: t, delay: i++ * stagger * speed });
-    }
-    return list;
-  }, [from, to, rounds, stagger, speed]);
+  const flights = useMemo(
+    () => backs.map((to, i) => ({ key: i, to, delay: i * stagger * speed })),
+    [backs, stagger, speed],
+  );
 
   return (
     <>

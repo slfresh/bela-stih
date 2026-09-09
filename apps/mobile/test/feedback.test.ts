@@ -12,7 +12,7 @@ vi.mock('expo-haptics', () => ({
 
 import * as Haptics from 'expo-haptics';
 import { playSfx } from '../src/audio';
-import { emptyTally, processEvents, SILENT_EVENTS } from '../src/feedback';
+import { emptyTally, landingSound, processEvents, SILENT_EVENTS } from '../src/feedback';
 
 /**
  * The event → sound switch, checked against the real event stream rather
@@ -94,10 +94,24 @@ describe('every event kind is scored', () => {
 
   for (const kind of KINDS) {
     it(`${kind}: ${SILENT_EVENTS.includes(kind) ? 'is silent by declaration' : 'makes a sound'}`, () => {
-      run([byKind.get(kind)!]);
+      const e = byKind.get(kind)!;
+      // A card of MINE sounds as it leaves the hand; another seat's sounds as
+      // it lands, from the end-of-beat (tested below).
+      run([e.kind === 'cardPlayed' ? { ...e, seat: MY_SEAT } : e]);
       expect(heard().length > 0).toBe(!SILENT_EVENTS.includes(kind));
     });
   }
+
+  it("an opponent's card is silent as it leaves and sounds as it lands", () => {
+    const e = byKind.get('cardPlayed')! as Extract<TableEvent, { kind: 'cardPlayed' }>;
+    run([{ ...e, seat: ((MY_SEAT + 1) % 4) as typeof e.seat }]);
+    expect(heard()).toEqual([]);
+    landingSound({ ...e, seat: ((MY_SEAT + 1) % 4) as typeof e.seat }, MY_SEAT);
+    expect(heard()).toEqual(['play']);
+    sfx.mockClear();
+    landingSound({ ...e, seat: MY_SEAT }, MY_SEAT);
+    expect(heard()).toEqual([]); // mine already sounded at the tap
+  });
 });
 
 describe('a flushed replay', () => {
