@@ -15,7 +15,7 @@ import { CardBackFace, CardFace, SuitPip } from '../deck';
 import { EmoteFace } from '../emoteArt';
 import { garb } from '../deck/palette';
 import { counters } from '../dev/counters';
-import { radius, signal, theme } from '../theme';
+import { font, radius, signal, theme } from '../theme';
 import type { FxBus, FxWithId, XY } from './FxBus';
 import {
   BACK_SCALE,
@@ -865,7 +865,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { color: garb.ink, fontSize: 11, fontWeight: '800' },
+  badgeText: { color: garb.ink, fontSize: 11, fontFamily: font.bold },
   pulse: {
     width: PULSE_SIZE,
     height: PULSE_SIZE,
@@ -905,7 +905,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stampText: { color: garb.gold, fontSize: 20, fontWeight: '800' },
+  stampText: { color: garb.gold, fontSize: 20, fontFamily: font.bold },
   stampTextDanger: { color: theme.danger },
   stampTextOk: { color: theme.ok },
   stampWide: { width: STAMP_WIDE },
@@ -927,7 +927,7 @@ const styles = StyleSheet.create({
     borderColor: garb.gold,
   },
   stampRingDanger: { borderColor: theme.danger },
-  bubbleText: { color: garb.ink, fontSize: 14, fontWeight: '700', textAlign: 'center' },
+  bubbleText: { color: garb.ink, fontSize: 14, fontFamily: font.bold, textAlign: 'center' },
   bubbleTextGold: { color: garb.ink },
   bubbleTextBig: { fontSize: 28, lineHeight: 34 },
   bubbleTail: {

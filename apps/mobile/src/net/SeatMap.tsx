@@ -8,7 +8,7 @@ import { FeltArt } from '../table/FeltArt';
 import { seatPosition, type Position } from '../table/geometry';
 import { SeatPuck } from '../table/SeatPuck';
 import { isPartner, seatTone } from '../table/teamColour';
-import { ink, radius, space, stroke, surface, theme, type } from '../theme';
+import { font, ink, radius, space, stroke, surface, theme, type } from '../theme';
 import { Chair, Crown } from '../ui/icons';
 import { PressScale } from '../ui/PressScale';
 import type { SeatInfo } from './useNetGame';
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   plateLabel: { color: ink.mid, ...type.caption },
-  plateCode: { color: theme.accent, ...type.h1, fontWeight: '800', letterSpacing: 2 },
+  plateCode: { color: theme.accent, ...type.h1, fontFamily: font.bold, letterSpacing: 2 },
   seat: { position: 'absolute', alignItems: 'center', gap: 2 },
   ghost: {
     alignItems: 'center',

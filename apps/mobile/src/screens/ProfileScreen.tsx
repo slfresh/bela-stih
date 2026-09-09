@@ -4,7 +4,7 @@ import { levelProgress, type PlayerProfile } from '@belot/progression';
 import { Avatar } from '../avatars';
 import { Button } from '../ui/Button';
 import type { Settings } from '../storage';
-import { ink, num, radius, space, stroke, surface, theme, type } from '../theme';
+import { font, ink, num, radius, space, stroke, surface, theme, type } from '../theme';
 import { Panel, ScreenShell } from './common';
 
 /** Identity and the lifetime numbers — everything is already tracked. */
@@ -84,7 +84,7 @@ export function ProfileScreen({
 
 const styles = StyleSheet.create({
   identity: { alignItems: 'center', gap: 10 },
-  name: { color: theme.text, fontSize: 22, fontWeight: '800' },
+  name: { color: theme.text, fontSize: 22, fontFamily: font.bold },
   levelRow: { alignSelf: 'stretch', gap: 6, alignItems: 'center' },
   level: { color: theme.textDim, fontSize: 13 },
   xpTrack: {
@@ -107,9 +107,9 @@ const styles = StyleSheet.create({
     borderColor: stroke.hair,
     paddingVertical: space.md,
   },
-  headlineValue: { color: theme.accent, ...type.display, fontWeight: '900', ...num },
+  headlineValue: { color: theme.accent, ...type.display, fontFamily: font.black, ...num },
   headlineLabel: { color: ink.mid, ...type.caption },
   statRow: { flexDirection: 'row', justifyContent: 'space-between' },
   statLabel: { color: theme.textDim, fontSize: 14 },
-  statValue: { color: theme.text, fontSize: 14, fontWeight: '700' },
+  statValue: { color: theme.text, fontSize: 14, fontFamily: font.bold },
 });

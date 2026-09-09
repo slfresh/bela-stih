@@ -31,7 +31,7 @@ import { useLaggedNumber } from './ui/useLaggedNumber';
 /** Coins a claim sends flying to the wallet. */
 const BONUS_COINS = 8;
 const QUEST_COINS = 6;
-import { ink, radius, space, stroke, surface, theme, type } from './theme';
+import { font, ink, radius, space, stroke, surface, theme, type } from './theme';
 
 /**
  * The lobby, laid out the social-poker way: identity in the header, one hero
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   identityFlex: { flex: 1, minWidth: 0 },
   identity: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexShrink: 1, minWidth: 0 },
   identityText: { flexShrink: 1, minWidth: 0 },
-  headerName: { color: ink.hi, ...type.body, fontWeight: '700' },
+  headerName: { color: ink.hi, ...type.body, fontFamily: font.bold },
   headerLevel: { color: ink.mid, ...type.caption },
   coinChip: {
     flexDirection: 'row',
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.md,
     paddingVertical: 6,
   },
-  coinText: { color: theme.accent, ...type.sub, fontWeight: '800' },
+  coinText: { color: theme.accent, ...type.sub, fontFamily: font.bold },
   gear: { padding: space.xs },
 
   brand: { alignItems: 'center', gap: 2 },
@@ -365,13 +365,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tileText: { flex: 1, minWidth: 0, gap: 1 },
-  tileTitle: { color: ink.hi, ...type.sub, fontWeight: '800' },
+  tileTitle: { color: ink.hi, ...type.sub, fontFamily: font.bold },
   tileSub: { color: ink.mid, ...type.caption },
 
   bonusRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm + 2, minHeight: 44 },
   bonusText: { flex: 1, minWidth: 0, gap: 2 },
   bonusTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 1 },
-  bonusTitle: { color: theme.accent, ...type.h3, fontWeight: '800', flexShrink: 1 },
+  bonusTitle: { color: theme.accent, ...type.h3, fontFamily: font.bold, flexShrink: 1 },
   hint: { color: ink.mid, ...type.caption },
   claimed: { width: 44, height: 36, alignItems: 'center', justifyContent: 'center' },
   rule: { height: 1, backgroundColor: stroke.hair, marginVertical: space.xs },
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
   questRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm + 2, minHeight: 36 },
   questLeft: { flex: 1, gap: 5 },
   questText: { color: ink.hi, ...type.sub },
-  questDone: { color: theme.okInk, fontWeight: '700' },
+  questDone: { color: theme.okInk, fontFamily: font.bold },
   questTrack: {
     height: 5,
     borderRadius: radius.pill,

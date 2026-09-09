@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { garb } from '../deck/palette';
-import { ink, type } from '../theme';
+import { font, ink, type } from '../theme';
 
 /**
  * "Bela Štih": cream and gold. Set in type for now; the brand pass replaces
@@ -19,6 +19,6 @@ export function Wordmark({ size = 34, onLongPress }: { size?: number; onLongPres
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'baseline' },
-  word: { color: ink.hi, fontWeight: '900', letterSpacing: 0.5, ...type.display },
+  word: { color: ink.hi, letterSpacing: 0.5, ...type.display, fontFamily: font.black },
   gold: { color: garb.gold },
 });

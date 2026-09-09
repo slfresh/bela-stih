@@ -20,7 +20,7 @@ import { playSfx } from '../audio';
 import { pattern } from '../haptics';
 import { TableScreen, type SeatMeta } from '../TableScreen';
 import { Button } from '../ui/Button';
-import { radius, theme } from '../theme';
+import { font, radius, theme } from '../theme';
 import { SeatMap } from './SeatMap';
 import type { Settings } from '../storage';
 import { SERVER_URL, useNetGame, type NetGame } from './useNetGame';
@@ -276,7 +276,7 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.feltDeep },
   centre: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: 18, padding: 24 },
-  title: { color: theme.text, fontSize: 20, fontWeight: '700', textAlign: 'center' },
+  title: { color: theme.text, fontSize: 20, fontFamily: font.bold, textAlign: 'center' },
   error: { color: theme.danger, fontSize: 13, textAlign: 'center' },
   panel: {
     alignSelf: 'stretch',

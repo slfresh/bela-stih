@@ -82,7 +82,7 @@ import { Button } from './ui/Button';
 import { Coin, Crown, Star } from './ui/icons';
 import { EmoteFace } from './emoteArt';
 import { PressScale } from './ui/PressScale';
-import { ink, num, radius, space, stroke, surface, team, theme, type } from './theme';
+import { font, ink, num, radius, space, stroke, surface, team, theme, type } from './theme';
 import { isPartner, seatTone } from './table/teamColour';
 
 /**
@@ -1830,7 +1830,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  levelText: { color: theme.accent, fontWeight: '800', fontSize: 12 },
+  levelText: { color: theme.accent, fontFamily: font.bold, fontSize: 12 },
   profileBarCol: { flexDirection: 'column', gap: 6, paddingVertical: 8, alignSelf: 'stretch' },
   xpWrap: { flex: 1 },
   // A column has no width to give the bar, so pin it instead of flexing.
@@ -1843,7 +1843,7 @@ const styles = StyleSheet.create({
   },
   xpFill: { height: 5, backgroundColor: theme.accent },
   coinsRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  coins: { color: theme.accent, fontWeight: '700', fontSize: 14 },
+  coins: { color: theme.accent, fontFamily: font.bold, fontSize: 14 },
 
   status: { color: theme.accent, fontSize: 12, textAlign: 'center' },
 
@@ -1852,7 +1852,7 @@ const styles = StyleSheet.create({
   centreText: { textAlign: 'center' },
   scoreText: {},
   scoreLabel: { color: theme.textDim, fontSize: 13 },
-  scoreValue: { color: theme.text, fontSize: 20, fontWeight: '800' },
+  scoreValue: { color: theme.text, fontSize: 20, fontFamily: font.bold },
   subDim: { color: theme.textDim, fontSize: 12 },
   seriesLine: { color: theme.textDim, fontSize: 13, textAlign: 'center' },
   pillRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
@@ -1866,10 +1866,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 3,
   },
-  pillLabel: { color: theme.textDim, fontSize: 12, fontWeight: '600' },
-  pillValue: { fontSize: 17, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  dealCount: { color: theme.accent, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  dealCountDim: { color: theme.textDim, fontSize: 13, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  pillLabel: { color: theme.textDim, fontSize: 12, fontFamily: font.medium },
+  pillValue: { fontSize: 17, fontFamily: font.bold, fontVariant: ['tabular-nums'] },
+  dealCount: { color: theme.accent, fontSize: 13, fontFamily: font.bold, fontVariant: ['tabular-nums'] },
+  dealCountDim: { color: theme.textDim, fontSize: 13, fontFamily: font.bold, fontVariant: ['tabular-nums'] },
 
   tableArea: { flex: 1 },
   topSeat: { alignItems: 'center' },
@@ -1933,12 +1933,12 @@ const styles = StyleSheet.create({
   miniFan: { flexDirection: 'row', alignItems: 'flex-end', height: 22, paddingHorizontal: 4 },
   miniBack: { width: 13, height: 19 },
   miniBackNext: { marginLeft: -5 },
-  plaqueUndecided: { color: ink.mid, fontSize: 11, fontWeight: '700' },
+  plaqueUndecided: { color: ink.mid, fontSize: 11, fontFamily: font.bold },
   // Portrait: at the left end of the partner's row, which is as tall as a puck.
   plaquePortrait: { position: 'absolute', left: 0, top: 0 },
   // In the rail it is a row in the flow, the width of the rail.
   plaqueRail: { alignSelf: 'stretch', paddingHorizontal: 6, paddingVertical: 3 },
-  plaqueMult: { color: theme.cardFace, fontSize: 12, fontWeight: '800' },
+  plaqueMult: { color: theme.cardFace, fontSize: 12, fontFamily: font.bold },
   plaqueCaller: { color: ink.mid, fontSize: 11 },
 
   slot: { position: 'absolute', width: 46, height: 67 },
@@ -2022,7 +2022,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     gap: 2,
   },
-  promptText: { color: theme.accent, fontWeight: '700', fontSize: 13 },
+  promptText: { color: theme.accent, fontFamily: font.bold, fontSize: 13 },
   promptsReserve: { minHeight: 54, justifyContent: 'flex-end', gap: 8 },
   promptHint: { color: theme.textDim, fontSize: 12 },
 
@@ -2109,20 +2109,20 @@ const styles = StyleSheet.create({
   sheetBandLost: { backgroundColor: team.themDim, borderColor: team.themEdge },
   sheetBandMatch: { backgroundColor: surface.sunk, borderColor: theme.accent },
   sheetBandText: { flex: 1, gap: 2 },
-  sheetTitle: { color: ink.hi, ...type.h3, fontWeight: '800' },
+  sheetTitle: { color: ink.hi, ...type.h3, fontFamily: font.bold },
   sheetTitleStiglja: { color: theme.accent },
   sheetVerdict: { color: ink.mid, ...type.caption },
-  sheetWord: { ...type.h2, fontWeight: '800' },
+  sheetWord: { ...type.h2, fontFamily: font.bold },
   sheetWordMade: { color: theme.okInk },
   sheetWordFailed: { color: theme.dangerInk },
   resultHeads: { flexDirection: 'row', justifyContent: 'flex-end', gap: space.xs, paddingBottom: 2 },
-  resultHead: { ...type.caption, fontWeight: '700', width: 44, textAlign: 'right' },
+  resultHead: { ...type.caption, fontFamily: font.bold, width: 44, textAlign: 'right' },
   resultHeadUs: { color: team.usInk, marginRight: 12 },
   resultHeadThem: { color: team.themInk },
   resultRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 2 },
   resultHero: { paddingVertical: space.xs },
   resultLabel: { color: ink.mid, ...type.body },
-  resultLabelHero: { color: ink.hi, fontWeight: '800' },
+  resultLabelHero: { color: ink.hi, fontFamily: font.bold },
   rule: { height: 1, backgroundColor: stroke.hair, marginVertical: space.xs },
   voidNote: { color: theme.dangerInk, ...type.caption, fontStyle: 'italic' },
   pair: { flexDirection: 'row', alignItems: 'baseline' },
@@ -2130,7 +2130,7 @@ const styles = StyleSheet.create({
   pairUs: { color: team.usInk },
   pairThem: { color: team.themInk },
   pairSep: { color: ink.lo, ...type.body, width: 12, textAlign: 'center' },
-  pairHero: { ...type.h2, fontWeight: '800' },
+  pairHero: { ...type.h2, fontFamily: font.bold },
   sheetAward: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2142,7 +2142,7 @@ const styles = StyleSheet.create({
     backgroundColor: surface.raised,
   },
   sheetAwardCoins: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  sheetAwardText: { color: theme.okInk, fontWeight: '800', ...type.body },
+  sheetAwardText: { color: theme.okInk, ...type.body, fontFamily: font.bold },
   sheetLevel: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2154,7 +2154,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.accent,
   },
-  sheetLevelText: { color: theme.accent, ...type.sub, fontWeight: '800' },
+  sheetLevelText: { color: theme.accent, ...type.sub, fontFamily: font.bold },
   sheetFoot: { gap: space.sm, alignItems: 'center', marginTop: space.sm },
   resultButtons: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginTop: space.sm },
 });

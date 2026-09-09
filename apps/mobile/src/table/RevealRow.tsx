@@ -14,7 +14,7 @@ import { REVEAL_MS } from '../anim/director';
 import type { DeckStyle } from '../cosmetics';
 import { PlayingCard } from '../PlayingCard';
 import { garb } from '../deck/palette';
-import { radius, theme } from '../theme';
+import { font, radius, theme } from '../theme';
 import type { Position } from './geometry';
 import { REVEAL_EXIT_MS, type RevealPhase } from './revealTiming';
 
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   group: { alignItems: 'center', gap: 2 },
-  label: { color: theme.accent, fontSize: 11, fontWeight: '700' },
+  label: { color: theme.accent, fontSize: 11, fontFamily: font.bold },
   cards: { flexDirection: 'row', gap: 2 },
   // The whole width of the row: time, made visible.
   track: {

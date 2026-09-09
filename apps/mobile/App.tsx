@@ -23,6 +23,15 @@ import {
 import { preloadSfx, setMasterVolume, setSoundEnabled } from './src/audio';
 import { AudioUnlockChip } from './src/ui/AudioUnlockChip';
 import { setAndroidHaptics, setHapticsEnabled } from './src/haptics';
+import { useFonts } from 'expo-font';
+
+/** Registered under the names theme.ts's `font` tokens use. */
+const FONTS = {
+  'Rubik-400': require('./assets/fonts/Rubik-400.ttf'),
+  'Rubik-500': require('./assets/fonts/Rubik-500.ttf'),
+  'Rubik-700': require('./assets/fonts/Rubik-700.ttf'),
+  'Rubik-900': require('./assets/fonts/Rubik-900.ttf'),
+};
 import { setCardLocale, setCosmetics, setDeckStyle } from './src/cosmetics';
 import { ErrorBoundary } from './src/ui/ErrorBoundary';
 import { useMotionPolicy } from './src/anim/useMotionPolicy';
@@ -36,6 +45,10 @@ type MenuScreen = 'home' | 'shop' | 'settings' | 'profile';
  * machinery than these transitions justify.
  */
 export default function App() {
+  // The display face. Native waits the few milliseconds the local files
+  // take (a system-font first frame that swaps to Rubik would flicker); the
+  // web paints at once in the fallback stack and swaps when the files arrive.
+  const [fontsLoaded, fontsError] = useFonts(FONTS);
   const [settings, setSettings] = useState(loadSettings);
   const [profile, setProfile] = useState<PlayerProfile>(loadProfile);
   const [launch, setLaunch] = useState<Launch | null>(null);
@@ -193,6 +206,10 @@ export default function App() {
       </Animated.View>
     </ErrorBoundary>
   );
+
+  // Native: the first frame waits for the local font files (milliseconds);
+  // the web never gates first paint on them (see theme.ts's fallback stack).
+  if (Platform.OS !== 'web' && !fontsLoaded && !fontsError) return null;
 
   return (
     <SafeAreaProvider>

@@ -7,7 +7,7 @@ import { resetProfile, type Settings, VOLUME_OPTIONS } from '../storage';
 import { setDeckStyle } from '../cosmetics';
 import { PlayingCard } from '../PlayingCard';
 import { playSfx, setMasterVolume, setSoundEnabled } from '../audio';
-import { ink, radius, space, surface, theme, type } from '../theme';
+import { font, ink, radius, space, surface, theme, type } from '../theme';
 import { APP_VERSION, Panel, ScreenShell } from './common';
 
 const LOCALES: ReadonlyArray<{ id: Settings['locale']; label: string }> = [
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   localeChipOn: { borderColor: theme.accent, backgroundColor: 'rgba(216,165,49,0.14)' },
-  localeText: { color: theme.textDim, fontSize: 13, fontWeight: '600' },
+  localeText: { color: theme.textDim, fontSize: 13, fontFamily: font.medium },
   localeTextOn: { color: theme.accent },
 
   resetButton: {
@@ -315,10 +315,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   resetArmed: { backgroundColor: theme.danger },
-  resetText: { color: theme.text, fontSize: 14, fontWeight: '700' },
+  resetText: { color: theme.text, fontSize: 14, fontFamily: font.bold },
 
   hint: { color: theme.textDim, fontSize: 12, lineHeight: 17, marginTop: 10 },
   previewRow: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginTop: 12 },
-  link: { color: theme.accent, fontSize: 15, fontWeight: '600', textAlign: 'center' },
+  link: { color: theme.accent, fontSize: 15, fontFamily: font.medium, textAlign: 'center' },
   version: { color: theme.textDim, fontSize: 12, textAlign: 'center' },
 });

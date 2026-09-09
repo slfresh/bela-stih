@@ -85,6 +85,17 @@ describe('the design tokens', () => {
     }
   });
 
+  it('set text in a static face, never a synthetic weight', () => {
+    // fontWeight on a custom family is a faux bold on Android and a
+    // double-emboldened face on the web: every weight is one of the four files.
+    for (const f of files) {
+      if (PALETTE_FILES.has(f.rel)) continue;
+      expect(f.text, `${f.rel} sets fontWeight`).not.toMatch(/fontWeight:\s*'/);
+    }
+    const theme = files.find((f) => f.rel === 'theme.ts')!.text;
+    for (const w of ['400', '500', '700', '900']) expect(theme).toContain(`'Rubik-${w}'`);
+  });
+
   it('draw their glyphs instead of typing dingbats', () => {
     for (const f of files) {
       if (PALETTE_FILES.has(f.rel)) continue;

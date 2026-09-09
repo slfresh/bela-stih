@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { onAudioBlocked, unlockAudio } from '../audio';
-import { radius, theme } from '../theme';
+import { font, radius, theme } from '../theme';
 import { PressScale } from './PressScale';
 
 /**
@@ -33,5 +33,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  text: { color: theme.text, fontSize: 13, fontWeight: '700' },
+  text: { color: theme.text, fontSize: 13, fontFamily: font.bold },
 });

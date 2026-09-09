@@ -104,19 +104,36 @@ export const ink = {
 export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 } as const;
 
 /**
+ * The one display face: Rubik (SIL OFL 1.1), as four static weights in
+ * assets/fonts, registered under these names by App's useFonts. Static
+ * weights and never `fontWeight`: a synthetic bold on Android and a
+ * double-emboldened face on the web were the alternative. On the web the
+ * name carries a fallback stack, so text paints in the system's face before
+ * the file arrives and never in the browser's serif default.
+ */
+const WEB = typeof document !== 'undefined';
+const face = (name: string) => (WEB ? `${name}, "Segoe UI", Roboto, Helvetica, Arial, sans-serif` : name);
+export const font = {
+  regular: face('Rubik-400'),
+  medium: face('Rubik-500'),
+  bold: face('Rubik-700'),
+  black: face('Rubik-900'),
+} as const;
+
+/**
  * The type scale. Nothing below `caption`; the deck's own art is the only
  * place smaller text exists, and it is drawn, not set.
  */
 export const type = {
-  display: { fontSize: 34, lineHeight: 40 },
-  h1: { fontSize: 24, lineHeight: 30 },
-  h2: { fontSize: 20, lineHeight: 26 },
-  h3: { fontSize: 17, lineHeight: 22 },
-  body: { fontSize: 15, lineHeight: 20 },
-  sub: { fontSize: 13, lineHeight: 18 },
-  caption: { fontSize: 11, lineHeight: 14 },
+  display: { fontSize: 34, lineHeight: 40, fontFamily: font.black },
+  h1: { fontSize: 24, lineHeight: 30, fontFamily: font.bold },
+  h2: { fontSize: 20, lineHeight: 26, fontFamily: font.bold },
+  h3: { fontSize: 17, lineHeight: 22, fontFamily: font.bold },
+  body: { fontSize: 15, lineHeight: 20, fontFamily: font.regular },
+  sub: { fontSize: 13, lineHeight: 18, fontFamily: font.regular },
+  caption: { fontSize: 11, lineHeight: 14, fontFamily: font.regular },
   /** The landscape rails: a step under `sub`, still readable at arm's length. */
-  rail: { fontSize: 12, lineHeight: 16 },
+  rail: { fontSize: 12, lineHeight: 16, fontFamily: font.regular },
 } as const;
 
 /** Every score, count and price: digits that do not jitter as they change. */

@@ -5,7 +5,7 @@ import { SUITS } from '@belot/engine';
 import { cardLang, cosmetics, room } from './cosmetics';
 import { CardBackFace, CardFace } from './deck';
 import { Button } from './ui/Button';
-import { theme } from './theme';
+import { font, theme } from './theme';
 
 /**
  * The whole deck on one screen — the review harness for card art.
@@ -57,7 +57,7 @@ export function DeckGallery({ onExit }: { onExit: () => void }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.feltDeep },
   scroll: { padding: 14, gap: 10, paddingBottom: 40 },
-  title: { color: theme.text, fontSize: 24, fontWeight: '800', textAlign: 'center' },
+  title: { color: theme.text, fontSize: 24, fontFamily: font.bold, textAlign: 'center' },
   suitLabel: { color: theme.textDim, fontSize: 14, marginTop: 8, marginBottom: 4 },
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   card: { marginBottom: 4 },

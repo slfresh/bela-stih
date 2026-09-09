@@ -16,7 +16,7 @@ import { TurnRing } from '../anim/TurnRing';
 import type { TeamTone } from './teamColour';
 import { Avatar, hasAvatar } from '../avatars';
 import { garb } from '../deck/palette';
-import { radius, stroke, theme } from '../theme';
+import { font, radius, stroke, theme } from '../theme';
 import { Robot } from '../ui/icons';
 import { useCountUp } from '../anim/useCountUp';
 
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: garb.goldDark,
   },
-  dealerText: { color: garb.ink, fontSize: 11, fontWeight: '800' },
+  dealerText: { color: garb.ink, fontSize: 11, fontFamily: font.bold },
   teamRing: { position: 'absolute', borderWidth: 2 },
   partnerMark: { position: 'absolute', bottom: -2, left: -2 },
   partnerMarkText: { color: theme.textDim, fontSize: 11 },
@@ -268,7 +268,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  countText: { color: theme.text, fontSize: 11, fontWeight: '700' },
+  countText: { color: theme.text, fontSize: 11, fontFamily: font.bold },
   // Two tiny backs, stacked, with the count: the side's pile of tricks.
   pile: { position: 'absolute', top: -4, right: -6, width: 22, height: 18 },
   pileCard: {
@@ -283,6 +283,6 @@ const styles = StyleSheet.create({
     borderColor: stroke.lit,
   },
   pileCardBack: { left: 2, top: 0 },
-  pileText: { position: 'absolute', right: 0, top: 3, color: theme.text, fontSize: 11, fontWeight: '800' },
+  pileText: { position: 'absolute', right: 0, top: 3, color: theme.text, fontSize: 11, fontFamily: font.bold },
 
 });

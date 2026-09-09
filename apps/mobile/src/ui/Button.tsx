@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import type { Sfx } from '../audio';
 import { garb } from '../deck/palette';
-import { radius, surface, theme } from '../theme';
+import { font, radius, surface, theme } from '../theme';
 import { PressScale } from './PressScale';
 
 /**
@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
   bela: { backgroundColor: theme.accent, borderColor: theme.accent },
   compact: { paddingHorizontal: 8, paddingVertical: 7 },
   withIcon: { flexDirection: 'row', gap: 6 },
-  text: { color: theme.text, fontSize: 14, fontWeight: '600' },
+  text: { color: theme.text, fontSize: 14, fontFamily: font.medium },
   // Cream on gold is 1.9:1; the deck's ink on gold is 6.7:1.
   textBela: { color: garb.ink },
   textCompact: { fontSize: 11, textAlign: 'center' },

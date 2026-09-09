@@ -1,6 +1,6 @@
 import { Component, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { radius, theme } from '../theme';
+import { font, radius, theme } from '../theme';
 
 /**
  * The screen a render error lands on.
@@ -76,9 +76,9 @@ const styles = StyleSheet.create({
     padding: 28,
     gap: 10,
   },
-  mark: { color: theme.text, fontSize: 30, fontWeight: '800', marginBottom: 14 },
+  mark: { color: theme.text, fontSize: 30, fontFamily: font.bold, marginBottom: 14 },
   markAccent: { color: theme.accent },
-  title: { color: theme.text, fontSize: 18, fontWeight: '700', textAlign: 'center' },
+  title: { color: theme.text, fontSize: 18, fontFamily: font.bold, textAlign: 'center' },
   body: { color: theme.textDim, fontSize: 14, textAlign: 'center', maxWidth: 320 },
   btn: {
     marginTop: 14,
@@ -90,5 +90,5 @@ const styles = StyleSheet.create({
     borderColor: theme.accent,
   },
   pressed: { opacity: 0.7, transform: [{ translateY: 2 }] },
-  btnText: { color: theme.text, fontSize: 15, fontWeight: '700' },
+  btnText: { color: theme.text, fontSize: 15, fontFamily: font.bold },
 });

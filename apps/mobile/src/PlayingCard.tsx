@@ -4,7 +4,7 @@ import type { Card } from '@belot/engine';
 import type { DeckStyle } from './cosmetics';
 import { CardBackFace, CardFace } from './deck';
 import { garb } from './deck/palette';
-import { radius, theme } from './theme';
+import { font, radius, theme } from './theme';
 
 /**
  * A card in the layout. The artwork itself lives in `./deck`; this only handles
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  captionText: { color: garb.ink, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  captionText: { color: garb.ink, fontSize: 11, fontFamily: font.bold, letterSpacing: 0.5 },
   dimmed: { opacity: 0.6 },
   dimmedTint: {
     position: 'absolute',

@@ -3,7 +3,7 @@ import { PressScale } from '../ui/PressScale';
 import type { Lang } from '@belot/i18n';
 import { EMOTES, emoteText } from '../emotes';
 import { EmoteFace, hasEmoteFace } from '../emoteArt';
-import { radius, theme } from '../theme';
+import { font, radius, theme } from '../theme';
 
 /**
  * The emote bar.
@@ -93,5 +93,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
-  phrase: { color: theme.text, fontSize: 13, fontWeight: '700' },
+  phrase: { color: theme.text, fontSize: 13, fontFamily: font.bold },
 });

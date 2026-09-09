@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { PressScale } from '../ui/PressScale';
 import { Chevron } from '../ui/icons';
-import { theme } from '../theme';
+import { font, theme } from '../theme';
 
 export { Panel } from '../ui/Panel';
 
@@ -47,6 +47,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   backButton: { width: 44, alignItems: 'flex-start', justifyContent: 'center' },
-  title: { flex: 1, color: theme.text, fontSize: 20, fontWeight: '800', textAlign: 'center' },
+  title: { flex: 1, color: theme.text, fontSize: 20, fontFamily: font.bold, textAlign: 'center' },
   scroll: { padding: 16, gap: 14, paddingBottom: 40 },
 });

@@ -20,7 +20,7 @@ import { FeltArt } from '../table/FeltArt';
 import { CardBackFace } from '../deck';
 import { playSfx } from '../audio';
 import { pattern } from '../haptics';
-import { radius, space, stroke, surface, theme } from '../theme';
+import { font, radius, space, stroke, surface, theme } from '../theme';
 import { Panel, ScreenShell } from './common';
 
 /**
@@ -140,7 +140,7 @@ export function ShopScreen({
 const styles = StyleSheet.create({
   walletRow: { alignItems: 'center', gap: 4 },
   walletCoins: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  wallet: { color: theme.accent, fontSize: 24, fontWeight: '800' },
+  wallet: { color: theme.accent, fontSize: 24, fontFamily: font.bold },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 3, flexWrap: 'wrap', justifyContent: 'center' },
   walletHint: { color: theme.textDim, fontSize: 11, textAlign: 'center' },
 
@@ -184,9 +184,9 @@ const styles = StyleSheet.create({
   },
   preview: { height: 56, justifyContent: 'center' },
   feltSwatch: { width: 46, height: 46 },
-  itemName: { color: theme.text, fontSize: 12, fontWeight: '600' },
-  price: { color: theme.accent, fontSize: 12, fontWeight: '700' },
-  select: { color: theme.text, fontSize: 12, fontWeight: '700' },
-  selected: { color: theme.accent, fontSize: 12, fontWeight: '800' },
+  itemName: { color: theme.text, fontSize: 12, fontFamily: font.medium },
+  price: { color: theme.accent, fontSize: 12, fontFamily: font.bold },
+  select: { color: theme.text, fontSize: 12, fontFamily: font.bold },
+  selected: { color: theme.accent, fontSize: 12, fontFamily: font.bold },
   locked: { color: theme.textDim, fontSize: 12 },
 });

@@ -4,7 +4,7 @@ import { Avatar, AVATAR_IDS } from '../avatars';
 import type { RoomStyle } from '../cosmetics';
 import { garb } from '../deck/palette';
 import { FeltArt } from '../table/FeltArt';
-import { radius, space, stroke, type } from '../theme';
+import { font, radius, space, stroke, type } from '../theme';
 import { PressScale } from '../ui/PressScale';
 import { guestsFor } from './guests';
 
@@ -78,5 +78,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.xxxl,
     paddingVertical: space.md,
   },
-  label: { color: garb.ink, ...type.h1, fontWeight: '900', letterSpacing: 3 },
+  label: { color: garb.ink, ...type.h1, fontFamily: font.black, letterSpacing: 3 },
 });
