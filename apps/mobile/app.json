@@ -2,7 +2,7 @@
   "expo": {
     "name": "Bela Štih",
     "slug": "bela-stih",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "scheme": "belastih",
     "orientation": "default",
     "icon": "./assets/icon.png",
@@ -43,7 +43,7 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
-      "versionCode": 15
+      "versionCode": 16
     },
     "web": {
       "favicon": "./assets/favicon.png",
