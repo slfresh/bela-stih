@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { PressScale } from '../ui/PressScale';
-import { Coin } from '../ui/icons';
+import { Check, Coin, Lock } from '../ui/icons';
+import { garb } from '../deck/palette';
 import type { Lang } from '@belot/i18n';
 import {
   canBuy,
@@ -19,7 +20,7 @@ import { FeltArt } from '../table/FeltArt';
 import { CardBackFace } from '../deck';
 import { playSfx } from '../audio';
 import { pattern } from '../haptics';
-import { radius, theme } from '../theme';
+import { radius, space, stroke, surface, theme } from '../theme';
 import { Panel, ScreenShell } from './common';
 
 /**
@@ -92,15 +93,24 @@ export function ShopScreen({
                 ) : owned ? (
                   <Text style={styles.select}>{ui.select}</Text>
                 ) : locked ? (
-                  <View style={styles.priceRow}>
-                    <Text style={styles.locked}>{c.price}</Text>
-                    <Coin size={11} />
-                    <Text style={styles.locked}> · {ui.needsLevel(c.requiredLevel)}</Text>
-                  </View>
+                  <Text style={styles.locked} numberOfLines={1}>
+                    {ui.needsLevel(c.requiredLevel)}
+                  </Text>
                 ) : (
                   <View style={styles.priceRow}>
                     <Text style={[styles.price, !affordable && styles.locked]}>{c.price}</Text>
                     <Coin size={11} />
+                  </View>
+                )}
+                {/* the chosen one wears a tick; a locked one a lock over its preview */}
+                {selected && (
+                  <View style={styles.badge}>
+                    <Check size={14} colour={garb.ink} />
+                  </View>
+                )}
+                {locked && (
+                  <View style={styles.lockOverlay} pointerEvents="none">
+                    <Lock size={18} />
                   </View>
                 )}
               </PressScale>
@@ -137,16 +147,41 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   item: {
     width: '30.5%',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: radius.panel,
+    // A fixed height: a row of tiles is a row, whatever each one has to say.
+    height: 122,
+    backgroundColor: surface.raised,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: theme.line,
-    paddingVertical: 10,
+    borderColor: stroke.hair,
+    paddingVertical: space.sm + 2,
     paddingHorizontal: 6,
     alignItems: 'center',
+    justifyContent: 'space-between',
+    overflow: 'hidden',
     gap: 6,
   },
   itemSelected: { borderColor: theme.accent },
+  badge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: theme.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lockOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 66,
+    backgroundColor: surface.scrim,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   preview: { height: 56, justifyContent: 'center' },
   feltSwatch: { width: 46, height: 46 },
   itemName: { color: theme.text, fontSize: 12, fontWeight: '600' },

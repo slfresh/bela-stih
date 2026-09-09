@@ -19,9 +19,12 @@ export function Button({
   sound = 'tap',
   style,
   icon,
+  accessibilityLabel,
 }: {
   label: string;
   onPress: () => void;
+  /** What a screen reader says when the visible label is abbreviated (the rail's suit buttons). */
+  accessibilityLabel?: string;
   tone?: 'plain' | 'strong' | 'bela';
   /** Landscape rail size: caption type, tighter padding, a label wraps at most once. */
   compact?: boolean;
@@ -42,6 +45,7 @@ export function Button({
       onPress={onPress}
       sound={sound}
       pressSound={sound === null ? null : 'press'}
+      accessibilityLabel={accessibilityLabel ?? label}
       style={[styles.btn, toneStyle, compact && styles.compact, icon !== undefined && styles.withIcon, style]}
     >
       {icon}

@@ -115,6 +115,8 @@ export const type = {
   body: { fontSize: 15, lineHeight: 20 },
   sub: { fontSize: 13, lineHeight: 18 },
   caption: { fontSize: 11, lineHeight: 14 },
+  /** The landscape rails: a step under `sub`, still readable at arm's length. */
+  rail: { fontSize: 12, lineHeight: 16 },
 } as const;
 
 /** Every score, count and price: digits that do not jitter as they change. */

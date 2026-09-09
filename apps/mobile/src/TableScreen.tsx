@@ -1565,7 +1565,9 @@ function NonCardActions({
         return (
           <Button
             key={i}
-            label={lang.action(a)}
+            // In the rail the pip says "zovi": the label is the suit alone.
+            label={compact && a.type === 'BID_CALL' ? lang.suitName(a.suit) : lang.action(a)}
+            accessibilityLabel={lang.action(a)}
             tone={isBela ? 'bela' : strong ? 'strong' : 'plain'}
             compact={compact}
             // The suit itself on a trump-call button, not only its name.
@@ -2011,11 +2013,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   callChipGold: { borderWidth: 1, borderColor: theme.accent },
-  callChipText: { color: theme.text, fontSize: 12 },
+  callChipText: { color: theme.text, ...type.rail },
   // The rail is 96dp wide: caption type and tighter padding. Never a line
   // cap — the chip is the only record of what a side called, and the rank
   // at the end of it is the tie-break.
-  callChipTextLand: { fontSize: 11 },
+  callChipTextLand: { ...type.caption },
   callChipLand: { paddingHorizontal: 8, alignSelf: 'stretch' },
 
 

@@ -4,7 +4,7 @@ import { levelProgress, type PlayerProfile } from '@belot/progression';
 import { Avatar } from '../avatars';
 import { Button } from '../ui/Button';
 import type { Settings } from '../storage';
-import { radius, theme } from '../theme';
+import { ink, num, radius, space, stroke, surface, theme, type } from '../theme';
 import { Panel, ScreenShell } from './common';
 
 /** Identity and the lifetime numbers — everything is already tracked. */
@@ -54,6 +54,22 @@ export function ProfileScreen({
         <Button label={ui.shop} tone="plain" onPress={onOpenShop} />
       </View>
 
+      {/* the two numbers that matter, as headlines */}
+      <View style={styles.headlines}>
+        <View style={styles.headline}>
+          <Text style={styles.headlineValue}>{profile.matchesWon}</Text>
+          <Text style={styles.headlineLabel} numberOfLines={1}>
+            {ui.statMatches}
+          </Text>
+        </View>
+        <View style={styles.headline}>
+          <Text style={styles.headlineValue}>{winRate}</Text>
+          <Text style={styles.headlineLabel} numberOfLines={1}>
+            {ui.statWinRate}
+          </Text>
+        </View>
+      </View>
+
       <Panel>
         {stats.map(([label, value]) => (
           <View key={label} style={styles.statRow}>
@@ -80,6 +96,19 @@ const styles = StyleSheet.create({
   },
   xpFill: { height: 8, borderRadius: radius.pill, backgroundColor: theme.accent },
 
+  headlines: { flexDirection: 'row', gap: space.sm + 2 },
+  headline: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: surface.panel,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: stroke.hair,
+    paddingVertical: space.md,
+  },
+  headlineValue: { color: theme.accent, ...type.display, fontWeight: '900', ...num },
+  headlineLabel: { color: ink.mid, ...type.caption },
   statRow: { flexDirection: 'row', justifyContent: 'space-between' },
   statLabel: { color: theme.textDim, fontSize: 14 },
   statValue: { color: theme.text, fontSize: 14, fontWeight: '700' },

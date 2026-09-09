@@ -115,6 +115,16 @@ export function Star({ size = 16, colour = garb.gold }: IconProps) {
   );
 }
 
+/** Not yet: a level to reach first. */
+export function Lock({ size = 16, colour = ink.hi }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Rect x={5} y={10} width={14} height={11} rx={2.5} fill={colour} />
+      <Path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke={colour} strokeWidth={2.4} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 /** A presence dot: connected or not. */
 export function Dot({ size = 8, on = true }: { size?: number; on?: boolean }) {
   return (

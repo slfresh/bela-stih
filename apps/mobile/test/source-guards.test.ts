@@ -194,6 +194,12 @@ describe('anchors measure on demand', () => {
     expect(map).toMatch(/anchored=\{false\}/);
   });
 
+  it('the rail\'s trump buttons say the suit alone and read the full call aloud', () => {
+    const t = src('TableScreen.tsx');
+    expect(t).toMatch(/label=\{compact && a\.type === 'BID_CALL' \? lang\.suitName\(a\.suit\) : lang\.action\(a\)\}/);
+    expect(t).toMatch(/accessibilityLabel=\{lang\.action\(a\)\}/);
+  });
+
   it('the home screen no longer re-renders on every scroll event', () => {
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/setScrollTick/);
