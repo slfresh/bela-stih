@@ -93,7 +93,8 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
         }, 700);
       }
     },
-    // Anchors re-measure once per batch, just before its first sprite.
+    // Anchors re-measure as each batch starts (the measurement lands a frame
+    // in; the table bumps them on every reflow as well).
     () => anchors.bump(),
   );
 

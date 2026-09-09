@@ -224,11 +224,10 @@ export function useNetGame(settings: Settings) {
         directorRef.current = new Director(msg.seat, msg.view, {
           onView: setView,
           onEventStart: (e, f, s) => onEventRef.current(e, f, s),
-          onIdle: (i) => {
-            // Anchors re-measure once per batch, just before its first sprite.
-            if (!i) anchors.bump();
-            setIdle(i);
-          },
+          onIdle: setIdle,
+          // Anchors re-measure as each batch starts; the table bumps them too
+          // whenever a row around the felt comes or goes.
+          onBatch: () => anchors.bump(),
         });
         setView(msg.view);
       }

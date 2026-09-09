@@ -338,7 +338,12 @@ export function TableScreen(props: TableScreenProps) {
       </View>
     </View>
   ) : (
-    <View style={[styles.tableArea, { minHeight: m.feltMinHeight, maxHeight: m.feltMaxHeight }]}>
+    <View
+      style={[styles.tableArea, { minHeight: m.feltMinHeight, maxHeight: m.feltMaxHeight }]}
+      // A row above the felt moves the whole area without resizing the felt
+      // inside it; this frame changes even when feltInner's does not.
+      onLayout={() => anchors.bump()}
+    >
       <View style={styles.topSeat}>{puck(at('top'))}</View>
       <View style={styles.midRow}>
         <View style={styles.sideSeat}>{puck(at('left'))}</View>
@@ -545,6 +550,25 @@ export function TableScreen(props: TableScreenProps) {
       </Text>
     </View>
   ) : null;
+
+  // Every row that comes and goes around the felt — status line, zvanja
+  // chips, the reveal, the award, a prompt — moves the pucks, slots and hand
+  // without any of them changing their own layout (and on the web onLayout
+  // is a ResizeObserver: a pure move fires nothing). Re-measure after each
+  // such commit, so the next sprite flies to where things are now.
+  const reflowKey = [
+    status ? 1 : 0,
+    calls ? 1 : 0,
+    revealRow ? 1 : 0,
+    awardRow ? 1 : 0,
+    declaring ? 1 : 0,
+    !settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0 ? 1 : 0,
+    arranging ? 1 : 0,
+    !settled && view.canAnnounceBela && !hardMode ? 1 : 0,
+  ].join('');
+  useEffect(() => {
+    anchors.bump();
+  }, [anchors, reflowKey]);
 
   const resultSheet = settled ? (
     <View style={styles.resultBackdrop} pointerEvents="box-none">

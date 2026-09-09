@@ -24,7 +24,17 @@ export type Fx =
   | { kind: 'flight'; card: Card; from: XY; to: XY; duration: number; faceUp: boolean; width: number }
   | { kind: 'deal'; from: XY; to: XY[]; rounds: number; speed: number; width: number }
   | { kind: 'sweep'; from: XY[]; to: XY; speed: number; width: number }
-  | { kind: 'bubble'; at: XY; text: string; tone: 'plain' | 'gold'; duration: number; big?: boolean }
+  | {
+      kind: 'bubble';
+      at: XY;
+      text: string;
+      tone: 'plain' | 'gold';
+      /** Total time on screen at this speed; the hold is what gives. */
+      duration: number;
+      /** The director's pace, so the pop and fade shrink with the beat. */
+      speed: number;
+      big?: boolean;
+    }
   | { kind: 'coins'; from: XY; to: XY; count: number }
   | { kind: 'confetti' };
 

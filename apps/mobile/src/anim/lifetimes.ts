@@ -20,7 +20,13 @@ export const DEAL_FADE_MS = 120;
 export const SWEEP_STAGGER_MS = 40;
 export const SWEEP_FLY_MS = 320;
 
+/** A bubble pops in, settles, holds for whatever is left of its duration, then fades. */
+export const BUBBLE_IN_MS = 160;
+export const BUBBLE_SETTLE_IN_MS = 90;
+export const BUBBLE_OUT_MS = 180;
 export const BUBBLE_SETTLE_MS = 250;
+/** The least a bubble can be on screen for at speed 1: in, settle and out with no hold. */
+export const BUBBLE_MIN_MS = BUBBLE_IN_MS + BUBBLE_SETTLE_IN_MS + BUBBLE_OUT_MS;
 
 export const COIN_STAGGER_MS = 50;
 export const COIN_FLY_MS = 550;
@@ -46,7 +52,9 @@ export function motionOf(fx: Fx): number {
     case 'sweep':
       return (fx.from.length * SWEEP_STAGGER_MS + SWEEP_FLY_MS) * fx.speed;
     case 'bubble':
-      return fx.duration;
+      // The pop and the fade are fixed choreography scaled by speed; a short
+      // beat cannot cut them, only the hold in between.
+      return Math.max(fx.duration, BUBBLE_MIN_MS * fx.speed);
     case 'coins':
       return fx.count * COIN_STAGGER_MS + COIN_FLY_MS;
     case 'confetti':
@@ -68,7 +76,7 @@ export function lifetimeOf(fx: Fx): number {
     case 'sweep':
       return (fx.from.length * SWEEP_STAGGER_MS + SWEEP_FLY_MS) * fx.speed + 100;
     case 'bubble':
-      return fx.duration + BUBBLE_SETTLE_MS;
+      return motionOf(fx) + BUBBLE_SETTLE_MS;
     case 'coins':
       return fx.count * COIN_STAGGER_MS + COIN_FLY_MS + 250;
     case 'confetti':

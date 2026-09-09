@@ -31,7 +31,7 @@ describe('the card tree stays memoised', () => {
     const cardFace = src('deck/CardFace.tsx');
     expect(cardFace).not.toMatch(/cosmetics\(\)/);
     const playingCard = src('PlayingCard.tsx');
-    const body = playingCard.slice(playingCard.indexOf('export const PlayingCard'), playingCard.indexOf('export function CardBack'));
+    const body = playingCard.slice(playingCard.indexOf('export const PlayingCard'));
     expect(body).not.toMatch(/cosmetics\(\)/);
   });
 });
@@ -41,6 +41,15 @@ describe('anchors measure on demand', () => {
     const registry = src('anim/AnchorRegistry.tsx');
     expect(registry).not.toMatch(/useEffect\(measure\)/);
     expect(registry).toMatch(/map\.subscribe\(measure\)/);
+  });
+
+  it('the table re-measures whenever a row around the felt comes or goes', () => {
+    // A status line, a chip row or a prompt moves every anchor without any
+    // of them changing its own layout; on the web onLayout cannot see a move.
+    const table = src('TableScreen.tsx');
+    expect(table).toMatch(/const reflowKey = \[/);
+    expect(table).toMatch(/\}, \[anchors, reflowKey\]\);/);
+    expect(table.match(/onLayout=\{\(\) => anchors\.bump\(\)\}/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 
   it('the home screen no longer re-renders on every scroll event', () => {

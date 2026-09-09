@@ -39,6 +39,13 @@ export interface DirectorCallbacks {
    */
   onEventStart(e: TableEvent, flushed: boolean, speed: number): void;
   onIdle(idle: boolean): void;
+  /**
+   * Fired as each non-empty batch begins animating — queued batches included,
+   * which `onIdle(false)` never covers. The table re-measures its anchors on
+   * it; the measurement lands a frame later, so it serves the batch's second
+   * sprite onward.
+   */
+  onBatch?(): void;
 }
 
 export interface EventTiming {
@@ -221,6 +228,7 @@ export class Director {
         this.finishBatch();
         return;
       }
+      this.cb.onBatch?.();
     }
 
     const { batch, nextIndex } = this.current;

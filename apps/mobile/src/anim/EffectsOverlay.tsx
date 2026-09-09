@@ -15,6 +15,10 @@ import { counters } from '../dev/counters';
 import { radius, theme } from '../theme';
 import type { FxBus, FxWithId, XY } from './FxBus';
 import {
+  BUBBLE_IN_MS,
+  BUBBLE_MIN_MS,
+  BUBBLE_OUT_MS,
+  BUBBLE_SETTLE_IN_MS,
   COIN_FLY_MS,
   COIN_STAGGER_MS,
   CONFETTI_MS,
@@ -100,7 +104,14 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
       return <Sweep from={fx.from.map(local)} to={local(fx.to)} speed={fx.speed} width={fx.width} />;
     case 'bubble':
       return (
-        <Bubble at={local(fx.at)} text={fx.text} tone={fx.tone} duration={fx.duration} big={fx.big} />
+        <Bubble
+          at={local(fx.at)}
+          text={fx.text}
+          tone={fx.tone}
+          duration={fx.duration}
+          speed={fx.speed}
+          big={fx.big}
+        />
       );
     case 'coins':
       return <Coins from={local(fx.from)} to={local(fx.to)} count={fx.count} />;
@@ -288,24 +299,31 @@ function Bubble({
   text,
   tone,
   duration,
+  speed,
   big = false,
 }: {
   at: XY;
   text: string;
   tone: 'plain' | 'gold';
   duration: number;
+  speed: number;
   /** Emoji emotes read at reaction size, not caption size. */
   big?: boolean;
 }) {
   const { width: screenW } = useWindowDimensions();
   const s = useSharedValue(0);
   useEffect(() => {
+    // Pop in, settle, hold whatever the duration leaves, fade — each leg
+    // scaled by the director's pace, as `motionOf` promises.
     s.value = withSequence(
-      withTiming(1.06, { duration: 160, easing: Easing.out(Easing.back(2)) }),
-      withTiming(1, { duration: 90 }),
-      withDelay(Math.max(0, duration - 450), withTiming(0, { duration: 180 })),
+      withTiming(1.06, { duration: BUBBLE_IN_MS * speed, easing: Easing.out(Easing.back(2)) }),
+      withTiming(1, { duration: BUBBLE_SETTLE_IN_MS * speed }),
+      withDelay(
+        Math.max(0, duration - BUBBLE_MIN_MS * speed),
+        withTiming(0, { duration: BUBBLE_OUT_MS * speed }),
+      ),
     );
-  }, [s, duration]);
+  }, [s, duration, speed]);
 
   const style = useAnimatedStyle(() => ({
     opacity: Math.min(1, s.value * 2),

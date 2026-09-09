@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useFrameCallback, useSharedValue } from 'react-native-reanimated';
 import { counters, lastTickCost } from './counters';
@@ -21,13 +21,19 @@ export function PerfProbe() {
   const over16 = useSharedValue(0);
   const over33 = useSharedValue(0);
 
-  useFrameCallback((info) => {
-    'worklet';
-    const dt = info.timeSincePreviousFrame ?? 0;
-    frames.value += 1;
-    if (dt > 16.7) over16.value += 1;
-    if (dt > 33) over33.value += 1;
-  });
+  // One identity: reanimated re-registers the frame callback whenever this
+  // changes, and the probe re-renders once a second.
+  const onFrame = useCallback(
+    (info: { timeSincePreviousFrame: number | null }) => {
+      'worklet';
+      const dt = info.timeSincePreviousFrame ?? 0;
+      frames.value += 1;
+      if (dt > 16.7) over16.value += 1;
+      if (dt > 33) over33.value += 1;
+    },
+    [frames, over16, over33],
+  );
+  useFrameCallback(onFrame);
 
   useEffect(() => {
     const id = setInterval(() => {

@@ -5,7 +5,7 @@ import { Table } from '@belot/table';
 import type { AnchorMap, AnchorRect } from '../src/anim/AnchorRegistry';
 import { DEFAULT_TIMINGS } from '../src/anim/director';
 import { FxBus, type Fx } from '../src/anim/FxBus';
-import { FALLBACK_CARD_W, lifetimeOf, motionOf } from '../src/anim/lifetimes';
+import { BUBBLE_MIN_MS, FALLBACK_CARD_W, lifetimeOf, motionOf } from '../src/anim/lifetimes';
 import { makeFxSpawner } from '../src/table/fx';
 
 /**
@@ -69,6 +69,11 @@ describe('sprites fit the beats they fill', () => {
         expect(motionOf(fx), `${fx.kind} spawned by ${kind}`).toBeLessThanOrEqual(budget);
         // The fade tail may run into the gap, but never past the sprite's own motion.
         expect(lifetimeOf(fx)).toBeGreaterThanOrEqual(motionOf(fx));
+        // A bubble's pop and fade are fixed choreography that only scales with
+        // speed; motionOf must own up to them, or a short beat passes vacuously.
+        if (fx.kind === 'bubble') {
+          expect(motionOf(fx)).toBeGreaterThanOrEqual(BUBBLE_MIN_MS * speed);
+        }
       }
     });
   }
@@ -110,5 +115,20 @@ describe('sprites are sized from the table, not from a constant', () => {
   it('spawns nothing when an anchor is missing, and never throws', () => {
     const none = { rect: () => null, centre: () => null } as unknown as AnchorMap;
     expect(spritesOfADeal(1, none)).toEqual([]);
+  });
+});
+
+describe('a bubble owns up to its fixed choreography', () => {
+  const bubble = (duration: number, speed: number) =>
+    ({ kind: 'bubble', at: { x: 0, y: 0 }, text: 'x', tone: 'plain', duration, speed }) as const;
+
+  it('never reports less than the pop and the fade, scaled by speed', () => {
+    // The overlay's pop-in and fade-out are fixed legs; a beat shorter than
+    // both cannot cut them, only the hold. Reporting the bare duration here is
+    // what let a 310ms budget pass a 430ms bubble.
+    expect(motionOf(bubble(100, 1))).toBe(BUBBLE_MIN_MS);
+    expect(motionOf(bubble(100, 0.5))).toBe(BUBBLE_MIN_MS * 0.5);
+    expect(motionOf(bubble(900, 1))).toBe(900);
+    expect(lifetimeOf(bubble(100, 1))).toBeGreaterThan(BUBBLE_MIN_MS);
   });
 });

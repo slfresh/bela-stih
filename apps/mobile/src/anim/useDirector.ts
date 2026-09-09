@@ -18,11 +18,11 @@ export function useDirector(
   initialView: PublicView,
   onEvent: (e: TableEvent, flushed: boolean, speed: number) => void,
   /**
-   * Called the moment a batch starts animating, before its first sprite spawns.
-   * The table uses it to re-measure its anchors — the one place drift between a
-   * layout and the sprites flying to it could actually be seen.
+   * Called as each batch starts animating, queued ones included. The table
+   * uses it to re-measure its anchors; the measurement lands a frame later,
+   * so it freshens everything from the batch's second sprite on.
    */
-  onBusy?: () => void,
+  onBatch?: () => void,
 ) {
   const [view, setView] = useState<PublicView>(initialView);
   const [idle, setIdle] = useState(true);
@@ -31,8 +31,8 @@ export function useDirector(
   // the latest ones without being rebuilt.
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
-  const onBusyRef = useRef(onBusy);
-  onBusyRef.current = onBusy;
+  const onBatchRef = useRef(onBatch);
+  onBatchRef.current = onBatch;
 
   const directorRef = useRef<Director | null>(null);
   if (directorRef.current === null) {
@@ -42,10 +42,8 @@ export function useDirector(
         setView(v);
       },
       onEventStart: (e, flushed, speed) => onEventRef.current(e, flushed, speed),
-      onIdle: (i) => {
-        if (!i) onBusyRef.current?.();
-        setIdle(i);
-      },
+      onIdle: setIdle,
+      onBatch: () => onBatchRef.current?.(),
     });
   }
 

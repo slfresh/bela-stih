@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { Card } from '@belot/engine';
-import { cosmetics, type DeckStyle } from './cosmetics';
+import type { DeckStyle } from './cosmetics';
 import { CardBackFace, CardFace } from './deck';
 import { radius, theme } from './theme';
 
@@ -53,11 +53,6 @@ export const PlayingCard = memo(
     a.highlight === b.highlight &&
     a.selected === b.selected,
 );
-
-/** A face-down card, for seats whose hands we are not allowed to see. */
-export function CardBack({ size = 'sm' }: { size?: CardSize }) {
-  return <CardBackFace width={WIDTHS[size]} variant={cosmetics().cardBack} />;
-}
 
 const styles = StyleSheet.create({
   highlight: {

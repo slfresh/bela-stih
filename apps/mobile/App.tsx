@@ -89,6 +89,7 @@ export default function App() {
   // this, Android's back button drops straight to whatever was behind and
   // takes the deal in progress with it — and people press back constantly.
   useEffect(() => {
+    if (Platform.OS === 'web') return; // no hardware back; the API only logs an error there
     if (launch === null && menu === 'home') return; // at the root, let back close the app
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (launch !== null) exitToHome();

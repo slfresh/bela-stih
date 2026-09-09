@@ -22,10 +22,12 @@ interface Capture {
   idleFlips: boolean[];
   /** The pace each ANIMATED event was started at. */
   speeds: number[];
+  /** How many batches began animating. */
+  batches: number;
 }
 
 function makeDirector(initial: PublicView, timings = ZERO_TIMINGS) {
-  const cap: Capture = { views: [], started: [], flushed: [], idleFlips: [], speeds: [] };
+  const cap: Capture = { views: [], started: [], flushed: [], idleFlips: [], speeds: [], batches: 0 };
   const d = new Director(SEAT, initial, {
     onView: (v) => cap.views.push(v),
     onEventStart: (e, f, speed) => {
@@ -36,6 +38,9 @@ function makeDirector(initial: PublicView, timings = ZERO_TIMINGS) {
       }
     },
     onIdle: (i) => cap.idleFlips.push(i),
+    onBatch: () => {
+      cap.batches += 1;
+    },
   }, timings);
   return { d, cap };
 }
@@ -236,5 +241,25 @@ describe('fast-forward and compression', () => {
     expect(cap2.speeds.slice(duo).every((s) => s === 0.5)).toBe(true);
     d.dispose();
     d2.dispose();
+  });
+
+  it('announces every batch as it starts animating, queued ones included', () => {
+    // onIdle(false) fires once per idle→busy transition; a batch dequeued
+    // while the director is still busy gets no such flip, and the table's
+    // anchors used to go un-measured for the whole of it.
+    const a = oneDealBatch(41);
+    const b = oneDealBatch(42).batch;
+    const { d, cap } = makeDirector(a.initial, DEFAULT_TIMINGS);
+    d.enqueue(a.batch);
+    expect(cap.batches).toBe(1);
+    d.enqueue(b); // waits behind a
+    expect(cap.batches).toBe(1);
+    vi.advanceTimersByTime(120_000); // a finishes; b is dequeued directly
+    expect(cap.batches).toBe(2);
+    expect(cap.idleFlips.filter((i) => !i)).toHaveLength(1);
+    // An empty batch has nothing to animate and announces nothing.
+    d.enqueue({ events: [], finalView: b.finalView });
+    expect(cap.batches).toBe(2);
+    d.dispose();
   });
 });

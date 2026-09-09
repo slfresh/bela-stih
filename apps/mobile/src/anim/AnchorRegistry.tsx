@@ -21,8 +21,15 @@ import { counters } from '../dev/counters';
  * director committing twice per event, that was ~20 `measureInWindow` calls
  * per tick, and on the web ten forced layouts per render. Now the map is told
  * when something reflowed (`bump()`), coalesces that into one pass on the next
- * frame, and the director bumps once as each batch starts animating — the one
- * moment a stale rect could actually be seen.
+ * frame, and the director bumps as each batch starts animating.
+ *
+ * Who bumps: the felt and the table area on their own layout, and the table
+ * screen after any commit that mounts or removes a row around the felt — a
+ * status line, a zvanja chip, a prompt. Those rows move every anchor without
+ * changing any anchor's own layout, and on the web `onLayout` is a
+ * ResizeObserver, so a pure move fires nothing at all. The bump lands a frame
+ * later, which means the FIRST sprite of a batch reads the rects as last
+ * measured; the row bumps are what keep those at most a frame old.
  */
 
 export interface AnchorRect {
@@ -124,7 +131,11 @@ export function Anchor({
   const measure = useCallback(() => {
     counters.measure++;
     ref.current?.measureInWindow((x, y, w, h) => {
-      if (Number.isFinite(x) && Number.isFinite(y)) map.set(id, { x, y, w, h });
+      // A view that has left the tree measures as all zeros on the web (the
+      // read lands a task later, by which time a claimed button is gone);
+      // keep the last real rect rather than aim a sprite at the corner.
+      const detached = x === 0 && y === 0 && w === 0 && h === 0;
+      if (Number.isFinite(x) && Number.isFinite(y) && !detached) map.set(id, { x, y, w, h });
     });
   }, [map, id]);
   // Once on mount, then whenever the map is told the table reflowed.

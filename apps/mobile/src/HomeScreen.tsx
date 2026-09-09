@@ -76,10 +76,16 @@ export function HomeScreen({
   // Scrolling moves the anchors without any layout changing, so ask them to
   // re-measure at the one moment it matters: just before the coins fly. This
   // used to be a re-render of the whole lobby on every scroll event instead.
-  const cascade = (fromKey: string, count: number) => {
+  //
+  // Measure BEFORE applying the claim: the claim unmounts the very button the
+  // coins fly from, and on the web a measure lands a task later — after that
+  // commit — so measuring afterwards read a detached node as (0, 0) and the
+  // coins set off from the corner of the window.
+  const claim = (fromKey: string, count: number, apply: () => void) => {
     void anchors.refresh().then(() => {
       const from = anchors.centre(fromKey);
       const to = anchors.centre(anchorId.wallet);
+      apply();
       if (from && to) fxBus.emit({ kind: 'coins', from, to, count });
     });
   };
@@ -88,8 +94,7 @@ export function HomeScreen({
     const r = claimDaily(profile, today);
     if (r.coins > 0) {
       playSfx('coin');
-      onProfileChange(r.profile);
-      cascade('bonus', 8);
+      claim('bonus', 8, () => onProfileChange(r.profile));
     }
   };
 
@@ -97,8 +102,7 @@ export function HomeScreen({
     const r = claimQuest(profile, index);
     if (r.coins > 0) {
       playSfx('coin');
-      onProfileChange(r.profile);
-      cascade(`quest:${index}`, 6);
+      claim(`quest:${index}`, 6, () => onProfileChange(r.profile));
     }
   };
 

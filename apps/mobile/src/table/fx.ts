@@ -35,6 +35,7 @@ export function spawnEmote(
     text,
     tone: 'plain',
     duration: 1800,
+    speed: 1,
     big: isGlyphEmote(id),
   });
 }
@@ -61,7 +62,7 @@ export function makeFxSpawner(opts: { anchors: AnchorMap; bus: FxBus; lang: Lang
     speed: number,
   ) => {
     const at = anchors.centre(anchorId.seat(seat));
-    if (at) bus.emit({ kind: 'bubble', at, text, tone, duration: duration * speed });
+    if (at) bus.emit({ kind: 'bubble', at, text, tone, duration: duration * speed, speed });
   };
 
   return (e: TableEvent, speed = 1): void => {
