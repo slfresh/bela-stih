@@ -48,7 +48,10 @@ for round in $(seq 1 "$MAX"); do
   # button ("Natrag" offline, "Napusti stol" online — it was "Izađi" until the
   # offline screen took the shared back label, and this anchor went stale
   # without the script noticing: it just reported "no hand on screen").
-  # Lifted (playable) cards sit higher, edge cards lower — three rows cover all.
+  # Lifted (playable) cards sit higher, edge cards lower — three rows cover
+  # all. The offsets are measured UP from the leave button, and M5 put two
+  # rows between it and the fan (the emote strip and the actions row), so the
+  # old -70..-230 landed on the emotes and sent a bot a thumbs-up every round.
   base=$(ui_bounds "Natrag" 2>/dev/null | awk '{print $2}')
   [ -z "$base" ] && base=$(ui_bounds "Napusti stol" 2>/dev/null | awk '{print $2}')
   if [ -z "$base" ]; then
@@ -56,8 +59,9 @@ for round in $(seq 1 "$MAX"); do
     sleep 1
     continue
   fi
-  for dy in -230 -150 -70; do
-    for x in 140 227 314 401 488 575 662 749 836 923 1010; do
+  for dy in -470 -390 -310; do
+    # From the fan's left edge: M5 stands the player's own puck to its left.
+    for x in 300 374 448 522 596 670 744 818 892 966 1040; do
       "$ADB" shell input tap "$x" $((base + dy))
     done
   done
