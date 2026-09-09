@@ -131,6 +131,11 @@ export function useNetGame(settings: Settings) {
   const [matchNumber, setMatchNumber] = useState(0);
   const [rematchVotes, setRematchVotes] = useState<Seat[]>([]);
   const [banner, setBanner] = useState<Award | null>(null);
+  // Whose move is being animated; cleared when the director goes idle.
+  const [spotlight, setSpotlight] = useState<Seat | null>(null);
+  useEffect(() => {
+    if (idle) setSpotlight(null);
+  }, [idle]);
   const [lastDealResult, setLastDealResult] = useState<DealScoreResult | null>(null);
   const [winnerTeam, setWinnerTeam] = useState<TeamId | null>(null);
   const [turnDeadline, setTurnDeadline] = useState<number | null>(null);
@@ -173,7 +178,10 @@ export function useNetGame(settings: Settings) {
         saveProfile(r.profile);
       }
       if (r.award) setBanner(r.award);
-      if (!flushed) spawn(e, speed);
+      if (!flushed) {
+        spawn(e, speed);
+        if ('seat' in e) setSpotlight(e.seat);
+      }
     },
     [spawn],
   );
@@ -450,6 +458,7 @@ export function useNetGame(settings: Settings) {
     profile: profileRef.current,
     banner,
     lastDealResult,
+    spotlight,
     matchOver: view?.phase === 'MATCH_OVER',
     winnerTeam,
     turnDeadline,

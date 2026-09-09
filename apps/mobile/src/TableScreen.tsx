@@ -9,6 +9,13 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import type {
   Action,
   Card,
@@ -46,6 +53,9 @@ import { cosmetics, feltStyle, type DeckStyle } from './cosmetics';
 import { PerfProbe } from './dev/PerfProbe';
 import { EmoteStrip } from './table/EmoteStrip';
 import { useTurnCues } from './table/useTurnCues';
+import { TurnBeacon } from './table/TurnBeacon';
+import { FeltGlow } from './table/FeltGlow';
+import { useReduceMotion } from './anim/useReduceMotion';
 import { PlayingCard } from './PlayingCard';
 import { SuitPip } from './deck';
 import { playSfx, type Sfx } from './audio';
@@ -92,6 +102,8 @@ export interface TableScreenProps {
   /** Per-seat presence; falls back to relative labels for missing entries. */
   seatMeta?: (SeatMeta | null)[];
   status?: string | null;
+  /** The seat whose move is being animated right now — presentation only, never `toAct`. */
+  spotlightSeat?: Seat | null;
   anchors: AnchorMap;
   fxBus: FxBus;
   /** Absolute epoch deadline for the active seat's ring; null = soft ring. */
@@ -124,7 +136,7 @@ export interface TableScreenProps {
 export function TableScreen(props: TableScreenProps) {
   const {
     mySeat, lang, view, options, myTurn, settled, matchOver, lastDealResult,
-    matchScores, winnerTeam, profile, banner, seatMeta, status, anchors, fxBus,
+    matchScores, winnerTeam, profile, banner, seatMeta, status, anchors, fxBus, spotlightSeat = null,
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
     hardMode = false, series, askedRematch, waitingFor, onRematch, onForceRematch,
     handSort = 'auto', onHandSortChange, confirmPlay = 'ambiguous',
@@ -135,6 +147,7 @@ export function TableScreen(props: TableScreenProps) {
   // three columns when the phone is turned on its side.
   const m = useTableMetrics();
   const land = m.orientation === 'landscape';
+  const reduced = useReduceMotion();
 
   // The trick cross is sized against the felt it is drawn in, not the window:
   // a landscape felt is a short wide ellipse and window-sized cards hang out
@@ -214,8 +227,17 @@ export function TableScreen(props: TableScreenProps) {
       size={m.puck}
       deadline={turnDeadline}
       totalMs={turnTotalMs}
+      thinking={spotlightSeat === s}
+      reduced={reduced}
     />
   );
+
+  // A ring of light bursts from the hand as a cue lands — the sound's
+  // visible twin, fired from the very same edge so it can never be held on.
+  const pulseHand = useCallback(() => {
+    const at = anchors.centre(anchorId.seat(mySeat));
+    if (at) fxBus.emit({ kind: 'pulse', at, speed: 1 });
+  }, [anchors, fxBus, mySeat]);
 
   // Your turn, your call, your clock running out.
   useTurnCues({
@@ -224,6 +246,8 @@ export function TableScreen(props: TableScreenProps) {
     canDeclare: view.canDeclare === true,
     deadline: turnDeadline,
     settled,
+    onTurnEdge: pulseHand,
+    onDeclareEdge: pulseHand,
   });
 
   const trump = view.context.trumpSuit;
@@ -313,21 +337,26 @@ export function TableScreen(props: TableScreenProps) {
           anchors.bump();
         }}
       >
+        {/* the light on the baize, under everything else on it */}
+        <FeltGlow width={feltBox.w} height={feltBox.h} felt={baize.felt} />
+
         {/* the deck: cards are dealt from the felt's centre, whichever way up
             the table is — the plaque moves to the left lobe in landscape. */}
         <Anchor id={anchorId.deck} style={styles.deckAnchor} />
 
         {/* centre plaque: trump + multiplier */}
-        <Anchor id={anchorId.plaque} style={[styles.plaque, land && styles.plaqueLand]}>
+        <Anchor id={anchorId.plaque} style={[styles.plaque, land ? styles.plaqueLand : styles.plaquePortrait]}>
           {trump ? (
             <>
-              <SuitPip suit={trump} size={26} />
+              <SuitPip suit={trump} size={30} />
               {view.multiplier > 1 && <Text style={styles.plaqueMult}>×{view.multiplier}</Text>}
             </>
           ) : (
             <Text style={styles.subDim}>{lang.s.trumpUndecided}</Text>
           )}
-          {view.callerSeat !== null && (
+          {/* Sideways the plate is a single row along the bottom rim; the caller
+              line would double its height into the bottom slot. */}
+          {!land && view.callerSeat !== null && (
             <Text style={styles.plaqueCaller}>{lang.s.calledBy(meta(view.callerSeat).name)}</Text>
           )}
         </Anchor>
@@ -445,7 +474,7 @@ export function TableScreen(props: TableScreenProps) {
     ) : null;
 
   // Prompts that need words, not just buttons.
-  const prompts = (
+  const promptRows = (
     <>
       {declaring && (
         <View style={styles.promptRow}>
@@ -486,10 +515,18 @@ export function TableScreen(props: TableScreenProps) {
       )}
     </>
   );
+  // Portrait reserves the row's height, so a prompt coming or going never
+  // moves the hand under your thumb; a compact phone cannot spare it, and
+  // landscape flexes the felt instead.
+  const prompts =
+    !land && !m.compact ? <View style={styles.promptsReserve}>{promptRows}</View> : promptRows;
 
   // My hand, fanned; the seat anchor for sprites sits underneath it.
   const handBlock = (
     <Anchor id={anchorId.seat(mySeat)} style={[styles.handArea, { minHeight: m.handMinHeight }]}>
+      {/* "Your turn", as light along the top of the hand. On the RENDERED
+          turn prop: it fades across a drain and is never held on. */}
+      {myTurn && !settled && <TurnBeacon reduced={reduced} />}
       <Pressable
         onLongPress={() => {
           playSfx('tap');
@@ -512,6 +549,8 @@ export function TableScreen(props: TableScreenProps) {
           onToggleMark={toggleMark}
           confirmPlay={confirmPlay}
           deckStyle={deck}
+          reduced={reduced}
+          armCaption={lang.s.ui.play}
         />
       </Pressable>
       {/* online, my own turn is on the clock too — show it */}
@@ -836,6 +875,8 @@ function Hand({
   onSwap,
   confirmPlay = 'ambiguous',
   deckStyle,
+  reduced = false,
+  armCaption,
 }: {
   cards: Card[];
   options: Action[];
@@ -856,6 +897,10 @@ function Hand({
   onToggleMark?: (id: string) => void;
   confirmPlay?: ConfirmPlay;
   deckStyle: DeckStyle;
+  /** Reduce-motion: the cards step up instead of springing. */
+  reduced?: boolean;
+  /** What the second tap on an armed card does, on the card. */
+  armCaption?: string;
 }) {
   const plays = options.filter(
     (a): a is Extract<Action, { type: 'PLAY_CARD' }> => a.type === 'PLAY_CARD',
@@ -956,6 +1001,7 @@ function Hand({
         const illegalNow = !freePlay && !arranging && enabled && inPlayMoment && !playable;
         const isArmed = marking ? marked.includes(id) : arranging ? arrangePick === id : armed === id;
         const off = i - mid;
+        const picking = arranging || marking;
         return (
           <FanCard
             key={id}
@@ -964,15 +1010,18 @@ function Hand({
             width={fit.cardW}
             deckStyle={deckStyle}
             marginLeft={i === 0 ? 0 : fit.overlap}
-            translateY={
-              Math.pow(Math.abs(off), 1.6) * 3.2 * fit.scale -
-              (playable || ((arranging || marking) && isArmed) ? lift : 0)
-            }
+            baseY={Math.pow(Math.abs(off), 1.6) * 3.2 * fit.scale}
+            lift={playable || (picking && isArmed) ? -lift : 0}
+            // The lift ripples out from the middle of the fan, 30 ms a card.
+            rippleDelay={Math.abs(off) * 30}
+            reduced={reduced}
             rotate={off * 4.5}
             zIndex={i}
             dimmed={illegalNow}
             highlight={playable && !freePlay && !isArmed}
-            selected={isArmed}
+            selected={picking && isArmed}
+            armed={!picking && isArmed}
+            caption={armCaption}
             disabled={!playable && !arranging && !marking}
             onPress={onPressCard}
           />
@@ -995,12 +1044,17 @@ const FanCard = memo(
     width,
     deckStyle,
     marginLeft,
-    translateY,
+    baseY,
+    lift,
+    rippleDelay,
+    reduced,
     rotate,
     zIndex,
     dimmed,
     highlight,
     selected,
+    armed,
+    caption,
     disabled,
     onPress,
   }: {
@@ -1009,40 +1063,56 @@ const FanCard = memo(
     width: number;
     deckStyle: DeckStyle;
     marginLeft: number;
-    translateY: number;
+    /** The fan's arc: where this card sits when it is not lifted. */
+    baseY: number;
+    /** Lifted (negative) or resting; animated, never jumped. */
+    lift: number;
+    /** How long after the middle card this one moves — the ripple. */
+    rippleDelay: number;
+    reduced: boolean;
     rotate: number;
     zIndex: number;
     dimmed: boolean;
     highlight: boolean;
     selected: boolean;
+    armed: boolean;
+    caption?: string;
     disabled: boolean;
     onPress: (id: string) => void;
   }) {
+    // The lift used to be a 14 px jump on the frame the turn arrived. Now the
+    // playable cards spring up from the middle outward; a card that stops
+    // being playable settles back the same way.
+    const liftV = useSharedValue(lift);
+    useEffect(() => {
+      liftV.value = reduced
+        ? withTiming(lift, { duration: 120 })
+        : withDelay(rippleDelay, withSpring(lift, { damping: 16, stiffness: 190, mass: 0.6 }));
+    }, [liftV, lift, rippleDelay, reduced]);
+    const motion = useAnimatedStyle(() => ({
+      transform: [{ translateY: baseY + liftV.value }, { rotateZ: `${rotate}deg` }],
+    }));
     return (
-      <Pressable
-        disabled={disabled}
-        onPress={() => onPress(id)}
-        // Vertical only: horizontal slop would overlap the neighbouring
-        // card in touch space and make mis-taps MORE likely, not less.
-        hitSlop={{ top: 12, bottom: 8 }}
-        style={[
-          styles.fanCard,
-          {
-            marginLeft,
-            transform: [{ translateY }, { rotateZ: `${rotate}deg` }],
-            zIndex,
-          },
-        ]}
-      >
-        <PlayingCard
-          card={card}
-          width={width}
-          deckStyle={deckStyle}
-          dimmed={dimmed}
-          highlight={highlight}
-          selected={selected}
-        />
-      </Pressable>
+      <Animated.View style={[styles.fanCard, { marginLeft, zIndex }, motion]}>
+        <Pressable
+          disabled={disabled}
+          onPress={() => onPress(id)}
+          // Vertical only: horizontal slop would overlap the neighbouring
+          // card in touch space and make mis-taps MORE likely, not less.
+          hitSlop={{ top: 12, bottom: 8 }}
+        >
+          <PlayingCard
+            card={card}
+            width={width}
+            deckStyle={deckStyle}
+            dimmed={dimmed}
+            highlight={highlight}
+            selected={selected}
+            armed={armed}
+            caption={caption}
+          />
+        </Pressable>
+      </Animated.View>
     );
   },
   (a, b) =>
@@ -1052,12 +1122,17 @@ const FanCard = memo(
     a.width === b.width &&
     a.deckStyle === b.deckStyle &&
     a.marginLeft === b.marginLeft &&
-    a.translateY === b.translateY &&
+    a.baseY === b.baseY &&
+    a.lift === b.lift &&
+    a.rippleDelay === b.rippleDelay &&
+    a.reduced === b.reduced &&
     a.rotate === b.rotate &&
     a.zIndex === b.zIndex &&
     a.dimmed === b.dimmed &&
     a.highlight === b.highlight &&
     a.selected === b.selected &&
+    a.armed === b.armed &&
+    a.caption === b.caption &&
     a.disabled === b.disabled &&
     a.onPress === b.onPress,
 );
@@ -1344,12 +1419,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   // Sits in the felt's upper lobe, clear of the trick cross at the centre.
-  plaque: { position: 'absolute', top: '5%', alignSelf: 'center', alignItems: 'center', gap: 1 },
-  // Landscape parks the partner on the top rim, so the plaque moves to the
-  // left lobe, which the trick cross never reaches.
-  plaqueLand: { top: '38%', left: '4%', alignSelf: 'flex-start' },
+  // A plate on the baize, not a pip floating in space.
+  plaque: {
+    position: 'absolute',
+    alignSelf: 'center',
+    alignItems: 'center',
+    gap: 1,
+    backgroundColor: 'rgba(0,0,0,0.28)',
+    borderRadius: radius.panel,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  // Sits in the felt's upper lobe, clear of the trick cross at the centre.
+  plaquePortrait: { top: '5%' },
+  // Landscape parks the partner on the top rim and the trick cross fills the
+  // felt's width, so the plate lies along the bottom rim as one row.
+  plaqueLand: { bottom: '2%', flexDirection: 'row', gap: 6, paddingVertical: 3 },
   plaqueMult: { color: theme.accent, fontSize: 13, fontWeight: '800' },
-  plaqueCaller: { color: theme.textDim, fontSize: 10 },
+  plaqueCaller: { color: theme.textDim, fontSize: 12 },
 
   slot: { position: 'absolute', width: 46, height: 67 },
   slotGhost: {
@@ -1418,6 +1507,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   promptText: { color: theme.accent, fontWeight: '700', fontSize: 13 },
+  promptsReserve: { minHeight: 54, justifyContent: 'flex-end', gap: 8 },
   promptHint: { color: theme.textDim, fontSize: 12 },
 
   handArea: { justifyContent: 'flex-end' },

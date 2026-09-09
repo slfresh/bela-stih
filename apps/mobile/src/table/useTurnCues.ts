@@ -32,28 +32,60 @@ export interface TurnCues {
   deadline: number | null;
   /** True once the deal is over: the table is settling, stay quiet. */
   settled: boolean;
+  /** The cue's visible twin, fired from the very same edge as the sound. */
+  onTurnEdge?: () => void;
+  onDeclareEdge?: () => void;
 }
 
-export function useTurnCues({ myTurn, mustDeclare, canDeclare, deadline, settled }: TurnCues): void {
-  const wasMyTurn = useRef(false);
-  const wasDeclaring = useRef(false);
+export interface CueState {
+  myTurn: boolean;
+  declaring: boolean;
+}
+export type CueEdge = 'declare' | 'turn' | null;
+
+/**
+ * Which cue this commit fires, given the last one. Pure, so the one property
+ * the whole hook rests on — a drain of suppressed views yields exactly one
+ * edge, at the terminal sync — can be checked without a renderer. Both edges
+ * usually land in the same commit; the call is the more specific message, so
+ * it wins and the turn cue stays silent. A settled table stays quiet.
+ */
+export function cueEdge(was: CueState, now: CueState, settled: boolean): CueEdge {
+  if (settled) return null;
+  if (now.declaring && !was.declaring) return 'declare';
+  if (now.myTurn && !was.myTurn) return 'turn';
+  return null;
+}
+
+export function useTurnCues({
+  myTurn,
+  mustDeclare,
+  canDeclare,
+  deadline,
+  settled,
+  onTurnEdge,
+  onDeclareEdge,
+}: TurnCues): void {
+  const was = useRef<CueState>({ myTurn: false, declaring: false });
+  // Fresh callbacks each render; the effect must not re-run for them.
+  const onTurnEdgeRef = useRef(onTurnEdge);
+  onTurnEdgeRef.current = onTurnEdge;
+  const onDeclareEdgeRef = useRef(onDeclareEdge);
+  onDeclareEdgeRef.current = onDeclareEdge;
 
   useEffect(() => {
-    const declaring = mustDeclare || canDeclare;
-    const turnEdge = myTurn && !wasMyTurn.current;
-    const declareEdge = declaring && !wasDeclaring.current;
-    wasMyTurn.current = myTurn;
-    wasDeclaring.current = declaring;
+    const now = { myTurn, declaring: mustDeclare || canDeclare };
+    const edge = cueEdge(was.current, now, settled);
+    was.current = now;
 
-    if (settled) return;
-    // Both edges usually land in the same commit; the call is the more
-    // specific message, so it wins and the turn cue stays silent.
-    if (declareEdge) {
+    if (edge === 'declare') {
       doubleBuzz('medium');
       playSfx('zvanje');
-    } else if (turnEdge) {
+      onDeclareEdgeRef.current?.();
+    } else if (edge === 'turn') {
       buzz('select');
       playSfx('turn');
+      onTurnEdgeRef.current?.();
     }
   }, [myTurn, mustDeclare, canDeclare, settled]);
 

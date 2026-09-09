@@ -2,10 +2,13 @@ import { useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import Animated, {
+  cancelAnimation,
   Easing,
   interpolateColor,
   useAnimatedProps,
   useSharedValue,
+  withRepeat,
+  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { theme } from '../theme';
@@ -19,8 +22,9 @@ import { theme } from '../theme';
  * than resumed from wherever the animation froze. One shared value animates on
  * the UI thread; no per-frame JS.
  *
- * `deadline == null` renders a static soft ring (offline "your move" pulse
- * territory — nothing auto-plays there, so no countdown is promised).
+ * `deadline == null` renders a soft full ring with no countdown promised
+ * (offline, nothing auto-plays); with `breathe` it breathes slowly in gold,
+ * so a waiting seat reads as waiting rather than as a static badge.
  */
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -29,14 +33,35 @@ export function TurnRing({
   size,
   deadline,
   totalMs = 30_000,
+  breathe = false,
 }: {
   size: number;
   deadline: number | null;
   totalMs?: number;
+  /** Without a deadline: a slow gold breath instead of a static ring. */
+  breathe?: boolean;
 }) {
   const r = (size - 6) / 2;
   const c = 2 * Math.PI * r;
   const progress = useSharedValue(deadline === null ? 1 : 0);
+  const breath = useSharedValue(1);
+
+  useEffect(() => {
+    if (deadline === null && breathe) {
+      breath.value = withRepeat(
+        withSequence(
+          withTiming(0.55, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+          withTiming(1, { duration: 900, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        false,
+      );
+    } else {
+      cancelAnimation(breath);
+      breath.value = withTiming(1, { duration: 150 });
+    }
+    return () => cancelAnimation(breath);
+  }, [breath, deadline, breathe]);
 
   useEffect(() => {
     if (deadline === null) {
@@ -50,6 +75,7 @@ export function TurnRing({
 
   const animatedProps = useAnimatedProps(() => ({
     strokeDashoffset: c * (1 - progress.value),
+    opacity: breath.value,
     stroke: interpolateColor(
       progress.value,
       [0, 0.18, 0.45, 1],

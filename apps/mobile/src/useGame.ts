@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { HARD_CONFIG_OVERRIDES, type Action, type PublicView, type Seat } from '@belot/engine';
 import { Table } from '@belot/table';
 import type { BotLevel } from '@belot/bots';
@@ -59,6 +59,10 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
   const profileRef = useRef<PlayerProfile>(loadProfile());
   const tally = useRef(emptyTally());
   const [banner, setBanner] = useState<Award | null>(null);
+  // Whose move is being animated: the seat of every event as it starts,
+  // cleared when the director goes idle. Presentation only — `toAct` on the
+  // intermediate views stays null, and the turn cues never see this.
+  const [spotlight, setSpotlight] = useState<Seat | null>(null);
 
   const anchors = useMemo(() => new AnchorMap(), []);
   const fxBus = useMemo(() => new FxBus(), []);
@@ -88,7 +92,10 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
         saveProfile(r.profile);
       }
       if (r.award) setBanner(r.award);
-      if (!flushed) spawn(e, speed);
+      if (!flushed) {
+        spawn(e, speed);
+        if ('seat' in e) setSpotlight(e.seat);
+      }
       // A bot that takes a trick occasionally gloats — the table talks back.
       if (!flushed && e.kind === 'trickWon' && e.seat !== HUMAN && Math.random() < 0.22) {
         const id = BOT_EMOTES[Math.floor(Math.random() * BOT_EMOTES.length)]!;
@@ -105,6 +112,9 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
   );
 
   getViewRef.current = getView;
+  useEffect(() => {
+    if (idle) setSpotlight(null);
+  }, [idle]);
 
   // The constructor already ran the bots to the first human decision; feed that
   // opening batch (deal animation included) into the director exactly once.
@@ -162,6 +172,7 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     fxBus,
     lang,
     myTurn: idle && view.toAct === HUMAN,
+    spotlight,
     submit,
     nextDeal,
     emote,

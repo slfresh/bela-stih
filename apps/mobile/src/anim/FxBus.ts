@@ -62,6 +62,8 @@ export type Fx =
       speed: number;
       big?: boolean;
     }
+  /** A ring of light bursting from a point — the "your turn" cue's visible twin. */
+  | { kind: 'pulse'; at: XY; speed: number }
   | { kind: 'coins'; from: XY; to: XY; count: number }
   | { kind: 'confetti' };
 

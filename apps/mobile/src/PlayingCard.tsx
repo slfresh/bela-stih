@@ -1,8 +1,9 @@
 import { memo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import type { Card } from '@belot/engine';
 import type { DeckStyle } from './cosmetics';
 import { CardBackFace, CardFace } from './deck';
+import { garb } from './deck/palette';
 import { radius, theme } from './theme';
 
 /**
@@ -26,6 +27,8 @@ export const PlayingCard = memo(
     dimmed = false,
     highlight = false,
     selected = false,
+    armed = false,
+    caption,
   }: {
     card: Card;
     size?: CardSize;
@@ -34,12 +37,28 @@ export const PlayingCard = memo(
     deckStyle: DeckStyle;
     dimmed?: boolean;
     highlight?: boolean;
-    /** Armed by a first tap, waiting for the confirming second one. */
+    /** Picked for a zvanja or an arrange swap: the green ring. */
     selected?: boolean;
+    /**
+     * Armed to play by a first tap, waiting for the confirming second one.
+     * Unmistakable at arm's length: a touch bigger, a gold ring with a dark
+     * outline, and a caption saying what the next tap does.
+     */
+    armed?: boolean;
+    caption?: string;
   }) {
     return (
-      <View style={[highlight && styles.highlight, selected && styles.selected, dimmed && styles.dimmed]}>
-        <CardFace card={card} width={width ?? WIDTHS[size]} style={deckStyle} />
+      <View style={[armed && styles.armedOutline, dimmed && styles.dimmed]}>
+        <View style={[highlight && styles.highlight, selected && styles.selected, armed && styles.armed]}>
+          <CardFace card={card} width={width ?? WIDTHS[size]} style={deckStyle} />
+          {/* Illegal right now: readable, but clearly sunk into the felt. */}
+          {dimmed && <View pointerEvents="none" style={styles.dimmedTint} />}
+        </View>
+        {armed && caption ? (
+          <View pointerEvents="none" style={styles.captionChip}>
+            <Text style={styles.captionText}>{caption}</Text>
+          </View>
+        ) : null}
       </View>
     );
   },
@@ -51,7 +70,9 @@ export const PlayingCard = memo(
     a.deckStyle === b.deckStyle &&
     a.dimmed === b.dimmed &&
     a.highlight === b.highlight &&
-    a.selected === b.selected,
+    a.selected === b.selected &&
+    a.armed === b.armed &&
+    a.caption === b.caption,
 );
 
 const styles = StyleSheet.create({
@@ -67,5 +88,37 @@ const styles = StyleSheet.create({
     borderColor: theme.ok,
     margin: -3,
   },
-  dimmed: { opacity: 0.4 },
+  armed: {
+    borderRadius: radius.card,
+    borderWidth: 3,
+    borderColor: theme.accent,
+    margin: -3,
+    transform: [{ scale: 1.06 }],
+  },
+  armedOutline: {
+    borderRadius: radius.card + 1,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.6)',
+    margin: -1,
+  },
+  captionChip: {
+    position: 'absolute',
+    top: -12,
+    alignSelf: 'center',
+    backgroundColor: theme.accent,
+    borderRadius: radius.pill,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  captionText: { color: garb.ink, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  dimmed: { opacity: 0.6 },
+  dimmedTint: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: radius.card,
+    backgroundColor: 'rgba(18,58,43,0.35)',
+  },
 });

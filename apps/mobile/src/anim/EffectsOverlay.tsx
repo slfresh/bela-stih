@@ -13,7 +13,7 @@ import { cosmetics } from '../cosmetics';
 import { CardBackFace, CardFace } from '../deck';
 import { garb } from '../deck/palette';
 import { counters } from '../dev/counters';
-import { radius, theme } from '../theme';
+import { radius, signal, theme } from '../theme';
 import type { FxBus, FxWithId, XY } from './FxBus';
 import {
   BACK_SCALE,
@@ -27,6 +27,7 @@ import {
   DEAL_FADE_MS,
   DEAL_FLY_MS,
   DEAL_HOLD_MS,
+  PULSE_MS,
   SWEEP_FLIP_AT,
   SWEEP_FLY_MS,
   SWEEP_HOLD_MS,
@@ -119,6 +120,8 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
           big={fx.big}
         />
       );
+    case 'pulse':
+      return <Pulse at={local(fx.at)} speed={fx.speed} />;
     case 'coins':
       return <Coins from={local(fx.from)} to={local(fx.to)} count={fx.count} />;
     case 'confetti':
@@ -334,6 +337,27 @@ function SweptCard({
   );
 }
 
+// --- the turn pulse ------------------------------------------------------------
+
+const PULSE_SIZE = 56;
+
+/** A cream ring that grows from the hand and is gone: "now", said with light. */
+function Pulse({ at, speed }: { at: XY; speed: number }) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    p.value = withTiming(1, { duration: PULSE_MS * speed, easing: Easing.out(Easing.cubic) });
+  }, [p, speed]);
+  const style = useAnimatedStyle(() => ({
+    opacity: 0.9 * (1 - p.value),
+    transform: [
+      { translateX: at.x - PULSE_SIZE / 2 },
+      { translateY: at.y - PULSE_SIZE / 2 },
+      { scale: 1 + 0.6 * p.value },
+    ],
+  }));
+  return <Animated.View style={[styles.sprite, styles.pulse, style]} />;
+}
+
 // --- speech bubble -----------------------------------------------------------
 
 function Bubble({
@@ -512,6 +536,13 @@ function ConfettiPiece({
 // -----------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
+  pulse: {
+    width: PULSE_SIZE,
+    height: PULSE_SIZE,
+    borderRadius: PULSE_SIZE / 2,
+    borderWidth: 3,
+    borderColor: signal.turn,
+  },
   // The card that took the trick, marked while the four hold on the felt.
   sweptRing: {
     position: 'absolute',

@@ -1,5 +1,14 @@
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import Svg, { Circle, Text as SvgText } from 'react-native-svg';
 import type { Seat } from '@belot/engine';
 import { Anchor } from '../anim/AnchorRegistry';
@@ -41,6 +50,8 @@ export const SeatPuck = memo(function SeatPuck({
   deadline,
   totalMs,
   size = 54,
+  thinking = false,
+  reduced = false,
 }: {
   seat: Seat;
   name: string;
@@ -60,8 +71,42 @@ export const SeatPuck = memo(function SeatPuck({
   deadline: number | null;
   totalMs?: number;
   size?: number;
+  /**
+   * This seat's move is being animated right now — presentation only, from
+   * the director's event stream, never from `toAct`. Pulses the team ring.
+   */
+  thinking?: boolean;
+  /** Reduce-motion: no pulse, no breath. */
+  reduced?: boolean;
 }) {
   const initial = (name.trim()[0] ?? '?').toUpperCase();
+
+  // The turn ring stays mounted and fades, instead of unmounting on every
+  // intermediate view of a drain — which blinked it off and on per event.
+  const ringOn = useSharedValue(active ? 1 : 0);
+  useEffect(() => {
+    ringOn.value = withTiming(active ? 1 : 0, { duration: 150 });
+  }, [ringOn, active]);
+  const ringFade = useAnimatedStyle(() => ({ opacity: ringOn.value }));
+
+  const think = useSharedValue(1);
+  useEffect(() => {
+    if (thinking && !reduced) {
+      think.value = withRepeat(
+        withSequence(
+          withTiming(1.06, { duration: 500, easing: Easing.inOut(Easing.sin) }),
+          withTiming(1, { duration: 500, easing: Easing.inOut(Easing.sin) }),
+        ),
+        -1,
+        false,
+      );
+    } else {
+      cancelAnimation(think);
+      think.value = withTiming(1, { duration: 150 });
+    }
+    return () => cancelAnimation(think);
+  }, [think, thinking, reduced]);
+  const thinkPulse = useAnimatedStyle(() => ({ transform: [{ scale: think.value }] }));
   // The name sits under the disc and needs room for a couple of words; a
   // smaller puck must give that room back, or a shrunk seat still costs 86px
   // of the table's width. 54 + 32 is exactly the old fixed width.
@@ -100,16 +145,24 @@ export const SeatPuck = memo(function SeatPuck({
         {/* Team ring: static, and deliberately NOT the countdown ring — that
             one means TIME (amber to red) and the two must never be confused. */}
         {tone && (
-          <View
+          <Animated.View
             style={[
               styles.teamRing,
               { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: tone.edge },
+              thinkPulse,
             ]}
             pointerEvents="none"
           />
         )}
 
-        {active && <TurnRing size={ringSize} deadline={deadline} totalMs={totalMs} />}
+        <Animated.View style={[StyleSheet.absoluteFill, ringFade]} pointerEvents="none">
+          <TurnRing
+            size={ringSize}
+            deadline={active ? deadline : null}
+            totalMs={totalMs}
+            breathe={active && !reduced}
+          />
+        </Animated.View>
 
         {/* A shape, not just a colour: the partner is readable in greyscale. */}
         {partner && (

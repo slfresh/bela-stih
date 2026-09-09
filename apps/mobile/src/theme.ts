@@ -43,4 +43,13 @@ export const team = {
   themInk: '#f0a79f',
 } as const;
 
+/**
+ * Signals that are not about outcome or side: cream, not more gold, so the
+ * one thing gold still means on the table stays legible.
+ */
+export const signal = {
+  /** "Your turn" — the beacon under the hand and the pulse that announces it. */
+  turn: '#fff1c9',
+} as const;
+
 export const radius = { card: 8, panel: 14, pill: 999 } as const;

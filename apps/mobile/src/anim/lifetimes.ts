@@ -74,6 +74,11 @@ export const BUBBLE_SETTLE_MS = 250;
 /** The least a bubble can be on screen for at speed 1: in, settle and out with no hold. */
 export const BUBBLE_MIN_MS = BUBBLE_IN_MS + BUBBLE_SETTLE_IN_MS + BUBBLE_OUT_MS;
 
+// --- cues --------------------------------------------------------------------------
+
+/** A ring scaling 1 → 1.6 and fading: one beat of attention, then gone. */
+export const PULSE_MS = 500;
+
 // --- rewards ---------------------------------------------------------------------
 
 export const COIN_STAGGER_MS = 50;
@@ -112,6 +117,8 @@ export function motionOf(fx: Fx): number {
       // The pop and the fade are fixed choreography scaled by speed; a short
       // beat cannot cut them, only the hold in between.
       return Math.max(fx.duration, BUBBLE_MIN_MS * fx.speed);
+    case 'pulse':
+      return PULSE_MS * fx.speed;
     case 'coins':
       return coinsLandedMs(fx.count);
     case 'confetti':
@@ -130,6 +137,8 @@ export function lifetimeOf(fx: Fx): number {
       return motionOf(fx) + SWEEP_SETTLE_MS;
     case 'bubble':
       return motionOf(fx) + BUBBLE_SETTLE_MS;
+    case 'pulse':
+      return motionOf(fx) + 50;
     case 'coins':
       return motionOf(fx) + 250;
     case 'confetti':

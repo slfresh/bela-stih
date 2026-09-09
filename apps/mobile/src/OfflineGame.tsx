@@ -74,6 +74,7 @@ function OfflineMatch({
       mySeat={HUMAN}
       lang={g.lang}
       view={g.view}
+      spotlightSeat={g.spotlight}
       hardMode={settings.hardMode}
       handSort={settings.handSort}
       onHandSortChange={(m) => onSettingsChange?.({ ...settings, handSort: m })}

@@ -11,6 +11,7 @@ import {
   FALLBACK_CARD_W,
   FLIGHT_MAX_MS,
   FLIGHT_MIN_MS,
+  PULSE_MS,
   lifetimeOf,
   motionOf,
 } from '../src/anim/lifetimes';
@@ -215,5 +216,14 @@ describe('a landed flight gives way to the sweep', () => {
         expect(lifetimeOf(fx)).toBeLessThanOrEqual(fx.duration + gap * speed);
       }
     }
+  });
+});
+
+describe('the turn pulse', () => {
+  it('is one short beat that scales with the pace', () => {
+    const pulse = (speed: number) => ({ kind: 'pulse', at: { x: 0, y: 0 }, speed }) as const;
+    expect(motionOf(pulse(1))).toBe(PULSE_MS);
+    expect(motionOf(pulse(0.5))).toBe(PULSE_MS / 2);
+    expect(lifetimeOf(pulse(1))).toBeGreaterThanOrEqual(PULSE_MS);
   });
 });

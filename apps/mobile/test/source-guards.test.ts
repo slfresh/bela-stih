@@ -52,6 +52,16 @@ describe('anchors measure on demand', () => {
     expect(table.match(/onLayout=\{\(\) => anchors\.bump\(\)\}/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 
+  it('the turn beacon and the fan lift read only rendered turn state', () => {
+    // Turn visuals may fade OUT across a drain but must never be held ON by
+    // anything the director suppresses on intermediate views.
+    const table = src('TableScreen.tsx');
+    expect(table).toMatch(/\{myTurn && !settled && <TurnBeacon/);
+    expect(table).not.toMatch(/spotlightSeat === mySeat/);
+    // The beacon knows nothing of the director: no view, no event stream.
+    expect(src('table/TurnBeacon.tsx')).not.toMatch(/anim\/director|useDirector|view\.|PublicView/);
+  });
+
   it('the home screen no longer re-renders on every scroll event', () => {
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/setScrollTick/);
