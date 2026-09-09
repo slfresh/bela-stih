@@ -8,7 +8,7 @@ import { AnchorMap } from './anim/AnchorRegistry';
 import { FxBus } from './anim/FxBus';
 import { useDirector } from './anim/useDirector';
 import { makeFxSpawner, spawnEmote } from './table/fx';
-import { timingsFor } from './anim/director';
+import { timingsFor, type MotionPolicy } from './anim/director';
 import { cueFor, type TableCue } from './table/cues';
 import { useMotionPolicy } from './anim/useMotionPolicy';
 import { BOT_EMOTES } from './emotes';
@@ -76,6 +76,7 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
   // The spawner is built before the director exists; it reads the view
   // through a ref the director fills in just below.
   const getViewRef = useRef<() => PublicView | null>(() => null);
+  const motionRef = useRef<MotionPolicy>('full');
   const fx = useMemo(
     () =>
       makeFxSpawner({
@@ -84,12 +85,14 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
         lang,
         mySeat: () => HUMAN,
         view: () => getViewRef.current(),
+        reduced: () => motionRef.current === 'reduced',
       }),
     [anchors, fxBus, lang],
   );
 
   // Pacing follows the motion policy; fixed for the life of this table.
   const motion = useMotionPolicy(settings.motion);
+  motionRef.current = motion;
   const { view, idle, enqueue, getView } = useDirector(
     HUMAN,
     useMemo(() => preDealView(table.view(HUMAN)), [table]),

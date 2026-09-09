@@ -72,9 +72,11 @@ function OfflineMatch({
   useEffect(() => {
     if (matchOver && !cheered.current && g.table.winner() === teamOf(HUMAN)) {
       cheered.current = true;
-      g.fxBus.emit({ kind: 'confetti' });
-      const at = g.anchors.centre(anchorId.deck);
-      if (at) g.fxBus.emit({ kind: 'burst', at, count: 40 });
+      if (g.motion !== 'reduced') {
+        g.fxBus.emit({ kind: 'confetti' });
+        const at = g.anchors.centre(anchorId.deck);
+        if (at) g.fxBus.emit({ kind: 'burst', at, count: 40 });
+      }
     }
   }, [matchOver, g.table, g.fxBus]);
 

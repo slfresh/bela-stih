@@ -3,7 +3,7 @@ import { cardId, SEATS, type PublicView, type Seat } from '@belot/engine';
 import { Lang } from '@belot/i18n';
 import { Table, type TableEvent } from '@belot/table';
 import type { AnchorMap, AnchorRect } from '../src/anim/AnchorRegistry';
-import { DEFAULT_TIMINGS } from '../src/anim/director';
+import { DEFAULT_TIMINGS, REDUCED_TIMINGS } from '../src/anim/director';
 import { FxBus, type Fx } from '../src/anim/FxBus';
 import {
   BUBBLE_MIN_MS,
@@ -59,7 +59,7 @@ function fakeAnchors(withSlots = true): AnchorMap {
 }
 
 /** Every sprite a whole all-bot deal produces, tagged with the event that spawned it. */
-function spritesOfADeal(speed: number, anchors = fakeAnchors()) {
+function spritesOfADeal(speed: number, anchors = fakeAnchors(), reduced = false) {
   const table = new Table({ seed: 7, humanSeats: [] });
   const events = table.drainEvents();
   if (events.length < 30) throw new Error('hollow deal');
@@ -77,6 +77,7 @@ function spritesOfADeal(speed: number, anchors = fakeAnchors()) {
     lang: new Lang('hr'),
     mySeat: () => 0,
     view: () => ({ ...base, currentTrick: trick }),
+    reduced: () => reduced,
   }).start;
   for (const e of events) {
     current = e.kind;
@@ -373,5 +374,21 @@ describe('the scoring beats', () => {
     expect(stamp?.kind === 'stamp' && stamp.text).toBe('Štiglja');
     expect(stamp?.kind === 'stamp' && stamp.tone).toBe('danger');
     expect(motionOf(stamp!)).toBeLessThanOrEqual(DEFAULT_TIMINGS.dealScored.dur);
+  });
+});
+
+describe('reduce-motion sprites', () => {
+  it('fit the reduced beats at speed 1 and 0.5, and nothing flies', () => {
+    for (const speed of [1, 0.5]) {
+      const sprites = spritesOfADeal(speed, fakeAnchors(), true);
+      expect(sprites.length).toBeGreaterThan(30);
+      for (const { kind, fx } of sprites) {
+        const beat = REDUCED_TIMINGS[kind as keyof typeof REDUCED_TIMINGS];
+        expect(beat, `no timing for ${kind}`).toBeDefined();
+        expect(motionOf(fx), `${fx.kind} spawned by ${kind}`).toBeLessThanOrEqual((beat.dur + beat.gap) * speed);
+        if (fx.kind === 'flight' || fx.kind === 'deal' || fx.kind === 'trickSweep') expect(fx.fade).toBe(true);
+        expect(fx.kind).not.toBe('badge'); // the hops are off
+      }
+    }
   });
 });

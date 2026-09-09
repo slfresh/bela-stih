@@ -29,14 +29,17 @@ import {
   DEAL_FADE_MS,
   DEAL_FLY_MS,
   DEAL_HOLD_MS,
+  FADE_BUBBLE_IN_MS,
+  FADE_BUBBLE_OUT_MS,
+  FADE_SWEEP_MS,
   FLIGHT_FLIP_AT,
-  lifetimeOf,
   PULSE_MS,
   STAMP_MS,
   SWEEP_FLIP_AT,
   SWEEP_FLY_MS,
   SWEEP_HOLD_MS,
   SWEEP_STAGGER_MS,
+  lifetimeOf,
 } from './lifetimes';
 
 /**
@@ -108,6 +111,7 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
           stagger={fx.stagger}
           speed={fx.speed}
           width={fx.width}
+          fade={fx.fade}
         />
       );
     case 'trickSweep':
@@ -123,6 +127,7 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
           big={fx.big}
           pip={fx.pip}
           weight={fx.weight}
+          fade={fx.fade}
         />
       );
     case 'stamp':
@@ -167,14 +172,22 @@ function Flight({
     p.value = withTiming(1, { duration: fx.duration, easing: Easing.out(Easing.cubic) });
   }, [p, fx.duration]);
 
-  const style = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: from.x + (to.x - from.x) * p.value - w / 2 },
-      { translateY: from.y + (to.y - from.y) * p.value - (w * 1.45) / 2 },
-      { scale: startScale + (1 - startScale) * p.value },
-      { rotateZ: `${(1 - p.value) * -8}deg` },
-    ],
-  }));
+  const style = useAnimatedStyle(() =>
+    fx.fade
+      ? {
+          // Reduce-motion: already there, becoming visible.
+          opacity: p.value,
+          transform: [{ translateX: to.x - w / 2 }, { translateY: to.y - (w * 1.45) / 2 }],
+        }
+      : {
+          transform: [
+            { translateX: from.x + (to.x - from.x) * p.value - w / 2 },
+            { translateY: from.y + (to.y - from.y) * p.value - (w * 1.45) / 2 },
+            { scale: startScale + (1 - startScale) * p.value },
+            { rotateZ: `${(1 - p.value) * -8}deg` },
+          ],
+        },
+  );
   // An opponent's card turns over part-way; mine is face up from the tap.
   const face = useAnimatedStyle(() => ({
     opacity: fx.faceUp || p.value >= FLIGHT_FLIP_AT ? 1 : 0,
@@ -205,22 +218,31 @@ function Deal({
   stagger,
   speed,
   width,
+  fade = false,
 }: {
   from: XY;
   backs: XY[];
   stagger: number;
   speed: number;
   width: number;
+  fade?: boolean;
 }) {
   const flights = useMemo(
-    () => backs.map((to, i) => ({ key: i, to, delay: i * stagger * speed })),
-    [backs, stagger, speed],
+    () => backs.map((to, i) => ({ key: i, to, delay: fade ? 0 : i * stagger * speed })),
+    [backs, stagger, speed, fade],
   );
 
   return (
     <>
       {flights.map((f) => (
-        <DealBack key={f.key} from={from} to={f.to} delay={f.delay} speed={speed} width={width} />
+        <DealBack
+          key={f.key}
+          from={fade ? f.to : from}
+          to={f.to}
+          delay={f.delay}
+          speed={speed}
+          width={width}
+        />
       ))}
     </>
   );
@@ -297,11 +319,13 @@ function TrickSweep({
           key={i}
           card={c.card}
           from={local(c.from)}
-          to={to}
+          // Reduce-motion: the cards fade where they lie.
+          to={fx.fade ? local(c.from) : to}
           winner={c.seat === fx.winner}
-          delay={(SWEEP_HOLD_MS + i * SWEEP_STAGGER_MS) * fx.speed}
+          delay={fx.fade ? 0 : (SWEEP_HOLD_MS + i * SWEEP_STAGGER_MS) * fx.speed}
           speed={fx.speed}
           width={fx.width}
+          fade={fx.fade}
         />
       ))}
     </>
@@ -316,6 +340,7 @@ function SweptCard({
   delay,
   speed,
   width,
+  fade = false,
 }: {
   card: Card;
   from: XY;
@@ -324,21 +349,22 @@ function SweptCard({
   delay: number;
   speed: number;
   width: number;
+  fade?: boolean;
 }) {
   const p = useSharedValue(0);
   const lift = useSharedValue(0);
   useEffect(() => {
-    if (winner) {
+    if (winner && !fade) {
       lift.value = withTiming(1, { duration: 140 * speed, easing: Easing.out(Easing.quad) });
     }
     p.value = withDelay(
       delay,
-      withTiming(1, { duration: SWEEP_FLY_MS * speed, easing: Easing.in(Easing.quad) }),
+      withTiming(1, { duration: (fade ? FADE_SWEEP_MS : SWEEP_FLY_MS) * speed, easing: Easing.in(Easing.quad) }),
     );
-  }, [p, lift, winner, delay, speed]);
+  }, [p, lift, winner, delay, speed, fade]);
 
   const style = useAnimatedStyle(() => ({
-    opacity: 1 - 0.9 * Math.max(0, (p.value - 0.8) / 0.2),
+    opacity: fade ? 1 - p.value : 1 - 0.9 * Math.max(0, (p.value - 0.8) / 0.2),
     transform: [
       { translateX: from.x + (to.x - from.x) * p.value - width / 2 },
       { translateY: from.y + (to.y - from.y) * p.value - (width * 1.45) / 2 - lift.value * 6 },
@@ -570,6 +596,7 @@ function Bubble({
   big = false,
   pip,
   weight = 1,
+  fade = false,
 }: {
   at: XY;
   text: string;
@@ -580,10 +607,22 @@ function Bubble({
   big?: boolean;
   pip?: Suit;
   weight?: 1 | 2 | 3 | 4;
+  fade?: boolean;
 }) {
   const { width: screenW } = useWindowDimensions();
   const s = useSharedValue(0);
   useEffect(() => {
+    if (fade) {
+      // Reduce-motion: in, hold, out — no pop, and exactly as long as it says.
+      s.value = withSequence(
+        withTiming(1, { duration: FADE_BUBBLE_IN_MS * speed }),
+        withDelay(
+          Math.max(0, duration - (FADE_BUBBLE_IN_MS + FADE_BUBBLE_OUT_MS) * speed),
+          withTiming(0, { duration: FADE_BUBBLE_OUT_MS * speed }),
+        ),
+      );
+      return;
+    }
     // Pop in, settle, hold whatever the duration leaves, fade — each leg
     // scaled by the director's pace, as `motionOf` promises.
     s.value = withSequence(
@@ -594,11 +633,11 @@ function Bubble({
         withTiming(0, { duration: BUBBLE_OUT_MS * speed }),
       ),
     );
-  }, [s, duration, speed]);
+  }, [s, duration, speed, fade]);
 
   const style = useAnimatedStyle(() => ({
     opacity: Math.min(1, s.value * 2),
-    transform: [{ scale: s.value }],
+    transform: [{ scale: fade ? 1 : s.value }],
   }));
 
   return (

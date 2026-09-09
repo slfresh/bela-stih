@@ -35,6 +35,8 @@ export type Fx =
       width: number;
       /** Width where it sets off — the fan's card, for my own — if different. */
       fromWidth?: number;
+      /** Reduce-motion: appear at the destination instead of flying. */
+      fade?: boolean;
     }
   | {
       kind: 'deal';
@@ -45,6 +47,8 @@ export type Fx =
       stagger: number;
       speed: number;
       width: number;
+      /** Reduce-motion: the backs appear where they land and fade, all at once. */
+      fade?: boolean;
     }
   /** The real cards of a won trick, from their slots to the winner's puck. */
   | {
@@ -54,6 +58,8 @@ export type Fx =
       winner: Seat;
       speed: number;
       width: number;
+      /** Reduce-motion: the cards fade where they lie instead of flying. */
+      fade?: boolean;
     }
   | {
       kind: 'bubble';
@@ -69,6 +75,8 @@ export type Fx =
       pip?: Suit;
       /** A zvanje's weight, 1–4: bigger and gold-edged as it grows. */
       weight?: 1 | 2 | 3 | 4;
+      /** Reduce-motion: a plain fade in and out, no pop, inside a short beat. */
+      fade?: boolean;
     }
   /** The pip (or the ×2) landing on the plaque as a call's beat ends. */
   | { kind: 'stamp'; at: XY; pip?: Suit; text?: string; tone: 'gold' | 'danger' | 'ok'; speed: number }

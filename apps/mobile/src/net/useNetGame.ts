@@ -8,7 +8,7 @@ import type { TableEvent } from '@belot/table';
 import { Lang } from '@belot/i18n';
 import type { Award, PlayerProfile } from '@belot/progression';
 import { AnchorMap } from '../anim/AnchorRegistry';
-import { Director, timingsFor } from '../anim/director';
+import { Director, timingsFor, type MotionPolicy } from '../anim/director';
 import { FxBus } from '../anim/FxBus';
 import { makeFxSpawner, spawnEmote } from '../table/fx';
 import { useMotionPolicy } from '../anim/useMotionPolicy';
@@ -148,6 +148,7 @@ export function useNetGame(settings: Settings) {
   const anchors = useMemo(() => new AnchorMap(), []);
   const fxBus = useMemo(() => new FxBus(), []);
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
+  const motionRef = useRef<MotionPolicy>('full');
   const fx = useMemo(
     () =>
       makeFxSpawner({
@@ -156,6 +157,7 @@ export function useNetGame(settings: Settings) {
         lang,
         mySeat: () => mySeatRef.current,
         view: () => directorRef.current?.getView() ?? null,
+        reduced: () => motionRef.current === 'reduced',
       }),
     [anchors, fxBus, lang],
   );
@@ -167,7 +169,6 @@ export function useNetGame(settings: Settings) {
   fxRef.current = fx;
   // Pacing follows the motion policy as it stands when the table is joined.
   const motion = useMotionPolicy(settings.motion);
-  const motionRef = useRef(motion);
   motionRef.current = motion;
   // The socket callbacks are created once; a ref keeps their locale current.
   const langRef = useRef(lang);

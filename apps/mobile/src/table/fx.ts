@@ -9,6 +9,8 @@ import { anchorId, type FxBus } from '../anim/FxBus';
 import {
   BACK_SCALE,
   dealStagger,
+  FADE_BUBBLE_MS,
+  FADE_FLIGHT_MS,
   FALLBACK_CARD_W,
   flightDuration,
   LAST_TRICK_CHIP_MS,
@@ -36,6 +38,8 @@ export interface FxSpawnerOptions {
   lang: Lang;
   /** The viewer's seat: their own card flies face up from the tap. */
   mySeat: () => Seat | null;
+  /** Reduce-motion: fades in place of flights, and no burst or shake. */
+  reduced?: () => boolean;
   /**
    * The presentation view as it stands when an event STARTS — before the
    * director's start patch. The trick sweep reads the four cards on the felt
@@ -67,6 +71,7 @@ export function spawnEmote(
 export function makeFxSpawner(opts: FxSpawnerOptions) {
   const { anchors, bus, lang, view } = opts;
   const mySeatOf = opts.mySeat;
+  const isReduced = opts.reduced ?? (() => false);
 
   /** The width of a card sitting in this seat's slot, or the fallback before the first layout. */
   const slotW = (seat: Seat): number => anchors.rect(anchorId.slot(seat))?.w ?? FALLBACK_CARD_W;
@@ -88,7 +93,18 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
     extra: { pip?: Suit; weight?: 1 | 2 | 3 | 4 } = {},
   ) => {
     const at = anchors.centre(anchorId.seat(seat));
-    if (at) bus.emit({ kind: 'bubble', at, text, tone, duration: duration * speed, speed, ...extra });
+    if (!at) return;
+    const reduced = isReduced();
+    bus.emit({
+      kind: 'bubble',
+      at,
+      text,
+      tone,
+      duration: (reduced ? Math.min(duration, FADE_BUBBLE_MS) : duration) * speed,
+      speed,
+      fade: reduced,
+      ...extra,
+    });
   };
 
   /**
@@ -125,12 +141,14 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
       stagger: dealStagger(backs.length, beatMs),
       speed,
       width: anySlotW() * BACK_SCALE,
+      fade: isReduced(),
     });
   };
 
   /** Sprites for an event's START: the beat itself. */
   const start = (e: TableEvent, speed = 1): void => {
     const mySeat = mySeatOf();
+    const reduced = isReduced();
     switch (e.kind) {
       case 'dealStarted':
         // Two rounds of three.
@@ -158,13 +176,14 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
             card: e.card,
             from,
             to,
-            duration: flightDuration(Math.hypot(to.x - from.x, to.y - from.y)) * speed,
+            duration: (reduced ? FADE_FLIGHT_MS : flightDuration(Math.hypot(to.x - from.x, to.y - from.y))) * speed,
             speed,
             // An opponent's card leaves their hand face down and turns over
             // in flight, the way a card is actually thrown on the table.
-            faceUp: mine,
+            faceUp: mine || reduced,
             width: slotW(e.seat),
-            fromWidth: tapped ? tapped.w : undefined,
+            fromWidth: tapped && !reduced ? tapped.w : undefined,
+            fade: reduced,
           });
         }
         break;
@@ -181,10 +200,10 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
         });
         const to = anchors.centre(anchorId.seat(e.seat));
         if (cards.length > 0 && to) {
-          bus.emit({ kind: 'trickSweep', cards, to, winner: e.seat, speed, width: anySlotW() });
+          bus.emit({ kind: 'trickSweep', cards, to, winner: e.seat, speed, width: anySlotW(), fade: reduced });
         }
         // The last trick's ten points, from the felt to the running count.
-        if (e.isLastTrick) {
+        if (e.isLastTrick && !reduced) {
           const chipFrom = anchors.centre(anchorId.deck);
           const chipTo = anchors.centre(anchorId.running);
           if (chipFrom && chipTo) {
@@ -243,7 +262,7 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
         if (dealer === undefined) break;
         const from = anchors.centre(anchorId.seat(dealer));
         const to = anchors.centre(anchorId.seat(((dealer + 1) % 4) as Seat));
-        if (from && to) {
+        if (from && to && !reduced) {
           bus.emit({ kind: 'badge', from, to, duration: DEFAULT_TIMINGS.dealScored.dur * speed });
         }
         // Štiglja: the word itself, stamped on the felt in the sweeping side's colour.

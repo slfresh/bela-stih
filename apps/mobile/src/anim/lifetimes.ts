@@ -30,6 +30,19 @@ export const FLIGHT_SETTLE_MS = 100;
 /** Where along the flight an opponent's card turns face up. */
 export const FLIGHT_FLIP_AT = 0.35;
 
+/**
+ * Reduce-motion: nothing flies. A card appears where it lands, a trick fades
+ * where it lies, the dealt backs fade in at once — each inside the shortest
+ * beat REDUCED_TIMINGS allows (250 + 80).
+ */
+export const FADE_FLIGHT_MS = 200;
+export const FADE_SWEEP_MS = 250;
+export const FADE_DEAL_MS = 200;
+/** A bubble under reduce-motion: at most this long, fading in and out. */
+export const FADE_BUBBLE_MS = 300;
+export const FADE_BUBBLE_IN_MS = 60;
+export const FADE_BUBBLE_OUT_MS = 80;
+
 export function flightDuration(distancePx: number): number {
   return clamp(FLIGHT_MIN_MS + FLIGHT_PER_PX * distancePx, FLIGHT_MIN_MS, FLIGHT_MAX_MS);
 }
@@ -126,13 +139,16 @@ export function motionOf(fx: Fx): number {
     case 'flight':
       return fx.duration;
     case 'deal':
+      if (fx.fade) return FADE_DEAL_MS * fx.speed;
       return ((fx.backs.length - 1) * fx.stagger + DEAL_FLY_MS + DEAL_HOLD_MS) * fx.speed;
     case 'trickSweep':
+      if (fx.fade) return FADE_SWEEP_MS * fx.speed;
       return (SWEEP_HOLD_MS + (fx.cards.length - 1) * SWEEP_STAGGER_MS + SWEEP_FLY_MS) * fx.speed;
     case 'bubble':
       // The pop and the fade are fixed choreography scaled by speed; a short
-      // beat cannot cut them, only the hold in between.
-      return Math.max(fx.duration, BUBBLE_MIN_MS * fx.speed);
+      // beat cannot cut them, only the hold in between. A reduce-motion
+      // bubble has no pop: it is exactly as long as it says.
+      return fx.fade ? fx.duration : Math.max(fx.duration, BUBBLE_MIN_MS * fx.speed);
     case 'pulse':
       return PULSE_MS * fx.speed;
     case 'badge':

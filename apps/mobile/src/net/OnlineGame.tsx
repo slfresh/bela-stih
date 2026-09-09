@@ -84,9 +84,11 @@ export function OnlineGame({
       net.winnerTeam === teamOf(net.seat)
     ) {
       cheeredMatch.current = net.matchNumber;
-      net.fxBus.emit({ kind: 'confetti' });
-      const at = net.anchors.centre(anchorId.deck);
-      if (at) net.fxBus.emit({ kind: 'burst', at, count: 40 });
+      if (net.motion !== 'reduced') {
+        net.fxBus.emit({ kind: 'confetti' });
+        const at = net.anchors.centre(anchorId.deck);
+        if (at) net.fxBus.emit({ kind: 'burst', at, count: 40 });
+      }
     }
   }, [net.matchOver, net.matchNumber, net.winnerTeam, net.seat, net.fxBus]);
 

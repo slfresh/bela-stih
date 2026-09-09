@@ -57,6 +57,26 @@ export const TRIM = {
 
 const n = (seconds) => Math.round(seconds * RATE);
 
+/**
+ * Noise from a seeded generator, reseeded per sound in `render()`: the same
+ * source renders the same bytes, so regenerating the bank changes only the
+ * files whose recipe changed instead of every noise-based one.
+ */
+let rngState = 1;
+function seed(name) {
+  let h = 2166136261;
+  for (const ch of name) h = Math.imul(h ^ ch.charCodeAt(0), 16777619);
+  rngState = h >>> 0 || 1;
+}
+function random() {
+  // mulberry32
+  rngState = (rngState + 0x6d2b79f5) >>> 0;
+  let t = rngState;
+  t = Math.imul(t ^ (t >>> 15), t | 1);
+  t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
 /** Exponential decay, the shape almost every short effect wants. */
 const decay = (i, len, power = 4) => Math.pow(1 - i / len, power);
 
@@ -99,7 +119,7 @@ function noise(seconds, { power = 3, gain = 0.4, smooth = 0.55 } = {}) {
   const out = new Float32Array(len);
   let last = 0;
   for (let i = 0; i < len; i++) {
-    const white = Math.random() * 2 - 1;
+    const white = random() * 2 - 1;
     last = last * smooth + white * (1 - smooth); // one-pole low pass
     out[i] = gain * decay(i, len, power) * last;
   }
@@ -117,7 +137,7 @@ function bandNoise(seconds, { power = 6, gain = 0.4, lo = 0.9, hi = 0.4 } = {}) 
   let fast = 0;
   let slow = 0;
   for (let i = 0; i < len; i++) {
-    const white = Math.random() * 2 - 1;
+    const white = random() * 2 - 1;
     fast = fast * hi + white * (1 - hi);
     slow = slow * lo + fast * (1 - lo);
     out[i] = gain * decay(i, len, power) * (fast - slow);
@@ -151,7 +171,7 @@ function whoosh(seconds, { gain = 0.5 } = {}) {
     const k = i / len;
     const hump = Math.sin(Math.PI * Math.min(1, k * 1.15)) ** 1.5; // fast in, slow out
     const smooth = 0.92 - 0.55 * Math.sin(Math.PI * k); // filter opens mid-flight
-    const white = Math.random() * 2 - 1;
+    const white = random() * 2 - 1;
     last = last * smooth + white * (1 - smooth);
     out[i] = gain * hump * last;
   }
@@ -439,5 +459,6 @@ export const SFX = {
  * the energy, and levelling afterwards is what makes the measurement honest.
  */
 export function render(name) {
+  seed(name);
   return level(deClick(SFX[name]()), TRIM[name] ?? 0);
 }

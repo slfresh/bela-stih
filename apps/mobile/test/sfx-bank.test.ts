@@ -53,6 +53,14 @@ describe('the sound bank is levelled', () => {
   });
 });
 
+describe('the bank renders deterministically', () => {
+  it('the same recipe gives the same bytes twice', () => {
+    const a = toWav(render('deal'));
+    const b = toWav(render('deal'));
+    expect(a.equals(b)).toBe(true);
+  });
+});
+
 describe('the files the app plays', () => {
   it('round-trip as 16-bit mono at the bank rate', () => {
     const samples = render('tap');
