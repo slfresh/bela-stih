@@ -64,10 +64,8 @@ export function HomeScreen({
   const claimable = canClaimDaily(profile, today);
   const level = levelProgress(profile.xp);
 
-  const go = (l: Launch) => {
-    playSfx('tap');
-    onLaunch(l);
-  };
+  const go = (l: Launch) => onLaunch(l);
+  // For the bare pressables (hero, gear, wallet); a Button clicks for itself.
   const open = (fn: () => void) => () => {
     playSfx('tap');
     fn();
@@ -150,7 +148,7 @@ export function HomeScreen({
             </View>
 
             {/* the hero: online quick play */}
-            <Pressable onPress={() => go({ mode: 'quick' })} style={styles.hero}>
+            <Pressable onPress={open(() => go({ mode: 'quick' }))} style={styles.hero}>
               <Text style={styles.heroText}>{ui.play}</Text>
             </Pressable>
 
@@ -170,7 +168,7 @@ export function HomeScreen({
                     : ui.startStreak}
                 </Text>
                 <Anchor id="bonus">
-                  <Button label={ui.claim} tone="strong" onPress={collect} />
+                  <Button label={ui.claim} tone="strong" sound={null} onPress={collect} />
                 </Anchor>
               </View>
             ) : (
@@ -199,7 +197,12 @@ export function HomeScreen({
                       <Text style={styles.questClaimed}>✓</Text>
                     ) : isQuestComplete(q) ? (
                       <Anchor id={`quest:${i}`}>
-                        <Button label={`+${q.reward} ●`} tone="strong" onPress={() => collectQuest(i)} />
+                        <Button
+                          label={`+${q.reward} ●`}
+                          tone="strong"
+                          sound={null}
+                          onPress={() => collectQuest(i)}
+                        />
                       </Anchor>
                     ) : (
                       <Text style={styles.questReward}>+{q.reward} ●</Text>

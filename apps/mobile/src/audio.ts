@@ -13,10 +13,13 @@ export type Sfx =
   | 'deal'
   | 'play'
   | 'trick'
+  | 'lastTrick'
   | 'zvanje'
   | 'bela'
   | 'win'
   | 'lose'
+  | 'matchWon'
+  | 'matchLost'
   | 'levelup'
   | 'coin'
   | 'tap'
@@ -29,26 +32,60 @@ const SOURCES: Record<Sfx, number> = {
   deal: require('../assets/sfx/deal.wav'),
   play: require('../assets/sfx/play.wav'),
   trick: require('../assets/sfx/trick.wav'),
+  lastTrick: require('../assets/sfx/lastTrick.wav'),
   zvanje: require('../assets/sfx/zvanje.wav'),
   bela: require('../assets/sfx/bela.wav'),
   win: require('../assets/sfx/win.wav'),
   lose: require('../assets/sfx/lose.wav'),
+  matchWon: require('../assets/sfx/matchWon.wav'),
+  matchLost: require('../assets/sfx/matchLost.wav'),
   levelup: require('../assets/sfx/levelup.wav'),
   coin: require('../assets/sfx/coin.wav'),
   tap: require('../assets/sfx/tap.wav'),
   pop: require('../assets/sfx/pop.wav'),
-  // Aliased for now: swapping in dedicated art is one line each, and doing it
-  // here rather than at the call sites keeps the intent readable meanwhile.
-  turn: require('../assets/sfx/pop.wav'),
-  tick: require('../assets/sfx/tap.wav'),
+  turn: require('../assets/sfx/turn.wav'),
+  tick: require('../assets/sfx/tick.wav'),
+};
+
+/**
+ * Playback gain per effect, on top of the bank's own levelling (every file
+ * sits at the same loudness plus a small trim — see scripts/sfx-bank.mjs).
+ * These are the game's mix decisions, how loud a tap is next to a fanfare,
+ * and they belong here with the game rather than baked into the files.
+ */
+const GAIN: Record<Sfx, number> = {
+  deal: 0.8,
+  play: 0.9,
+  trick: 0.9,
+  lastTrick: 1,
+  zvanje: 0.85,
+  bela: 0.9,
+  win: 1,
+  lose: 0.8,
+  matchWon: 1,
+  matchLost: 0.85,
+  levelup: 1,
+  coin: 0.6,
+  tap: 0.5,
+  pop: 0.6,
+  turn: 0.9,
+  tick: 0.7,
 };
 
 /**
  * The percussive effects vary a little in pitch per play, the way real cards
  * and coins never sound twice the same. The melodic ones stay put — a detuned
- * fanfare just sounds wrong.
+ * fanfare just sounds wrong — and so does the clock, whose two pitches must
+ * stay tellable apart.
  */
-const VARIED: ReadonlySet<Sfx> = new Set(['deal', 'play', 'trick', 'coin', 'tap', 'pop', 'turn']);
+const VARIED: ReadonlySet<Sfx> = new Set(['deal', 'play', 'trick', 'lastTrick', 'coin', 'tap', 'pop']);
+
+export interface PlayOptions {
+  /** Pitch and tempo multiplier on top of the effect's own variation; 1 plays it as made. */
+  rate?: number;
+  /** Extra gain on top of the effect's mix level, 0–1. */
+  gain?: number;
+}
 
 const players = new Map<Sfx, AudioPlayer>();
 let enabled = true;
@@ -89,7 +126,7 @@ export function preloadSfx(): void {
   }
 }
 
-export function playSfx(name: Sfx): void {
+export function playSfx(name: Sfx, opts: PlayOptions = {}): void {
   if (!enabled) return;
   void configureOnce();
   try {
@@ -100,7 +137,9 @@ export function playSfx(name: Sfx): void {
     }
     // Rewind first: the same effect often fires again before it has finished.
     player.seekTo(0);
-    if (VARIED.has(name)) player.setPlaybackRate(0.92 + Math.random() * 0.16);
+    player.volume = Math.max(0, Math.min(1, GAIN[name] * (opts.gain ?? 1)));
+    const vary = VARIED.has(name) ? 0.92 + Math.random() * 0.16 : 1;
+    player.setPlaybackRate(vary * (opts.rate ?? 1));
     player.play();
   } catch {
     // A missing or busy player must never break the game loop.

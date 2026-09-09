@@ -7,7 +7,7 @@ import {
   type Award,
   type PlayerProfile,
 } from '@belot/progression';
-import { playSfx } from './audio';
+import { playSfx, type PlayOptions, type Sfx } from './audio';
 
 /**
  * Turns the table's event stream into sound, haptics and rewards.
@@ -16,6 +16,19 @@ import { playSfx } from './audio';
  * `TableEvent`s the local table does, so a player earns XP and coins the same
  * way in both modes without a second implementation to keep in step.
  */
+
+/**
+ * The events that make no sound of their own. Listed so a test can insist
+ * that every other kind does — a new event kind that nobody scored is
+ * otherwise a silence nobody notices.
+ */
+export const SILENT_EVENTS: readonly TableEvent['kind'][] = [
+  'bidPassed', // the pass bubble is the whole message
+  'doublePassed',
+  'declarationSkipped',
+  'declarationsRevealed', // the cards themselves are the announcement, for now
+  'matchStarted',
+];
 
 /** What the player did this deal, accumulated from events as they arrive. */
 export interface DealTally {
@@ -59,8 +72,10 @@ export function processEvents({
   haptics,
   silent = false,
 }: ProcessOptions): { profile: PlayerProfile; award: Award | null } {
-  const sfx = (name: Parameters<typeof playSfx>[0]) => {
-    if (!silent) playSfx(name);
+  const sfx = (name: Sfx, opts?: PlayOptions) => {
+    if (silent) return;
+    if (opts) playSfx(name, opts);
+    else playSfx(name);
   };
   const buzz = (style: Haptics.ImpactFeedbackStyle) => {
     if (!haptics || silent) return;
@@ -69,6 +84,7 @@ export function processEvents({
 
   let next = profile;
   let earned: Award | null = null;
+  let matchEnded = false;
 
   for (const e of events) {
     switch (e.kind) {
@@ -83,10 +99,15 @@ export function processEvents({
         if (e.seat === mySeat) buzz(Haptics.ImpactFeedbackStyle.Light);
         break;
 
-      case 'trickWon':
-        sfx('trick');
-        if (teamOf(e.seat) === teamOf(mySeat)) buzz(Haptics.ImpactFeedbackStyle.Medium);
+      case 'trickWon': {
+        const mine = teamOf(e.seat) === teamOf(mySeat);
+        // The last trick closes the deal and carries its own ten points: its
+        // own sound. An ordinary trick sweeps a shade lower when it is theirs.
+        if (e.isLastTrick) sfx('lastTrick');
+        else sfx('trick', { rate: mine ? 1 : 0.85 });
+        if (mine) buzz(Haptics.ImpactFeedbackStyle.Medium);
         break;
+      }
 
       // Bidding was silent film until now: these three are the moments a
       // table actually reacts to.
@@ -133,7 +154,10 @@ export function processEvents({
       }
 
       case 'matchOver': {
-        const r = applyMatchOutcome(next, e.winner === teamOf(mySeat));
+        const won = e.winner === teamOf(mySeat);
+        sfx(won ? 'matchWon' : 'matchLost');
+        matchEnded = true;
+        const r = applyMatchOutcome(next, won);
         next = r.profile;
         earned = mergeAward(earned, r.award);
         break;
@@ -146,7 +170,9 @@ export function processEvents({
 
   if (earned) {
     if (earned.levelUp !== null) sfx('levelup');
-    else if (earned.coins > 0) sfx('coin');
+    // The match fanfare already says "you earned this"; a coin ding on top of
+    // it is clutter.
+    else if (earned.coins > 0 && !matchEnded) sfx('coin');
   }
   return { profile: next, award: earned };
 }

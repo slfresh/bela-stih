@@ -46,7 +46,8 @@ import { EmoteStrip } from './table/EmoteStrip';
 import { useTurnCues } from './table/useTurnCues';
 import { PlayingCard } from './PlayingCard';
 import { SuitPip } from './deck';
-import { playSfx } from './audio';
+import { playSfx, type Sfx } from './audio';
+import { buzz } from './haptics';
 import { radius, team, theme } from './theme';
 import { isPartner, seatTone } from './table/teamColour';
 
@@ -195,11 +196,6 @@ export function TableScreen(props: TableScreenProps) {
       bot: s !== mySeat,
       connected: true,
     };
-
-  const tap = (fn: () => void) => () => {
-    playSfx('tap');
-    fn();
-  };
 
   const puck = (s: Seat) => (
     <SeatPuck
@@ -589,8 +585,8 @@ export function TableScreen(props: TableScreenProps) {
         waitingFor={waitingFor}
         onRematch={onRematch}
         onForceRematch={onForceRematch}
-        onNext={tap(onNext)}
-        onFinish={tap(onFinish)}
+        onNext={onNext}
+        onFinish={onFinish}
         finishLabel={finishLabel}
       />
     </View>
@@ -617,7 +613,7 @@ export function TableScreen(props: TableScreenProps) {
                 />
                 {calls}
                 <View style={styles.railGap} />
-                <Button label={finishLabel} tone="plain" compact onPress={tap(onFinish)} />
+                <Button label={finishLabel} tone="plain" compact onPress={onFinish} />
               </View>
 
               <View style={styles.centre}>
@@ -671,7 +667,7 @@ export function TableScreen(props: TableScreenProps) {
                   {declareButtons ?? (
                     <NonCardActions options={options} lang={lang} onChoose={onAction} />
                   )}
-                  <Button label={finishLabel} tone="plain" onPress={tap(onFinish)} />
+                  <Button label={finishLabel} tone="plain" onPress={onFinish} />
                 </View>
               )}
             </>
@@ -922,6 +918,9 @@ function Hand({
     const chosen = card ? chosenFor(card) : undefined;
     if (!chosen) return;
     if (needsConfirm && armed !== id) {
+      // Arming is a decision too; it used to happen in silence.
+      playSfx('tap');
+      buzz('select');
       setArmed(id);
       return;
     }
@@ -1197,18 +1196,30 @@ export function Button({
   onPress,
   tone = 'plain',
   compact = false,
+  sound = 'tap',
 }: {
   label: string;
   onPress: () => void;
   tone?: 'plain' | 'strong' | 'bela';
   /** Landscape rail size: caption type, tighter padding, a label wraps at most once. */
   compact?: boolean;
+  /**
+   * The click. Every button makes it — the bid, declare and rematch buttons
+   * were mute while the leave button clicked — and the button makes it
+   * itself, so no caller wraps its handler in a second one. `null` for a
+   * press whose own sound follows at once (claiming coins).
+   */
+  sound?: Sfx | null;
 }) {
   const toneStyle: StyleProp<ViewStyle> =
     tone === 'strong' ? styles.btnStrong : tone === 'bela' ? styles.btnBela : styles.btnPlain;
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        if (sound) playSfx(sound);
+        buzz('select');
+        onPress();
+      }}
       style={({ pressed }) => [
         styles.btn,
         toneStyle,

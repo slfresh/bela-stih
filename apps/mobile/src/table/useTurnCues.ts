@@ -66,7 +66,8 @@ export function useTurnCues({ myTurn, mustDeclare, canDeclare, deadline, settled
       if (wait <= 0) return null;
       return setTimeout(() => {
         buzz('heavy');
-        playSfx('tick');
+        // The same woodblock, a shade higher as the clock gets shorter.
+        playSfx('tick', { rate: before <= 2_000 ? 1.25 : 1 });
       }, wait);
     }).filter((t): t is ReturnType<typeof setTimeout> => t !== null);
     return () => timers.forEach(clearTimeout);
