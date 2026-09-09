@@ -5,7 +5,7 @@ import { PressScale } from '../ui/PressScale';
 import { radius, theme } from '../theme';
 
 /** The version shown in settings; keep in step with app.json. */
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 
 /**
  * The frame every secondary screen (shop, settings, profile) shares: a back
