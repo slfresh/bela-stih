@@ -136,6 +136,8 @@ export interface UiStrings {
   botPlaysFor: (names: string) => string;
   startWithBots: string;
   sitHere: string;
+  /** The lobby's error state: try the connection again. */
+  retry: string;
   /** Rematch flow after a finished match. */
   playAgain: string;
   waitingForRematch: (n: number) => string;
@@ -497,6 +499,7 @@ const hr: Strings = {
     botPlaysFor: (names) => `${names} — bot igra umjesto njih`,
     startWithBots: 'Počni s botovima',
     sitHere: 'sjedni ovdje',
+    retry: 'Pokušaj ponovno',
     playAgain: 'Igraj opet',
     waitingForRematch: (n) => `Čekamo još ${n} igrača…`,
     rematchAsked: 'Nova partija je zatražena',
@@ -722,6 +725,7 @@ const srCyrl: Strings = {
     botPlaysFor: (names) => `${names} — бот игра уместо њих`,
     startWithBots: 'Почни са ботовима',
     sitHere: 'седни овде',
+    retry: 'Покушај поново',
     playAgain: 'Играј опет',
     waitingForRematch: (n) => `Чекамо још ${n} играча…`,
     rematchAsked: 'Нова партија је затражена',
@@ -943,6 +947,7 @@ const en: Strings = {
     botPlaysFor: (names) => `${names} — a bot plays for them`,
     startWithBots: 'Start with bots',
     sitHere: 'sit here',
+    retry: 'Try again',
     playAgain: 'Play again',
     waitingForRematch: (n) => `Waiting for ${n} more…`,
     rematchAsked: 'You asked for another match',

@@ -384,8 +384,11 @@ export function useNetGame(settings: Settings) {
     });
   }, []);
 
+  // What the last connection did, so an error state can try it again.
+  const lastMakeRef = useRef<((client: Client) => Promise<Room>) | null>(null);
   const connect = useCallback(
     async (make: (client: Client) => Promise<Room>) => {
+      lastMakeRef.current = make;
       leave();
       setStatus('connecting');
       setError(null);
@@ -519,6 +522,12 @@ export function useNetGame(settings: Settings) {
     roomRef.current?.send('sit', { seat: target });
   }, []);
 
+  /** The lobby's "try again": the same connection, once more. */
+  const retry = useCallback(() => {
+    const make = lastMakeRef.current;
+    if (make) void connect(make);
+  }, [connect]);
+
   /** After a match: ask for another with the same people (all must agree). */
   const rematch = useCallback(() => roomRef.current?.send('rematch', {}), []);
   const rematchCancel = useCallback(() => roomRef.current?.send('rematchCancel', {}), []);
@@ -546,6 +555,7 @@ export function useNetGame(settings: Settings) {
     dealerHop,
     motion,
     matchOver: view?.phase === 'MATCH_OVER',
+    retry,
     winnerTeam,
     turnDeadline,
     turnTotalMs,

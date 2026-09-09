@@ -1,9 +1,8 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { room } from '../cosmetics';
 import {
   ActivityIndicator,
   Platform,
-  Pressable,
   ScrollView,
   Share,
   StyleSheet,
@@ -22,7 +21,7 @@ import { pattern } from '../haptics';
 import { TableScreen, type SeatMeta } from '../TableScreen';
 import { Button } from '../ui/Button';
 import { radius, theme } from '../theme';
-import { Dot } from '../ui/icons';
+import { SeatMap } from './SeatMap';
 import type { Settings } from '../storage';
 import { SERVER_URL, useNetGame, type NetGame } from './useNetGame';
 
@@ -207,6 +206,8 @@ export function OnlineGame({
 
 /** Everything that happens before four people are sitting down. */
 function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
+  // The seat map is drawn to the column's measured width.
+  const [width, setWidth] = useState(0);
   const seated = net.seats.filter((s) => s.connected).length;
   const ui = net.lang.s.ui;
 
@@ -221,19 +222,29 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: room().page }]}>
-      <ScrollView contentContainerStyle={styles.centre}>
-        {net.status === 'connecting' || net.status === 'waiting' ? (
-          <ActivityIndicator color={theme.accent} size="large" />
-        ) : null}
+      <ScrollView contentContainerStyle={styles.centre} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+        {net.status === 'connecting' ? <ActivityIndicator color={theme.accent} size="large" /> : null}
         <Text style={styles.title}>{message}</Text>
         {net.error && net.status !== 'waiting' && <Text style={styles.error}>{net.error}</Text>}
+        {net.status === 'error' && <Button label={ui.retry} tone="strong" onPress={net.retry} />}
+
+        {net.seats.length > 0 && width > 0 && (
+          <SeatMap
+            width={Math.min(420, width - 48)}
+            seats={net.seats}
+            mySeat={net.seat}
+            hostSeat={net.hostSeat}
+            canSit={net.status === 'waiting'}
+            roomId={net.roomId}
+            lang={net.lang}
+            room={room()}
+            anchors={net.anchors}
+            onSit={net.sit}
+          />
+        )}
 
         {net.roomId && (
           <View style={styles.panel}>
-            <Text style={styles.label}>{ui.tableCode}</Text>
-            <Text selectable style={styles.code}>
-              {net.roomId}
-            </Text>
             <Text style={styles.hint}>{ui.shareCode}</Text>
             {net.seat !== null &&
               net.seat === net.hostSeat &&
@@ -253,41 +264,6 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
                 }).catch(() => {});
               }}
             />
-          </View>
-        )}
-
-        {net.seats.length > 0 && (
-          <View style={styles.panel}>
-            {/* Two team rows: 0&2 vs 1&3. Before the start, an empty seat is a
-                button — tap it to move there and pick your partner. */}
-            {([[0, 2], [1, 3]] as const).map((team, ti) => (
-              <View key={ti} style={styles.teamRow}>
-                <Text style={styles.teamTag}>
-                  {ti === 0 ? net.lang.s.teamA : net.lang.s.teamB}
-                </Text>
-                {team.map((idx) => {
-                  const s = net.seats[idx]!;
-                  const free = !s.connected && net.status === 'waiting';
-                  const canSit = free && net.seat !== null && net.seat !== idx;
-                  return (
-                    <Pressable
-                      key={idx}
-                      disabled={!canSit}
-                      onPress={() => net.sit(idx as Seat)}
-                      style={[styles.seatCell, canSit && styles.seatCellFree]}
-                    >
-                      <View style={styles.seatInner}>
-                        <Dot on={s.connected} />
-                        <Text style={styles.seatLine}>
-                          {s.connected ? s.name : canSit ? ui.sitHere : s.name}
-                          {idx === net.seat ? `  (${net.lang.s.seat[0]})` : ''}
-                        </Text>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ))}
           </View>
         )}
 
@@ -312,13 +288,5 @@ const styles = StyleSheet.create({
     gap: 6,
     alignItems: 'center',
   },
-  label: { color: theme.textDim, fontSize: 13 },
-  code: { color: theme.accent, fontSize: 26, fontWeight: '800', letterSpacing: 2 },
   hint: { color: theme.textDim, fontSize: 12, textAlign: 'center' },
-  seatInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  seatLine: { color: theme.text, fontSize: 15 },
-  teamRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 4 },
-  teamTag: { color: theme.textDim, fontSize: 12, width: 34 },
-  seatCell: { flex: 1, paddingVertical: 6, paddingHorizontal: 8, borderRadius: 10 },
-  seatCellFree: { borderWidth: 1, borderColor: theme.line, borderStyle: 'dashed' },
 });

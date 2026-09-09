@@ -183,6 +183,17 @@ describe('anchors measure on demand', () => {
     expect(src('table/SeatPuck.tsx')).toMatch(/anchored \? anchorId\.seat\(seat\) : anchorId\.puck\(seat\)/);
   });
 
+  it('the lobby is a seat map on a felt, with a way back from an error', () => {
+    const online = src('net/OnlineGame.tsx');
+    expect(online).toMatch(/<SeatMap/);
+    expect(online).not.toMatch(/styles\.teamRow/);
+    expect(online).toMatch(/onPress=\{net\.retry\}/);
+    const map = src('net/SeatMap.tsx');
+    expect(map).toMatch(/<FeltArt/);
+    expect(map).toMatch(/seatPosition\(seat, me\)/);
+    expect(map).toMatch(/anchored=\{false\}/);
+  });
+
   it('the home screen no longer re-renders on every scroll event', () => {
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/setScrollTick/);
