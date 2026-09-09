@@ -18,8 +18,10 @@ import { EffectsOverlay } from './anim/EffectsOverlay';
 import { anchorId, FxBus } from './anim/FxBus';
 import { Avatar } from './avatars';
 import { Button } from './ui/Button';
-import { Check, Coin, Gear } from './ui/icons';
+import { Check, Coin, Crown, Gear, Robot } from './ui/icons';
 import { Panel } from './ui/Panel';
+import { TableHero } from './home/TableHero';
+import { Wordmark } from './home/Wordmark';
 import { PressScale } from './ui/PressScale';
 import type { Settings } from './storage';
 import { coinDingTimers, coinsLandedMs } from './anim/lifetimes';
@@ -29,7 +31,7 @@ import { useLaggedNumber } from './ui/useLaggedNumber';
 /** Coins a claim sends flying to the wallet. */
 const BONUS_COINS = 8;
 const QUEST_COINS = 6;
-import { radius, theme } from './theme';
+import { ink, radius, space, stroke, surface, theme, type } from './theme';
 
 /**
  * The lobby, laid out the social-poker way: identity in the header, one hero
@@ -49,7 +51,7 @@ export function HomeScreen({
   profile,
   settings,
   onProfileChange,
-  onSettingsChange,
+  onSettingsChange: _onSettingsChange,
   onLaunch,
   onOpenShop,
   onOpenSettings,
@@ -67,6 +69,9 @@ export function HomeScreen({
 }) {
   const ui = lang.s.ui;
   const [code, setCode] = useState('');
+  // The hero is drawn to the column's measured width (an SVG, not a flex box).
+  const [width, setWidth] = useState(0);
+  const heroWidth = Math.max(0, width - 2 * space.xl);
   const anchors = useMemo(() => new AnchorMap(), []);
   const fxBus = useMemo(() => new FxBus(), []);
 
@@ -117,7 +122,7 @@ export function HomeScreen({
     <AnchorHost map={anchors}>
       <SafeAreaView style={[styles.safe, { backgroundColor: room().page }]}>
         <View style={styles.fill}>
-          <ScrollView contentContainerStyle={styles.scroll}>
+          <ScrollView contentContainerStyle={styles.scroll} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
             {/* identity header */}
             <View style={styles.headerRow}>
               <PressScale
@@ -150,82 +155,107 @@ export function HomeScreen({
               </PressScale>
             </View>
 
+            {/* the brand — a long press opens the deck gallery: review harness and easter egg */}
             <View style={styles.brand}>
-              {/* Long-press opens the deck gallery — review harness and easter egg. */}
-              <Text style={styles.title} onLongPress={() => onLaunch({ mode: 'gallery' })}>
-                Bela Štih
-              </Text>
+              <Wordmark onLongPress={() => onLaunch({ mode: 'gallery' })} />
               <Text style={styles.sub}>{lang.s.gameToTarget(1001)}</Text>
             </View>
 
-            {/* the hero: online quick play */}
-            <PressScale onPress={() => go({ mode: 'quick' })} style={styles.hero} scaleTo={0.985}>
-              <Text style={styles.heroText}>{ui.play}</Text>
-            </PressScale>
+            {/* the table: online quick play */}
+            <TableHero
+              width={heroWidth}
+              avatar={profile.selectedAvatar}
+              day={today}
+              label={ui.play}
+              room={room()}
+              onPress={() => go({ mode: 'quick' })}
+            />
 
+            {/* the two other ways in */}
             <View style={styles.modeRow}>
-              <Button label={ui.playBots} tone="plain" onPress={() => go({ mode: 'offline' })} />
-              <Button label={ui.privateTable} tone="plain" onPress={() => go({ mode: 'create' })} />
+              <ModeTile
+                icon={<Robot size={22} colour={ink.hi} />}
+                title={ui.playBots}
+                sub={ui.modeBotsSub}
+                onPress={() => go({ mode: 'offline' })}
+              />
+              <ModeTile
+                icon={<Crown size={22} />}
+                title={ui.privateTable}
+                sub={ui.modePrivateSub}
+                onPress={() => go({ mode: 'create' })}
+              />
             </View>
 
-            {claimable ? (
-              <Panel tone="accent" style={styles.centred}>
-                <View style={styles.bonusRow}>
-                  <Text style={styles.bonusTitle}>{ui.dailyBonus(previewDaily(profile, today).coins)}</Text>
-                  <Coin size={16} />
-                </View>
-                <Text style={styles.hint}>
-                  {previewDaily(profile, today).streakDays > 1
-                    ? ui.streakDays(profile.streakDays)
-                    : ui.startStreak}
-                </Text>
-                <Anchor id="bonus">
-                  <Button label={ui.claim} tone="strong" sound={null} onPress={collect} />
-                </Anchor>
-              </Panel>
-            ) : (
-              <Text style={styles.hint}>{ui.bonusClaimed(profile.streakDays)}</Text>
-            )}
-
-            {profile.quests.length > 0 && (
-              <Panel label={ui.dailyQuests}>
-                {profile.quests.map((q, i) => (
-                  <View key={i} style={styles.questRow}>
-                    <View style={styles.questLeft}>
-                      <Text style={[styles.questText, isQuestComplete(q) && styles.questDone]}>
-                        {ui.questLabel(q.kind)} {q.progress}/{q.target}
-                      </Text>
-                      <View style={styles.questTrack}>
-                        <View
-                          style={[
-                            styles.questFill,
-                            { width: `${Math.round((q.progress / q.target) * 100)}%` },
-                          ]}
-                        />
-                      </View>
-                    </View>
-                    {q.claimed ? (
-                      <Check />
-                    ) : isQuestComplete(q) ? (
-                      <Anchor id={`quest:${i}`}>
-                        <Button
-                          label={`+${q.reward}`}
-                          icon={<Coin size={12} />}
-                          tone="strong"
-                          sound={null}
-                          onPress={() => collectQuest(i)}
-                        />
-                      </Anchor>
-                    ) : (
-                      <View style={styles.reward}>
-                        <Text style={styles.questReward}>+{q.reward}</Text>
-                        <Coin size={12} />
-                      </View>
-                    )}
+            {/* the retention loop, in one place: today's bonus, today's quests */}
+            <Panel label={ui.daily}>
+              <View style={styles.bonusRow}>
+                <View style={styles.bonusText}>
+                  <View style={styles.bonusTitleRow}>
+                    <Text style={styles.bonusTitle} numberOfLines={1}>
+                      {claimable
+                        ? ui.dailyBonus(previewDaily(profile, today).coins)
+                        : ui.bonusClaimed(profile.streakDays)}
+                    </Text>
+                    {claimable && <Coin size={15} />}
                   </View>
-                ))}
-              </Panel>
-            )}
+                  <Text style={styles.hint} numberOfLines={1}>
+                    {claimable && previewDaily(profile, today).streakDays > 1
+                      ? ui.streakDays(profile.streakDays)
+                      : claimable
+                        ? ui.startStreak
+                        : ui.streakDays(profile.streakDays)}
+                  </Text>
+                </View>
+                {claimable ? (
+                  <Anchor id="bonus">
+                    <Button label={ui.claim} tone="strong" sound={null} onPress={collect} />
+                  </Anchor>
+                ) : (
+                  <View style={styles.claimed}>
+                    <Check />
+                  </View>
+                )}
+              </View>
+              {profile.quests.length > 0 && <View style={styles.rule} />}
+              {profile.quests.map((q, i) => (
+                <View key={i} style={styles.questRow}>
+                  <View style={styles.questLeft}>
+                    <Text style={[styles.questText, isQuestComplete(q) && styles.questDone]}>
+                      {ui.questLabel(q.kind)} {q.progress}/{q.target}
+                    </Text>
+                    <View style={styles.questTrack}>
+                      <View
+                        style={[
+                          styles.questFill,
+                          { width: `${Math.round((q.progress / q.target) * 100)}%` },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                  {q.claimed ? (
+                    <View style={styles.claimed}>
+                      <Check />
+                    </View>
+                  ) : isQuestComplete(q) ? (
+                    <Anchor id={`quest:${i}`}>
+                      <Button
+                        label={`+${q.reward}`}
+                        icon={<Coin size={12} />}
+                        tone="strong"
+                        sound={null}
+                        onPress={() => collectQuest(i)}
+                      />
+                    </Anchor>
+                  ) : (
+                    <View style={styles.reward}>
+                      <Text style={styles.questReward}>+{q.reward}</Text>
+                      <Coin size={12} />
+                    </View>
+                  )}
+                </View>
+              ))}
+            </Panel>
 
             <Panel label={ui.joinByCode}>
               <View style={styles.joinRow}>
@@ -233,7 +263,7 @@ export function HomeScreen({
                   value={code}
                   onChangeText={setCode}
                   placeholder={ui.tableCode}
-                  placeholderTextColor={theme.textDim}
+                  placeholderTextColor={ink.lo}
                   autoCapitalize="none"
                   autoCorrect={false}
                   style={styles.input}
@@ -246,18 +276,6 @@ export function HomeScreen({
               </View>
             </Panel>
 
-            <Panel label={ui.nicknameLabel}>
-              <TextInput
-                value={settings.nickname}
-                onChangeText={(nickname) => onSettingsChange({ ...settings, nickname })}
-                placeholder={ui.nicknamePlaceholder}
-                placeholderTextColor={theme.textDim}
-                maxLength={20}
-                autoCorrect={false}
-                style={styles.input}
-              />
-            </Panel>
-
             <Text style={styles.disclaimer}>{ui.coinsDisclaimer}</Text>
           </ScrollView>
 
@@ -268,76 +286,120 @@ export function HomeScreen({
   );
 }
 
+/** One of the two ways in that is not the table itself: an icon, a title, a line under it. */
+function ModeTile({
+  icon,
+  title,
+  sub,
+  onPress,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  sub: string;
+  onPress: () => void;
+}) {
+  return (
+    <PressScale onPress={onPress} style={styles.tile} scaleTo={0.98}>
+      <View style={styles.tileIcon}>{icon}</View>
+      <View style={styles.tileText}>
+        <Text style={styles.tileTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={styles.tileSub} numberOfLines={1}>
+          {sub}
+        </Text>
+      </View>
+    </PressScale>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.feltDeep },
   fill: { flex: 1 },
-  scroll: { padding: 20, gap: 16, paddingBottom: 40 },
+  scroll: { padding: space.xl, gap: space.lg, paddingBottom: 40 },
 
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm + 2 },
   // The name gets the room the row actually has: it was being squeezed into its
   // own text width and truncated to two letters while half the row sat empty.
   identityFlex: { flex: 1, minWidth: 0 },
-  identity: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 },
+  identity: { flexDirection: 'row', alignItems: 'center', gap: space.sm, flexShrink: 1, minWidth: 0 },
   identityText: { flexShrink: 1, minWidth: 0 },
-  headerName: { color: theme.text, fontSize: 15, fontWeight: '700' },
-  headerLevel: { color: theme.textDim, fontSize: 12 },
+  headerName: { color: ink.hi, ...type.body, fontWeight: '700' },
+  headerLevel: { color: ink.mid, ...type.caption },
   coinChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.28)',
+    gap: space.xs,
+    backgroundColor: surface.sunk,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: theme.accent,
-    paddingHorizontal: 12,
+    paddingHorizontal: space.md,
     paddingVertical: 6,
   },
-  coinText: { color: theme.accent, fontSize: 14, fontWeight: '800' },
-  gear: { padding: 4 },
-  gearText: { fontSize: 20 },
+  coinText: { color: theme.accent, ...type.sub, fontWeight: '800' },
+  gear: { padding: space.xs },
 
   brand: { alignItems: 'center', gap: 2 },
-  title: { color: theme.text, fontSize: 30, fontWeight: '800' },
-  sub: { color: theme.textDim, fontSize: 14 },
+  sub: { color: ink.mid, ...type.sub },
 
-  hero: {
-    backgroundColor: theme.accent,
-    borderRadius: radius.panel,
-    paddingVertical: 18,
+  modeRow: { flexDirection: 'row', gap: space.sm + 2 },
+  tile: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: space.sm + 2,
+    backgroundColor: surface.panel,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: stroke.hair,
+    padding: space.md,
+    minWidth: 0,
   },
-  heroText: { color: '#241a05', fontSize: 24, fontWeight: '900', letterSpacing: 2 },
-  modeRow: { gap: 10 },
+  tileIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: surface.chip,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileText: { flex: 1, minWidth: 0, gap: 1 },
+  tileTitle: { color: ink.hi, ...type.sub, fontWeight: '800' },
+  tileSub: { color: ink.mid, ...type.caption },
 
-  centred: { alignItems: 'center' },
-  bonusRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  bonusTitle: { color: theme.accent, fontSize: 17, fontWeight: '800' },
-  hint: { color: theme.textDim, fontSize: 12, textAlign: 'center' },
+  bonusRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm + 2, minHeight: 44 },
+  bonusText: { flex: 1, minWidth: 0, gap: 2 },
+  bonusTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 1 },
+  bonusTitle: { color: theme.accent, ...type.h3, fontWeight: '800', flexShrink: 1 },
+  hint: { color: ink.mid, ...type.caption },
+  claimed: { width: 44, height: 36, alignItems: 'center', justifyContent: 'center' },
+  rule: { height: 1, backgroundColor: stroke.hair, marginVertical: space.xs },
 
-  joinRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  joinRow: { flexDirection: 'row', gap: space.sm + 2, alignItems: 'center' },
   input: {
     flex: 1,
-    color: theme.text,
-    backgroundColor: 'rgba(255,255,255,0.07)',
+    color: ink.hi,
+    backgroundColor: surface.chip,
     borderRadius: radius.pill,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 15,
+    paddingHorizontal: space.lg - 2,
+    paddingVertical: space.sm + 2,
+    ...type.body,
   },
 
-  questRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  questRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm + 2, minHeight: 36 },
   questLeft: { flex: 1, gap: 5 },
-  questText: { color: theme.text, fontSize: 14 },
-  questDone: { color: theme.ok, fontWeight: '700' },
+  questText: { color: ink.hi, ...type.sub },
+  questDone: { color: theme.okInk, fontWeight: '700' },
   questTrack: {
     height: 5,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    backgroundColor: surface.chip,
     overflow: 'hidden',
   },
   questFill: { height: 5, borderRadius: radius.pill, backgroundColor: theme.accent },
-  reward: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  questReward: { color: theme.accent, fontSize: 14 },
+  reward: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  questReward: { color: theme.accent, ...type.sub },
 
-  disclaimer: { color: theme.textDim, fontSize: 11, textAlign: 'center', marginTop: 8 },
+  disclaimer: { color: ink.lo, ...type.caption, textAlign: 'center', marginTop: space.sm },
 });

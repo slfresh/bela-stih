@@ -20,7 +20,7 @@ const PALETTE_FILES = new Set(['theme.ts', 'cosmetics.ts', 'avatars.tsx', 'emote
 
 /** rgba(...) and '#hex' literals still allowed per file (path relative to src, forward slashes). */
 const LITERAL_BASELINE: Record<string, number> = {
-  'HomeScreen.tsx': 4,
+  'HomeScreen.tsx': 0,
   'PlayingCard.tsx': 2,
   'TableScreen.tsx': 10,
   'anim/EffectsOverlay.tsx': 1,
@@ -110,6 +110,17 @@ describe('the design tokens', () => {
       for (const a of allow[f.rel] ?? []) text = text.split(a).join('');
       expect(emoji.test(text), `${f.rel} contains an emoji`).toBe(false);
     }
+  });
+
+  it('keep the home a lobby: the table, two tiles, one daily panel, no form field but the code', () => {
+    const home = files.find((f) => f.rel === 'HomeScreen.tsx')!.text;
+    expect(home).toMatch(/<TableHero/);
+    expect(home).toMatch(/<Wordmark/);
+    expect((home.match(/<ModeTile/g) ?? []).length).toBe(2);
+    expect((home.match(/<TextInput/g) ?? []).length).toBe(1); // the table code; the nickname moved to Settings
+    expect(home).toMatch(/<Anchor id="bonus">/);
+    expect(home).toMatch(/<Anchor id=\{`quest:\$\{i\}`\}>/);
+    expect(files.find((f) => f.rel === 'screens/SettingsScreen.tsx')!.text).toMatch(/settings\.nickname/);
   });
 
   it('are what the screens import: the one panel, the drawn icons', () => {

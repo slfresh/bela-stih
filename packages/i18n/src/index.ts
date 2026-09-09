@@ -69,6 +69,11 @@ export interface UiStrings {
   play: string;
   playBots: string;
   privateTable: string;
+  /** Under the two mode tiles on the home screen. */
+  modeBotsSub: string;
+  modePrivateSub: string;
+  /** The one panel that holds the daily bonus and the quests. */
+  daily: string;
   joinByCode: string;
   tableCode: string;
   enter: string;
@@ -432,6 +437,9 @@ const hr: Strings = {
     play: 'IGRAJ',
     playBots: 'Igraj protiv botova',
     privateTable: 'Napravi privatni stol',
+    modeBotsSub: 'Odmah, i bez interneta',
+    modePrivateSub: 'Pozovi prijatelje kodom',
+    daily: 'Dnevno',
     joinByCode: 'Pridruži se šifrom',
     tableCode: 'šifra stola',
     enter: 'Uđi',
@@ -654,6 +662,9 @@ const srCyrl: Strings = {
     play: 'ИГРАЈ',
     playBots: 'Играј против ботова',
     privateTable: 'Направи приватни сто',
+    modeBotsSub: 'Одмах, и без интернета',
+    modePrivateSub: 'Позови пријатеље кодом',
+    daily: 'Дневно',
     joinByCode: 'Придружи се шифром',
     tableCode: 'шифра стола',
     enter: 'Уђи',
@@ -872,6 +883,9 @@ const en: Strings = {
     play: 'PLAY',
     playBots: 'Play vs bots',
     privateTable: 'Create a private table',
+    modeBotsSub: 'Right away, offline too',
+    modePrivateSub: 'Invite friends with a code',
+    daily: 'Daily',
     joinByCode: 'Join with a code',
     tableCode: 'table code',
     enter: 'Enter',

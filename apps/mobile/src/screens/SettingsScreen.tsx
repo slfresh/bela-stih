@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Linking, StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { PressScale } from '../ui/PressScale';
 import type { Lang } from '@belot/i18n';
 import type { PlayerProfile } from '@belot/progression';
@@ -7,7 +7,7 @@ import { resetProfile, type Settings, VOLUME_OPTIONS } from '../storage';
 import { setDeckStyle } from '../cosmetics';
 import { PlayingCard } from '../PlayingCard';
 import { playSfx, setMasterVolume, setSoundEnabled } from '../audio';
-import { radius, theme } from '../theme';
+import { ink, radius, space, surface, theme, type } from '../theme';
 import { APP_VERSION, Panel, ScreenShell } from './common';
 
 const LOCALES: ReadonlyArray<{ id: Settings['locale']; label: string }> = [
@@ -54,6 +54,17 @@ export function SettingsScreen({
 
   return (
     <ScreenShell title={ui.settings} onBack={onBack}>
+      <Panel label={ui.nicknameLabel}>
+        <TextInput
+          value={settings.nickname}
+          onChangeText={(nickname) => onSettingsChange({ ...settings, nickname })}
+          placeholder={ui.nicknamePlaceholder}
+          placeholderTextColor={ink.lo}
+          maxLength={20}
+          autoCorrect={false}
+          style={styles.input}
+        />
+      </Panel>
       <Panel>
         {toggleRow(ui.sound, settings.sound, (sound) => onSettingsChange({ ...settings, sound }))}
         {toggleRow(ui.haptics, settings.haptics, (haptics) =>
@@ -272,6 +283,14 @@ export function SettingsScreen({
 }
 
 const styles = StyleSheet.create({
+  input: {
+    color: ink.hi,
+    backgroundColor: surface.chip,
+    borderRadius: radius.pill,
+    paddingHorizontal: space.lg - 2,
+    paddingVertical: space.sm + 2,
+    ...type.body,
+  },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowLabel: { color: theme.text, fontSize: 15 },
 
