@@ -1,5 +1,6 @@
 import { G, Text as SvgText } from 'react-native-svg';
 import type { Card, Rank } from '@belot/engine';
+import { cardLang } from '../cosmetics';
 import { PipShape, suitColour } from './pips';
 
 /**
@@ -9,21 +10,14 @@ import { PipShape, suitColour } from './pips';
  * the quickest possible read, or just bigger type.
  */
 
-/** Plain-language rank: arabic numbers, K/D/B/A letters. */
-const SIMPLE_RANK: Record<Rank, string> = {
-  A: 'A',
-  K: 'K',
-  Q: 'D',
-  J: 'B',
-  '10': '10',
-  '9': '9',
-  '8': '8',
-  '7': '7',
-};
+/** Plain-language rank: arabic numbers; the court letters as the app's locale spells them (K/D/B/A in Croatian). */
+function simpleRank(rank: Rank): string {
+  return rank === 'A' || rank === 'K' || rank === 'Q' || rank === 'J' ? cardLang().rankShort(rank) : rank;
+}
 
 function CornerIndex({ card }: { card: Card }) {
   const { fill } = suitColour(card.suit);
-  const label = SIMPLE_RANK[card.rank];
+  const label = simpleRank(card.rank);
   const size = label.length > 1 ? 13 : 16;
   return (
     <G>
@@ -39,7 +33,7 @@ function CornerIndex({ card }: { card: Card }) {
 
 export function SimpleFace({ card }: { card: Card }) {
   const { fill } = suitColour(card.suit);
-  const label = SIMPLE_RANK[card.rank];
+  const label = simpleRank(card.rank);
   return (
     <G>
       <CornerIndex card={card} />

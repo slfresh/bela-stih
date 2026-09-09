@@ -1,14 +1,14 @@
 import { memo } from 'react';
 import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
 import type { Card, Rank, Suit } from '@belot/engine';
-import { Lang } from '@belot/i18n';
-import type { DeckStyle } from '../cosmetics';
+import { cardLang, type DeckStyle } from '../cosmetics';
 import { counters } from '../dev/counters';
-import { PipShape, suitColour } from './pips';
+import { indexColour, PipShape, suitColour } from './pips';
+import { cornerIndexLayout, INDEX_PIP_SCALE } from './cornerIndex';
 import { SeasonScene } from './scenes';
 import { CourtHalf } from './courts';
 import { garb } from './palette';
-import { Image as RNImage, StyleSheet } from 'react-native';
+import { Image as RNImage, StyleSheet, Text as RNText, View } from 'react-native';
 import { FrenchFace, frenchColour } from './french';
 import { SimpleFace } from './simple';
 import { vintageSource } from './vintage';
@@ -27,8 +27,6 @@ import { vintageSource } from './vintage';
  *
  * Everything is vector; nothing is traced from a copyrighted printing.
  */
-
-const lang = new Lang('hr');
 
 const COURTS: Rank[] = ['J', 'Q', 'K'];
 
@@ -83,16 +81,29 @@ export const CardFace = memo(CardFaceImpl, (a, b) =>
   a.card.suit === b.card.suit &&
   a.card.rank === b.card.rank &&
   a.width === b.width &&
-  a.style === b.style,
+  a.style === b.style &&
+  a.index === b.index,
 );
 
-function CardFaceImpl({ card, width, style }: { card: Card; width: number; style: DeckStyle }) {
+function CardFaceImpl({
+  card,
+  width,
+  style,
+  index = true,
+}: {
+  card: Card;
+  width: number;
+  style: DeckStyle;
+  /** The corner index: on by default; the gallery may show the bare printing. */
+  index?: boolean;
+}) {
   counters.cardFace++;
   const height = width * 1.45;
 
-  // The vintage deck is photographic: a real printed card, rounded and framed.
+  // The vintage deck is photographic: a real printed card, rounded and framed
+  // — the index is a small cream chip laid over the corner, the photo untouched.
   if (style === 'starinske') {
-    return (
+    const image = (
       <RNImage
         source={vintageSource(card)}
         style={{
@@ -104,6 +115,32 @@ function CardFaceImpl({ card, width, style }: { card: Card; width: number; style
         }}
         resizeMode="cover"
       />
+    );
+    if (!index) return image;
+    const chip = Math.max(14, Math.round(width * 0.22));
+    return (
+      <View style={{ width, height }}>
+        {image}
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left: Math.round(width * 0.05),
+            top: Math.round(width * 0.05),
+            height: chip,
+            minWidth: chip,
+            paddingHorizontal: 3,
+            borderRadius: chip / 3,
+            backgroundColor: garb.cream,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <RNText style={{ color: indexColour(card.suit), fontSize: Math.round(chip * 0.7), fontWeight: '800' }}>
+            {cardLang().rankShort(card.rank)}
+          </RNText>
+        </View>
+      </View>
     );
   }
 
@@ -133,7 +170,39 @@ function CardFaceImpl({ card, width, style }: { card: Card; width: number; style
       ) : (
         <Pips rank={card.rank} suit={card.suit} />
       )}
+      {/* the corner index, at both ends, on the mađarice only: the other faces carry their own */}
+      {index && style === 'madarice' && (
+        <>
+          <CornerIndex card={card} />
+          <G transform="rotate(180 50 72.5)">
+            <CornerIndex card={card} />
+          </G>
+        </>
+      )}
     </Svg>
+  );
+}
+
+/**
+ * The rank in the corner — and on courts and aces the pip too, since their
+ * own pips sit inboard or low. Number cards show the numeral alone: their
+ * pips are the suit, and the top-left one starts where a corner pip would.
+ */
+function CornerIndex({ card }: { card: Card }) {
+  const withPip = card.rank === 'A' || COURTS.includes(card.rank);
+  const l = cornerIndexLayout(cardLang().rankShort(card.rank), withPip);
+  const ink = indexColour(card.suit);
+  return (
+    <G>
+      <SvgText x={l.x} y={l.y} fontSize={l.fontSize} fontWeight="bold" fill={ink} textAnchor="middle">
+        {l.label}
+      </SvgText>
+      {l.pip && (
+        <G transform={`translate(${l.pip.x} ${l.pip.y}) scale(${INDEX_PIP_SCALE})`}>
+          <PipShape suit={card.suit} />
+        </G>
+      )}
+    </G>
   );
 }
 
@@ -143,7 +212,7 @@ function Pips({ rank, suit }: { rank: Rank; suit: Suit }) {
   if (!layout) return null;
   const half = (100 * PIP_SCALE) / 2;
   const makerPanel = rank === '7' && suit === 'clubs';
-  const numeral = lang.rankShort(rank);
+  const numeral = cardLang().rankShort(rank);
   const { fill } = suitColour(suit);
 
   const pipAt = ([x, y]: [number, number], i: number) => (
@@ -269,7 +338,7 @@ function Ace({ suit, colour }: { suit: Suit; colour: string }) {
         fill={garb.cream} stroke={garb.ink} strokeWidth="0.9" />
       <SvgText x="50" y="118" fontSize="9" fontWeight="bold" fill={garb.ink}
         textAnchor="middle" letterSpacing="0.4">
-        {lang.seasonName(suit).toUpperCase()}
+        {cardLang().seasonName(suit).toUpperCase()}
       </SvgText>
     </G>
   );

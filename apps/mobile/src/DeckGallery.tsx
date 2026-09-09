@@ -2,8 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { Rank, Suit } from '@belot/engine';
 import { SUITS } from '@belot/engine';
-import { Lang } from '@belot/i18n';
-import { cosmetics, room } from './cosmetics';
+import { cardLang, cosmetics, room } from './cosmetics';
 import { CardBackFace, CardFace } from './deck';
 import { Button } from './ui/Button';
 import { theme } from './theme';
@@ -16,7 +15,7 @@ import { theme } from './theme';
  * answer to "show me the cards" for curious players, and it costs nothing.
  */
 
-const lang = new Lang('hr');
+const lang = () => cardLang();
 
 /** Strength order within a suit, strongest first — how a player would fan them. */
 const ORDER: Rank[] = ['A', '10', 'K', 'Q', 'J', '9', '8', '7'];
@@ -30,7 +29,7 @@ export function DeckGallery({ onExit }: { onExit: () => void }) {
         {SUITS.map((suit: Suit) => (
           <View key={suit}>
             <Text style={styles.suitLabel}>
-              {lang.suitName(suit)} · {lang.seasonName(suit)}
+              {lang().suitName(suit)} · {lang().seasonName(suit)}
             </Text>
             <View style={styles.row}>
               {ORDER.map((rank) => (

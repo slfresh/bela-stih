@@ -1,3 +1,4 @@
+import { Lang } from '@belot/i18n';
 import type { PlayerProfile } from '@belot/progression';
 import { shade } from './colour';
 
@@ -99,4 +100,16 @@ export function cosmetics(): Readonly<typeof current> {
 /** The room the player has chosen, read during render like the rest of the cosmetics. */
 export function room(): RoomStyle {
   return roomStyle(current.felt);
+}
+
+// The cards' own labels (the corner index, the season banner) follow the
+// app's locale the same way: set by App, read by the memoised faces.
+let cardLocale = new Lang('hr');
+
+export function setCardLocale(l: Lang): void {
+  cardLocale = l;
+}
+
+export function cardLang(): Lang {
+  return cardLocale;
 }

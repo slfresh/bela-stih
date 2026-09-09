@@ -25,6 +25,12 @@ export function suitColour(suit: Suit): { fill: string; dark: string } {
   return PIP_COLOUR[SUIT_COLOUR[suit]];
 }
 
+/** The corner index's ink: the suit's own colour, except bundeva's gold, which is too light on cream (its dark reads 4.6:1). */
+export function indexColour(suit: Suit): string {
+  const role = SUIT_COLOUR[suit];
+  return role === 'gold' ? PIP_COLOUR[role].dark : PIP_COLOUR[role].fill;
+}
+
 /** Pip artwork on a 0..100 canvas, with no <Svg> wrapper. */
 export function PipShape({ suit }: { suit: Suit }) {
   const { fill } = suitColour(suit);

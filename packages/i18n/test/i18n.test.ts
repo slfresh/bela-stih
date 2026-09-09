@@ -160,6 +160,12 @@ describe('the Cyrillic locale is actually Cyrillic', () => {
     for (const rank of RANKS) assertNoLatin(`rankName.${rank}`, cyr.rankName(rank));
   });
 
+  it('translates the court letters on the cards and the seasons on the aces', () => {
+    // These are printed on the cards' corner index and the ace's banner.
+    for (const rank of ['J', 'Q', 'K'] as const) assertNoLatin(`rankShort.${rank}`, cyr.rankShort(rank));
+    for (const suit of SUITS) assertNoLatin(`season.${suit}`, cyr.seasonName(suit));
+  });
+
   it('translates suits, seats and teams', () => {
     for (const suit of SUITS) assertNoLatin('suit', cyr.suitName(suit));
     for (const seat of [0, 1, 2, 3] as Seat[]) assertNoLatin('seat', cyr.seat(seat, 0));
