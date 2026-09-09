@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import type { Sfx } from '../audio';
 import { radius, theme } from '../theme';
@@ -15,6 +16,7 @@ export function Button({
   compact = false,
   sound = 'tap',
   style,
+  icon,
 }: {
   label: string;
   onPress: () => void;
@@ -28,6 +30,8 @@ export function Button({
    */
   sound?: Sfx | null;
   style?: StyleProp<ViewStyle>;
+  /** Drawn before the label: the suit pip on a trump-call button. */
+  icon?: ReactNode;
 }) {
   const toneStyle =
     tone === 'strong' ? styles.strong : tone === 'bela' ? styles.bela : styles.plain;
@@ -35,8 +39,9 @@ export function Button({
     <PressScale
       onPress={onPress}
       sound={sound}
-      style={[styles.btn, toneStyle, compact && styles.compact, style]}
+      style={[styles.btn, toneStyle, compact && styles.compact, icon !== undefined && styles.withIcon, style]}
     >
+      {icon}
       <Text style={[styles.text, compact && styles.textCompact]} numberOfLines={compact ? 2 : undefined}>
         {label}
       </Text>
@@ -58,6 +63,7 @@ const styles = StyleSheet.create({
   strong: { backgroundColor: theme.wood, borderColor: theme.accent },
   bela: { backgroundColor: theme.accent, borderColor: theme.accent },
   compact: { paddingHorizontal: 8, paddingVertical: 7 },
+  withIcon: { flexDirection: 'row', gap: 6 },
   text: { color: theme.text, fontSize: 14, fontWeight: '600' },
   textCompact: { fontSize: 11, textAlign: 'center' },
 });

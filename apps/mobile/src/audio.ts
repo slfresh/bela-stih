@@ -25,7 +25,11 @@ export type Sfx =
   | 'tap'
   | 'pop'
   | 'turn'
-  | 'tick';
+  | 'tick'
+  | 'knock'
+  | 'call'
+  | 'stamp'
+  | 'kontra';
 
 // require() rather than import so Metro bundles the asset and hands back a module id.
 const SOURCES: Record<Sfx, number> = {
@@ -45,6 +49,10 @@ const SOURCES: Record<Sfx, number> = {
   pop: require('../assets/sfx/pop.wav'),
   turn: require('../assets/sfx/turn.wav'),
   tick: require('../assets/sfx/tick.wav'),
+  knock: require('../assets/sfx/knock.wav'),
+  call: require('../assets/sfx/call.wav'),
+  stamp: require('../assets/sfx/stamp.wav'),
+  kontra: require('../assets/sfx/kontra.wav'),
 };
 
 /**
@@ -70,6 +78,10 @@ const GAIN: Record<Sfx, number> = {
   pop: 0.6,
   turn: 0.9,
   tick: 0.7,
+  knock: 0.7,
+  call: 0.85,
+  stamp: 0.7,
+  kontra: 0.9,
 };
 
 /**
@@ -78,7 +90,17 @@ const GAIN: Record<Sfx, number> = {
  * fanfare just sounds wrong — and so does the clock, whose two pitches must
  * stay tellable apart.
  */
-const VARIED: ReadonlySet<Sfx> = new Set(['deal', 'play', 'trick', 'lastTrick', 'coin', 'tap', 'pop']);
+const VARIED: ReadonlySet<Sfx> = new Set([
+  'deal',
+  'play',
+  'trick',
+  'lastTrick',
+  'coin',
+  'tap',
+  'pop',
+  'knock',
+  'stamp',
+]);
 
 export interface PlayOptions {
   /** Pitch and tempo multiplier on top of the effect's own variation; 1 plays it as made. */

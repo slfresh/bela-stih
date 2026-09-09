@@ -1,4 +1,4 @@
-import type { Card, Seat } from '@belot/engine';
+import type { Card, Seat, Suit } from '@belot/engine';
 
 /**
  * A tiny imperative channel from game logic to the effects overlay.
@@ -65,7 +65,13 @@ export type Fx =
       /** The director's pace, so the pop and fade shrink with the beat. */
       speed: number;
       big?: boolean;
+      /** A suit pip before the text: the trump being called. */
+      pip?: Suit;
+      /** A zvanje's weight, 1–4: bigger and gold-edged as it grows. */
+      weight?: 1 | 2 | 3 | 4;
     }
+  /** The pip (or the ×2) landing on the plaque as a call's beat ends. */
+  | { kind: 'stamp'; at: XY; pip?: Suit; text?: string; tone: 'gold' | 'danger'; speed: number }
   /** A ring of light bursting from a point — the "your turn" cue's visible twin. */
   | { kind: 'pulse'; at: XY; speed: number }
   /** The dealer's button passing to the next seat over the scoring beat. */

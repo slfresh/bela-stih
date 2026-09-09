@@ -9,6 +9,7 @@ import { FxBus } from './anim/FxBus';
 import { useDirector } from './anim/useDirector';
 import { makeFxSpawner, spawnEmote } from './table/fx';
 import { timingsFor } from './anim/director';
+import { cueFor, type TableCue } from './table/cues';
 import { useMotionPolicy } from './anim/useMotionPolicy';
 import { BOT_EMOTES } from './emotes';
 import { playSfx } from './audio';
@@ -65,6 +66,9 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
   // cleared when the director goes idle. Presentation only — `toAct` on the
   // intermediate views stays null, and the turn cues never see this.
   const [spotlight, setSpotlight] = useState<Seat | null>(null);
+  // What the table itself does about an event: a nod, a shake, a glow.
+  const [cue, setCue] = useState<TableCue | null>(null);
+  const cueN = useRef(0);
 
   const anchors = useMemo(() => new AnchorMap(), []);
   const fxBus = useMemo(() => new FxBus(), []);
@@ -72,7 +76,7 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
   // The spawner is built before the director exists; it reads the view
   // through a ref the director fills in just below.
   const getViewRef = useRef<() => PublicView | null>(() => null);
-  const spawn = useMemo(
+  const fx = useMemo(
     () =>
       makeFxSpawner({
         anchors,
@@ -104,9 +108,11 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
       }
       if (r.award) setBanner(r.award);
       if (!flushed) {
-        spawn(e, speed);
+        fx.start(e, speed);
         // A seatless beat (the reveal, the deal, scoring) is nobody's move.
         setSpotlight('seat' in e ? e.seat : null);
+        const c = cueFor(e, HUMAN, getViewRef.current(), ++cueN.current);
+        if (c) setCue(c);
       }
       // A bot that takes a trick occasionally gloats — the table talks back.
       if (!flushed && e.kind === 'trickWon' && e.seat !== HUMAN && Math.random() < 0.22) {
@@ -121,7 +127,13 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     // Anchors re-measure as each batch starts (the measurement lands a frame
     // in; the table bumps them on every reflow as well).
     () => anchors.bump(),
-    { timings: timingsFor(motion), onEventEnd: (e) => landingSound(e, HUMAN) },
+    {
+      timings: timingsFor(motion),
+      onEventEnd: (e) => {
+        landingSound(e, HUMAN);
+        fx.end(e);
+      },
+    },
   );
 
   getViewRef.current = getView;
@@ -186,6 +198,7 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     lang,
     myTurn: idle && view.toAct === HUMAN,
     spotlight,
+    cue,
     motion,
     submit,
     nextDeal,

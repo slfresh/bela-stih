@@ -53,6 +53,7 @@ export const SeatPuck = memo(function SeatPuck({
   size = 54,
   thinking = false,
   reduced = false,
+  gesture = null,
 }: {
   seat: Seat;
   name: string;
@@ -79,6 +80,8 @@ export const SeatPuck = memo(function SeatPuck({
   thinking?: boolean;
   /** Reduce-motion: no pulse, no breath. */
   reduced?: boolean;
+  /** A one-off: a nod (a pass) or a pulse of the team ring (a big zvanje, a bela). */
+  gesture?: { kind: 'nod' | 'pulse'; n: number } | null;
 }) {
   const initial = (name.trim()[0] ?? '?').toUpperCase();
   // The chip ticks up as the deal lands (0 → 6 → 8) rather than jumping.
@@ -109,7 +112,23 @@ export const SeatPuck = memo(function SeatPuck({
     }
     return () => cancelAnimation(think);
   }, [think, thinking, reduced]);
-  const thinkPulse = useAnimatedStyle(() => ({ transform: [{ scale: think.value }] }));
+  // One-off gestures: a pass nods the whole puck; a big call or a bela flares
+  // the team ring. `n` is what makes a repeat new.
+  const nod = useSharedValue(0);
+  const flare = useSharedValue(1);
+  useEffect(() => {
+    if (!gesture || reduced) return;
+    if (gesture.kind === 'nod') {
+      nod.value = withSequence(withTiming(4, { duration: 90 }), withTiming(0, { duration: 110 }));
+    } else {
+      flare.value = withSequence(
+        withTiming(1.14, { duration: 120, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 220, easing: Easing.inOut(Easing.quad) }),
+      );
+    }
+  }, [gesture, nod, flare, reduced]);
+  const nodStyle = useAnimatedStyle(() => ({ transform: [{ translateY: nod.value }] }));
+  const flareStyle = useAnimatedStyle(() => ({ transform: [{ scale: think.value * flare.value }] }));
   // The name sits under the disc and needs room for a couple of words; a
   // smaller puck must give that room back, or a shrunk seat still costs 86px
   // of the table's width. 54 + 32 is exactly the old fixed width.
@@ -119,7 +138,7 @@ export const SeatPuck = memo(function SeatPuck({
   const portrait = avatar && hasAvatar(avatar) ? avatar : null;
 
   return (
-    <View style={[styles.root, { width }]}>
+    <Animated.View style={[styles.root, { width }, nodStyle]}>
       <View style={{ width: ringSize, height: ringSize }}>
         <Anchor id={anchorId.seat(seat)} style={[StyleSheet.absoluteFill, styles.centre]}>
           {portrait ? (
@@ -152,7 +171,7 @@ export const SeatPuck = memo(function SeatPuck({
             style={[
               styles.teamRing,
               { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: tone.edge },
-              thinkPulse,
+              flareStyle,
             ]}
             pointerEvents="none"
           />
@@ -190,7 +209,7 @@ export const SeatPuck = memo(function SeatPuck({
         {name}
         {isBot ? ' 🤖' : ''}
       </Text>
-    </View>
+    </Animated.View>
   );
 });
 

@@ -6,11 +6,12 @@ import Animated, {
   useSharedValue,
   withDelay,
   withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import type { Card } from '@belot/engine';
+import type { Card, Suit } from '@belot/engine';
 import { cosmetics } from '../cosmetics';
-import { CardBackFace, CardFace } from '../deck';
+import { CardBackFace, CardFace, SuitPip } from '../deck';
 import { garb } from '../deck/palette';
 import { counters } from '../dev/counters';
 import { radius, signal, theme } from '../theme';
@@ -29,6 +30,7 @@ import {
   DEAL_HOLD_MS,
   FLIGHT_FLIP_AT,
   PULSE_MS,
+  STAMP_MS,
   SWEEP_FLIP_AT,
   SWEEP_FLY_MS,
   SWEEP_HOLD_MS,
@@ -118,8 +120,12 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
           duration={fx.duration}
           speed={fx.speed}
           big={fx.big}
+          pip={fx.pip}
+          weight={fx.weight}
         />
       );
+    case 'stamp':
+      return <Stamp at={local(fx.at)} pip={fx.pip} text={fx.text} tone={fx.tone} speed={fx.speed} />;
     case 'pulse':
       return <Pulse at={local(fx.at)} speed={fx.speed} />;
     case 'badge':
@@ -393,6 +399,63 @@ function Badge({ from, to, duration }: { from: XY; to: XY; duration: number }) {
   );
 }
 
+// --- the stamp -----------------------------------------------------------------
+
+/**
+ * The trump pip (or the ×2) dropping onto the plaque as the call's beat ends:
+ * 1.6 → 1 with a spring and a ring of light, then it is simply the plaque's.
+ */
+function Stamp({
+  at,
+  pip,
+  text,
+  tone,
+  speed,
+}: {
+  at: XY;
+  pip?: Suit;
+  text?: string;
+  tone: 'gold' | 'danger';
+  speed: number;
+}) {
+  const p = useSharedValue(0);
+  const drop = useSharedValue(1.6);
+  useEffect(() => {
+    drop.value = withSpring(1, { damping: 12, stiffness: 240, mass: 0.5 });
+    p.value = withTiming(1, { duration: STAMP_MS * speed, easing: Easing.out(Easing.cubic) });
+  }, [p, drop, speed]);
+  const body = useAnimatedStyle(() => ({
+    opacity: 1 - Math.max(0, (p.value - 0.7) / 0.3),
+    transform: [
+      { translateX: at.x - STAMP_SIZE / 2 },
+      { translateY: at.y - STAMP_SIZE / 2 },
+      { scale: drop.value },
+    ],
+  }));
+  const ring = useAnimatedStyle(() => ({
+    opacity: 0.9 * (1 - p.value),
+    transform: [
+      { translateX: at.x - STAMP_SIZE / 2 },
+      { translateY: at.y - STAMP_SIZE / 2 },
+      { scale: 1 + 1.2 * p.value },
+    ],
+  }));
+  return (
+    <>
+      <Animated.View style={[styles.sprite, styles.stampRing, tone === 'danger' && styles.stampRingDanger, ring]} />
+      <Animated.View style={[styles.sprite, styles.stamp, body]}>
+        {pip !== undefined ? (
+          <SuitPip suit={pip} size={STAMP_SIZE - 8} />
+        ) : (
+          <Text style={[styles.stampText, tone === 'danger' && styles.stampTextDanger]}>{text}</Text>
+        )}
+      </Animated.View>
+    </>
+  );
+}
+
+const STAMP_SIZE = 36;
+
 // --- speech bubble -----------------------------------------------------------
 
 function Bubble({
@@ -402,6 +465,8 @@ function Bubble({
   duration,
   speed,
   big = false,
+  pip,
+  weight = 1,
 }: {
   at: XY;
   text: string;
@@ -410,6 +475,8 @@ function Bubble({
   speed: number;
   /** Emoji emotes read at reaction size, not caption size. */
   big?: boolean;
+  pip?: Suit;
+  weight?: 1 | 2 | 3 | 4;
 }) {
   const { width: screenW } = useWindowDimensions();
   const s = useSharedValue(0);
@@ -447,12 +514,24 @@ function Bubble({
       ]}
     >
       <Animated.View style={style}>
-        <View style={[styles.bubbleInner, tone === 'gold' && styles.bubbleInnerGold]}>
+        <View
+          style={[
+            styles.bubbleInner,
+            tone === 'gold' && styles.bubbleInnerGold,
+            weight >= 3 && styles.bubbleInnerHeavy,
+            pip !== undefined && styles.bubbleInnerRow,
+          ]}
+        >
+          {pip !== undefined && <SuitPip suit={pip} size={18} />}
           <Text
             style={[
               styles.bubbleText,
               tone === 'gold' && styles.bubbleTextGold,
               big && styles.bubbleTextBig,
+              // A bigger zvanje says so: 14 / 15 / 17 / 19.
+              weight === 2 && { fontSize: 15 },
+              weight === 3 && { fontSize: 17 },
+              weight === 4 && { fontSize: 19 },
             ]}
           >
             {text}
@@ -614,6 +693,24 @@ const styles = StyleSheet.create({
     maxWidth: 150,
   },
   bubbleInnerGold: { backgroundColor: theme.accent, borderColor: garb.goldDark },
+  bubbleInnerHeavy: { borderWidth: 2.5, borderColor: garb.gold, paddingVertical: 9 },
+  bubbleInnerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  stamp: {
+    width: STAMP_SIZE,
+    height: STAMP_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stampText: { color: garb.gold, fontSize: 20, fontWeight: '800' },
+  stampTextDanger: { color: theme.danger },
+  stampRing: {
+    width: STAMP_SIZE,
+    height: STAMP_SIZE,
+    borderRadius: STAMP_SIZE / 2,
+    borderWidth: 2,
+    borderColor: garb.gold,
+  },
+  stampRingDanger: { borderColor: theme.danger },
   bubbleText: { color: garb.ink, fontSize: 14, fontWeight: '700', textAlign: 'center' },
   bubbleTextGold: { color: garb.ink },
   bubbleTextBig: { fontSize: 28, lineHeight: 34 },

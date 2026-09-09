@@ -111,6 +111,7 @@ export function OnlineGame({
       lang={net.lang}
       view={net.view}
       spotlightSeat={net.spotlight}
+      cue={net.cue}
       reducedMotion={net.motion === 'reduced'}
       hardMode={net.hard}
       handSort={settings.handSort}

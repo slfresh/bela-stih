@@ -1,4 +1,4 @@
-import type { PublicView, Seat } from '@belot/engine';
+import type { PublicView, Seat, Suit } from '@belot/engine';
 import { cardId, SEATS } from '@belot/engine';
 import type { TableEvent } from '@belot/table';
 import type { Lang } from '@belot/i18n';
@@ -8,6 +8,7 @@ import { DEFAULT_TIMINGS } from '../anim/director';
 import { anchorId, type FxBus } from '../anim/FxBus';
 import { BACK_SCALE, dealStagger, FALLBACK_CARD_W, flightDuration } from '../anim/lifetimes';
 import { emoteText, isGlyphEmote } from '../emotes';
+import { declarationWeight } from './cues';
 
 /**
  * Maps table events to sprites. Shared by the offline and online screens, so a
@@ -78,9 +79,10 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
     tone: 'plain' | 'gold',
     duration: number,
     speed: number,
+    extra: { pip?: Suit; weight?: 1 | 2 | 3 | 4 } = {},
   ) => {
     const at = anchors.centre(anchorId.seat(seat));
-    if (at) bus.emit({ kind: 'bubble', at, text, tone, duration: duration * speed, speed });
+    if (at) bus.emit({ kind: 'bubble', at, text, tone, duration: duration * speed, speed, ...extra });
   };
 
   /**
@@ -120,7 +122,8 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
     });
   };
 
-  return (e: TableEvent, speed = 1): void => {
+  /** Sprites for an event's START: the beat itself. */
+  const start = (e: TableEvent, speed = 1): void => {
     const mySeat = mySeatOf();
     switch (e.kind) {
       case 'dealStarted':
@@ -182,7 +185,9 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
         break;
 
       case 'bidCalled':
-        bubble(e.seat, `${lang.s.callsVerb} ${lang.suitName(e.suit)}`, 'plain', 900, speed);
+        bubble(e.seat, `${lang.s.callsVerb} ${lang.suitName(e.suit)}`, 'plain', 900, speed, {
+          pip: e.suit,
+        });
         break;
 
       case 'doubled':
@@ -201,6 +206,7 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
           'gold',
           1100,
           speed,
+          { weight: declarationWeight(e.declarations.map((d) => d.value)) },
         );
         break;
 
@@ -228,4 +234,28 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
         break;
     }
   };
+
+  /**
+   * Sprites for an event's END: what lands as the beat closes. Fired from the
+   * director's onEventEnd, which never fires for a flushed event; always at
+   * full pace, since these are flourishes on something already committed.
+   */
+  const end = (e: TableEvent): void => {
+    switch (e.kind) {
+      case 'bidCalled': {
+        const at = anchors.centre(anchorId.plaque);
+        if (at) bus.emit({ kind: 'stamp', at, pip: e.suit, tone: 'gold', speed: 1 });
+        break;
+      }
+      case 'doubled': {
+        const at = anchors.centre(anchorId.plaque);
+        if (at) bus.emit({ kind: 'stamp', at, text: `×${e.multiplier}`, tone: 'danger', speed: 1 });
+        break;
+      }
+      default:
+        break;
+    }
+  };
+
+  return { start, end };
 }

@@ -23,8 +23,6 @@ import { playSfx, type PlayOptions, type Sfx } from './audio';
  * otherwise a silence nobody notices.
  */
 export const SILENT_EVENTS: readonly TableEvent['kind'][] = [
-  'bidPassed', // the pass bubble is the whole message
-  'doublePassed',
   'declarationSkipped',
   'declarationsRevealed', // the cards themselves are the announcement, for now
   'matchStarted',
@@ -55,6 +53,8 @@ export function mergeAward(a: Award | null, b: Award): Award {
  */
 export function landingSound(e: TableEvent, mySeat: Seat): void {
   if (e.kind === 'cardPlayed' && e.seat !== mySeat) playSfx('play', { rate: 0.95 });
+  // The pip (or the ×2) lands on the plaque as the beat ends.
+  if (e.kind === 'bidCalled' || e.kind === 'doubled') playSfx('stamp');
 }
 
 export interface ProcessOptions {
@@ -122,15 +122,23 @@ export function processEvents({
         break;
       }
 
-      // Bidding was silent film until now: these three are the moments a
-      // table actually reacts to.
+      // Bidding: a pass knocks on the table, a call is its own marimba pair
+      // (the zvanja call used to stand in for it), kontra is a challenge.
+      case 'bidPassed':
+        sfx('knock');
+        break;
+
+      case 'doublePassed':
+        sfx('knock', { gain: 0.6 });
+        break;
+
       case 'bidCalled':
-        sfx('zvanje');
+        sfx('call');
         if (e.seat === mySeat) buzz(Haptics.ImpactFeedbackStyle.Light);
         break;
 
       case 'doubled':
-        sfx('bela');
+        sfx('kontra', { rate: e.multiplier === 4 ? 1.12 : 1 });
         if (teamOf(e.seat) === teamOf(mySeat)) buzz(Haptics.ImpactFeedbackStyle.Medium);
         break;
 

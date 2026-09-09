@@ -44,6 +44,10 @@ export const TRIM = {
   pop: -3,
   turn: 0,
   tick: -2,
+  knock: -3,
+  call: -1,
+  stamp: -2,
+  kontra: 0,
 };
 
 // --- tiny synth -------------------------------------------------------------
@@ -383,6 +387,28 @@ export const SFX = {
       bandNoise(0.05, { gain: 0.5, power: 5, lo: 0.85, hi: 0.35 }),
       tone(1200, 0.04, { gain: 0.24, power: 9, harmonic: 0.1 }),
     ),
+
+  // a pass: knuckles on the table — a damped low body and a short burst
+  knock: () =>
+    mix(
+      tone(190, 0.11, { gain: 0.5, power: 7, harmonic: 0.15 }),
+      bandNoise(0.03, { gain: 0.35, power: 6, lo: 0.7, hi: 0.2 }),
+    ),
+
+  // calling trump: a marimba pair, warmer and lower than the zvanja call
+  call: () =>
+    arpeggio([392, 523], 0.11, 0.22, { gain: 0.3, power: 6, harmonic: 0.15, attack: 0.003 }),
+
+  // the pip landing on the plaque: a soft thud with a little ring in it
+  stamp: () =>
+    mix(
+      tone(150, 0.08, { gain: 0.45, power: 6, harmonic: 0.1 }),
+      concat(silence(0.01), tone(1568, 0.09, { gain: 0.12, power: 8, harmonic: 0.3 })),
+    ),
+
+  // kontra: two falling notes with a bit of brass in them — a challenge
+  kontra: () =>
+    arpeggio([440, 330], 0.13, 0.28, { gain: 0.3, power: 4, harmonic: 0.6, attack: 0.008 }),
 };
 
 /**

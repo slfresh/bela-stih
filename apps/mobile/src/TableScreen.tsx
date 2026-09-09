@@ -23,6 +23,7 @@ import Animated, {
   ZoomIn,
 } from 'react-native-reanimated';
 import { useCountUp } from './anim/useCountUp';
+import type { TableCue } from './table/cues';
 import type {
   Action,
   Card,
@@ -114,6 +115,8 @@ export interface TableScreenProps {
   spotlightSeat?: Seat | null;
   /** The motion policy: no loops, no springs, fades only. */
   reducedMotion?: boolean;
+  /** What the table does in reaction to the current beat: a nod, a shake, a glow. */
+  cue?: TableCue | null;
   anchors: AnchorMap;
   fxBus: FxBus;
   /** Absolute epoch deadline for the active seat's ring; null = soft ring. */
@@ -148,6 +151,7 @@ export function TableScreen(props: TableScreenProps) {
     mySeat, lang, view, options, myTurn, settled, matchOver, lastDealResult,
     matchScores, winnerTeam, profile, banner, seatMeta, status, anchors, fxBus, spotlightSeat = null,
     reducedMotion = false,
+    cue = null,
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
     hardMode = false, series, askedRematch, waitingFor, onRematch, onForceRematch,
     handSort = 'auto', onHandSortChange, confirmPlay = 'ambiguous',
@@ -163,6 +167,21 @@ export function TableScreen(props: TableScreenProps) {
   // is about to happen" rather than as a dead tap.
   const hold = useSharedValue(1);
   const holdStyle = useAnimatedStyle(() => ({ transform: [{ scale: hold.value }] }));
+  // Kontra rattles the table: three quick cycles, ±3 (±5 for rekontra),
+  // scaled with the layout. Off under reduce-motion.
+  const feltShake = useSharedValue(0);
+  const feltShakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: feltShake.value }] }));
+  useEffect(() => {
+    if (cue?.kind !== 'shake' || reduced) return;
+    const a = cue.amp * m.scale;
+    feltShake.value = withSequence(
+      withTiming(a, { duration: 40 }),
+      withTiming(-a, { duration: 80 }),
+      withTiming(a, { duration: 80 }),
+      withTiming(-a * 0.6, { duration: 80 }),
+      withTiming(0, { duration: 60 }),
+    );
+  }, [cue, feltShake, reduced, m.scale]);
 
   // The trick cross is sized against the felt it is drawn in, not the window:
   // a landscape felt is a short wide ellipse and window-sized cards hang out
@@ -247,6 +266,7 @@ export function TableScreen(props: TableScreenProps) {
       totalMs={turnTotalMs}
       thinking={spotlightSeat === s}
       reduced={reduced}
+      gesture={cue && (cue.kind === 'nod' || cue.kind === 'pulse') && cue.seat === s ? cue : null}
     />
     </Animated.View>
   );
@@ -364,6 +384,7 @@ export function TableScreen(props: TableScreenProps) {
       style={[
         styles.felt,
         { backgroundColor: baize.felt, borderColor: baize.rim },
+        feltShakeStyle,
         // Landscape hangs the partner over the far rim, so the felt starts
         // just below their disc rather than below their whole puck.
         land && { marginTop: Math.round(m.puck * 0.5) },
@@ -595,6 +616,7 @@ export function TableScreen(props: TableScreenProps) {
           deckStyle={deck}
           reduced={reduced}
           armCaption={lang.s.ui.play}
+          glow={cue?.kind === 'glow' ? cue : null}
         />
         </Animated.View>
       </Pressable>
@@ -933,6 +955,7 @@ function Hand({
   deckStyle,
   reduced = false,
   armCaption,
+  glow = null,
 }: {
   cards: Card[];
   options: Action[];
@@ -957,6 +980,8 @@ function Hand({
   reduced?: boolean;
   /** What the second tap on an armed card does, on the card. */
   armCaption?: string;
+  /** Cards to glow gold for a moment: my bela's king and queen. */
+  glow?: { cardIds: string[]; n: number } | null;
 }) {
   const plays = options.filter(
     (a): a is Extract<Action, { type: 'PLAY_CARD' }> => a.type === 'PLAY_CARD',
@@ -1079,6 +1104,7 @@ function Hand({
             armed={!picking && isArmed}
             caption={armCaption}
             disabled={!playable && !arranging && !marking}
+            glowN={glow && glow.cardIds.includes(id) ? glow.n : 0}
             onPress={onPressCard}
           />
         );
@@ -1112,6 +1138,7 @@ const FanCard = memo(
     armed,
     caption,
     disabled,
+    glowN,
     onPress,
   }: {
     id: string;
@@ -1134,8 +1161,19 @@ const FanCard = memo(
     armed: boolean;
     caption?: string;
     disabled: boolean;
+    /** Non-zero, and new: glow gold for a moment (my bela's king and queen). */
+    glowN: number;
     onPress: (id: string) => void;
   }) {
+    const glowV = useSharedValue(0);
+    useEffect(() => {
+      if (!glowN) return;
+      glowV.value = withSequence(
+        withTiming(1, { duration: 150 }),
+        withDelay(400, withTiming(0, { duration: 150 })),
+      );
+    }, [glowN, glowV]);
+    const glowStyle = useAnimatedStyle(() => ({ opacity: glowV.value }));
     // The lift used to be a 14 px jump on the frame the turn arrived. Now the
     // playable cards spring up from the middle outward; a card that stops
     // being playable settles back the same way.
@@ -1190,6 +1228,7 @@ const FanCard = memo(
             armed={armed}
             caption={caption}
           />
+          <Animated.View pointerEvents="none" style={[styles.cardGlow, glowStyle]} />
         </Pressable>
       </Animated.View>
     );
@@ -1213,6 +1252,7 @@ const FanCard = memo(
     a.armed === b.armed &&
     a.caption === b.caption &&
     a.disabled === b.disabled &&
+    a.glowN === b.glowN &&
     a.onPress === b.onPress,
 );
 
@@ -1301,6 +1341,8 @@ function NonCardActions({
             label={lang.action(a)}
             tone={isBela ? 'bela' : strong ? 'strong' : 'plain'}
             compact={compact}
+            // The suit itself on a trump-call button, not only its name.
+            icon={a.type === 'BID_CALL' ? <SuitPip suit={a.suit} size={compact ? 14 : 16} /> : undefined}
             onPress={() => onChoose(a)}
           />
         );
@@ -1622,6 +1664,18 @@ const styles = StyleSheet.create({
     paddingTop: FAN_PAD,
   },
   fanCard: {},
+  // Bela: the king and queen of trumps light up gold for a moment.
+  cardGlow: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: radius.card,
+    backgroundColor: 'rgba(216,165,49,0.45)',
+    borderWidth: 2,
+    borderColor: theme.accent,
+  },
 
   actionsRow: {
     flexDirection: 'row',

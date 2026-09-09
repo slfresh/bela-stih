@@ -40,6 +40,7 @@ function fakeAnchors(withSlots = true): AnchorMap {
     if (withSlots) rects.set(`slot:${s}`, { x: 120 * s, y: 220, w: SLOT_W, h: SLOT_W * 1.45 });
   }
   rects.set('deck', { x: 180, y: 160, w: 10, h: 10 });
+  rects.set('plaque', { x: 170, y: 90, w: 40, h: 40 });
   const map = {
     rect: (k: string) => rects.get(k) ?? null,
     centre: (k: string) => {
@@ -75,7 +76,7 @@ function spritesOfADeal(speed: number, anchors = fakeAnchors()) {
     lang: new Lang('hr'),
     mySeat: () => 0,
     view: () => ({ ...base, currentTrick: trick }),
-  });
+  }).start;
   for (const e of events) {
     current = e.kind;
     spawn(e, speed);
@@ -254,7 +255,7 @@ describe('a played card sets off from the right place, the right way up', () => 
       lang: new Lang('hr'),
       mySeat: () => 0,
       view: () => table.view(0 as Seat),
-    });
+    }).start;
     spawn(mine!, 1);
     const flight = out.find((f) => f.kind === 'flight');
     expect(flight?.kind).toBe('flight');
@@ -302,5 +303,41 @@ describe('the deal', () => {
     const talonMine = talon.backs.filter((b) => !puckXs.has(b.x));
     expect(talonMine.length).toBe(2);
     expect(Math.min(...talonMine.map((b) => b.x))).toBeGreaterThan(Math.max(...mine.map((b) => b.x)) - 1);
+  });
+});
+
+describe('the bidding beats', () => {
+  it('a call bubble carries its suit, and the pip stamps onto the plaque at the end', () => {
+    const anchors = fakeAnchors();
+    const table = new Table({ seed: 7, humanSeats: [] });
+    const called = table.drainEvents().find((e) => e.kind === 'bidCalled');
+    expect(called).toBeDefined();
+    const bus = new FxBus();
+    const out: Fx[] = [];
+    bus.subscribe((fx) => out.push(fx));
+    const fx = makeFxSpawner({
+      anchors,
+      bus,
+      lang: new Lang('hr'),
+      mySeat: () => 0,
+      view: () => table.view(0 as Seat),
+    });
+    fx.start(called!, 1);
+    const bubble = out.find((f) => f.kind === 'bubble');
+    expect(bubble?.kind === 'bubble' && bubble.pip).toBe(called!.kind === 'bidCalled' ? called!.suit : null);
+    fx.end(called!);
+    const stamp = out.find((f) => f.kind === 'stamp');
+    expect(stamp?.kind === 'stamp' && stamp.pip).toBe(called!.kind === 'bidCalled' ? called!.suit : null);
+    expect(stamp?.kind === 'stamp' && stamp.at).toEqual({ x: 190, y: 110 });
+    // The stamp fits the call's gap, where it lands.
+    expect(motionOf(stamp!)).toBeLessThanOrEqual(DEFAULT_TIMINGS.bidCalled.gap);
+  });
+
+  it('a zvanje bubble is weighted by its value', () => {
+    const declared = spritesOfADeal(1).filter((s) => s.kind === 'declared');
+    for (const { fx } of declared) {
+      if (fx.kind !== 'bubble') continue;
+      expect([1, 2, 3, 4]).toContain(fx.weight);
+    }
   });
 });

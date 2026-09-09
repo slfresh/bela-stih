@@ -12,6 +12,7 @@ import { Director, timingsFor } from '../anim/director';
 import { FxBus } from '../anim/FxBus';
 import { makeFxSpawner, spawnEmote } from '../table/fx';
 import { useMotionPolicy } from '../anim/useMotionPolicy';
+import { cueFor, type TableCue } from '../table/cues';
 import { playSfx } from '../audio';
 import { emptyTally, landingSound, processEvents } from '../feedback';
 import { loadProfile, saveProfile, type Settings } from '../storage';
@@ -134,6 +135,8 @@ export function useNetGame(settings: Settings) {
   const [banner, setBanner] = useState<Award | null>(null);
   // Whose move is being animated; cleared when the director goes idle.
   const [spotlight, setSpotlight] = useState<Seat | null>(null);
+  const [cue, setCue] = useState<TableCue | null>(null);
+  const cueN = useRef(0);
   useEffect(() => {
     if (idle) setSpotlight(null);
   }, [idle]);
@@ -145,7 +148,7 @@ export function useNetGame(settings: Settings) {
   const anchors = useMemo(() => new AnchorMap(), []);
   const fxBus = useMemo(() => new FxBus(), []);
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
-  const spawn = useMemo(
+  const fx = useMemo(
     () =>
       makeFxSpawner({
         anchors,
@@ -159,6 +162,9 @@ export function useNetGame(settings: Settings) {
 
   const hapticsRef = useRef(settings.haptics);
   hapticsRef.current = settings.haptics;
+  // The director is built inside attach() once; it reaches the spawner by ref.
+  const fxRef = useRef(fx);
+  fxRef.current = fx;
   // Pacing follows the motion policy as it stands when the table is joined.
   const motion = useMotionPolicy(settings.motion);
   const motionRef = useRef(motion);
@@ -185,12 +191,14 @@ export function useNetGame(settings: Settings) {
       }
       if (r.award) setBanner(r.award);
       if (!flushed) {
-        spawn(e, speed);
+        fx.start(e, speed);
         // A seatless beat (the reveal, the deal, scoring) is nobody's move.
         setSpotlight('seat' in e ? e.seat : null);
+        const c = cueFor(e, mine, directorRef.current?.getView() ?? null, ++cueN.current);
+        if (c) setCue(c);
       }
     },
-    [spawn],
+    [fx],
   );
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
@@ -254,6 +262,7 @@ export function useNetGame(settings: Settings) {
             onEventEnd: (e) => {
               const mine = mySeatRef.current;
               if (mine !== null) landingSound(e, mine);
+              fxRef.current.end(e);
             },
             onIdle: setIdle,
             // Anchors re-measure as each batch starts; the table bumps them too
@@ -475,6 +484,7 @@ export function useNetGame(settings: Settings) {
     banner,
     lastDealResult,
     spotlight,
+    cue,
     motion,
     matchOver: view?.phase === 'MATCH_OVER',
     winnerTeam,

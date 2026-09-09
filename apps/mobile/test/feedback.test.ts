@@ -143,6 +143,20 @@ describe('the sounds that carry meaning', () => {
     expect(sfx).toHaveBeenLastCalledWith('lastTrick');
   });
 
+  it('a pass knocks, a call is its own sound, kontra is a challenge', () => {
+    run([{ kind: 'bidPassed', seat: 1 }]);
+    expect(heard()).toEqual(['knock']);
+    sfx.mockClear();
+    run([byKind.get('bidCalled')!]);
+    expect(heard()).toEqual(['call']);
+    sfx.mockClear();
+    run([{ kind: 'doubled', seat: 1, multiplier: 4 }]);
+    expect(sfx).toHaveBeenLastCalledWith('kontra', { rate: 1.12 });
+    sfx.mockClear();
+    landingSound(byKind.get('bidCalled')!, MY_SEAT);
+    expect(heard()).toEqual(['stamp']);
+  });
+
   it('the match ends on a fanfare, not a coin ding', () => {
     const over = byKind.get('matchOver')! as Extract<TableEvent, { kind: 'matchOver' }>;
     const won = over.winner === teamOf(MY_SEAT);

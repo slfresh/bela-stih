@@ -80,6 +80,11 @@ export const BUBBLE_MIN_MS = BUBBLE_IN_MS + BUBBLE_SETTLE_IN_MS + BUBBLE_OUT_MS;
 
 /** A ring scaling 1 → 1.6 and fading: one beat of attention, then gone. */
 export const PULSE_MS = 500;
+/**
+ * A pip dropping onto the plaque: 1.6 → 1 with a spring, a flash, then it is
+ * the plaque's. Fits inside the call's 350 ms gap, where it lands.
+ */
+export const STAMP_MS = 340;
 
 // --- rewards ---------------------------------------------------------------------
 
@@ -123,6 +128,8 @@ export function motionOf(fx: Fx): number {
       return PULSE_MS * fx.speed;
     case 'badge':
       return fx.duration;
+    case 'stamp':
+      return STAMP_MS * fx.speed;
     case 'coins':
       return coinsLandedMs(fx.count);
     case 'confetti':
@@ -144,6 +151,8 @@ export function lifetimeOf(fx: Fx): number {
     case 'pulse':
       return motionOf(fx) + 50;
     case 'badge':
+      return motionOf(fx) + 60;
+    case 'stamp':
       return motionOf(fx) + 60;
     case 'coins':
       return motionOf(fx) + 250;

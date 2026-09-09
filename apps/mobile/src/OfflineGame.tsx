@@ -75,6 +75,7 @@ function OfflineMatch({
       lang={g.lang}
       view={g.view}
       spotlightSeat={g.spotlight}
+      cue={g.cue}
       reducedMotion={g.motion === 'reduced'}
       hardMode={settings.hardMode}
       handSort={settings.handSort}
