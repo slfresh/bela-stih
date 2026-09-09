@@ -170,9 +170,10 @@ export function HomeScreen({
 
             {claimable ? (
               <Panel tone="accent" style={styles.centred}>
-                <Text style={styles.bonusTitle}>
-                  {ui.dailyBonus(previewDaily(profile, today).coins)}
-                </Text>
+                <View style={styles.bonusRow}>
+                  <Text style={styles.bonusTitle}>{ui.dailyBonus(previewDaily(profile, today).coins)}</Text>
+                  <Coin size={16} />
+                </View>
                 <Text style={styles.hint}>
                   {previewDaily(profile, today).streakDays > 1
                     ? ui.streakDays(profile.streakDays)
@@ -309,6 +310,7 @@ const styles = StyleSheet.create({
   modeRow: { gap: 10 },
 
   centred: { alignItems: 'center' },
+  bonusRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   bonusTitle: { color: theme.accent, fontSize: 17, fontWeight: '800' },
   hint: { color: theme.textDim, fontSize: 12, textAlign: 'center' },
 
