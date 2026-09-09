@@ -57,3 +57,15 @@ describe('computeTableMetrics', () => {
     }
   });
 });
+
+describe('the prompt reserve', () => {
+  it('is kept only where the column can pay for it', () => {
+    // With the felt at its floor the fixed rows need ~610px; the reserve's
+    // 62 more pushed the action buttons off a 647px iPhone SE / 8.
+    expect(computeTableMetrics(375, 647).promptReserve).toBe(false);
+    expect(computeTableMetrics(360, 668).promptReserve).toBe(false);
+    expect(computeTableMetrics(390, 763).promptReserve).toBe(true);
+    expect(computeTableMetrics(412, 850).promptReserve).toBe(true);
+    for (const [w, h] of LANDSCAPE) expect(computeTableMetrics(w, h).promptReserve).toBe(false);
+  });
+});

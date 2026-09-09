@@ -15,9 +15,9 @@ import { signal } from '../theme';
  * "Your turn", as light: a cream glow along the top of the hand that breathes
  * while the table waits on you, and only then.
  *
- * Mounted on the RENDERED turn prop, so it fades out across an animation
- * drain (the director suppresses `toAct` on every intermediate view) and is
- * never held on. The breath runs on the UI thread; nothing crosses to JS per
+ * Mounted on the RENDERED turn prop, so it is gone the moment a drain starts
+ * (the director suppresses `toAct` on every intermediate view) and is never
+ * held on. The breath runs on the UI thread; nothing crosses to JS per
  * frame. Under reduce-motion it holds still at a steady glow.
  */
 export function TurnBeacon({ reduced }: { reduced: boolean }) {

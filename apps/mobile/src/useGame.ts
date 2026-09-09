@@ -105,7 +105,8 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
       if (r.award) setBanner(r.award);
       if (!flushed) {
         spawn(e, speed);
-        if ('seat' in e) setSpotlight(e.seat);
+        // A seatless beat (the reveal, the deal, scoring) is nobody's move.
+        setSpotlight('seat' in e ? e.seat : null);
       }
       // A bot that takes a trick occasionally gloats — the table talks back.
       if (!flushed && e.kind === 'trickWon' && e.seat !== HUMAN && Math.random() < 0.22) {

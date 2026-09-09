@@ -5,6 +5,7 @@ import Animated, {
   cancelAnimation,
   Easing,
   interpolateColor,
+  ReduceMotion,
   useAnimatedProps,
   useSharedValue,
   withRepeat,
@@ -65,13 +66,23 @@ export function TurnRing({
 
   useEffect(() => {
     if (deadline === null) {
-      progress.value = 1;
+      // No countdown: a full ring where one is wanted (breathing), otherwise
+      // FREEZE where the arc was. The puck fades this ring out when its seat
+      // has acted, and snapping to a full gold arc under that fade flashed
+      // on every hand-off.
+      cancelAnimation(progress);
+      if (breathe) progress.value = 1;
       return;
     }
     const msLeft = Math.max(0, deadline - Date.now());
     progress.value = Math.min(1, msLeft / totalMs);
-    progress.value = withTiming(0, { duration: msLeft, easing: Easing.linear });
-  }, [progress, deadline, totalMs]);
+    // Information, not decoration: the clock draws under reduce-motion too.
+    progress.value = withTiming(0, {
+      duration: msLeft,
+      easing: Easing.linear,
+      reduceMotion: ReduceMotion.Never,
+    });
+  }, [progress, deadline, totalMs, breathe]);
 
   const animatedProps = useAnimatedProps(() => ({
     strokeDashoffset: c * (1 - progress.value),

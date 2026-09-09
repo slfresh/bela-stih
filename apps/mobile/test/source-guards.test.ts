@@ -93,6 +93,13 @@ describe('anchors measure on demand', () => {
     expect(src('TableScreen.tsx')).toMatch(/entering=\{reduced \? undefined : feltEntering\}/);
   });
 
+  it('the spotlight clears on a seatless beat, and the countdown survives reduce-motion', () => {
+    expect(src('useGame.ts')).toMatch(/setSpotlight\('seat' in e \? e\.seat : null\)/);
+    expect(src('net/useNetGame.ts')).toMatch(/setSpotlight\('seat' in e \? e\.seat : null\)/);
+    expect(src('anim/TurnRing.tsx')).toMatch(/reduceMotion: ReduceMotion\.Never/);
+    expect(src('TableScreen.tsx')).toMatch(/m\.promptReserve/);
+  });
+
   it('the home screen no longer re-renders on every scroll event', () => {
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/setScrollTick/);

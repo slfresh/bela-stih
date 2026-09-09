@@ -39,6 +39,14 @@ export interface TableMetrics {
   puck: number;
   /** Short screens hide what they must rather than squashing everything. */
   compact: boolean;
+  /**
+   * Portrait keeps a row's height free under the felt so a prompt coming or
+   * going never moves the hand — but only where the column can pay for it.
+   * With the felt at its 260 floor, the fixed rows (profile, score, hand,
+   * emotes, actions, gaps) need ~610px; the reserve's 62 more pushed the
+   * action buttons off every 647–676px phone (iPhone SE/8, 360x720 Android).
+   */
+  promptReserve: boolean;
 }
 
 const REF_W = 390;
@@ -98,6 +106,7 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
     slotH: Math.round(67 * scale),
     puck: Math.round((landscape ? 44 : 54) * scale),
     compact: usableH < 620,
+    promptReserve: !landscape && usableH >= 700,
   };
 }
 

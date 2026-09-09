@@ -17,10 +17,13 @@ export function useReduceMotion(): boolean {
         if (live) setReduced(on);
       })
       .catch(() => {});
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduced);
+    // react-native-web hands back nothing at all where matchMedia is missing.
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduced) as
+      | { remove(): void }
+      | undefined;
     return () => {
       live = false;
-      sub.remove();
+      sub?.remove();
     };
   }, []);
   return reduced;

@@ -186,7 +186,8 @@ export function useNetGame(settings: Settings) {
       if (r.award) setBanner(r.award);
       if (!flushed) {
         spawn(e, speed);
-        if ('seat' in e) setSpotlight(e.seat);
+        // A seatless beat (the reveal, the deal, scoring) is nobody's move.
+        setSpotlight('seat' in e ? e.seat : null);
       }
     },
     [spawn],

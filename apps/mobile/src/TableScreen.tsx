@@ -338,16 +338,22 @@ export function TableScreen(props: TableScreenProps) {
   // felt from rim to rim, and a plate anywhere on it covered a slot).
   const plaque = (
     <Anchor id={anchorId.plaque} style={[styles.plaque, land ? styles.plaqueRail : styles.plaquePortrait]}>
-      {trump ? (
-        <>
-          <SuitPip suit={trump} size={land ? 22 : 30} />
-          {view.multiplier > 1 && <Text style={styles.plaqueMult}>×{view.multiplier}</Text>}
-        </>
-      ) : (
-        <Text style={[styles.subDim, land && styles.centreText]}>{lang.s.trumpUndecided}</Text>
-      )}
+      <View style={styles.plaqueRow}>
+        {trump ? (
+          <>
+            <SuitPip suit={trump} size={22} />
+            {view.multiplier > 1 && <Text style={styles.plaqueMult}>×{view.multiplier}</Text>}
+          </>
+        ) : (
+          <Text style={[styles.plaqueUndecided, styles.centreText]} numberOfLines={2}>
+            {lang.s.trumpUndecided}
+          </Text>
+        )}
+      </View>
       {view.callerSeat !== null && (
-        <Text style={styles.plaqueCaller}>{lang.s.calledBy(meta(view.callerSeat).name)}</Text>
+        <Text style={styles.plaqueCaller} numberOfLines={1}>
+          {lang.s.calledBy(meta(view.callerSeat).name)}
+        </Text>
       )}
     </Anchor>
   );
@@ -383,9 +389,6 @@ export function TableScreen(props: TableScreenProps) {
             the table is — the plaque moves to the left lobe in landscape. */}
         <Anchor id={anchorId.deck} style={styles.deckAnchor} />
 
-        {/* the plaque, in the felt's upper lobe; landscape has no lobe to spare
-            and shows it in the left rail instead */}
-        {!land && plaque}
 
         {/* one trick slot per seat, positioned by table side */}
         {([0, 1, 2, 3] as Seat[]).map((s) => {
@@ -466,7 +469,12 @@ export function TableScreen(props: TableScreenProps) {
       // inside it; this frame changes even when feltInner's does not.
       onLayout={() => anchors.bump()}
     >
-      <View style={styles.topSeat}>{puck(at('top'))}</View>
+      {/* The plaque sits beside the partner's puck: the felt's upper lobe is
+          15–35px tall on a phone and a plate there covered the top slot. */}
+      <View style={styles.topSeat}>
+        {puck(at('top'))}
+        {plaque}
+      </View>
       <View style={styles.midRow}>
         <View style={styles.sideSeat}>{puck(at('left'))}</View>
         {feltBody}
@@ -545,11 +553,10 @@ export function TableScreen(props: TableScreenProps) {
       )}
     </>
   );
-  // Portrait reserves the row's height, so a prompt coming or going never
-  // moves the hand under your thumb; a compact phone cannot spare it, and
-  // landscape flexes the felt instead.
-  const prompts =
-    !land && !m.compact ? <View style={styles.promptsReserve}>{promptRows}</View> : promptRows;
+  // Portrait reserves the row's height where the column can afford it, so a
+  // prompt coming or going never moves the hand under your thumb; a shorter
+  // phone cannot spare it, and landscape flexes the felt instead.
+  const prompts = m.promptReserve ? <View style={styles.promptsReserve}>{promptRows}</View> : promptRows;
 
   // My hand, fanned; the seat anchor for sprites sits underneath it.
   const handBlock = (
@@ -1506,30 +1513,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   // Sits in the felt's upper lobe, clear of the trick cross at the centre.
-  // A plate on the baize, not a pip floating in space.
+  // A plate, not a pip floating in space — and a small one: ~44px tall.
   plaque: {
-    position: 'absolute',
-    alignSelf: 'center',
     alignItems: 'center',
     gap: 1,
     backgroundColor: 'rgba(0,0,0,0.28)',
     borderRadius: radius.panel,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  // Sits in the felt's upper lobe, clear of the trick cross at the centre.
-  plaquePortrait: { top: '5%' },
-  // In the rail it is a row in the flow, the width of the rail.
-  plaqueRail: {
-    position: 'relative',
-    alignSelf: 'stretch',
-    paddingHorizontal: 6,
+    paddingHorizontal: 10,
     paddingVertical: 4,
+    maxWidth: 132,
   },
+  plaqueRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  plaqueUndecided: { color: theme.textDim, fontSize: 11 },
+  // Portrait: at the left end of the partner's row, which is as tall as a puck.
+  plaquePortrait: { position: 'absolute', left: 0, top: 0 },
+  // In the rail it is a row in the flow, the width of the rail.
+  plaqueRail: { alignSelf: 'stretch', paddingHorizontal: 6, paddingVertical: 3 },
   plaqueMult: { color: theme.accent, fontSize: 13, fontWeight: '800' },
-  plaqueCaller: { color: theme.textDim, fontSize: 12 },
+  plaqueCaller: { color: theme.textDim, fontSize: 11 },
 
   slot: { position: 'absolute', width: 46, height: 67 },
   slotGhost: {
@@ -1570,7 +1573,16 @@ const styles = StyleSheet.create({
   revealGroup: { alignItems: 'center', gap: 2 },
   revealLabel: { color: theme.accent, fontSize: 11, fontWeight: '700' },
   revealCards: { flexDirection: 'row', gap: 2 },
-  callsCol: { flexDirection: 'column', flexWrap: 'nowrap', alignSelf: 'stretch' },
+  // In the rail the chips are what gives when the height runs out: they
+  // shrink and clip, and the leave button below them stays reachable.
+  callsCol: {
+    flexDirection: 'column',
+    flexWrap: 'nowrap',
+    alignSelf: 'stretch',
+    flexShrink: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
   callChip: {
     backgroundColor: 'rgba(0,0,0,0.28)',
     borderRadius: radius.pill,
