@@ -110,6 +110,7 @@ export function OnlineGame({
       lang={net.lang}
       view={net.view}
       spotlightSeat={net.spotlight}
+      reducedMotion={net.motion === 'reduced'}
       hardMode={net.hard}
       handSort={settings.handSort}
       onHandSortChange={(m) => onSettingsChange?.({ ...settings, handSort: m })}

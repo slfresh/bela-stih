@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cardId, type PublicView, type Seat } from '@belot/engine';
 import { Table, type TableEvent } from '@belot/table';
-import { DEFAULT_TIMINGS, Director, ZERO_TIMINGS, type Batch } from '../src/anim/director';
+import {
+  DEFAULT_TIMINGS,
+  Director,
+  REDUCED_TIMINGS,
+  REVEAL_MS,
+  ZERO_TIMINGS,
+  type Batch,
+} from '../src/anim/director';
 import { applyEventEnd, applyEventStart } from '../src/anim/patch';
 
 /**
@@ -25,10 +32,23 @@ interface Capture {
   speeds: number[];
   /** How many batches began animating. */
   batches: number;
+  /** Events whose end-commit landed. */
+  ended: TableEvent[];
+  /** Every onSkip count. */
+  skips: number[];
 }
 
 function makeDirector(initial: PublicView, timings = ZERO_TIMINGS) {
-  const cap: Capture = { views: [], started: [], flushed: [], idleFlips: [], speeds: [], batches: 0 };
+  const cap: Capture = {
+    views: [],
+    started: [],
+    flushed: [],
+    idleFlips: [],
+    speeds: [],
+    batches: 0,
+    ended: [],
+    skips: [],
+  };
   const d = new Director(SEAT, initial, {
     onView: (v) => cap.views.push(v),
     onEventStart: (e, f, speed) => {
@@ -42,6 +62,8 @@ function makeDirector(initial: PublicView, timings = ZERO_TIMINGS) {
     onBatch: () => {
       cap.batches += 1;
     },
+    onEventEnd: (e) => cap.ended.push(e),
+    onSkip: (n) => cap.skips.push(n),
   }, timings);
   return { d, cap };
 }
@@ -286,5 +308,97 @@ describe('a won trick', () => {
     expect(started.toAct).toBeNull();
     const ended = applyEventEnd(started, events[wonAt]!, table.view(SEAT), SEAT);
     expect(ended.currentTrick).toEqual([]);
+  });
+});
+
+describe('the end of a beat', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function deal(seed: number): { batch: Batch; initial: PublicView } {
+    const table = new Table({ seed, humanSeats: [] });
+    const batch = { events: table.drainEvents(), finalView: table.view(SEAT) };
+    return { batch, initial: batch.finalView };
+  }
+
+  it('is announced once per animated event, in order, and never for a flushed one', () => {
+    const a = deal(51);
+    const { d, cap } = makeDirector(a.initial, DEFAULT_TIMINGS);
+    d.enqueue(a.batch);
+    vi.advanceTimersByTime(120_000);
+    expect(cap.ended.map((e) => e.kind)).toEqual(cap.started.map((e) => e.kind));
+    expect(cap.flushed).toHaveLength(0);
+    expect(cap.skips).toEqual([]);
+    d.dispose();
+  });
+
+  it('is never announced for a beat that fastForward cleared', () => {
+    const a = deal(52);
+    const { d, cap } = makeDirector(a.initial, DEFAULT_TIMINGS);
+    d.enqueue(a.batch);
+    vi.advanceTimersByTime(3000);
+    const endedBefore = cap.ended.length;
+    const startedBefore = cap.started.length;
+    expect(startedBefore).toBeGreaterThan(endedBefore); // one beat is mid-flight
+    d.fastForward();
+    vi.advanceTimersByTime(120_000);
+    expect(cap.ended).toHaveLength(endedBefore);
+    // Everything that had not started was flushed, and said so in one count.
+    expect(cap.skips).toEqual([a.batch.events.length - startedBefore]);
+    d.dispose();
+  });
+
+  it('counts what compress() flushes', () => {
+    const a = deal(53);
+    const b = deal(54).batch;
+    const c = deal(55).batch;
+    const { d, cap } = makeDirector(a.initial, DEFAULT_TIMINGS);
+    d.enqueue(a.batch);
+    d.enqueue(b);
+    d.enqueue(c); // b is flushed instantly
+    expect(cap.skips).toEqual([b.events.length]);
+    d.dispose();
+  });
+});
+
+describe('reduced-motion pacing', () => {
+  it('shortens every beat except the reveal, which is information', () => {
+    for (const [kind, t] of Object.entries(REDUCED_TIMINGS)) {
+      if (kind === 'declarationsRevealed') {
+        expect(t).toEqual({ dur: REVEAL_MS, gap: 300 });
+      } else {
+        expect(t.dur).toBeLessThanOrEqual(250);
+        expect(t.gap).toBeLessThanOrEqual(80);
+      }
+    }
+  });
+
+  it('replays a match to the same views as the full pacing', () => {
+    // Pacing changes when things happen, never what is shown.
+    for (const seed of [5, 8]) {
+      const full = new Table({ seed, humanSeats: [SEAT] });
+      const fast = new Table({ seed, humanSeats: [SEAT] });
+      const a = makeDirector(full.view(SEAT), ZERO_TIMINGS);
+      const b = makeDirector(fast.view(SEAT), ZERO_TIMINGS);
+      // ZERO settles synchronously; the reduced table is checked structurally
+      // above. Here: both directors, fed the same events, patch identically.
+      let guard = 0;
+      while (full.phase !== 'MATCH_OVER' && guard++ < 5000) {
+        if (full.phase === 'DEAL_OVER') {
+          full.startNextDeal();
+          fast.startNextDeal();
+        } else {
+          const act = full.legal()[0]!;
+          full.submit(act);
+          fast.submit(act);
+        }
+        a.d.enqueue({ events: full.drainEvents(), finalView: full.view(SEAT) });
+        b.d.enqueue({ events: fast.drainEvents(), finalView: fast.view(SEAT) });
+        expect(projection(b.d.getView())).toEqual(projection(a.d.getView()));
+      }
+      expect(a.cap.views.length).toBe(b.cap.views.length);
+      a.d.dispose();
+      b.d.dispose();
+    }
   });
 });

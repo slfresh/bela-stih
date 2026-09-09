@@ -3,7 +3,7 @@ import { AppState } from 'react-native';
 import type { PublicView, Seat } from '@belot/engine';
 import type { TableEvent } from '@belot/table';
 import { markTick } from '../dev/counters';
-import { Director, type Batch } from './director';
+import { DEFAULT_TIMINGS, Director, type Batch, type Timings } from './director';
 
 /**
  * React glue for the animation director.
@@ -23,6 +23,12 @@ export function useDirector(
    * so it freshens everything from the batch's second sprite on.
    */
   onBatch?: () => void,
+  opts: {
+    /** The pacing table, fixed at construction — a policy change retimes the next table, not this one. */
+    timings?: Timings;
+    /** An animated event's end-commit has landed: landing sounds and stamps go here. */
+    onEventEnd?: (e: TableEvent) => void;
+  } = {},
 ) {
   const [view, setView] = useState<PublicView>(initialView);
   const [idle, setIdle] = useState(true);
@@ -33,18 +39,26 @@ export function useDirector(
   onEventRef.current = onEvent;
   const onBatchRef = useRef(onBatch);
   onBatchRef.current = onBatch;
+  const onEventEndRef = useRef(opts.onEventEnd);
+  onEventEndRef.current = opts.onEventEnd;
 
   const directorRef = useRef<Director | null>(null);
   if (directorRef.current === null) {
-    directorRef.current = new Director(mySeat, initialView, {
-      onView: (v) => {
-        markTick();
-        setView(v);
+    directorRef.current = new Director(
+      mySeat,
+      initialView,
+      {
+        onView: (v) => {
+          markTick();
+          setView(v);
+        },
+        onEventStart: (e, flushed, speed) => onEventRef.current(e, flushed, speed),
+        onEventEnd: (e) => onEventEndRef.current?.(e),
+        onIdle: setIdle,
+        onBatch: () => onBatchRef.current?.(),
       },
-      onEventStart: (e, flushed, speed) => onEventRef.current(e, flushed, speed),
-      onIdle: setIdle,
-      onBatch: () => onBatchRef.current?.(),
-    });
+      opts.timings ?? DEFAULT_TIMINGS,
+    );
   }
 
   useEffect(() => {

@@ -143,6 +143,31 @@ export function SettingsScreen({
         </View>
       </Panel>
 
+      <Panel label={ui.motionLabel}>
+        <View style={styles.localeRow}>
+          {(
+            [
+              { id: 'system', label: ui.motionSystem },
+              { id: 'full', label: ui.motionFull },
+              { id: 'reduced', label: ui.motionReduced },
+            ] as const
+          ).map((o) => (
+            <Pressable
+              key={o.id}
+              onPress={() => {
+                playSfx('tap');
+                onSettingsChange({ ...settings, motion: o.id });
+              }}
+              style={[styles.localeChip, settings.motion === o.id && styles.localeChipOn]}
+            >
+              <Text style={[styles.localeText, settings.motion === o.id && styles.localeTextOn]}>
+                {o.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </Panel>
+
       <Panel label={lang.s.difficulty}>
         <View style={styles.localeRow}>
           {(

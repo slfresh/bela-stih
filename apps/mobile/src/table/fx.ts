@@ -171,7 +171,7 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
         break;
 
       case 'belaCalled':
-        bubble(e.seat, `${lang.s.bela.toUpperCase()}! (20)`, 'gold', 1100, speed);
+        bubble(e.seat, `${lang.s.bela.toUpperCase()}! (20)`, 'gold', 1000, speed);
         break;
 
       // dealScored / matchOver feedback is the result panel, coins and

@@ -148,6 +148,10 @@ export interface UiStrings {
   confirmOff: string;
   confirmAmbiguous: string;
   confirmAlways: string;
+  motionLabel: string;
+  motionSystem: string;
+  motionFull: string;
+  motionReduced: string;
   invite: string;
   inviteText: (url: string) => string;
 }
@@ -487,6 +491,10 @@ const hr: Strings = {
     confirmOff: 'Bez potvrde',
     confirmAmbiguous: 'Kad ima izbora',
     confirmAlways: 'Uvijek',
+    motionLabel: 'Animacije',
+    motionSystem: 'Kao sustav',
+    motionFull: 'Pune',
+    motionReduced: 'Smanjene',
     invite: 'Pozovi prijatelje',
     inviteText: (url) => `Zaigraj Belu sa mnom! Pridruži se mom stolu: ${url}`,
   },
@@ -697,6 +705,10 @@ const srCyrl: Strings = {
     confirmOff: 'Без потврде',
     confirmAmbiguous: 'Кад има избора',
     confirmAlways: 'Увек',
+    motionLabel: 'Анимације',
+    motionSystem: 'Као систем',
+    motionFull: 'Пуне',
+    motionReduced: 'Смањене',
     invite: 'Позови пријатеље',
     inviteText: (url) => `Заиграј белу са мном! Придружи се мом столу: ${url}`,
   },
@@ -903,6 +915,10 @@ const en: Strings = {
     confirmOff: 'Never',
     confirmAmbiguous: 'When there is a choice',
     confirmAlways: 'Always',
+    motionLabel: 'Animations',
+    motionSystem: 'Follow system',
+    motionFull: 'Full',
+    motionReduced: 'Reduced',
     invite: 'Invite friends',
     inviteText: (url) => `Come play Bela with me! Join my table: ${url}`,
   },

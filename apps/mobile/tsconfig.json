@@ -1,6 +1,12 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    // The workspace packages, from source: node_modules links them to whichever
+    // checkout ran npm install, which is not always this one (git worktrees).
+    "baseUrl": ".",
+    "paths": {
+      "@belot/*": ["../../packages/*/src/index.ts"]
+    }
   }
 }

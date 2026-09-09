@@ -62,6 +62,13 @@ describe('anchors measure on demand', () => {
     expect(src('table/TurnBeacon.tsx')).not.toMatch(/anim\/director|useDirector|view\.|PublicView/);
   });
 
+  it('the motion policy has one source: the table reads a prop, the games read the hook', () => {
+    expect(src('TableScreen.tsx')).not.toMatch(/useReduceMotion/);
+    expect(src('anim/useMotionPolicy.ts')).toMatch(/useReduceMotion\(\)/);
+    expect(src('useGame.ts')).toMatch(/timingsFor\(motion\)/);
+    expect(src('net/useNetGame.ts')).toMatch(/timingsFor\(motionRef\.current\)/);
+  });
+
   it('the home screen no longer re-renders on every scroll event', () => {
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/setScrollTick/);

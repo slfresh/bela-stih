@@ -8,9 +8,10 @@ import type { TableEvent } from '@belot/table';
 import { Lang } from '@belot/i18n';
 import type { Award, PlayerProfile } from '@belot/progression';
 import { AnchorMap } from '../anim/AnchorRegistry';
-import { Director } from '../anim/director';
+import { Director, timingsFor } from '../anim/director';
 import { FxBus } from '../anim/FxBus';
 import { makeFxSpawner, spawnEmote } from '../table/fx';
+import { useMotionPolicy } from '../anim/useMotionPolicy';
 import { playSfx } from '../audio';
 import { emptyTally, processEvents } from '../feedback';
 import { loadProfile, saveProfile, type Settings } from '../storage';
@@ -157,6 +158,10 @@ export function useNetGame(settings: Settings) {
 
   const hapticsRef = useRef(settings.haptics);
   hapticsRef.current = settings.haptics;
+  // Pacing follows the motion policy as it stands when the table is joined.
+  const motion = useMotionPolicy(settings.motion);
+  const motionRef = useRef(motion);
+  motionRef.current = motion;
   // The socket callbacks are created once; a ref keeps their locale current.
   const langRef = useRef(lang);
   langRef.current = lang;
@@ -238,14 +243,19 @@ export function useNetGame(settings: Settings) {
       authViewRef.current = msg.view;
       setSeat(msg.seat);
       if (!directorRef.current) {
-        directorRef.current = new Director(msg.seat, msg.view, {
-          onView: setView,
-          onEventStart: (e, f, s) => onEventRef.current(e, f, s),
-          onIdle: setIdle,
-          // Anchors re-measure as each batch starts; the table bumps them too
-          // whenever a row around the felt comes or goes.
-          onBatch: () => anchors.bump(),
-        });
+        directorRef.current = new Director(
+          msg.seat,
+          msg.view,
+          {
+            onView: setView,
+            onEventStart: (e, f, s) => onEventRef.current(e, f, s),
+            onIdle: setIdle,
+            // Anchors re-measure as each batch starts; the table bumps them too
+            // whenever a row around the felt comes or goes.
+            onBatch: () => anchors.bump(),
+          },
+          timingsFor(motionRef.current),
+        );
         setView(msg.view);
       }
     });
@@ -459,6 +469,7 @@ export function useNetGame(settings: Settings) {
     banner,
     lastDealResult,
     spotlight,
+    motion,
     matchOver: view?.phase === 'MATCH_OVER',
     winnerTeam,
     turnDeadline,

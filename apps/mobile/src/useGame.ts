@@ -8,6 +8,8 @@ import { AnchorMap } from './anim/AnchorRegistry';
 import { FxBus } from './anim/FxBus';
 import { useDirector } from './anim/useDirector';
 import { makeFxSpawner, spawnEmote } from './table/fx';
+import { timingsFor } from './anim/director';
+import { useMotionPolicy } from './anim/useMotionPolicy';
 import { BOT_EMOTES } from './emotes';
 import { playSfx } from './audio';
 import { emptyTally, processEvents } from './feedback';
@@ -75,6 +77,8 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     [anchors, fxBus, lang],
   );
 
+  // Pacing follows the motion policy; fixed for the life of this table.
+  const motion = useMotionPolicy(settings.motion);
   const { view, idle, enqueue, getView } = useDirector(
     HUMAN,
     useMemo(() => preDealView(table.view(HUMAN)), [table]),
@@ -109,6 +113,7 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     // Anchors re-measure as each batch starts (the measurement lands a frame
     // in; the table bumps them on every reflow as well).
     () => anchors.bump(),
+    { timings: timingsFor(motion) },
   );
 
   getViewRef.current = getView;
@@ -173,6 +178,7 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     lang,
     myTurn: idle && view.toAct === HUMAN,
     spotlight,
+    motion,
     submit,
     nextDeal,
     emote,

@@ -55,7 +55,6 @@ import { EmoteStrip } from './table/EmoteStrip';
 import { useTurnCues } from './table/useTurnCues';
 import { TurnBeacon } from './table/TurnBeacon';
 import { FeltGlow } from './table/FeltGlow';
-import { useReduceMotion } from './anim/useReduceMotion';
 import { PlayingCard } from './PlayingCard';
 import { SuitPip } from './deck';
 import { playSfx, type Sfx } from './audio';
@@ -104,6 +103,8 @@ export interface TableScreenProps {
   status?: string | null;
   /** The seat whose move is being animated right now — presentation only, never `toAct`. */
   spotlightSeat?: Seat | null;
+  /** The motion policy: no loops, no springs, fades only. */
+  reducedMotion?: boolean;
   anchors: AnchorMap;
   fxBus: FxBus;
   /** Absolute epoch deadline for the active seat's ring; null = soft ring. */
@@ -137,6 +138,7 @@ export function TableScreen(props: TableScreenProps) {
   const {
     mySeat, lang, view, options, myTurn, settled, matchOver, lastDealResult,
     matchScores, winnerTeam, profile, banner, seatMeta, status, anchors, fxBus, spotlightSeat = null,
+    reducedMotion = false,
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
     hardMode = false, series, askedRematch, waitingFor, onRematch, onForceRematch,
     handSort = 'auto', onHandSortChange, confirmPlay = 'ambiguous',
@@ -147,7 +149,7 @@ export function TableScreen(props: TableScreenProps) {
   // three columns when the phone is turned on its side.
   const m = useTableMetrics();
   const land = m.orientation === 'landscape';
-  const reduced = useReduceMotion();
+  const reduced = reducedMotion;
 
   // The trick cross is sized against the felt it is drawn in, not the window:
   // a landscape felt is a short wide ellipse and window-sized cards hang out

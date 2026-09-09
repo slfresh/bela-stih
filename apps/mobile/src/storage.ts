@@ -47,6 +47,8 @@ const KEY = {
 } as const;
 
 export type ConfirmPlay = 'off' | 'ambiguous' | 'always';
+/** Animation: follow the system's reduce-motion switch, or force either way. */
+export type MotionSetting = 'system' | 'full' | 'reduced';
 
 export interface Settings {
   sound: boolean;
@@ -72,6 +74,7 @@ export interface Settings {
    * when there is a genuine choice — a forced card still plays on one tap.
    */
   confirmPlay: ConfirmPlay;
+  motion: MotionSetting;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -83,6 +86,7 @@ export const DEFAULT_SETTINGS: Settings = {
   deckStyle: 'madarice',
   handSort: 'auto',
   confirmPlay: 'ambiguous',
+  motion: 'system',
 };
 
 function read<T>(key: string, fallback: T): T {

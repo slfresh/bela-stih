@@ -38,7 +38,16 @@ export interface DirectorCallbacks {
    * the card was already committed to its slot.
    */
   onEventStart(e: TableEvent, flushed: boolean, speed: number): void;
+  /**
+   * Fired once per ANIMATED event as its end-commit lands — the moment a
+   * sprite has arrived, so a landing sound or a stamp belongs here rather
+   * than on a free timer. Never fired for a flushed event, and never after
+   * fastForward() has cleared the beat it belonged to.
+   */
+  onEventEnd?(e: TableEvent): void;
   onIdle(idle: boolean): void;
+  /** Some events were flushed past without animating: how many. */
+  onSkip?(count: number): void;
   /**
    * Fired as each non-empty batch begins animating — queued batches included,
    * which `onIdle(false)` never covers. The table re-measures its anchors on
@@ -66,24 +75,32 @@ export type Timings = Record<TableEvent['kind'], EventTiming>;
  */
 export const REVEAL_MS = 5000;
 
+/**
+ * Each beat is as long as the thing that fills it — the sprites shrink to
+ * fit the beat, never the other way round (see anim/lifetimes.ts and the
+ * sprite-lifetimes test that bounds every one of them).
+ */
 export const DEFAULT_TIMINGS: Timings = {
   dealStarted: { dur: 1400, gap: 200 },
   bidPassed: { dur: 500, gap: 120 },
-  bidCalled: { dur: 900, gap: 150 },
+  // The bubble (dur), then the pip stamps onto the plaque in the gap.
+  bidCalled: { dur: 700, gap: 350 },
   doubled: { dur: 900, gap: 150 },
   doublePassed: { dur: 250, gap: 80 },
-  handsCompleted: { dur: 700, gap: 200 },
+  // The talon lands, then the fan re-sorts in the gap.
+  handsCompleted: { dur: 800, gap: 250 },
   declared: { dur: 1100, gap: 150 },
   declarationSkipped: { dur: 150, gap: 60 },
   // The one beat in the deal where everyone is looking at somebody else's hand.
   // The table holds here for exactly as long as the cards are up, so nobody
   // leads while you are still reading them.
   declarationsRevealed: { dur: REVEAL_MS, gap: 300 },
-  belaCalled: { dur: 1100, gap: 100 },
+  belaCalled: { dur: 900, gap: 150 },
   cardPlayed: { dur: 260, gap: 140 },
-  trickWon: { dur: 1000, gap: 200 },
-  dealScored: { dur: 900, gap: 0 },
-  matchOver: { dur: 300, gap: 0 },
+  // The four cards hold, then sweep to the winner (dur); the pile settles (gap).
+  trickWon: { dur: 760, gap: 240 },
+  dealScored: { dur: 700, gap: 0 },
+  matchOver: { dur: 600, gap: 0 },
   matchStarted: { dur: 600, gap: 200 },
 };
 
@@ -91,6 +108,25 @@ export const DEFAULT_TIMINGS: Timings = {
 export const ZERO_TIMINGS: Timings = Object.fromEntries(
   Object.keys(DEFAULT_TIMINGS).map((k) => [k, { dur: 0, gap: 0 }]),
 ) as Timings;
+
+export type MotionPolicy = 'full' | 'reduced';
+
+/**
+ * Reduce-motion pacing: every beat short enough that a fade is all the
+ * sprite can do — except the reveal, which is information, not decoration.
+ * Remembering what was shown is a skill of the game; it stays up for
+ * REVEAL_MS under every policy.
+ */
+export const REDUCED_TIMINGS: Timings = Object.fromEntries(
+  Object.entries(DEFAULT_TIMINGS).map(([k, t]) => [
+    k,
+    k === 'declarationsRevealed' ? t : { dur: Math.min(250, t.dur), gap: Math.min(80, t.gap) },
+  ]),
+) as Timings;
+
+export function timingsFor(policy: MotionPolicy): Timings {
+  return policy === 'reduced' ? REDUCED_TIMINGS : DEFAULT_TIMINGS;
+}
 
 interface Current {
   batch: Batch;
@@ -191,6 +227,7 @@ export class Director {
 
   private flushEvents(events: TableEvent[], from: number): void {
     for (let i = from; i < events.length; i++) this.cb.onEventStart(events[i]!, true, 1);
+    if (events.length > from) this.cb.onSkip?.(events.length - from);
   }
 
   private schedule(ms: number, fn: () => void): void {
@@ -246,6 +283,7 @@ export class Director {
       if (!this.current) return; // fast-forwarded meanwhile
       this.view = applyEventEnd(this.view, e, batch.finalView, this.mySeat);
       this.cb.onView(this.view);
+      this.cb.onEventEnd?.(e);
 
       if (this.current.nextIndex >= batch.events.length) {
         this.finishBatch();
