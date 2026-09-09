@@ -21,6 +21,7 @@ import { pattern } from '../haptics';
 import { TableScreen, type SeatMeta } from '../TableScreen';
 import { Button } from '../ui/Button';
 import { radius, theme } from '../theme';
+import { Dot } from '../ui/icons';
 import type { Settings } from '../storage';
 import { SERVER_URL, useNetGame, type NetGame } from './useNetGame';
 
@@ -274,11 +275,13 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
                       onPress={() => net.sit(idx as Seat)}
                       style={[styles.seatCell, canSit && styles.seatCellFree]}
                     >
-                      <Text style={styles.seatLine}>
-                        {s.connected ? '●' : '○'}{' '}
-                        {s.connected ? s.name : canSit ? ui.sitHere : s.name}
-                        {idx === net.seat ? `  (${net.lang.s.seat[0]})` : ''}
-                      </Text>
+                      <View style={styles.seatInner}>
+                        <Dot on={s.connected} />
+                        <Text style={styles.seatLine}>
+                          {s.connected ? s.name : canSit ? ui.sitHere : s.name}
+                          {idx === net.seat ? `  (${net.lang.s.seat[0]})` : ''}
+                        </Text>
+                      </View>
                     </Pressable>
                   );
                 })}
@@ -311,6 +314,7 @@ const styles = StyleSheet.create({
   label: { color: theme.textDim, fontSize: 13 },
   code: { color: theme.accent, fontSize: 26, fontWeight: '800', letterSpacing: 2 },
   hint: { color: theme.textDim, fontSize: 12, textAlign: 'center' },
+  seatInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   seatLine: { color: theme.text, fontSize: 15 },
   teamRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 4 },
   teamTag: { color: theme.textDim, fontSize: 12, width: 34 },

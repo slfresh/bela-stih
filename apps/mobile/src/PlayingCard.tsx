@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  captionText: { color: garb.ink, fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  captionText: { color: garb.ink, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   dimmed: { opacity: 0.6 },
   dimmedTint: {
     position: 'absolute',

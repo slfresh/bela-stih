@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { PressScale } from '../ui/PressScale';
+import { Coin } from '../ui/icons';
 import type { Lang } from '@belot/i18n';
 import {
   canBuy,
@@ -96,13 +97,16 @@ export function ShopScreen({
                 ) : owned ? (
                   <Text style={styles.select}>{ui.select}</Text>
                 ) : locked ? (
-                  <Text style={styles.locked}>
-                    {c.price} ● · {ui.needsLevel(c.requiredLevel)}
-                  </Text>
+                  <View style={styles.priceRow}>
+                    <Text style={styles.locked}>{c.price}</Text>
+                    <Coin size={11} />
+                    <Text style={styles.locked}> · {ui.needsLevel(c.requiredLevel)}</Text>
+                  </View>
                 ) : (
-                  <Text style={[styles.price, !affordable && styles.locked]}>
-                    {c.price} ●
-                  </Text>
+                  <View style={styles.priceRow}>
+                    <Text style={[styles.price, !affordable && styles.locked]}>{c.price}</Text>
+                    <Coin size={11} />
+                  </View>
                 )}
               </PressScale>
             );
@@ -115,7 +119,10 @@ export function ShopScreen({
   return (
     <ScreenShell title={ui.shop} onBack={onBack}>
       <View style={styles.walletRow}>
-        <Text style={styles.wallet}>{profile.coins} ●</Text>
+        <View style={styles.walletCoins}>
+          <Text style={styles.wallet}>{profile.coins}</Text>
+          <Coin size={20} />
+        </View>
         <Text style={styles.walletHint}>{ui.coinsDisclaimer}</Text>
       </View>
       {section('avatar', ui.sectionAvatars)}
@@ -127,7 +134,9 @@ export function ShopScreen({
 
 const styles = StyleSheet.create({
   walletRow: { alignItems: 'center', gap: 4 },
+  walletCoins: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   wallet: { color: theme.accent, fontSize: 24, fontWeight: '800' },
+  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 3, flexWrap: 'wrap', justifyContent: 'center' },
   walletHint: { color: theme.textDim, fontSize: 11, textAlign: 'center' },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },

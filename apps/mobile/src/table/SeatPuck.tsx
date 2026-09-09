@@ -17,7 +17,8 @@ import { TurnRing } from '../anim/TurnRing';
 import type { TeamTone } from './teamColour';
 import { Avatar, hasAvatar } from '../avatars';
 import { garb } from '../deck/palette';
-import { radius, theme } from '../theme';
+import { radius, stroke, theme } from '../theme';
+import { Robot } from '../ui/icons';
 import { useCountUp } from '../anim/useCountUp';
 
 /**
@@ -219,10 +220,12 @@ export const SeatPuck = memo(function SeatPuck({
         )}
       </View>
 
-      <Text style={styles.name} numberOfLines={1}>
-        {name}
-        {isBot ? ' 🤖' : ''}
-      </Text>
+      <View style={styles.nameRow}>
+        <Text style={styles.name} numberOfLines={1}>
+          {name}
+        </Text>
+        {isBot && <Robot size={12} />}
+      </View>
     </Animated.View>
   );
 });
@@ -230,7 +233,8 @@ export const SeatPuck = memo(function SeatPuck({
 const styles = StyleSheet.create({
   root: { alignItems: 'center', gap: 2 },
   centre: { alignItems: 'center', justifyContent: 'center' },
-  name: { color: theme.textDim, fontSize: 12, maxWidth: 84 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: 84 },
+  name: { color: theme.textDim, fontSize: 12, flexShrink: 1 },
   dealer: {
     position: 'absolute',
     top: -2,
@@ -270,11 +274,11 @@ const styles = StyleSheet.create({
     width: 12,
     height: 9,
     borderRadius: 2,
-    backgroundColor: theme.cardBack,
+    backgroundColor: garb.redDark,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
+    borderColor: stroke.lit,
   },
   pileCardBack: { left: 2, top: 0 },
-  pileText: { position: 'absolute', right: 0, top: 3, color: theme.text, fontSize: 10, fontWeight: '800' },
+  pileText: { position: 'absolute', right: 0, top: 3, color: theme.text, fontSize: 11, fontWeight: '800' },
 
 });

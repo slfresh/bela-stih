@@ -76,6 +76,7 @@ import { SuitPip } from './deck';
 import { playSfx } from './audio';
 import { pattern } from './haptics';
 import { Button } from './ui/Button';
+import { Coin } from './ui/icons';
 import { PressScale } from './ui/PressScale';
 import { radius, team, theme } from './theme';
 import { isPartner, seatTone } from './table/teamColour';
@@ -406,10 +407,18 @@ export function TableScreen(props: TableScreenProps) {
 
   const awardRow = banner ? (
     <View style={styles.awardRow}>
-      <Text style={styles.awardText}>
-        +{banner.xp} XP{banner.coins > 0 ? `   +${banner.coins} ●` : ''}
-        {banner.levelUp !== null ? `   ★ ${lang.s.ui.level} ${banner.levelUp}` : ''}
-      </Text>
+      <Text style={styles.awardText}>+{banner.xp} XP</Text>
+      {banner.coins > 0 && (
+        <View style={styles.awardCoins}>
+          <Text style={styles.awardText}>+{banner.coins}</Text>
+          <Coin size={13} />
+        </View>
+      )}
+      {banner.levelUp !== null && (
+        <Text style={styles.awardText}>
+          ★ {lang.s.ui.level} {banner.levelUp}
+        </Text>
+      )}
     </View>
   ) : null;
 
@@ -1044,7 +1053,10 @@ const ProfileBar = memo(
           </View>
         </View>
         <Anchor id={anchorId.wallet}>
-          <Text style={styles.coins}>{coins} ●</Text>
+          <View style={styles.coinsRow}>
+            <Text style={styles.coins}>{coins}</Text>
+            <Coin size={12} />
+          </View>
         </Anchor>
       </Pressable>
     );
@@ -1727,6 +1739,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   xpFill: { height: 5, backgroundColor: theme.accent },
+  coinsRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   coins: { color: theme.accent, fontWeight: '700', fontSize: 14 },
 
   status: { color: theme.accent, fontSize: 12, textAlign: 'center' },
@@ -1868,8 +1881,9 @@ const styles = StyleSheet.create({
   callChipTextLand: { fontSize: 11 },
   callChipLand: { paddingHorizontal: 8, alignSelf: 'stretch' },
 
-  awardRow: { alignItems: 'center' },
-  awardText: { color: theme.ok, fontWeight: '800', fontSize: 15 },
+  awardRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 },
+  awardCoins: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  awardText: { color: theme.okInk, fontWeight: '800', fontSize: 15 },
 
   promptRow: {
     backgroundColor: 'rgba(0,0,0,0.25)',

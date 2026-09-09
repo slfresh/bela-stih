@@ -17,6 +17,8 @@ import { EffectsOverlay } from './anim/EffectsOverlay';
 import { anchorId, FxBus } from './anim/FxBus';
 import { Avatar } from './avatars';
 import { Button } from './ui/Button';
+import { Check, Coin, Gear } from './ui/icons';
+import { Panel } from './ui/Panel';
 import { PressScale } from './ui/PressScale';
 import type { Settings } from './storage';
 import { coinDingTimers, coinsLandedMs } from './anim/lifetimes';
@@ -137,12 +139,13 @@ export function HomeScreen({
               <PressScale onPress={onOpenShop} hitSlop={6}>
                 <Anchor id={anchorId.wallet}>
                   <View style={styles.coinChip}>
-                    <Text style={styles.coinText}>{coins} ●</Text>
+                    <Text style={styles.coinText}>{coins}</Text>
+                    <Coin size={13} />
                   </View>
                 </Anchor>
               </PressScale>
               <PressScale onPress={onOpenSettings} hitSlop={6} style={styles.gear}>
-                <Text style={styles.gearText}>⚙️</Text>
+                <Gear size={22} />
               </PressScale>
             </View>
 
@@ -165,7 +168,7 @@ export function HomeScreen({
             </View>
 
             {claimable ? (
-              <View style={[styles.panel, styles.bonusPanel]}>
+              <Panel tone="accent" style={styles.centred}>
                 <Text style={styles.bonusTitle}>
                   {ui.dailyBonus(previewDaily(profile, today).coins)}
                 </Text>
@@ -177,14 +180,13 @@ export function HomeScreen({
                 <Anchor id="bonus">
                   <Button label={ui.claim} tone="strong" sound={null} onPress={collect} />
                 </Anchor>
-              </View>
+              </Panel>
             ) : (
               <Text style={styles.hint}>{ui.bonusClaimed(profile.streakDays)}</Text>
             )}
 
             {profile.quests.length > 0 && (
-              <View style={styles.panel}>
-                <Text style={styles.label}>{ui.dailyQuests}</Text>
+              <Panel label={ui.dailyQuests}>
                 {profile.quests.map((q, i) => (
                   <View key={i} style={styles.questRow}>
                     <View style={styles.questLeft}>
@@ -201,26 +203,29 @@ export function HomeScreen({
                       </View>
                     </View>
                     {q.claimed ? (
-                      <Text style={styles.questClaimed}>✓</Text>
+                      <Check />
                     ) : isQuestComplete(q) ? (
                       <Anchor id={`quest:${i}`}>
                         <Button
-                          label={`+${q.reward} ●`}
+                          label={`+${q.reward}`}
+                          icon={<Coin size={12} />}
                           tone="strong"
                           sound={null}
                           onPress={() => collectQuest(i)}
                         />
                       </Anchor>
                     ) : (
-                      <Text style={styles.questReward}>+{q.reward} ●</Text>
+                      <View style={styles.reward}>
+                        <Text style={styles.questReward}>+{q.reward}</Text>
+                        <Coin size={12} />
+                      </View>
                     )}
                   </View>
                 ))}
-              </View>
+              </Panel>
             )}
 
-            <View style={styles.panel}>
-              <Text style={styles.label}>{ui.joinByCode}</Text>
+            <Panel label={ui.joinByCode}>
               <View style={styles.joinRow}>
                 <TextInput
                   value={code}
@@ -237,10 +242,9 @@ export function HomeScreen({
                   onPress={() => code.trim() && go({ mode: 'join', code: code.trim() })}
                 />
               </View>
-            </View>
+            </Panel>
 
-            <View style={styles.panel}>
-              <Text style={styles.label}>{ui.nicknameLabel}</Text>
+            <Panel label={ui.nicknameLabel}>
               <TextInput
                 value={settings.nickname}
                 onChangeText={(nickname) => onSettingsChange({ ...settings, nickname })}
@@ -250,7 +254,7 @@ export function HomeScreen({
                 autoCorrect={false}
                 style={styles.input}
               />
-            </View>
+            </Panel>
 
             <Text style={styles.disclaimer}>{ui.coinsDisclaimer}</Text>
           </ScrollView>
@@ -276,6 +280,9 @@ const styles = StyleSheet.create({
   headerName: { color: theme.text, fontSize: 15, fontWeight: '700' },
   headerLevel: { color: theme.textDim, fontSize: 12 },
   coinChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     backgroundColor: 'rgba(0,0,0,0.28)',
     borderRadius: radius.pill,
     borderWidth: 1,
@@ -300,17 +307,8 @@ const styles = StyleSheet.create({
   heroText: { color: '#241a05', fontSize: 24, fontWeight: '900', letterSpacing: 2 },
   modeRow: { gap: 10 },
 
-  panel: {
-    backgroundColor: 'rgba(0,0,0,0.22)',
-    borderRadius: radius.panel,
-    borderWidth: 1,
-    borderColor: theme.line,
-    padding: 14,
-    gap: 10,
-  },
-  bonusPanel: { borderColor: theme.accent, alignItems: 'center' },
+  centred: { alignItems: 'center' },
   bonusTitle: { color: theme.accent, fontSize: 17, fontWeight: '800' },
-  label: { color: theme.textDim, fontSize: 13 },
   hint: { color: theme.textDim, fontSize: 12, textAlign: 'center' },
 
   joinRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
@@ -335,8 +333,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   questFill: { height: 5, borderRadius: radius.pill, backgroundColor: theme.accent },
+  reward: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   questReward: { color: theme.accent, fontSize: 14 },
-  questClaimed: { color: theme.ok, fontSize: 16, fontWeight: '800' },
 
   disclaimer: { color: theme.textDim, fontSize: 11, textAlign: 'center', marginTop: 8 },
 });

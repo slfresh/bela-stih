@@ -12,7 +12,7 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { theme } from '../theme';
+import { signal, stroke } from '../theme';
 
 /**
  * The countdown ring around the active seat's avatar — the poker-table way of
@@ -90,7 +90,7 @@ export function TurnRing({
     stroke: interpolateColor(
       progress.value,
       [0, 0.18, 0.45, 1],
-      ['#d63c2a', '#e2711d', theme.accent, theme.accent],
+      [signal.clockLow, signal.clockMid, signal.clockFull, signal.clockFull],
     ),
   }));
 
@@ -106,7 +106,7 @@ export function TurnRing({
         cx={size / 2}
         cy={size / 2}
         r={r}
-        stroke="rgba(255,255,255,0.14)"
+        stroke={stroke.hair}
         strokeWidth={3}
         fill="none"
       />

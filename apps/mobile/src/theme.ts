@@ -1,9 +1,15 @@
+import { garb } from './deck/palette';
+
 /**
  * A card-table palette, deliberately NOT casino chrome.
  *
  * This matters beyond taste: the IARC questionnaire assigns a "Simulated
  * Gambling" descriptor — and with it a PEGI 18 rating — to apps that look like a
  * casino. Felt and wood read as a kitchen table, which is what Bela is.
+ *
+ * The one gold is the deck's own (`garb.gold`), so the plaque, the coins and
+ * the cards' trim are the same metal. Gold means "the thing to press" or
+ * "money"; secondary emphasis is cream ink or a team colour, never more gold.
  */
 export const theme = {
   felt: '#123a2b',
@@ -12,14 +18,14 @@ export const theme = {
   line: 'rgba(255,255,255,0.10)',
   text: '#f2efe6',
   textDim: 'rgba(242,239,230,0.62)',
-  cardFace: '#f7f4ec',
-  cardBack: '#6b2230',
-  cardEdge: 'rgba(0,0,0,0.35)',
-  red: '#b3202e',
-  black: '#1b1b1b',
-  accent: '#d8a531',
+  cardFace: garb.cream,
+  accent: garb.gold,
+  /** An outcome went badly / well: fills, borders and large type. For body text use `okInk` / `dangerInk`. */
   danger: '#c2452f',
   ok: '#4e9d5b',
+  /** The same two outcomes as ink on the dark ground, lifted to read at body size. */
+  dangerInk: '#f28b7d',
+  okInk: '#7fcf8c',
 } as const;
 
 /**
@@ -50,6 +56,68 @@ export const team = {
 export const signal = {
   /** "Your turn" — the beacon under the hand and the pulse that announces it. */
   turn: '#fff1c9',
+  /** The turn clock, from plenty of time to none. */
+  clockFull: garb.gold,
+  clockMid: garb.flame,
+  clockLow: '#e8513f',
 } as const;
 
-export const radius = { card: 8, panel: 14, pill: 999 } as const;
+/**
+ * Surfaces are alpha overlays on whatever room the table is in, so a walnut
+ * or midnight cosmetic recolours every panel without a second palette.
+ */
+export const surface = {
+  /** A panel on the page. */
+  panel: 'rgba(0,0,0,0.22)',
+  /** Something set INTO a surface: a track, a well, the plaque's plate. */
+  sunk: 'rgba(0,0,0,0.28)',
+  /** A chip or a plain button. */
+  chip: 'rgba(255,255,255,0.07)',
+  /** A surface lifted a hair off its parent. */
+  raised: 'rgba(255,255,255,0.05)',
+  /** Over the table while a sheet or a reveal has the attention. */
+  scrim: 'rgba(0,0,0,0.55)',
+} as const;
+
+/**
+ * Depth without shadows: a lit hairline on top, a shaded one underneath.
+ * Shadow props render inconsistently across Android, iOS and the web; two
+ * hairlines look the same everywhere and cost nothing.
+ */
+export const stroke = {
+  hair: 'rgba(255,255,255,0.14)',
+  edge: 'rgba(255,255,255,0.24)',
+  lit: 'rgba(255,255,255,0.38)',
+  shade: 'rgba(0,0,0,0.45)',
+} as const;
+
+/** Text on the dark ground. `lo` only from 13 px up. */
+export const ink = {
+  hi: '#f2efe6',
+  mid: 'rgba(242,239,230,0.72)',
+  lo: 'rgba(242,239,230,0.52)',
+} as const;
+
+export const space = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 } as const;
+
+/**
+ * The type scale. Nothing below `caption`; the deck's own art is the only
+ * place smaller text exists, and it is drawn, not set.
+ */
+export const type = {
+  display: { fontSize: 34, lineHeight: 40 },
+  h1: { fontSize: 24, lineHeight: 30 },
+  h2: { fontSize: 20, lineHeight: 26 },
+  h3: { fontSize: 17, lineHeight: 22 },
+  body: { fontSize: 15, lineHeight: 20 },
+  sub: { fontSize: 13, lineHeight: 18 },
+  caption: { fontSize: 11, lineHeight: 14 },
+} as const;
+
+/** Every score, count and price: digits that do not jitter as they change. */
+export const num = { fontVariant: ['tabular-nums'] as const } as const;
+
+export const radius = { xs: 4, sm: 8, md: 14, lg: 20, pill: 999, card: 8, panel: 14 } as const;
+
+/** UI transitions — a press, a chip, a panel. NOT the director's beats (anim/director.ts). */
+export const motion = { fast: 120, base: 220, slow: 360 } as const;

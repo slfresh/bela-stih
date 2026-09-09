@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
 import { StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import type { Sfx } from '../audio';
-import { radius, theme } from '../theme';
+import { garb } from '../deck/palette';
+import { radius, surface, theme } from '../theme';
 import { PressScale } from './PressScale';
 
 /**
@@ -44,7 +45,10 @@ export function Button({
       style={[styles.btn, toneStyle, compact && styles.compact, icon !== undefined && styles.withIcon, style]}
     >
       {icon}
-      <Text style={[styles.text, compact && styles.textCompact]} numberOfLines={compact ? 2 : undefined}>
+      <Text
+        style={[styles.text, tone === 'bela' && styles.textBela, compact && styles.textCompact]}
+        numberOfLines={compact ? 2 : undefined}
+      >
         {label}
       </Text>
     </PressScale>
@@ -61,11 +65,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  plain: { backgroundColor: 'rgba(255,255,255,0.07)' },
+  plain: { backgroundColor: surface.chip },
   strong: { backgroundColor: theme.wood, borderColor: theme.accent },
   bela: { backgroundColor: theme.accent, borderColor: theme.accent },
   compact: { paddingHorizontal: 8, paddingVertical: 7 },
   withIcon: { flexDirection: 'row', gap: 6 },
   text: { color: theme.text, fontSize: 14, fontWeight: '600' },
+  // Cream on gold is 1.9:1; the deck's ink on gold is 6.7:1.
+  textBela: { color: garb.ink },
   textCompact: { fontSize: 11, textAlign: 'center' },
 });
