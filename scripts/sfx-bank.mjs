@@ -48,6 +48,8 @@ export const TRIM = {
   call: -1,
   stamp: -2,
   kontra: 0,
+  reveal: -1,
+  revealDown: -3,
 };
 
 // --- tiny synth -------------------------------------------------------------
@@ -409,6 +411,14 @@ export const SFX = {
   // kontra: two falling notes with a bit of brass in them — a challenge
   kontra: () =>
     arpeggio([440, 330], 0.13, 0.28, { gain: 0.3, power: 4, harmonic: 0.6, attack: 0.008 }),
+
+  // the zvanja going up: a quick bright shimmer, four notes climbing
+  reveal: () =>
+    arpeggio([784, 988, 1175, 1568], 0.055, 0.3, { gain: 0.22, power: 4, harmonic: 0.4, attack: 0.004 }),
+
+  // ...and coming down: two soft notes falling, no fuss
+  revealDown: () =>
+    arpeggio([988, 784], 0.1, 0.22, { gain: 0.22, power: 5, harmonic: 0.3, attack: 0.006 }),
 };
 
 /**

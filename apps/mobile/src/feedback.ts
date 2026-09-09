@@ -22,11 +22,7 @@ import { playSfx, type PlayOptions, type Sfx } from './audio';
  * that every other kind does — a new event kind that nobody scored is
  * otherwise a silence nobody notices.
  */
-export const SILENT_EVENTS: readonly TableEvent['kind'][] = [
-  'declarationSkipped',
-  'declarationsRevealed', // the cards themselves are the announcement, for now
-  'matchStarted',
-];
+export const SILENT_EVENTS: readonly TableEvent['kind'][] = ['declarationSkipped', 'matchStarted'];
 
 /** What the player did this deal, accumulated from events as they arrive. */
 export interface DealTally {
@@ -150,6 +146,11 @@ export function processEvents({
       case 'declared':
         sfx('zvanje');
         if (e.seat === mySeat) tally.zvanja += e.declarations.length;
+        break;
+
+      case 'declarationsRevealed':
+        // The cards going up; the row plays its own coming-down.
+        sfx('reveal');
         break;
 
       case 'belaCalled':

@@ -29,7 +29,9 @@ export type Sfx =
   | 'knock'
   | 'call'
   | 'stamp'
-  | 'kontra';
+  | 'kontra'
+  | 'reveal'
+  | 'revealDown';
 
 // require() rather than import so Metro bundles the asset and hands back a module id.
 const SOURCES: Record<Sfx, number> = {
@@ -53,6 +55,8 @@ const SOURCES: Record<Sfx, number> = {
   call: require('../assets/sfx/call.wav'),
   stamp: require('../assets/sfx/stamp.wav'),
   kontra: require('../assets/sfx/kontra.wav'),
+  reveal: require('../assets/sfx/reveal.wav'),
+  revealDown: require('../assets/sfx/revealDown.wav'),
 };
 
 /**
@@ -82,6 +86,8 @@ const GAIN: Record<Sfx, number> = {
   call: 0.85,
   stamp: 0.7,
   kontra: 0.9,
+  reveal: 0.8,
+  revealDown: 0.6,
 };
 
 /**

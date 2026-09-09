@@ -100,6 +100,14 @@ describe('anchors measure on demand', () => {
     expect(src('TableScreen.tsx')).toMatch(/m\.promptReserve/);
   });
 
+  it('the reveal comes down at REVEAL_MS, imported from the director in one place', () => {
+    const table = src('TableScreen.tsx');
+    expect(table).toMatch(/leaveReveal\(REVEAL_MS - REVEAL_EXIT_MS\)/);
+    expect(table).not.toMatch(/setTimeout\([^)]*5000/);
+    expect(src('table/RevealRow.tsx')).toMatch(/duration: REVEAL_MS/);
+    expect(src('table/RevealRow.tsx')).toMatch(/reduceMotion: ReduceMotion\.Never/);
+  });
+
   it('the home screen no longer re-renders on every scroll event', () => {
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/setScrollTick/);

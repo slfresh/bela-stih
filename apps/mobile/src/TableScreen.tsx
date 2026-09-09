@@ -39,6 +39,8 @@ import { levelProgress, type Award, type PlayerProfile } from '@belot/progressio
 import { Anchor, AnchorHost, useAnchors, type AnchorMap } from './anim/AnchorRegistry';
 import { EffectsOverlay } from './anim/EffectsOverlay';
 import { REVEAL_MS } from './anim/director';
+import { RevealRow } from './table/RevealRow';
+import { REVEAL_EXIT_MS, type RevealPhase } from './table/revealTiming';
 import { COIN_CASCADE_COUNT, coinsLandedMs } from './anim/lifetimes';
 import { useLaggedNumber } from './ui/useLaggedNumber';
 import { anchorId, type FxBus } from './anim/FxBus';
@@ -310,13 +312,34 @@ export function TableScreen(props: TableScreenProps) {
   const revealKey = view.revealedDeclarations
     .flatMap((d) => d.cards.map((c) => cardId(c)))
     .join('|');
-  const [revealDone, setRevealDone] = useState(false);
+  // showing → leaving (the cards fly back) → gone (unmounted): the exit starts
+  // REVEAL_EXIT_MS before REVEAL_MS so the row is empty when it comes down; a
+  // tap starts the same exit early. All UI timers, cancelled on unmount.
+  const [revealPhase, setRevealPhase] = useState<RevealPhase>('gone');
+  const revealTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const clearRevealTimers = () => {
+    for (const t of revealTimers.current) clearTimeout(t);
+    revealTimers.current = [];
+  };
+  const leaveReveal = useCallback(
+    (inMs: number) => {
+      clearRevealTimers();
+      revealTimers.current = [
+        setTimeout(() => {
+          setRevealPhase('leaving');
+          playSfx('revealDown');
+        }, inMs),
+        setTimeout(() => setRevealPhase('gone'), inMs + REVEAL_EXIT_MS),
+      ];
+    },
+    [],
+  );
   useEffect(() => {
     if (revealKey === '') return;
-    setRevealDone(false);
-    const t = setTimeout(() => setRevealDone(true), REVEAL_MS);
-    return () => clearTimeout(t);
-  }, [revealKey]);
+    setRevealPhase('showing');
+    leaveReveal(REVEAL_MS - REVEAL_EXIT_MS);
+    return clearRevealTimers;
+  }, [revealKey, leaveReveal]);
 
   // The winning side's combinations, laid out for everyone. Only ever the
   // winner's: the losing side said its number and keeps its cards. A group
@@ -327,21 +350,19 @@ export function TableScreen(props: TableScreenProps) {
     Math.floor((m.width - 24 - 16 - 2 * (revealLongest - 1)) / revealLongest),
   );
   const revealRow =
-    view.revealedDeclarations.length > 0 && !revealDone ? (
-      <Pressable style={styles.revealRow} onPress={() => setRevealDone(true)}>
-        {view.revealedDeclarations.map((d, i) => (
-          <View key={i} style={styles.revealGroup}>
-            <Text style={styles.revealLabel}>
-              {meta(d.seat).name}: {lang.declaration(d)}
-            </Text>
-            <View style={styles.revealCards}>
-              {d.cards.map((c) => (
-                <PlayingCard key={cardId(c)} card={c} width={revealCardW} deckStyle={deck} />
-              ))}
-            </View>
-          </View>
-        ))}
-      </Pressable>
+    view.revealedDeclarations.length > 0 && revealPhase !== 'gone' ? (
+      <RevealRow
+        declarations={view.revealedDeclarations}
+        cardW={revealCardW}
+        deckStyle={deck}
+        label={(d) => `${meta(d.seat).name}: ${lang.declaration(d)}`}
+        sideOf={(d) => seatPosition(d.seat, mySeat)}
+        phase={revealPhase}
+        reduced={reduced}
+        onTap={() => {
+          if (revealPhase === 'showing') leaveReveal(0);
+        }}
+      />
     ) : null;
 
   const awardRow = banner ? (
@@ -460,10 +481,14 @@ export function TableScreen(props: TableScreenProps) {
   // table area, not the felt: the felt's inner width on a phone is 140-184px
   // and a four-card sequence needs 190.
   const tableFloat = (
-    <View style={styles.tableFloat} pointerEvents="box-none">
-      {revealRow}
-      {awardRow}
-    </View>
+    <>
+      {/* While the zvanja are up the table dims a little, so the cards read. */}
+      {revealRow !== null && <View style={styles.revealScrim} pointerEvents="none" />}
+      <View style={styles.tableFloat} pointerEvents="box-none">
+        {revealRow}
+        {awardRow}
+      </View>
+    </>
   );
 
   const felt = land ? (
@@ -1611,10 +1636,15 @@ const styles = StyleSheet.create({
   myTimer: { position: 'absolute', right: 8, top: -20, width: 36, height: 36 },
 
   callsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  revealRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
-  revealGroup: { alignItems: 'center', gap: 2 },
-  revealLabel: { color: theme.accent, fontSize: 11, fontWeight: '700' },
-  revealCards: { flexDirection: 'row', gap: 2 },
+  revealScrim: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+    borderRadius: 999,
+  },
   // In the rail the chips are what gives when the height runs out: they
   // shrink and clip, and the leave button below them stays reachable.
   callsCol: {
