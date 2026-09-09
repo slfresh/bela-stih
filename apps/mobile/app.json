@@ -43,7 +43,7 @@
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
       ],
-      "versionCode": 13
+      "versionCode": 14
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -55,7 +55,15 @@
     "backgroundColor": "#0d2a1f",
     "plugins": [
       "expo-audio",
-      "./plugins/withUploadSigning"
+      "./plugins/withUploadSigning",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0d2a1f",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160
+        }
+      ]
     ],
     "extra": {
       "eas": {
