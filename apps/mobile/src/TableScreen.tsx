@@ -62,9 +62,9 @@ import {
   type Position,
 } from './table/geometry';
 import { useTableMetrics } from './table/useTableMetrics';
+import { SELF_PUCK_GAP } from './table/metrics';
 import { useHandOrder, type HandSort } from './table/useHandOrder';
 import type { ConfirmPlay } from './storage';
-import { TurnRing } from './anim/TurnRing';
 import { cosmetics, room, roomStyle, type DeckStyle } from './cosmetics';
 import { PerfProbe } from './dev/PerfProbe';
 import { EmoteStrip } from './table/EmoteStrip';
@@ -727,13 +727,34 @@ export function TableScreen(props: TableScreenProps) {
         />
         </Animated.View>
       </Pressable>
-      {/* online, my own turn is on the clock too — show it */}
-      {myTurn && turnDeadline !== null && (
-        <View style={styles.myTimer} pointerEvents="none">
-          <TurnRing size={36} deadline={turnDeadline} totalMs={turnTotalMs} />
-        </View>
-      )}
     </Anchor>
+  );
+
+  // My own puck: the same disc as everyone else's, a shade smaller, with my
+  // clock on it. Its anchor is NOT the seat's — the hand is where my cards
+  // fly from and to.
+  const selfPuck = (
+    <SeatPuck
+      seat={mySeat}
+      name={meta(mySeat).name}
+      avatar={meta(mySeat).avatar ?? cosmetics().avatar}
+      cards={view.handCounts[mySeat]}
+      isDealer={view.dealer === mySeat && !dealerHop}
+      isBot={false}
+      connected={meta(mySeat).connected}
+      active={view.toAct === mySeat}
+      tone={seatTone(mySeat, mySeat)}
+      size={m.selfPuck}
+      deadline={myTurn ? turnDeadline : null}
+      totalMs={turnTotalMs}
+      // No spotlight on myself: my own move needs no "thinking" pulse, and my
+      // turn cues read only rendered turn state (see the source guard).
+      thinking={false}
+      reduced={reduced}
+      gesture={cue && (cue.kind === 'nod' || cue.kind === 'pulse') && cue.seat === mySeat ? cue : null}
+      tricks={view.dealProgress?.tricksWon[teamOf(mySeat)] ?? 0}
+      anchored={false}
+    />
   );
 
   // A fixed 34px (or one column wide), so it never reflows the felt.
@@ -848,6 +869,7 @@ export function TableScreen(props: TableScreenProps) {
                   winner={matchOver ? winnerTeam : null}
                 />
                 {plaque}
+                {selfPuck}
                 {calls}
                 <View style={styles.railGap} />
                 <Button label={finishLabel} tone="plain" compact onPress={onFinish} />
@@ -892,7 +914,10 @@ export function TableScreen(props: TableScreenProps) {
               {felt}
               {calls}
               {prompts}
-              {handBlock}
+              <View style={styles.handRow}>
+                {selfPuck}
+                <View style={styles.handGrow}>{handBlock}</View>
+              </View>
               {emotes}
 
               {/* actions: bidding, declaring, bela, leave */}
@@ -1921,7 +1946,6 @@ const styles = StyleSheet.create({
     gap: 6,
   },
 
-  myTimer: { position: 'absolute', right: 8, top: -20, width: 36, height: 36 },
 
   callsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   revealScrim: {
@@ -1975,6 +1999,9 @@ const styles = StyleSheet.create({
   promptHint: { color: theme.textDim, fontSize: 12 },
 
   handArea: { justifyContent: 'flex-end' },
+  // Portrait: my puck at the left end of the hand's row, the fan filling the rest.
+  handRow: { flexDirection: 'row', alignItems: 'flex-end', gap: SELF_PUCK_GAP },
+  handGrow: { flex: 1 },
   fan: {
     flexDirection: 'row',
     justifyContent: 'center',

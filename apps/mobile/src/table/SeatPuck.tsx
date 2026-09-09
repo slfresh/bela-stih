@@ -56,6 +56,7 @@ export const SeatPuck = memo(function SeatPuck({
   reduced = false,
   gesture = null,
   tricks = 0,
+  anchored = true,
 }: {
   seat: Seat;
   name: string;
@@ -86,6 +87,11 @@ export const SeatPuck = memo(function SeatPuck({
   gesture?: { kind: 'nod' | 'pulse'; n: number } | null;
   /** Tricks this seat's side has taken this deal: a little pile by the puck. */
   tricks?: number;
+  /**
+   * Registers as the seat's sprite anchor (where cards fly from and to).
+   * False for the viewer's own puck: their hand is that anchor.
+   */
+  anchored?: boolean;
 }) {
   const initial = (name.trim()[0] ?? '?').toUpperCase();
   // The chip ticks up as the deal lands (0 → 6 → 8) rather than jumping.
@@ -148,7 +154,7 @@ export const SeatPuck = memo(function SeatPuck({
   return (
     <Animated.View style={[styles.root, { width }, nodStyle]}>
       <View style={{ width: ringSize, height: ringSize }}>
-        <Anchor id={anchorId.seat(seat)} style={[StyleSheet.absoluteFill, styles.centre]}>
+        <Anchor id={anchored ? anchorId.seat(seat) : anchorId.puck(seat)} style={[StyleSheet.absoluteFill, styles.centre]}>
           {portrait ? (
             <View style={{ opacity: connected ? 1 : 0.45 }}>
               <Avatar id={portrait} size={size} />

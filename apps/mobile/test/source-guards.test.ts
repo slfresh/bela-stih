@@ -173,6 +173,14 @@ describe('anchors measure on demand', () => {
     expect(t).toMatch(/backgroundColor: baize\.page/);
   });
 
+  it('my puck stands beside my hand without stealing the hand\'s anchor', () => {
+    const t = src('TableScreen.tsx');
+    expect(t).toMatch(/anchored=\{false\}/);
+    expect(t).toMatch(/<Anchor id=\{anchorId\.seat\(mySeat\)\} style=\{\[styles\.handArea/);
+    expect(t).not.toMatch(/myTimer/); // the clock is on the puck now
+    expect(src('table/SeatPuck.tsx')).toMatch(/anchored \? anchorId\.seat\(seat\) : anchorId\.puck\(seat\)/);
+  });
+
   it('the home screen no longer re-renders on every scroll event', () => {
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/setScrollTick/);

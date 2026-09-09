@@ -37,6 +37,8 @@ export interface TableMetrics {
   slotW: number;
   slotH: number;
   puck: number;
+  /** My own puck, a shade smaller than the others'. */
+  selfPuck: number;
   /** Short screens hide what they must rather than squashing everything. */
   compact: boolean;
   /**
@@ -58,6 +60,9 @@ const REF_H = 844;
  */
 export const FELT_HAND_GAP = 12;
 
+/** Between my puck and the fan, in the hand's row. */
+export const SELF_PUCK_GAP = 8;
+
 export function computeTableMetrics(usableW: number, usableH: number): TableMetrics {
   const landscape = usableW >= usableH;
   // Portrait is width-bound and landscape is height-bound: scale by whichever
@@ -68,7 +73,11 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
 
   // In landscape the rails take the sides, so the hand gets the middle.
   const railW = landscape ? Math.round(96 * scale) : 0;
-  const handWidth = Math.max(240, usableW - 24 - railW * 2);
+  const puck = Math.round((landscape ? 44 : 54) * scale);
+  // My own puck sits at the left end of the hand's row in portrait (the
+  // rail holds it in landscape); the fan gives up that much width.
+  const selfPuck = Math.round(puck * 0.85);
+  const handWidth = Math.max(240, usableW - 24 - railW * 2 - (landscape ? 0 : selfPuck + SELF_PUCK_GAP));
 
   // Landscape has width to burn and no height, so the hand takes a fixed
   // slice of the screen instead of the biggest card that fits across it.
@@ -104,7 +113,8 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
       : Math.round(usableH * 0.48),
     slotW: Math.round(46 * scale),
     slotH: Math.round(67 * scale),
-    puck: Math.round((landscape ? 44 : 54) * scale),
+    puck,
+    selfPuck,
     compact: usableH < 620,
     promptReserve: !landscape && usableH >= 700,
   };

@@ -122,6 +122,8 @@ export class FxBus {
 /** Convenience: seat-keyed anchor ids used across the table scene. */
 export const anchorId = {
   seat: (s: Seat) => `seat:${s}`,
+  /** My own puck: `seat(mySeat)` stays the hand, where my cards fly from and to. */
+  puck: (s: Seat) => `puck:${s}`,
   slot: (s: Seat) => `slot:${s}`,
   deck: 'deck',
   plaque: 'plaque',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeTableMetrics, FELT_HAND_GAP } from '../src/table/metrics';
+import { computeTableMetrics, FELT_HAND_GAP, SELF_PUCK_GAP } from '../src/table/metrics';
 import { fanHeight, fitHand } from '../src/table/geometry';
 
 /**
@@ -67,5 +67,28 @@ describe('the prompt reserve', () => {
     expect(computeTableMetrics(390, 763).promptReserve).toBe(true);
     expect(computeTableMetrics(412, 850).promptReserve).toBe(true);
     for (const [w, h] of LANDSCAPE) expect(computeTableMetrics(w, h).promptReserve).toBe(false);
+  });
+});
+
+describe('the hand beside my puck', () => {
+  it('still fits eight readable cards on a narrow phone with the puck taking its share', () => {
+    for (const [w, h] of [
+      [320, 568],
+      [360, 740],
+      [375, 667],
+    ] as const) {
+      const m = computeTableMetrics(w, h);
+      expect(m.selfPuck).toBeGreaterThan(0);
+      expect(m.selfPuck).toBeLessThan(m.puck);
+      // The row: puck + gap + hand, inside the usable width less the root padding.
+      expect(m.selfPuck + SELF_PUCK_GAP + m.handWidth).toBeLessThanOrEqual(w - 24);
+      const fit = fitHand(m.handWidth, 8, m.handCardMax);
+      expect(fit.cardW, `${w}x${h}`).toBeGreaterThanOrEqual(40);
+    }
+  });
+
+  it('keeps the whole width for the fan in landscape, where the rail holds the puck', () => {
+    const m = computeTableMetrics(800, 360);
+    expect(m.handWidth).toBe(Math.max(240, 800 - 24 - m.railW * 2));
   });
 });
