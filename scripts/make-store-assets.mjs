@@ -25,7 +25,7 @@ const feature = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="50
   ${fan(['acorns', 'leaves', 'hearts', 'bells'], { cx: 300, cy: 250, cardW: 150, spread: 42 })}
 
   <!-- the mark, outlined: the same shape as on the launcher and in the app -->
-  ${wordmark({ x: 560, baselineY: 262, height: 150 })}
+  ${wordmark({ x: 560, baselineY: 258, height: 112 })}
   <g font-family="Segoe UI, Arial, sans-serif">
     <text x="562" y="330" font-size="30" fill="${CREAM}" opacity="0.85">Prava bela s prijateljima</text>
     <text x="562" y="368" font-size="24" fill="${CREAM}" opacity="0.6">besplatno · bez prijave · bez reklama</text>
