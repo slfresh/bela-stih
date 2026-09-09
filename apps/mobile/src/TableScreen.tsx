@@ -80,9 +80,9 @@ import { CardBackFace, SuitPip } from './deck';
 import { playSfx } from './audio';
 import { pattern } from './haptics';
 import { Button } from './ui/Button';
-import { Coin } from './ui/icons';
+import { Coin, Crown, Star } from './ui/icons';
 import { PressScale } from './ui/PressScale';
-import { ink, radius, stroke, surface, team, theme } from './theme';
+import { ink, num, radius, space, stroke, surface, team, theme, type } from './theme';
 import { isPartner, seatTone } from './table/teamColour';
 
 /**
@@ -409,23 +409,6 @@ export function TableScreen(props: TableScreenProps) {
       />
     ) : null;
 
-  const awardRow = banner ? (
-    <View style={styles.awardRow}>
-      <Text style={styles.awardText}>+{banner.xp} XP</Text>
-      {banner.coins > 0 && (
-        <View style={styles.awardCoins}>
-          <Text style={styles.awardText}>+{banner.coins}</Text>
-          <Coin size={13} />
-        </View>
-      )}
-      {banner.levelUp !== null && (
-        <Text style={styles.awardText}>
-          ★ {lang.s.ui.level} {banner.levelUp}
-        </Text>
-      )}
-    </View>
-  ) : null;
-
   // Trump, multiplier and who called it: a plate on the baize in portrait,
   // a row in the left rail in landscape (the trick cross fills a sideways
   // felt from rim to rim, and a plate anywhere on it covered a slot).
@@ -567,7 +550,6 @@ export function TableScreen(props: TableScreenProps) {
       {revealRow !== null && <View style={styles.revealScrim} pointerEvents="none" />}
       <View style={styles.tableFloat} pointerEvents="box-none">
         {revealRow}
-        {awardRow}
       </View>
     </>
   );
@@ -824,11 +806,13 @@ export function TableScreen(props: TableScreenProps) {
     >
       <DealResult
         lang={lang}
+        mySeat={mySeat}
         reduced={reduced}
         maxHeight={Math.round(m.height * 0.92)}
         result={lastDealResult}
         matchScores={matchScores}
         matchOver={matchOver}
+        award={banner}
         winnerLabel={winnerTeam !== null ? lang.team(winnerTeam, mySeat) : ''}
         renonsText={
           lastDealResult?.renonsSeat != null
@@ -1595,6 +1579,7 @@ function NonCardActions({
 
 function DealResult({
   lang,
+  mySeat,
   maxHeight,
   result,
   matchScores,
@@ -1602,6 +1587,7 @@ function DealResult({
   winnerLabel,
   renonsText,
   series,
+  award = null,
   askedRematch = false,
   waitingFor = 0,
   onRematch,
@@ -1612,6 +1598,7 @@ function DealResult({
   reduced = false,
 }: {
   lang: Lang;
+  mySeat: Seat;
   reduced?: boolean;
   /** The sheet scrolls rather than run off a short (landscape) screen. */
   maxHeight: number;
@@ -1622,6 +1609,8 @@ function DealResult({
   renonsText?: string | null;
   /** Matches won per side since this roster sat down; online only. */
   series?: readonly [number, number] | null;
+  /** What this deal (or match) earned: shown at the foot of the sheet, where the coins set off from. */
+  award?: Award | null;
   /** Has this seat already asked for another match? */
   askedRematch?: boolean;
   /** How many players have yet to accept. */
@@ -1633,26 +1622,33 @@ function DealResult({
   finishLabel: string;
 }) {
   if (!result) return null;
+  const us = teamOf(mySeat);
+  const them = (1 - us) as TeamId;
+  // Ours or theirs — the same rule the sounds use (feedback.ts).
+  const won = result.finalScore[us] > result.finalScore[them];
+  const made = renonsText ? false : result.callerMade;
+  const stiglja = result.valatTeam !== null;
   // Rows arrive one after another; the totals count up to their values.
   let order = 0;
   const enter = () => (reduced ? undefined : FadeInDown.delay(order++ * 60).duration(220));
   const row = (
     label: string,
     v: readonly [number, number],
-    opts: { from?: readonly [number, number]; anchor?: string; tick?: boolean } = {},
+    opts: { from?: readonly [number, number]; anchor?: string; hero?: boolean } = {},
   ) => (
-    <Animated.View style={styles.resultRow} key={label} entering={enter()}>
-      <Text style={styles.resultLabel}>{label}</Text>
-      {opts.from ? (
-        <CountedPair a={v[0]} b={v[1]} from={opts.from} reduced={reduced} anchor={opts.anchor} tick={opts.tick} />
-      ) : (
-        <Text style={styles.resultValue}>
-          {v[0]} : {v[1]}
-        </Text>
-      )}
+    <Animated.View style={[styles.resultRow, opts.hero && styles.resultHero]} key={label} entering={enter()}>
+      <Text style={[styles.resultLabel, opts.hero && styles.resultLabelHero]}>{label}</Text>
+      <Pair
+        us={v[us]}
+        them={v[them]}
+        from={opts.from ? [opts.from[us], opts.from[them]] : undefined}
+        reduced={reduced}
+        anchor={opts.anchor}
+        hero={opts.hero}
+      />
     </Animated.View>
   );
-  const stiglja = result.valatTeam !== null;
+  const rule = <View style={styles.rule} />;
 
   return (
     <Animated.View entering={reduced ? undefined : SlideInDown.duration(280)}>
@@ -1660,9 +1656,38 @@ function DealResult({
       style={[styles.resultPanel, { maxHeight, backgroundColor: room().page }]}
       contentContainerStyle={styles.resultContent}
     >
-      <Text style={[styles.resultTitle, stiglja && styles.resultTitleStiglja]}>
-        {stiglja ? `${lang.s.valat}!` : lang.s.dealResult}
-      </Text>
+      {/* The header band says whose deal it was at a glance: tinted by our
+          outcome, the caller's verdict as one word at its end. */}
+      <View
+        style={[
+          styles.sheetBand,
+          matchOver ? styles.sheetBandMatch : won ? styles.sheetBandWon : styles.sheetBandLost,
+        ]}
+      >
+        {matchOver && <Crown size={26} />}
+        <View style={styles.sheetBandText}>
+          <Text style={[styles.sheetTitle, stiglja && !matchOver && styles.sheetTitleStiglja]} numberOfLines={2}>
+            {matchOver ? lang.s.winner(winnerLabel) : stiglja ? `${lang.s.valat}!` : lang.s.dealResult}
+          </Text>
+          <Text style={styles.sheetVerdict} numberOfLines={2}>
+            {renonsText ? `${lang.s.renonsTitle} ${renonsText}` : made ? lang.s.callerMade : lang.s.callerFailed}
+          </Text>
+        </View>
+        {!matchOver && (
+          <Animated.Text
+            style={[styles.sheetWord, made ? styles.sheetWordMade : styles.sheetWordFailed]}
+            entering={reduced ? undefined : ZoomIn.springify().damping(14).delay(120)}
+          >
+            {made ? lang.s.madeShort : lang.s.failedShort}
+          </Animated.Text>
+        )}
+      </View>
+
+      {/* the columns, ours first */}
+      <View style={styles.resultHeads}>
+        <Text style={[styles.resultHead, styles.resultHeadUs]}>{lang.team(us, mySeat)}</Text>
+        <Text style={[styles.resultHead, styles.resultHeadThem]}>{lang.team(them, mySeat)}</Text>
+      </View>
       {row(lang.s.cardsAndLastTrick, result.trickPoints)}
       {result.valatTeam !== null && row(lang.s.valat, result.valatBonus)}
       {result.declarationPoints[0] + result.declarationPoints[1] > 0 &&
@@ -1673,26 +1698,13 @@ function DealResult({
         <Text style={styles.voidNote}>{lang.s.zvanjaNoTrickToOpponents}</Text>
       )}
       {result.bela[0] + result.bela[1] > 0 && row(lang.s.bela, result.bela)}
+      {rule}
       {row(lang.s.total, result.rawTotal)}
-      {renonsText ? (
-        <Animated.Text
-          style={[styles.verdict, styles.failed]}
-          entering={reduced ? undefined : ZoomIn.springify().damping(14).delay(order * 60)}
-        >
-          {lang.s.renonsTitle} {renonsText}
-        </Animated.Text>
-      ) : (
-        <Animated.Text
-          style={[styles.verdict, result.callerMade ? styles.made : styles.failed]}
-          entering={reduced ? undefined : ZoomIn.springify().damping(14).delay(order * 60)}
-        >
-          {result.callerMade ? lang.s.callerMade : lang.s.callerFailed}
-        </Animated.Text>
-      )}
+      {rule}
       {/* The sheet mounts with the final numbers already in the view, so the
           two totals count from where they were: nought, and the match score
           before this deal was added to it. */}
-      {row(lang.s.recorded, result.finalScore, { from: [0, 0], anchor: anchorId.sheetTotal, tick: true })}
+      {row(lang.s.recorded, result.finalScore, { from: [0, 0], anchor: anchorId.sheetTotal, hero: true })}
       {row(lang.s.matchScore, matchScores, {
         from: [
           Math.max(0, matchScores[0] - result.finalScore[0]),
@@ -1700,9 +1712,28 @@ function DealResult({
         ],
       })}
 
+      {award && (award.xp > 0 || award.coins > 0 || award.levelUp !== null) && (
+        <Animated.View style={styles.sheetAward} entering={enter()}>
+          {award.xp > 0 && <Text style={styles.sheetAwardText}>+{award.xp} XP</Text>}
+          {award.coins > 0 && (
+            <View style={styles.sheetAwardCoins}>
+              <Text style={styles.sheetAwardText}>+{award.coins}</Text>
+              <Coin size={13} />
+            </View>
+          )}
+          {award.levelUp !== null && (
+            <View style={styles.levelBadge}>
+              <Star size={14} />
+              <Text style={styles.levelBadgeText}>
+                {lang.s.ui.level} {award.levelUp}
+              </Text>
+            </View>
+          )}
+        </Animated.View>
+      )}
+
       {matchOver ? (
-        <>
-          <Text style={styles.winner}>{lang.s.winner(winnerLabel)}</Text>
+        <View style={styles.sheetFoot}>
           {series && (
             <Text style={styles.seriesLine}>
               {lang.s.ui.seriesScore}  {series[0]} : {series[1]}
@@ -1724,7 +1755,7 @@ function DealResult({
             </>
           )}
           <Button label={finishLabel} tone="plain" onPress={onFinish} />
-        </>
+        </View>
       ) : (
         <View style={styles.resultButtons}>
           <Button label={lang.s.nextDeal} tone="strong" onPress={onNext} />
@@ -1736,39 +1767,44 @@ function DealResult({
   );
 }
 
-/** "a : b", each counting up from `from` to its value; optionally the anchor coins set off from. */
-function CountedPair({
-  a,
-  b,
+/**
+ * Ours and theirs, side by side in the team inks — each counting up from
+ * `from` when given; optionally the anchor the coins set off from.
+ */
+function Pair({
+  us,
+  them,
   from,
   reduced,
   anchor,
-  tick = false,
+  hero = false,
 }: {
-  a: number;
-  b: number;
-  from: readonly [number, number];
+  us: number;
+  them: number;
+  from?: readonly [number, number];
   reduced: boolean;
   anchor?: string;
-  /** Only one row ticks, or two tallies rattle under the stinger. */
-  tick?: boolean;
+  hero?: boolean;
 }) {
   const steps = useRef(0);
-  const av = useCountUp(a, 600, {
+  const a = useCountUp(us, 600, {
     reduced,
-    from: from[0],
+    from: from?.[0] ?? us,
     // Every other step ticks, softly: a tally being written, not a rattle.
     onStep: () => {
-      if (tick && ++steps.current % 2 === 0) playSfx('tick', { gain: 0.6, rate: 1.4 });
+      // Only the hero row ticks, or two tallies rattle under the stinger.
+      if (hero && ++steps.current % 2 === 0) playSfx('tick', { gain: 0.6, rate: 1.4 });
     },
   });
-  const bv = useCountUp(b, 600, { reduced, from: from[1] });
-  const text = (
-    <Text style={styles.resultValue}>
-      {av} : {bv}
-    </Text>
+  const b = useCountUp(them, 600, { reduced, from: from?.[1] ?? them });
+  const pair = (
+    <View style={styles.pair}>
+      <Text style={[styles.pairValue, styles.pairUs, hero && styles.pairHero]}>{a}</Text>
+      <Text style={[styles.pairSep, hero && styles.pairHero]}>:</Text>
+      <Text style={[styles.pairValue, styles.pairThem, hero && styles.pairHero]}>{b}</Text>
+    </View>
   );
-  return anchor ? <Anchor id={anchor}>{text}</Anchor> : text;
+  return anchor ? <Anchor id={anchor}>{pair}</Anchor> : pair;
 }
 
 const styles = StyleSheet.create({
@@ -1981,9 +2017,6 @@ const styles = StyleSheet.create({
   callChipTextLand: { fontSize: 11 },
   callChipLand: { paddingHorizontal: 8, alignSelf: 'stretch' },
 
-  awardRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 },
-  awardCoins: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  awardText: { color: theme.okInk, fontWeight: '800', fontSize: 15 },
 
   promptRow: {
     backgroundColor: 'rgba(0,0,0,0.25)',
@@ -2066,16 +2099,68 @@ const styles = StyleSheet.create({
     borderColor: theme.line,
     flexGrow: 0,
   },
-  resultContent: { padding: 16, gap: 4 },
-  resultTitle: { color: theme.text, fontWeight: '800', fontSize: 16, marginBottom: 4 },
-  resultTitleStiglja: { color: theme.accent, fontSize: 20 },
-  resultRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  resultLabel: { color: theme.textDim, fontSize: 14 },
-  voidNote: { color: theme.danger, fontSize: 12, fontStyle: 'italic' },
-  resultValue: { color: theme.text, fontSize: 14, fontVariant: ['tabular-nums'] },
-  verdict: { fontSize: 14, fontWeight: '700', marginVertical: 6 },
-  made: { color: theme.ok },
-  failed: { color: theme.danger },
-  winner: { color: theme.accent, fontSize: 18, fontWeight: '800', marginVertical: 8 },
-  resultButtons: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginTop: 8 },
+  resultContent: { padding: space.lg, gap: 2 },
+  // The header band: our outcome as a tint, the caller's verdict as a word.
+  sheetBand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm + 2,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    marginBottom: space.sm,
+  },
+  sheetBandWon: { backgroundColor: team.usDim, borderColor: team.usEdge },
+  sheetBandLost: { backgroundColor: team.themDim, borderColor: team.themEdge },
+  sheetBandMatch: { backgroundColor: surface.sunk, borderColor: theme.accent },
+  sheetBandText: { flex: 1, gap: 2 },
+  sheetTitle: { color: ink.hi, ...type.h3, fontWeight: '800' },
+  sheetTitleStiglja: { color: theme.accent },
+  sheetVerdict: { color: ink.mid, ...type.caption },
+  sheetWord: { ...type.h2, fontWeight: '800' },
+  sheetWordMade: { color: theme.okInk },
+  sheetWordFailed: { color: theme.dangerInk },
+  resultHeads: { flexDirection: 'row', justifyContent: 'flex-end', gap: space.xs, paddingBottom: 2 },
+  resultHead: { ...type.caption, fontWeight: '700', width: 44, textAlign: 'right' },
+  resultHeadUs: { color: team.usInk, marginRight: 12 },
+  resultHeadThem: { color: team.themInk },
+  resultRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 2 },
+  resultHero: { paddingVertical: space.xs },
+  resultLabel: { color: ink.mid, ...type.body },
+  resultLabelHero: { color: ink.hi, fontWeight: '800' },
+  rule: { height: 1, backgroundColor: stroke.hair, marginVertical: space.xs },
+  voidNote: { color: theme.dangerInk, ...type.caption, fontStyle: 'italic' },
+  pair: { flexDirection: 'row', alignItems: 'baseline' },
+  pairValue: { ...type.body, ...num, width: 44, textAlign: 'right' },
+  pairUs: { color: team.usInk },
+  pairThem: { color: team.themInk },
+  pairSep: { color: ink.lo, ...type.body, width: 12, textAlign: 'center' },
+  pairHero: { ...type.h2, fontWeight: '800' },
+  sheetAward: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: space.md,
+    marginTop: space.sm,
+    paddingVertical: space.sm,
+    borderRadius: radius.sm,
+    backgroundColor: surface.raised,
+  },
+  sheetAwardCoins: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  sheetAwardText: { color: theme.okInk, fontWeight: '800', ...type.body },
+  levelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: space.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: surface.chip,
+    borderWidth: 1,
+    borderColor: theme.accent,
+  },
+  levelBadgeText: { color: theme.accent, ...type.sub, fontWeight: '800' },
+  sheetFoot: { gap: space.sm, alignItems: 'center', marginTop: space.sm },
+  resultButtons: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginTop: space.sm },
 });

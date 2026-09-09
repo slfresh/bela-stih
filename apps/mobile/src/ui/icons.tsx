@@ -100,6 +100,21 @@ export function Diamond({ size = 10, colour = ink.hi }: IconProps) {
   );
 }
 
+/** A level gained. */
+export function Star({ size = 16, colour = garb.gold }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6L2.5 9.4l6.6-.8z"
+        fill={colour}
+        stroke={garb.goldDark}
+        strokeWidth={1.2}
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 /** A presence dot: connected or not. */
 export function Dot({ size = 8, on = true }: { size?: number; on?: boolean }) {
   return (

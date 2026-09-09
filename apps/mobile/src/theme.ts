@@ -1,3 +1,4 @@
+import type { TextStyle } from 'react-native';
 import { garb } from './deck/palette';
 
 /**
@@ -117,7 +118,7 @@ export const type = {
 } as const;
 
 /** Every score, count and price: digits that do not jitter as they change. */
-export const num = { fontVariant: ['tabular-nums'] as const } as const;
+export const num: Pick<TextStyle, 'fontVariant'> = { fontVariant: ['tabular-nums'] };
 
 export const radius = { xs: 4, sm: 8, md: 14, lg: 20, pill: 999, card: 8, panel: 14 } as const;
 

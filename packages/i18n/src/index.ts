@@ -265,6 +265,9 @@ interface Strings {
   matchScore: string;
   callerMade: string;
   callerFailed: string;
+  /** The verdict as one word on the sheet's header band: the call was made / fell. */
+  madeShort: string;
+  failedShort: string;
   winner: (team: string) => string;
   nextDeal: string;
   newMatch: string;
@@ -416,6 +419,8 @@ const hr: Strings = {
   matchScore: 'Rezultat meča',
   callerMade: 'Zvač je prošao.',
   callerFailed: 'PAD — zvač nije prošao, sve ide protivnicima.',
+  madeShort: 'Prošlo',
+  failedShort: 'Pad',
   winner: (team) => `Pobjeđuje ${team}`,
   nextDeal: 'Sljedeće dijeljenje',
   newMatch: 'Nova partija',
@@ -636,6 +641,8 @@ const srCyrl: Strings = {
   matchScore: 'Резултат меча',
   callerMade: 'Звач је прошао.',
   callerFailed: 'ПАД — звач није прошао, све иде противницима.',
+  madeShort: 'Прошло',
+  failedShort: 'Пад',
   winner: (team) => `Побеђује ${team}`,
   nextDeal: 'Следеће дељење',
   newMatch: 'Нова партија',
@@ -852,6 +859,8 @@ const en: Strings = {
   matchScore: 'Match score',
   callerMade: 'The caller made it.',
   callerFailed: 'PAD — the caller failed; everything goes to the opponents.',
+  madeShort: 'Made',
+  failedShort: 'Fell',
   winner: (team) => `${team} wins`,
   nextDeal: 'Next deal',
   newMatch: 'New match',

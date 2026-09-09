@@ -37,8 +37,8 @@ const LITERAL_BASELINE: Record<string, number> = {
 const TYPED_GLYPHS = ['●', '○', '⚙', '✓', '‹', '›', '★', '◆', '⏱', '✕'];
 /** Where a typed glyph is still tolerated, and which — each one a known debt. */
 const GLYPH_ALLOW: Record<string, string[]> = {
-  // The level-up star in the award row: becomes a badge with the result sheet (M5.6).
-  'TableScreen.tsx': ['★', '◆'],
+  // The partner marker beside the top seat's name.
+  'TableScreen.tsx': ['◆'],
   // The partner marker on a puck: colour is never the only carrier of "us".
   'table/SeatPuck.tsx': ['◆'],
 };
@@ -101,8 +101,8 @@ describe('the design tokens', () => {
     const emoji = /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/u;
     // Known debts, each removed with the milestone that redraws it.
     const allow: Record<string, string[]> = {
-      // The emote-strip toggle (M5.9 draws the emotes) and the level-up star (M5.6).
-      'TableScreen.tsx': ['😄', '★'],
+      // The emote-strip toggle (M5.9 draws the emotes).
+      'TableScreen.tsx': ['😄'],
     };
     for (const f of files) {
       if (PALETTE_FILES.has(f.rel)) continue;
