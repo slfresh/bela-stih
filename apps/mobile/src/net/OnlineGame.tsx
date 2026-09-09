@@ -14,7 +14,8 @@ import { useKeepAwake } from 'expo-keep-awake';
 import type { Seat } from '@belot/engine';
 import { teamOf } from '@belot/engine';
 import { anchorId } from '../anim/FxBus';
-import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS, coinDingTimers, coinsLandedMs } from '../anim/lifetimes';
+import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS, coinDingTimers, coinsLandedMs, MATCH_CASCADE_HOLD_MS } from '../anim/lifetimes';
+import { isMatchAward } from '../feedback';
 import { playSfx } from '../audio';
 import { pattern } from '../haptics';
 import { TableScreen, type SeatMeta } from '../TableScreen';
@@ -59,22 +60,22 @@ export function OnlineGame({
   }, []);
 
   // Same celebration wiring as offline: coins to the wallet, confetti on a win.
-  // Every timer here dies with the screen and NOT with the next banner: a
-  // match's banner arrives a second after the last deal's, and clearing on
-  // that change swallowed the deal's coins and its level-up.
+  // One cascade per banner. A match's award is MERGED onto the last deal's
+  // banner a second later, so that banner's pending timers are replaced by
+  // the merged banner's own — nothing is lost, nothing plays twice, and a
+  // match's coins wait for the fanfare. The timers die with the screen.
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const lastBanner = useRef<typeof net.banner>(null);
   useEffect(() => {
     const banner = net.banner;
     if (!banner || banner === lastBanner.current) return;
-    const previous = lastBanner.current;
     lastBanner.current = banner;
-    // Coins only when this banner brought new ones (a merged match banner
-    // carries the deal's again).
-    const newCoins = banner.coins - (previous?.coins ?? 0);
-    const hasCoins = newCoins > 0 || (previous === null && banner.coins > 0);
-    if (hasCoins) {
+    timers.current.forEach(clearTimeout);
+    timers.current = [];
+    const hold = isMatchAward(banner) ? MATCH_CASCADE_HOLD_MS : 0;
+    const delay = COIN_CASCADE_DELAY_MS + hold;
+    if (banner.coins > 0) {
       // From the sheet's "Upisano" total once the sheet has slid up and
       // settled; from the felt if there is no sheet.
       timers.current.push(
@@ -88,21 +89,21 @@ export function OnlineGame({
             const to = net.anchors.centre(anchorId.wallet);
             if (from && to) net.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
           });
-        }, COIN_CASCADE_DELAY_MS),
+        }, delay),
         // One ding per coin as it lands.
-        ...coinDingTimers(COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS),
+        ...coinDingTimers(COIN_CASCADE_COUNT, delay),
       );
     }
     // The level-up: its own moment, after the coins if there are any, and
     // whether or not there are — a level crossed on a lost deal counts too.
-    if (banner.levelUp !== null && banner.levelUp !== previous?.levelUp) {
+    if (banner.levelUp !== null) {
       timers.current.push(
         setTimeout(
           () => {
             playSfx('levelup');
             pattern('levelUp');
           },
-          COIN_CASCADE_DELAY_MS + (hasCoins ? coinsLandedMs(COIN_CASCADE_COUNT) : 0),
+          delay + (banner.coins > 0 ? coinsLandedMs(COIN_CASCADE_COUNT) : 0),
         ),
       );
     }

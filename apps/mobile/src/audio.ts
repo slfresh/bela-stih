@@ -211,7 +211,8 @@ export function unlockAudio(): void {
   for (const pool of pools.values()) {
     for (const p of pool) {
       try {
-        if (p.playing) continue;
+        // By the element, not expo-audio's flag (true from play() on, whatever the browser did).
+        if (!p.paused) continue;
         const v = p.volume;
         p.volume = 0;
         p.play();

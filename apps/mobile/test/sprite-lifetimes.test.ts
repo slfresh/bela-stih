@@ -4,7 +4,8 @@ import { Lang } from '@belot/i18n';
 import { Table, type TableEvent } from '@belot/table';
 import type { AnchorMap, AnchorRect } from '../src/anim/AnchorRegistry';
 import { DEFAULT_TIMINGS, REDUCED_TIMINGS } from '../src/anim/director';
-import { FxBus, type Fx } from '../src/anim/FxBus';
+import { anchorId, FxBus, metaId, type Fx } from '../src/anim/FxBus';
+import { fitHand } from '../src/table/geometry';
 import {
   BUBBLE_MIN_MS,
   DEAL_DONE_AT,
@@ -34,6 +35,7 @@ const SLOT_W = 60;
 
 function fakeAnchors(withSlots = true): AnchorMap {
   const rects = new Map<string, AnchorRect>();
+  const metaNumbers = new Map<string, number>();
   for (const s of SEATS) {
     // Each seat a different distance from its slot, as on a real table.
     rects.set(`seat:${s}`, { x: 120 * s, y: 40 + 50 * s, w: 54, h: 54 });
@@ -53,6 +55,10 @@ function fakeAnchors(withSlots = true): AnchorMap {
     },
     delete: (k: string) => {
       rects.delete(k);
+    },
+    meta: (k: string) => metaNumbers.get(k) ?? null,
+    setMeta: (k: string, v: number) => {
+      metaNumbers.set(k, v);
     },
   };
   return map as unknown as AnchorMap;
@@ -291,6 +297,24 @@ describe('a played card sets off from the right place, the right way up', () => 
 });
 
 describe('the deal', () => {
+  it('lands my backs on the fan the hand actually lays out, when the table has said how', () => {
+    // The table publishes the fan's width and card cap; the backs then sit on
+    // exactly the centres fitHand gives for those numbers, centred in the block.
+    const anchors = fakeAnchors();
+    anchors.setMeta(metaId.handWidth, 300);
+    anchors.setMeta(metaId.handCardMax, 60);
+    const deals = spritesOfADeal(1, anchors).filter((s) => s.fx.kind === 'deal');
+    const first = deals[0]!.fx;
+    if (first.kind !== 'deal') throw new Error('no deal');
+    const puckXs = new Set(SEATS.map((s) => 120 * s + 27));
+    const mine = first.backs.filter((b) => !puckXs.has(b.x)).map((b) => b.x);
+    const fit = fitHand(300, 6, 60);
+    const hand = anchors.rect(anchorId.seat(0))!;
+    const span = fit.cardW + 5 * fit.advance;
+    const expected = Array.from({ length: 6 }, (_, k) => hand.x + (hand.w - span) / 2 + k * fit.advance + fit.cardW / 2);
+    expect(mine.map((x) => Math.round(x))).toEqual(expected.map((x) => Math.round(x)));
+  });
+
   it('spreads my backs across the hand and sends one a round to each opponent', () => {
     const deals = spritesOfADeal(1).filter((s) => s.fx.kind === 'deal');
     const [first, talon] = deals.map((d) => d.fx);

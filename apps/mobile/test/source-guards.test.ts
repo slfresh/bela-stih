@@ -149,6 +149,19 @@ describe('anchors measure on demand', () => {
     }
   });
 
+  it('a cue plays once even across a remount, and a fresh online table has none', () => {
+    expect(src('TableScreen.tsx')).toMatch(/const seenCue = useRef\(cue\?\.n \?\? 0\);/);
+    const net = src('net/useNetGame.ts');
+    expect((net.match(/setCue\(null\)/g) ?? []).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('the level and the wallet move when their sounds play', () => {
+    const t = src('TableScreen.tsx');
+    expect(t).toMatch(/const xp = useLaggedNumber\(profile\.xp, lag, 1\);/);
+    expect(t).toMatch(/levelProgress\(xp\)/);
+    expect(t).not.toMatch(/levelProgress\(profile\.xp\)/);
+  });
+
   it('the home screen no longer re-renders on every scroll event', () => {
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/setScrollTick/);

@@ -49,11 +49,26 @@ function nextFrame(fn: () => void): void {
 
 export class AnchorMap {
   private rects = new Map<string, AnchorRect>();
+  private numbers = new Map<string, number>();
   private listeners = new Set<Listener>();
   private pending = false;
 
   set(key: string, rect: AnchorRect): void {
     this.rects.set(key, rect);
+  }
+
+  /**
+   * A number the sprites need that is not a rect: the hand's layout width
+   * and card cap, so a dealt back lands on the fan's REAL positions instead
+   * of a refit from the measured block, which differed by a card width in
+   * landscape.
+   */
+  setMeta(key: string, value: number): void {
+    this.numbers.set(key, value);
+  }
+
+  meta(key: string): number | null {
+    return this.numbers.get(key) ?? null;
   }
 
   /** For the one transient rect (the card just tapped): read once, then gone. */

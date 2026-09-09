@@ -33,6 +33,11 @@ export interface DealTally {
 export const emptyTally = (): DealTally => ({ zvanja: 0, bela: false });
 
 /** Merge a deal award and a match award into one banner. */
+/** True for a banner that carries a match's outcome (merged onto the last deal's). */
+export function isMatchAward(a: Award): boolean {
+  return a.reasons.some((r) => r === 'matchWon' || r === 'matchLost');
+}
+
 export function mergeAward(a: Award | null, b: Award): Award {
   if (!a) return b;
   return {

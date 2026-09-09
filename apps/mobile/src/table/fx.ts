@@ -5,7 +5,7 @@ import type { Lang } from '@belot/i18n';
 import type { AnchorMap } from '../anim/AnchorRegistry';
 import type { XY } from '../anim/FxBus';
 import { timingsFor } from '../anim/director';
-import { anchorId, type FxBus } from '../anim/FxBus';
+import { anchorId, metaId, type FxBus } from '../anim/FxBus';
 import {
   BACK_SCALE,
   DEALER_BADGE,
@@ -134,8 +134,15 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
     const hand = mySeat !== null ? anchors.rect(anchorId.seat(mySeat)) : null;
     const n = rounds * perRound;
     const total = perRound === 2 ? 8 : n;
-    // The hand's own height caps its cards in landscape; the block's rect carries that.
-    const fit = hand ? fitHand(hand.w, total, Math.min(MAX_CARD_W, cardWidthForHeight(hand.h, total))) : null;
+    // The very numbers the hand lays itself out with (published by the
+    // table); the measured block is only a fallback before the first layout.
+    const fit = hand
+      ? fitHand(
+          anchors.meta(metaId.handWidth) ?? hand.w,
+          total,
+          anchors.meta(metaId.handCardMax) ?? Math.min(MAX_CARD_W, cardWidthForHeight(hand.h, total)),
+        )
+      : null;
     const mine = (k: number): XY => {
       if (!hand || !fit) return seats[mySeat!]!;
       const pos = perRound === 2 ? k + 6 : k;

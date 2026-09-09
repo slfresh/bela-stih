@@ -18,8 +18,10 @@ export function useCountUp(
     from?: number;
   } = {},
 ): number {
-  const [shown, setShown] = useState(opts.from ?? target);
-  const shownRef = useRef(opts.from ?? target);
+  // Under reduce-motion there is nothing to count from: the first paint is the number.
+  const initial = opts.reduced ? target : (opts.from ?? target);
+  const [shown, setShown] = useState(initial);
+  const shownRef = useRef(initial);
   shownRef.current = shown;
   const onStepRef = useRef(opts.onStep);
   onStepRef.current = opts.onStep;

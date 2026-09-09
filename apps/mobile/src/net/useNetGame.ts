@@ -242,6 +242,9 @@ export function useNetGame(settings: Settings) {
     setMatchNumber(0);
     setRematchVotes([]);
     setBanner(null);
+    setCue(null);
+    setSpotlight(null);
+    setDealerHop(false);
     setLastDealResult(null);
     setWinnerTeam(null);
     setTurnDeadline(null);
@@ -276,6 +279,10 @@ export function useNetGame(settings: Settings) {
       authViewRef.current = msg.view;
       setSeat(msg.seat);
       if (!directorRef.current) {
+        // A rebuilt table (a reconnect) starts with no cue to replay.
+        setCue(null);
+        setSpotlight(null);
+        setDealerHop(false);
         directorRef.current = new Director(
           msg.seat,
           msg.view,

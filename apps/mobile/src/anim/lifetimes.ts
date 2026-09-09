@@ -152,6 +152,12 @@ export const BURST_MS = 1400;
 export const COIN_CASCADE_DELAY_MS = 1400;
 /** The last trick's +10 chip, from the felt to the running count. */
 export const LAST_TRICK_CHIP_MS = 600;
+/**
+ * A match's coins wait this much longer: the fanfare lands at the end of the
+ * matchOver beat (600 ms after it starts) and runs 1.4 s; the cascade and
+ * its dings come after it, not under it.
+ */
+export const MATCH_CASCADE_HOLD_MS = 1200;
 
 // --- sizes -----------------------------------------------------------------------
 

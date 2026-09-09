@@ -45,9 +45,10 @@ import { EffectsOverlay } from './anim/EffectsOverlay';
 import { REVEAL_MS } from './anim/director';
 import { RevealRow } from './table/RevealRow';
 import { REVEAL_EXIT_MS, type RevealPhase } from './table/revealTiming';
-import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS, coinsLandedMs } from './anim/lifetimes';
+import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS, coinsLandedMs, MATCH_CASCADE_HOLD_MS } from './anim/lifetimes';
+import { isMatchAward } from './feedback';
 import { useLaggedNumber } from './ui/useLaggedNumber';
-import { anchorId, type FxBus } from './anim/FxBus';
+import { anchorId, metaId, type FxBus } from './anim/FxBus';
 import { SeatPuck } from './table/SeatPuck';
 import {
   CARD_ASPECT,
@@ -173,6 +174,8 @@ export function TableScreen(props: TableScreenProps) {
   const m = useTableMetrics();
   const land = m.orientation === 'landscape';
   const reduced = reducedMotion;
+  // A match's award waits for the fanfare (see the screens' cascade timers).
+  const awardHold = banner && isMatchAward(banner) ? MATCH_CASCADE_HOLD_MS : 0;
   // The fan swells a hair over a long press, so the hold reads as "something
   // is about to happen" rather than as a dead tap.
   const hold = useSharedValue(1);
@@ -190,9 +193,14 @@ export function TableScreen(props: TableScreenProps) {
   scaleRef.current = m.scale;
   const reducedRef = useRef(reduced);
   reducedRef.current = reduced;
+  // ...and only a cue newer than this mount: a reconnect remounts the table
+  // with the last cue still current.
+  const seenCue = useRef(cue?.n ?? 0);
   useEffect(() => {
     const c = cueRef.current;
-    if (!c || reducedRef.current) return;
+    if (!c || c.n === seenCue.current) return;
+    seenCue.current = c.n;
+    if (reducedRef.current) return;
     if (c.kind === 'stiglja') {
       const at = anchors.centre(anchorId.deck);
       if (at) fxBus.emit({ kind: 'burst', at, count: 40 });
@@ -207,6 +215,12 @@ export function TableScreen(props: TableScreenProps) {
       withTiming(0, { duration: 60 }),
     );
   }, [cue?.n, feltShake, anchors, fxBus]);
+
+  // The fan's layout numbers, for the dealt backs to land on the real cards.
+  useEffect(() => {
+    anchors.setMeta(metaId.handWidth, m.handWidth);
+    anchors.setMeta(metaId.handCardMax, m.handCardMax);
+  }, [anchors, m.handWidth, m.handCardMax]);
 
   // The trick cross is sized against the felt it is drawn in, not the window:
   // a landscape felt is a short wide ellipse and window-sized cards hang out
@@ -781,7 +795,7 @@ export function TableScreen(props: TableScreenProps) {
             // moves into the two rails and the middle keeps its full height.
             <>
               <View style={[styles.rail, { width: m.railW }]}>
-                <ProfileBar profile={profile} vertical onLongPress={toggleProbe} />
+                <ProfileBar profile={profile} vertical holdMs={awardHold} onLongPress={toggleProbe} />
                 <TableHeader
                   lang={lang}
                   mySeat={mySeat}
@@ -820,7 +834,7 @@ export function TableScreen(props: TableScreenProps) {
           ) : (
             <>
               {/* wallet / level strip */}
-              <ProfileBar profile={profile} onLongPress={toggleProbe} />
+              <ProfileBar profile={profile} holdMs={awardHold} onLongPress={toggleProbe} />
               {status ? <Text style={styles.status}>{status}</Text> : null}
 
               {/* score strip: match score, plus this deal's running count */}
@@ -979,18 +993,25 @@ const ProfileBar = memo(
   function ProfileBar({
     profile,
     vertical = false,
+    holdMs = 0,
     onLongPress,
   }: {
     profile: PlayerProfile;
     vertical?: boolean;
+    /** Extra wait before the wallet and the level move: a match's fanfare plays first. */
+    holdMs?: number;
     /** Dev builds: toggles the frame/render probe. */
     onLongPress?: () => void;
   }) {
-    const p = levelProgress(profile.xp);
+    // The level (its badge swell, its bar) lands with the level-up sound —
+    // after the coins, not at the moment the deal was scored.
+    const lag = COIN_CASCADE_DELAY_MS + coinsLandedMs(COIN_CASCADE_COUNT) + holdMs;
+    const xp = useLaggedNumber(profile.xp, lag, 1);
+    const p = levelProgress(xp);
     // The total changes when the last coin lands on it, not when the deal is
     // scored with the coins still in the air — and the coins set off from the
     // sheet's total, a moment after the sheet has slid up.
-    const coins = useLaggedNumber(profile.coins, COIN_CASCADE_DELAY_MS + coinsLandedMs(COIN_CASCADE_COUNT));
+    const coins = useLaggedNumber(profile.coins, lag);
     // The XP bar fills rather than jumps; a new level swells the badge.
     const fill = useSharedValue(p.fraction);
     useEffect(() => {
@@ -1111,11 +1132,27 @@ function Hand({
   // Disarm whenever the decision in front of the player changes — a new turn, a
   // new trick, entering or leaving arrange mode. Nothing here changes while they
   // are deliberating, so this never cancels a legitimate arm.
+  // The card just tapped measured itself into a transient rect (see
+  // FanCard). Only the LAST tap's rect may be live: a rect left from an
+  // earlier tap would send a server-driven play of that card (the clock
+  // running out online) off from where the card was several tricks ago.
+  const anchors = useAnchors();
+  const lastTap = useRef<string | null>(null);
   const decision = `${arranging}|${enabled}|${plays.map((p) => cardId(p.card)).join(',')}`;
   useEffect(() => {
     setArmed(null);
     setArrangePick(null);
   }, [decision]);
+  // When the cards themselves change (a new deal, the talon, my own card
+  // leaving) the last tapped rect describes a fan that no longer exists. Not
+  // on the decision above: online, my play's echo arrives after it.
+  const cardsKey = cards.map(cardId).join(',');
+  useEffect(() => {
+    if (lastTap.current !== null) {
+      anchors.delete(anchorId.card(lastTap.current));
+      lastTap.current = null;
+    }
+  }, [cardsKey, anchors]);
 
   const fit = fitHand(width, cards.length, maxCardW);
   const mid = (cards.length - 1) / 2;
@@ -1139,15 +1176,14 @@ function Hand({
     );
   };
 
-  // The card just tapped measured itself into a transient rect (see
-  // FanCard). Only the LAST tap's rect may be live: a rect left from an
-  // earlier tap would send a server-driven play of that card (the clock
-  // running out online) off from where the card was several tricks ago.
-  const anchors = useAnchors();
-  const lastTap = useRef<string | null>(null);
   const press = (id: string) => {
     if (lastTap.current !== null && lastTap.current !== id) anchors.delete(anchorId.card(lastTap.current));
     lastTap.current = id;
+    // A marking or arranging tap never becomes a flight; its rect goes at once.
+    if (marking || arranging) {
+      anchors.delete(anchorId.card(id));
+      lastTap.current = null;
+    }
     if (marking) {
       onToggleMark?.(id);
       return;

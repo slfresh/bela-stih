@@ -125,7 +125,13 @@ export function saveProfile(profile: PlayerProfile): void {
 }
 
 export function loadSettings(): Settings {
-  return read(KEY.settings, DEFAULT_SETTINGS);
+  const s = read(KEY.settings, DEFAULT_SETTINGS);
+  // A volume saved by a build with other steps snaps to the nearest chip, or
+  // Settings would light none.
+  const volume = (VOLUME_OPTIONS as readonly number[]).reduce((best, v) =>
+    Math.abs(v - s.volume) < Math.abs(best - s.volume) ? v : best,
+  );
+  return volume === s.volume ? s : { ...s, volume };
 }
 
 export function saveSettings(settings: Settings): void {

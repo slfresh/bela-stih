@@ -139,3 +139,10 @@ export const anchorId = {
    */
   card: (id: string) => `card:${id}`,
 } as const;
+
+/** Numbers the table publishes for the sprites (AnchorMap.setMeta). */
+export const metaId = {
+  /** The width the hand lays its fan out in, and the card-width cap it uses. */
+  handWidth: 'handWidth',
+  handCardMax: 'handCardMax',
+} as const;
