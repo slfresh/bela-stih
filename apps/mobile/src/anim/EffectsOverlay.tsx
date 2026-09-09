@@ -15,7 +15,7 @@ import { CardBackFace, CardFace, SuitPip } from '../deck';
 import { EmoteFace } from '../emoteArt';
 import { garb } from '../deck/palette';
 import { counters } from '../dev/counters';
-import { font, radius, signal, theme } from '../theme';
+import { font, radius, signal, stroke, surface, theme } from '../theme';
 import type { FxBus, FxWithId, XY } from './FxBus';
 import {
   BACK_SCALE,
@@ -27,6 +27,7 @@ import {
   COIN_FLY_MS,
   COIN_STAGGER_MS,
   CONFETTI_MS,
+  confettiX,
   DEALER_BADGE,
   DEAL_FADE_LEAD_MS,
   DEAL_FADE_MS,
@@ -613,7 +614,11 @@ function Stamp({
           ]}
         />
       )}
-      <Animated.View style={[styles.sprite, styles.stamp, wide && styles.stampWide, body]}>
+      {/* A word or a ×2 sits on a dark plate: the outcome inks read on it
+          wherever it lands (the lit baize, the plaque's cream disc). */}
+      <Animated.View
+        style={[styles.sprite, styles.stamp, wide && styles.stampWide, pip === undefined && styles.stampPlate, body]}
+      >
         {pip !== undefined ? (
           <SuitPip suit={pip} size={STAMP_SIZE - 8} />
         ) : (
@@ -800,7 +805,7 @@ function Confetti({ seed, width, height }: { seed: number; width: number; height
     () =>
       Array.from({ length: CONFETTI_PIECES }).map((_, i) => ({
         key: i,
-        x: ((seed * 131 + i * 197) % 100) / 100,
+        x: confettiX(seed, i, CONFETTI_PIECES),
         delay: (i * 53) % 500,
         colour: CONFETTI_COLOURS[i % CONFETTI_COLOURS.length]!,
         spin: ((i * 89) % 2 ? 1 : -1) * (360 + ((i * 71) % 360)),
@@ -906,11 +911,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   stampText: { color: garb.gold, fontSize: 20, fontFamily: font.bold },
-  stampTextDanger: { color: theme.danger },
-  stampTextOk: { color: theme.ok },
+  stampTextDanger: { color: theme.dangerInk },
+  stampTextOk: { color: theme.okInk },
+  stampPlate: {
+    backgroundColor: surface.scrim,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: stroke.edge,
+  },
   stampWide: { width: STAMP_WIDE },
   stampTextWide: { fontSize: 30, letterSpacing: 1 },
-  stampRingOk: { borderColor: theme.ok },
+  stampRingOk: { borderColor: theme.okInk },
   badgePoints: {
     width: 34,
     borderRadius: 9,
@@ -926,7 +937,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: garb.gold,
   },
-  stampRingDanger: { borderColor: theme.danger },
+  stampRingDanger: { borderColor: theme.dangerInk },
   bubbleText: { color: garb.ink, fontSize: 14, fontFamily: font.bold, textAlign: 'center' },
   bubbleTextGold: { color: garb.ink },
   bubbleTextBig: { fontSize: 28, lineHeight: 34 },

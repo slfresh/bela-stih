@@ -2,6 +2,7 @@ import { G, Text as SvgText } from 'react-native-svg';
 import type { Card, Rank } from '@belot/engine';
 import { cardLang } from '../cosmetics';
 import { PipShape, suitColour } from './pips';
+import { font } from '../theme';
 
 /**
  * The big-and-simple face: one large mađarica pip, one large rank, corner
@@ -21,7 +22,7 @@ function CornerIndex({ card }: { card: Card }) {
   const size = label.length > 1 ? 13 : 16;
   return (
     <G>
-      <SvgText x="13" y={size + 2} fontSize={size} fontWeight="bold" fill={fill} textAnchor="middle">
+      <SvgText x="13" y={size + 2} fontSize={size} fontFamily={font.bold} fill={fill} textAnchor="middle">
         {label}
       </SvgText>
       <G transform={`translate(7.5 ${size + 5}) scale(0.11)`}>
@@ -44,7 +45,7 @@ export function SimpleFace({ card }: { card: Card }) {
         x="50"
         y="62"
         fontSize={label.length > 1 ? 34 : 40}
-        fontWeight="bold"
+        fontFamily={font.bold}
         fill={fill}
         textAnchor="middle"
       >

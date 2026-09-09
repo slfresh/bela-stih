@@ -1,6 +1,7 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Avatar, AVATAR_IDS } from '../avatars';
+import { Avatar } from '../avatars';
+import { AVATAR_IDS } from '../avatarIds';
 import type { RoomStyle } from '../cosmetics';
 import { garb } from '../deck/palette';
 import { FeltArt } from '../table/FeltArt';
@@ -12,17 +13,20 @@ import { guestsFor } from './guests';
  * The home screen's table: a real felt, two of the house's characters
  * already sitting at the far side (a different pair each day), your own
  * avatar in your chair, and the one word that starts a game on the baize.
- * Memoised: it redraws only when the room, the avatar or the width change.
+ *
+ * Its box is reserved by aspect ratio before the first paint, and the art is
+ * drawn to the width that box measures — the column's content width, so a
+ * browser's scrollbar is not counted in it. Measured from a parent instead,
+ * the lobby mounted without the hero and dropped every panel 329 px when
+ * the width arrived a frame later.
  */
 export const TableHero = memo(function TableHero({
-  width,
   avatar,
   day,
   label,
   room,
   onPress,
 }: {
-  width: number;
   /** The player's own avatar id. */
   avatar: string;
   /** Today's ISO day: picks which two characters sit across. */
@@ -31,34 +35,47 @@ export const TableHero = memo(function TableHero({
   room: RoomStyle;
   onPress: () => void;
 }) {
+  const [width, setWidth] = useState(0);
   const height = Math.round(width * 0.5);
   const seat = Math.round(Math.min(56, width * 0.14));
   const guests = guestsFor(day, avatar, AVATAR_IDS);
   return (
-    <PressScale onPress={onPress} scaleTo={0.985} style={{ width, height }}>
-      <FeltArt width={width} height={height} room={room} grain={false} />
-      {/* the two across the table */}
-      <View style={[styles.guest, { top: Math.round(height * 0.1), left: Math.round(width * 0.2) }]}>
-        <Avatar id={guests[0]!} size={seat} />
-      </View>
-      <View style={[styles.guest, { top: Math.round(height * 0.1), right: Math.round(width * 0.2) }]}>
-        <Avatar id={guests[1]!} size={seat} />
-      </View>
-      {/* you, in your chair */}
-      <View style={[styles.you, { bottom: Math.round(height * 0.07) }]}>
-        <Avatar id={avatar} size={Math.round(seat * 1.12)} />
-      </View>
-      {/* the word on the baize */}
-      <View style={styles.centre} pointerEvents="none">
-        <View style={styles.pill}>
-          <Text style={styles.label}>{label}</Text>
-        </View>
-      </View>
-    </PressScale>
+    <View
+      style={styles.box}
+      onLayout={(e) => {
+        const w = Math.round(e.nativeEvent.layout.width);
+        setWidth((prev) => (Math.abs(prev - w) < 1 ? prev : w));
+      }}
+    >
+      {width > 0 && (
+        <PressScale onPress={onPress} scaleTo={0.985} style={StyleSheet.absoluteFill}>
+          <FeltArt width={width} height={height} room={room} grain={false} />
+          {/* the two across the table */}
+          <View style={[styles.guest, { top: Math.round(height * 0.1), left: Math.round(width * 0.2) }]}>
+            <Avatar id={guests[0]!} size={seat} />
+          </View>
+          <View style={[styles.guest, { top: Math.round(height * 0.1), right: Math.round(width * 0.2) }]}>
+            <Avatar id={guests[1]!} size={seat} />
+          </View>
+          {/* you, in your chair */}
+          <View style={[styles.you, { bottom: Math.round(height * 0.07) }]}>
+            <Avatar id={avatar} size={Math.round(seat * 1.12)} />
+          </View>
+          {/* the word on the baize */}
+          <View style={styles.centre} pointerEvents="none">
+            <View style={styles.pill}>
+              <Text style={styles.label}>{label}</Text>
+            </View>
+          </View>
+        </PressScale>
+      )}
+    </View>
   );
 });
 
 const styles = StyleSheet.create({
+  /** Twice as wide as tall, at the width the column gives it. */
+  box: { alignSelf: 'stretch', aspectRatio: 2 },
   guest: { position: 'absolute' },
   you: { position: 'absolute', alignSelf: 'center' },
   centre: {

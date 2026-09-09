@@ -8,7 +8,9 @@ import { anchorId, FxBus, metaId, type Fx } from '../src/anim/FxBus';
 import { fitHand } from '../src/table/geometry';
 import {
   BUBBLE_MIN_MS,
+  confettiX,
   DEAL_DONE_AT,
+  DEALER_BADGE,
   FALLBACK_CARD_W,
   FLIGHT_MAX_MS,
   FLIGHT_MIN_MS,
@@ -41,6 +43,8 @@ function fakeAnchors(withSlots = true): AnchorMap {
     rects.set(`seat:${s}`, { x: 120 * s, y: 40 + 50 * s, w: 54, h: 54 });
     if (withSlots) rects.set(`slot:${s}`, { x: 120 * s, y: 220, w: SLOT_W, h: SLOT_W * 1.45 });
   }
+  // My own puck stands apart from my seat anchor, which is the hand.
+  rects.set('puck:0', { x: 30, y: 300, w: 44, h: 44 });
   rects.set('deck', { x: 180, y: 160, w: 10, h: 10 });
   rects.set('plaque', { x: 170, y: 90, w: 40, h: 40 });
   rects.set('running', { x: 160, y: 10, w: 60, h: 16 });
@@ -472,6 +476,51 @@ describe('reduce-motion sprites', () => {
         expect(fx.kind).not.toBe('badge'); // the hops are off
         // Nothing outlives the short beat plus its gap, fade tail included.
         expect(lifetimeOf(fx), `${fx.kind} spawned by ${kind}`).toBeLessThanOrEqual((beat.dur + beat.gap) * speed + 40);
+      }
+    }
+  });
+});
+
+describe('the dealer badge hop', () => {
+  function badgeOf(dealer: Seat, anchors = fakeAnchors()) {
+    const table = new Table({ seed: 7, humanSeats: [] });
+    const scored = table.drainEvents().find((e) => e.kind === 'dealScored');
+    if (!scored) throw new Error('no dealScored');
+    const bus = new FxBus();
+    const out: Fx[] = [];
+    bus.subscribe((fx) => out.push(fx));
+    const view = { ...table.view(0 as Seat), dealer };
+    makeFxSpawner({ anchors, bus, lang: new Lang('hr'), mySeat: () => 0, view: () => view }).start(scored, 1);
+    const badge = out.find((fx) => fx.kind === 'badge');
+    if (!badge || badge.kind !== 'badge') throw new Error('no badge');
+    return badge;
+  }
+  const corner = (r: { x: number; y: number }) => ({ x: r.x - 2 + DEALER_BADGE / 2, y: r.y - 2 + DEALER_BADGE / 2 });
+
+  it('lands on my puck, not on my hand — my seat anchor is the fan', () => {
+    const b = badgeOf(3 as Seat);
+    expect(b.from).toEqual(corner({ x: 360, y: 190 }));
+    expect(b.to).toEqual(corner({ x: 30, y: 300 }));
+  });
+
+  it('falls back to the seat anchor where no puck is registered', () => {
+    const anchors = fakeAnchors();
+    anchors.delete('puck:0');
+    expect(badgeOf(3 as Seat, anchors).to).toEqual(corner({ x: 0, y: 40 }));
+  });
+});
+
+describe('confetti', () => {
+  it('rains across the whole width for every seed, never in a band', () => {
+    // (seed·131 + i·197) mod 100 stepped −3 a piece: one band over half the width.
+    for (const n of [18, 26]) {
+      for (let seed = 1; seed <= 300; seed++) {
+        const xs = Array.from({ length: n }, (_, i) => confettiX(seed, i, n)).sort((a, b) => a - b);
+        expect(xs[0]).toBeGreaterThanOrEqual(0);
+        expect(xs[0]).toBeLessThan(1 / n);
+        expect(xs[n - 1]).toBeLessThan(1);
+        expect(xs[n - 1]).toBeGreaterThanOrEqual((n - 1) / n);
+        for (let i = 1; i < n; i++) expect(xs[i]! - xs[i - 1]!).toBeLessThanOrEqual(2 / n);
       }
     }
   });

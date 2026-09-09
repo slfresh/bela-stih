@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { garb } from '../src/deck/palette';
+import { ROOMS } from '../src/cosmetics';
+import { garb, PIP_COLOUR } from '../src/deck/palette';
 import { ink, signal, surface, team, theme } from '../src/theme';
 
 /**
@@ -39,7 +40,7 @@ function luminance([r, g, b]: RGB): number {
   return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
 }
 
-export function contrast(fg: string, bg: string, page = theme.feltDeep): number {
+export function contrast(fg: string, bg: string, page: string = theme.feltDeep): number {
   const ground = over(bg, page);
   const groundHex = `rgba(${ground[0]},${ground[1]},${ground[2]},1)`;
   const text = over(fg, groundHex);
@@ -98,5 +99,34 @@ describe('the ink on the grounds', () => {
     for (const c of [signal.clockFull, signal.clockMid, signal.clockLow]) {
       expect(contrast(c, theme.felt)).toBeGreaterThanOrEqual(LARGE);
     }
+  });
+
+  it('the corner index reads on the card stock in every suit', () => {
+    for (const c of [PIP_COLOUR.brown.fill, PIP_COLOUR.green.fill, PIP_COLOUR.red.fill, PIP_COLOUR.gold.dark]) {
+      expect(contrast(c, garb.cream)).toBeGreaterThanOrEqual(BODY);
+    }
+    // …which is why the bells take their dark, not their gold.
+    expect(contrast(PIP_COLOUR.gold.fill, garb.cream)).toBeLessThan(LARGE);
+  });
+
+  it('the inks the verification caught read in every room', () => {
+    const rgb = (c: [number, number, number]) => `rgba(${c[0]},${c[1]},${c[2]},1)`;
+    for (const [name, r] of Object.entries(ROOMS)) {
+      // The lobby's connection error, on the page.
+      expect(contrast(theme.dangerInk, r.page), `${name} error`).toBeGreaterThanOrEqual(BODY);
+      // A stamp's word on its plate, over the lit baize it lands on.
+      expect(contrast(theme.dangerInk, surface.scrim, r.feltLight), `${name} stamp`).toBeGreaterThanOrEqual(BODY);
+      expect(contrast(theme.okInk, surface.scrim, r.feltLight), `${name} stamp`).toBeGreaterThanOrEqual(BODY);
+      expect(contrast(theme.accent, surface.scrim, r.feltLight), `${name} stamp`).toBeGreaterThanOrEqual(LARGE);
+      // The join field's placeholder: a chip on a panel on the page.
+      const panel = rgb(over(surface.panel, r.page));
+      expect(contrast(ink.mid, surface.chip, panel), `${name} placeholder`).toBeGreaterThanOrEqual(BODY);
+      // The seat map's names on the lit baize.
+      expect(contrast(ink.hi, r.feltLight), `${name} seat names`).toBeGreaterThanOrEqual(BODY);
+      expect(contrast(theme.textDim, r.feltLight), `${name} dim names`).toBeLessThan(5.5); // the dim ink was the marginal one
+    }
+    // The armed reset button: cream on the deep red, not on the outcome red.
+    expect(contrast(theme.text, garb.redDark)).toBeGreaterThanOrEqual(BODY);
+    expect(contrast(theme.text, theme.danger)).toBeLessThan(BODY); // which is why
   });
 });

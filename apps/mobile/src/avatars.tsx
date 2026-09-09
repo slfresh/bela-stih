@@ -1,5 +1,6 @@
 import { Circle, ClipPath, Defs, Ellipse, G, Line, Path, Rect, Svg } from 'react-native-svg';
 import { garb } from './deck/palette';
+import { AVATAR_IDS } from './avatarIds';
 
 /**
  * Preset player avatars — twelve kitchen-table characters, drawn in the same
@@ -13,20 +14,7 @@ import { garb } from './deck/palette';
  * a round puck.
  */
 
-export const AVATAR_IDS: readonly string[] = [
-  'djed',
-  'baka',
-  'brko',
-  'snasa',
-  'student',
-  'teta',
-  'sofer',
-  'majstor',
-  'gazda',
-  'profesorica',
-  'ribar',
-  'kapetan',
-];
+export { AVATAR_IDS };
 
 // ---------------------------------------------------------------------------
 // Shared pieces

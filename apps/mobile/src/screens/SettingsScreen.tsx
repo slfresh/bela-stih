@@ -7,6 +7,7 @@ import { resetProfile, type Settings, VOLUME_OPTIONS } from '../storage';
 import { setDeckStyle } from '../cosmetics';
 import { PlayingCard } from '../PlayingCard';
 import { playSfx, setMasterVolume, setSoundEnabled } from '../audio';
+import { garb } from '../deck/palette';
 import { font, ink, radius, space, surface, theme, type } from '../theme';
 import { APP_VERSION, Panel, ScreenShell } from './common';
 
@@ -314,7 +315,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
   },
-  resetArmed: { backgroundColor: theme.danger },
+  // The deep red: cream on the outcome red is 4.4:1, a hair under body text's bar.
+  resetArmed: { backgroundColor: garb.redDark, borderColor: garb.redDark },
   resetText: { color: theme.text, fontSize: 14, fontFamily: font.bold },
 
   hint: { color: theme.textDim, fontSize: 12, lineHeight: 17, marginTop: 10 },

@@ -415,21 +415,24 @@ export function TableScreen(props: TableScreenProps) {
   // A wooden plate in the rim's own wood, lit on top and shaded underneath.
   // Bidding: three tiny backs and the question. Called: the pip on a cream
   // disc, and the ×2 / ×4 as a badge beside it.
+  // The sprite anchor is the disc (or the mini fan before a call), not the
+  // plate: a stamp centred on the plate landed under the disc, on the caller
+  // line.
   const plaque = (
-    <Anchor
-      id={anchorId.plaque}
+    <View
       style={[
         styles.plaque,
         land ? styles.plaqueRail : styles.plaquePortrait,
         { backgroundColor: baize.rim, borderTopColor: baize.rimLight, borderBottomColor: baize.rimDark },
       ]}
+      accessibilityLabel={trump ? undefined : lang.s.trumpUndecided}
     >
       <View style={styles.plaqueRow}>
         {trump ? (
           <>
-            <View style={styles.plaqueDisc}>
+            <Anchor id={anchorId.plaque} style={styles.plaqueDisc}>
               <SuitPip suit={trump} size={24} />
-            </View>
+            </Anchor>
             {view.multiplier > 1 && (
               <View style={styles.multBadge}>
                 <Text style={styles.plaqueMult}>×{view.multiplier}</Text>
@@ -438,25 +441,26 @@ export function TableScreen(props: TableScreenProps) {
           </>
         ) : (
           <>
-            <View style={styles.miniFan} accessibilityLabel={lang.s.trumpUndecided}>
+            <Anchor id={anchorId.plaque} style={styles.miniFan}>
               {[-16, 0, 16].map((deg, i) => (
                 <View key={deg} style={[styles.miniBack, i > 0 && styles.miniBackNext, { transform: [{ rotate: `${deg}deg` }] }]}>
                   <CardBackFace width={13} variant={cosmetics().cardBack} />
                 </View>
               ))}
-            </View>
+            </Anchor>
             <Text style={styles.plaqueUndecided} numberOfLines={1}>
               {lang.s.trumpQuestion}
             </Text>
           </>
         )}
       </View>
-      {view.callerSeat !== null && (
+      {/* A short phone's rail has no line to spare: the caller is in the bubble it came in. */}
+      {view.callerSeat !== null && !m.tightRail && (
         <Text style={styles.plaqueCaller} numberOfLines={1}>
           {view.callerSeat === mySeat ? lang.s.calledByYou : lang.s.calledBy(meta(view.callerSeat).name)}
         </Text>
       )}
-    </Anchor>
+    </View>
   );
 
   const feltBody = (
@@ -476,6 +480,7 @@ export function TableScreen(props: TableScreenProps) {
         height={feltBox.h + 2 * (RIM_W + FELT_PAD)}
         room={baize}
         lit={myTurn && !settled}
+        inset={RIM_W}
       />
       <View
         style={styles.feltInner}
@@ -856,7 +861,10 @@ export function TableScreen(props: TableScreenProps) {
                   winner={matchOver ? winnerTeam : null}
                 />
                 {plaque}
-                {selfPuck}
+                {/* A 360 dp-tall phone cannot stack the puck here too: it
+                    pushed the leave button off the screen and squashed the
+                    zvanje chips to nothing. There it stands by the buttons. */}
+                {!m.tightRail && selfPuck}
                 {calls}
                 <View style={styles.railGap} />
                 <Button label={finishLabel} tone="plain" compact onPress={onFinish} />
@@ -870,7 +878,7 @@ export function TableScreen(props: TableScreenProps) {
               </View>
 
               <View style={[styles.rail, styles.railRight, { width: m.railW }]}>
-                {emotes}
+                {m.tightRail ? selfPuck : emotes}
                 <View style={styles.railGap} />
                 {!settled && (
                   <View style={styles.actionsCol}>
@@ -878,6 +886,14 @@ export function TableScreen(props: TableScreenProps) {
                       <NonCardActions options={options} lang={lang} onChoose={onAction} compact />
                     )}
                     {emoteToggle}
+                  </View>
+                )}
+                {/* No column for six faces on a short phone (with five bid
+                    buttons under them they ran off the top): they float over
+                    the felt's edge while the tray is open. */}
+                {m.tightRail && trayOpen && (
+                  <View style={[styles.emoteFloat, { right: m.railW + 6 }]} pointerEvents="box-none">
+                    {emotes}
                   </View>
                 )}
               </View>
@@ -2082,6 +2098,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emoteToggleOn: { borderColor: theme.accent },
+  emoteFloat: { position: 'absolute', top: 0 },
 
 
   resultBackdrop: {

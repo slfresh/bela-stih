@@ -92,3 +92,54 @@ describe('the hand beside my puck', () => {
     expect(m.handWidth).toBe(Math.max(240, 800 - 24 - m.railW * 2));
   });
 });
+
+describe('the landscape rails', () => {
+  // The rails' fixed rows, as the web export measured them at 640x360 with
+  // Rubik and compact buttons. Not derived: the point is to hold the layout
+  // to the screens it must fit.
+  const PROFILE = 78;
+  const HEADER = 102;
+  const PLATE = 38;
+  const CALLER = 21;
+  const CHIP = 50; // one zvanje chip, the calls column's minimum worth having
+  const LEAVE = 31;
+  const BUTTON = 31;
+  const TOGGLE = 40;
+  const GAP = 6;
+  const ROOT_PAD = 12;
+  /** My puck's row: ring, its gap, the name. */
+  const puckRow = (selfPuck: number) => selfPuck + 10 + 2 + 16;
+
+  it('a phone stacks the left rail without the puck, and the right without the faces', () => {
+    for (const [w, h] of [
+      [640, 360],
+      [800, 360],
+      [915, 412],
+      [844, 390],
+    ] as const) {
+      const m = computeTableMetrics(w, h);
+      expect(m.tightRail, `${w}x${h}`).toBe(true);
+      const left = PROFILE + HEADER + PLATE + CHIP + LEAVE + 4 * GAP;
+      expect(left, `${w}x${h} left rail`).toBeLessThanOrEqual(h - ROOT_PAD);
+      // Bidding: pass and four calls, the toggle, my puck at the top.
+      const right = puckRow(m.selfPuck) + 5 * BUTTON + 4 * GAP + TOGGLE + 2 * GAP;
+      expect(right, `${w}x${h} right rail`).toBeLessThanOrEqual(h - ROOT_PAD);
+    }
+  });
+
+  it('a tablet or the web column keeps everything in the left rail', () => {
+    for (const [w, h] of [
+      [1024, 768],
+      [960, 505],
+    ] as const) {
+      const m = computeTableMetrics(w, h);
+      expect(m.tightRail, `${w}x${h}`).toBe(false);
+      const left = PROFILE + HEADER + PLATE + CALLER + puckRow(m.selfPuck) + CHIP + LEAVE + 5 * GAP;
+      expect(left, `${w}x${h} left rail`).toBeLessThanOrEqual(h - ROOT_PAD);
+    }
+  });
+
+  it('never tightens a portrait phone', () => {
+    for (const [w, h] of PORTRAIT) expect(computeTableMetrics(w, h).tightRail).toBe(false);
+  });
+});

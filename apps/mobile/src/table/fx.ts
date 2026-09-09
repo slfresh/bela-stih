@@ -84,9 +84,13 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
 
   /** The width of a card sitting in this seat's slot, or the fallback before the first layout. */
   const slotW = (seat: Seat): number => anchors.rect(anchorId.slot(seat))?.w ?? FALLBACK_CARD_W;
-  /** Where a seat's puck draws its dealer badge: 2 px outside its ring's top-left corner. */
+  /**
+   * Where a seat's puck draws its dealer badge: 2 px outside its ring's
+   * top-left corner. My own seat anchor is the hand, so my puck is asked
+   * first — the hop once set off from the fan's corner.
+   */
   const dealerBadgeAt = (seat: Seat): XY | null => {
-    const r = anchors.rect(anchorId.seat(seat));
+    const r = anchors.rect(anchorId.puck(seat)) ?? anchors.rect(anchorId.seat(seat));
     if (!r) return null;
     return { x: r.x - 2 + DEALER_BADGE / 2, y: r.y - 2 + DEALER_BADGE / 2 };
   };

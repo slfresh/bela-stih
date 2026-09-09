@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.feltDeep },
   centre: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: 18, padding: 24 },
   title: { color: theme.text, fontSize: 20, fontFamily: font.bold, textAlign: 'center' },
-  error: { color: theme.danger, fontSize: 13, textAlign: 'center' },
+  error: { color: theme.dangerInk, fontSize: 13, textAlign: 'center' },
   panel: {
     alignSelf: 'stretch',
     backgroundColor: 'rgba(0,0,0,0.22)',

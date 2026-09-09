@@ -42,6 +42,13 @@ export interface TableMetrics {
   /** Short screens hide what they must rather than squashing everything. */
   compact: boolean;
   /**
+   * Landscape on a phone: the left rail cannot stack the profile, the score,
+   * the plate, my puck, the calls and the leave button in 360 dp, so my puck
+   * stands in the right rail by the buttons, the plate drops its caller line
+   * and the emote faces float while the tray is open.
+   */
+  tightRail: boolean;
+  /**
    * Portrait keeps a row's height free under the felt so a prompt coming or
    * going never moves the hand — but only where the column can pay for it.
    * With the felt at its 260 floor, the fixed rows (profile, score, hand,
@@ -116,6 +123,7 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
     puck,
     selfPuck,
     compact: usableH < 620,
+    tightRail: landscape && usableH < 440,
     promptReserve: !landscape && usableH >= 700,
   };
 }

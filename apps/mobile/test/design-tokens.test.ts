@@ -22,13 +22,13 @@ const PALETTE_FILES = new Set(['theme.ts', 'cosmetics.ts', 'avatars.tsx', 'emote
 const LITERAL_BASELINE: Record<string, number> = {
   'HomeScreen.tsx': 0,
   'PlayingCard.tsx': 2,
-  'TableScreen.tsx': 10,
+  'TableScreen.tsx': 9,
   'anim/EffectsOverlay.tsx': 1,
   'net/OnlineGame.tsx': 1,
   'net/SeatMap.tsx': 0,
   'screens/ProfileScreen.tsx': 1,
   'screens/SettingsScreen.tsx': 2,
-  'screens/ShopScreen.tsx': 1,
+  'screens/ShopScreen.tsx': 0,
   'table/EmoteStrip.tsx': 2,
   'table/RevealRow.tsx': 1,
   'table/SeatPuck.tsx': 2,
@@ -68,7 +68,8 @@ describe('the design tokens', () => {
     for (const f of files) {
       if (PALETTE_FILES.has(f.rel)) continue;
       const rgba = (f.text.match(/rgba?\([^)]*\)/g) ?? []).length;
-      const hex = (f.text.match(/'#[0-9a-fA-F]{3,8}'/g) ?? []).length;
+      // Quoted any way: a JSX prop's "#fff" is as much a literal as a style's '#fff'.
+      const hex = (f.text.match(/["'`]#[0-9a-fA-F]{3,8}["'`]/g) ?? []).length;
       const n = rgba + hex;
       const allowed = LITERAL_BASELINE[f.rel] ?? 0;
       expect(n, `${f.rel}: ${n} colour literals, baseline ${allowed} — use theme/surface/stroke/ink`).toBeLessThanOrEqual(

@@ -1,6 +1,7 @@
 import { Circle, G, Path, Text as SvgText } from 'react-native-svg';
 import type { Card, Rank, Suit } from '@belot/engine';
 import { garb } from './palette';
+import { font } from '../theme';
 
 /**
  * The French-suited face: ♠ ♥ ♦ ♣, corner indices at both ends, classic pip
@@ -68,7 +69,7 @@ function CornerIndex({ card }: { card: Card }) {
   const size = label.length > 1 ? 14 : 17;
   return (
     <G>
-      <SvgText x="13" y={size + 2} fontSize={size} fontWeight="bold" fill={colour} textAnchor="middle">
+      <SvgText x="13" y={size + 2} fontSize={size} fontFamily={font.bold} fill={colour} textAnchor="middle">
         {label}
       </SvgText>
       <G transform={`translate(7 ${size + 5}) scale(0.12)`}>
@@ -138,7 +139,7 @@ function Court({ card }: { card: Card }) {
   const half = (
     <G>
       {mark}
-      <SvgText x="50" y="65" fontSize="26" fontWeight="bold" fill={colour} textAnchor="middle">
+      <SvgText x="50" y="65" fontSize="26" fontFamily={font.bold} fill={colour} textAnchor="middle">
         {FRENCH_RANK[card.rank]}
       </SvgText>
     </G>

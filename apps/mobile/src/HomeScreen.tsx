@@ -69,9 +69,6 @@ export function HomeScreen({
 }) {
   const ui = lang.s.ui;
   const [code, setCode] = useState('');
-  // The hero is drawn to the column's measured width (an SVG, not a flex box).
-  const [width, setWidth] = useState(0);
-  const heroWidth = Math.max(0, width - 2 * space.xl);
   const anchors = useMemo(() => new AnchorMap(), []);
   const fxBus = useMemo(() => new FxBus(), []);
 
@@ -122,7 +119,7 @@ export function HomeScreen({
     <AnchorHost map={anchors}>
       <SafeAreaView style={[styles.safe, { backgroundColor: room().page }]}>
         <View style={styles.fill}>
-          <ScrollView contentContainerStyle={styles.scroll} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
+          <ScrollView contentContainerStyle={styles.scroll}>
             {/* identity header */}
             <View style={styles.headerRow}>
               <PressScale
@@ -163,7 +160,6 @@ export function HomeScreen({
 
             {/* the table: online quick play */}
             <TableHero
-              width={heroWidth}
               avatar={profile.selectedAvatar}
               day={today}
               label={ui.play}
@@ -263,7 +259,7 @@ export function HomeScreen({
                   value={code}
                   onChangeText={setCode}
                   placeholder={ui.tableCode}
-                  placeholderTextColor={ink.lo}
+                  placeholderTextColor={ink.mid}
                   autoCapitalize="none"
                   autoCorrect={false}
                   style={styles.input}
@@ -373,7 +369,8 @@ const styles = StyleSheet.create({
   bonusTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 1 },
   bonusTitle: { color: theme.accent, ...type.h3, fontFamily: font.bold, flexShrink: 1 },
   hint: { color: ink.mid, ...type.caption },
-  claimed: { width: 44, height: 36, alignItems: 'center', justifyContent: 'center' },
+  // As tall as the claim button it replaces, so a claim moves nothing below it.
+  claimed: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },
   rule: { height: 1, backgroundColor: stroke.hair, marginVertical: space.xs },
 
   joinRow: { flexDirection: 'row', gap: space.sm + 2, alignItems: 'center' },
@@ -387,7 +384,7 @@ const styles = StyleSheet.create({
     ...type.body,
   },
 
-  questRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm + 2, minHeight: 36 },
+  questRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm + 2, minHeight: 40 },
   questLeft: { flex: 1, gap: 5 },
   questText: { color: ink.hi, ...type.sub },
   questDone: { color: theme.okInk, fontFamily: font.bold },
@@ -401,5 +398,5 @@ const styles = StyleSheet.create({
   reward: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
   questReward: { color: theme.accent, ...type.sub },
 
-  disclaimer: { color: ink.lo, ...type.caption, textAlign: 'center', marginTop: space.sm },
+  disclaimer: { color: ink.mid, ...type.caption, textAlign: 'center', marginTop: space.sm },
 });

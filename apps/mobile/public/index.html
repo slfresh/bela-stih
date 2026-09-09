@@ -44,6 +44,9 @@
       body,
       #root {
         background: #0d2a1f;
+        /* SVG text (card indices, seat initials) inherits this; without it
+           the browser set every one in its serif default. */
+        font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
       }
       /* Shown until React mounts and replaces the root's contents. */
       #boot {

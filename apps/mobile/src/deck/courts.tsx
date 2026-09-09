@@ -2,6 +2,7 @@ import { Circle, Ellipse, G, Line, Path, Rect, Text as SvgText } from 'react-nat
 import type { Rank, Suit } from '@belot/engine';
 import { PipShape } from './pips';
 import { garb } from './palette';
+import { font } from '../theme';
 
 /**
  * The court cards of the Tell pattern: double-headed half-figures, mirrored by
@@ -65,7 +66,7 @@ export function CourtHalf({ rank, suit }: { rank: Rank; suit: Suit }) {
             x="50"
             y="66.8"
             fontSize="8"
-            fontWeight="bold"
+            fontFamily={font.bold}
             fill={garb.ink}
             textAnchor="middle"
             letterSpacing="0.5"

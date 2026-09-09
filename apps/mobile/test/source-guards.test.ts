@@ -263,6 +263,40 @@ describe('the first frame and the last resort', () => {
     expect(html).toMatch(/id="boot"/);
     // Expo substitutes the title; a hard-coded one would silently drift from app.json.
     expect(html).toMatch(/%WEB_TITLE%/);
+    // SVG text has no family of its own; without this the browser set the
+    // card indices and seat initials in Times.
+    expect(html).toMatch(/#root\s*\{[^}]*font-family:\s*system-ui/s);
+  });
+
+  it('the verification\'s fixes stay put', () => {
+    const t = src('TableScreen.tsx');
+    // The art inside the 6 px rim is pulled back by it, or it draws 6 px off the frame.
+    expect(t).toMatch(/<FeltArt[^>]*inset=\{RIM_W\}/s);
+    expect(src('table/FeltArt.tsx')).toMatch(/top: -inset, left: -inset/);
+    // The stamp lands on the disc, not the plate's centre.
+    expect(t).toMatch(/<Anchor id=\{anchorId\.plaque\} style=\{styles\.plaqueDisc\}>/);
+    expect(t).toMatch(/<Anchor id=\{anchorId\.plaque\} style=\{styles\.miniFan\}>/);
+    expect(t).not.toMatch(/<Anchor\s+id=\{anchorId\.plaque\}\s+style=\{\[\s*styles\.plaque,/s);
+    // A short phone's rails: my puck by the buttons, the faces floating.
+    expect(t).toMatch(/\{!m\.tightRail && selfPuck\}/);
+    expect(t).toMatch(/\{m\.tightRail \? selfPuck : emotes\}/);
+    expect(t).toMatch(/view\.callerSeat !== null && !m\.tightRail/);
+    // The dealer's badge hops between pucks, mine included.
+    expect(src('table/fx.ts')).toMatch(/anchors\.rect\(anchorId\.puck\(seat\)\) \?\? anchors\.rect\(anchorId\.seat\(seat\)\)/);
+    // The hero reserves its box and measures itself; the lobby no longer measures the scroller.
+    const hero = src('home/TableHero.tsx');
+    expect(hero).toMatch(/aspectRatio: 2/);
+    expect(hero).toMatch(/onLayout=/);
+    const home = src('HomeScreen.tsx');
+    expect(home).not.toMatch(/<TableHero[^>]*width=/s);
+    expect(home).not.toMatch(/<ScrollView[^>]*onLayout/s);
+    // Every SVG text names the face, and never a weight on top of it.
+    for (const f of ['deck/CardFace.tsx', 'deck/courts.tsx', 'deck/french.tsx', 'deck/simple.tsx', 'table/SeatPuck.tsx']) {
+      expect(src(f), f).not.toMatch(/fontWeight=/);
+      expect(src(f), f).toMatch(/fontFamily=\{font\.bold\}/);
+    }
+    // Confetti spreads by slot, not by a modular walk.
+    expect(src('anim/EffectsOverlay.tsx')).toMatch(/x: confettiX\(seed, i, CONFETTI_PIECES\)/);
   });
 
   it('metrics stay a pure function of the box, so the landscape invariant is testable', () => {

@@ -16,6 +16,10 @@ import { signal, stroke } from '../theme';
  * redraw a gradient.
  *
  * `lit` swaps the bevel for the turn signal: the whole table says "you".
+ *
+ * `inset`: a frame with a border positions an absolute child at its padding
+ * box (Yoga and the browser alike), so the art inside the table's 6 px rim
+ * drew 6 px right and down of the frame until it was pulled back by it.
  */
 
 /** The rim's width in the felt's own layout: `styles.felt` borderWidth. */
@@ -32,6 +36,7 @@ export const FeltArt = memo(function FeltArt({
   // what a browser's compositor is worst at); phones draw the cloth.
   grain = Platform.OS !== 'web',
   rim = RIM_W,
+  inset = 0,
 }: {
   width: number;
   height: number;
@@ -39,6 +44,8 @@ export const FeltArt = memo(function FeltArt({
   lit?: boolean;
   grain?: boolean;
   rim?: number;
+  /** The frame's border width, when the art sits inside a bordered view. */
+  inset?: number;
 }) {
   // Gradient ids are document-global on the web: three swatches in the shop
   // must not share one.
@@ -51,7 +58,7 @@ export const FeltArt = memo(function FeltArt({
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      style={StyleSheet.absoluteFill}
+      style={inset ? { position: 'absolute', top: -inset, left: -inset, width, height } : StyleSheet.absoluteFill}
       pointerEvents="none"
     >
       <Defs>
@@ -71,8 +78,8 @@ export const FeltArt = memo(function FeltArt({
           <Stop offset="1" stopColor={room.feltDeep} />
         </RadialGradient>
         <Pattern id={`${id}-grain`} width="7" height="7" patternUnits="userSpaceOnUse">
-          <Circle cx="1.5" cy="1.5" r="0.8" fill="#000" opacity="0.16" />
-          <Circle cx="5" cy="4.5" r="0.7" fill="#fff" opacity="0.07" />
+          <Circle cx="1.5" cy="1.5" r="0.8" fill={stroke.shade} opacity={0.35} />
+          <Circle cx="5" cy="4.5" r="0.7" fill={stroke.lit} opacity={0.18} />
         </Pattern>
       </Defs>
       {/* the rim */}

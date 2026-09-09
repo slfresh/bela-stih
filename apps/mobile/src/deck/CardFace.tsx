@@ -8,6 +8,7 @@ import { cornerIndexLayout, INDEX_PIP_SCALE } from './cornerIndex';
 import { SeasonScene } from './scenes';
 import { CourtHalf } from './courts';
 import { garb } from './palette';
+import { font } from '../theme';
 import { Image as RNImage, StyleSheet, Text as RNText, View } from 'react-native';
 import { FrenchFace, frenchColour } from './french';
 import { SimpleFace } from './simple';
@@ -144,7 +145,7 @@ function CardFaceImpl({
             justifyContent: 'center',
           }}
         >
-          <RNText style={{ color: indexColour(card.suit), fontSize: Math.round(chip * 0.7), fontWeight: '800' }}>
+          <RNText style={{ color: indexColour(card.suit), fontSize: Math.round(chip * 0.7), fontFamily: font.black }}>
             {cardLang().rankShort(card.rank)}
           </RNText>
         </View>
@@ -202,9 +203,13 @@ function CornerIndex({ card }: { card: Card }) {
   const ink = indexColour(card.suit);
   return (
     <G>
-      <SvgText x={l.x} y={l.y} fontSize={l.fontSize} fontWeight="bold" fill={ink} textAnchor="middle">
-        {l.label}
-      </SvgText>
+      {/* A long run (Roman VIII) is condensed about its centre to stay inside
+          the box; the face is the app's own, so the width is known. */}
+      <G transform={l.scaleX < 1 ? `translate(${l.x} 0) scale(${l.scaleX} 1) translate(${-l.x} 0)` : undefined}>
+        <SvgText x={l.x} y={l.y} fontSize={l.fontSize} fontFamily={font.bold} fill={ink} textAnchor="middle">
+          {l.label}
+        </SvgText>
+      </G>
       {l.pip && (
         <G transform={`translate(${l.pip.x} ${l.pip.y}) scale(${INDEX_PIP_SCALE})`}>
           <PipShape suit={card.suit} />
@@ -232,12 +237,12 @@ function Pips({ rank, suit }: { rank: Rank; suit: Suit }) {
   return (
     <G>
       {/* the numeral, centred at both ends as on the printed cards */}
-      <SvgText x="50" y="17.5" fontSize="12" fontWeight="bold" fill={fill} textAnchor="middle">
+      <SvgText x="50" y="17.5" fontSize="12" fontFamily={font.bold} fill={fill} textAnchor="middle">
         {numeral}
       </SvgText>
       {layout.top.map(pipAt)}
       <G transform="rotate(180 50 72.5)">
-        <SvgText x="50" y="17.5" fontSize="12" fontWeight="bold" fill={fill} textAnchor="middle">
+        <SvgText x="50" y="17.5" fontSize="12" fontFamily={font.bold} fill={fill} textAnchor="middle">
           {numeral}
         </SvgText>
         {layout.bottom.map(pipAt)}
@@ -249,7 +254,7 @@ function Pips({ rank, suit }: { rank: Rank; suit: Suit }) {
         <G>
           <Rect x="26" y="66" width="48" height="13" rx="2.5"
             fill={garb.cream} stroke={garb.brownDark} strokeWidth="1" />
-          <SvgText x="50" y="75" fontSize="7.5" fontWeight="bold" fill={garb.brownDark}
+          <SvgText x="50" y="75" fontSize="7.5" fontFamily={font.bold} fill={garb.brownDark}
             textAnchor="middle" letterSpacing="0.8">
             BELA ŠTIH
           </SvgText>
@@ -344,7 +349,7 @@ function Ace({ suit, colour }: { suit: Suit; colour: string }) {
       {/* season banner */}
       <Rect x="20" y="108" width="60" height="14" rx="3"
         fill={garb.cream} stroke={garb.ink} strokeWidth="0.9" />
-      <SvgText x="50" y="118" fontSize="9" fontWeight="bold" fill={garb.ink}
+      <SvgText x="50" y="118" fontSize="9" fontFamily={font.bold} fill={garb.ink}
         textAnchor="middle" letterSpacing="0.4">
         {cardLang().seasonName(suit).toUpperCase()}
       </SvgText>

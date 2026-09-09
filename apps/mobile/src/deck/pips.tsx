@@ -1,5 +1,6 @@
 import Svg, { G, Path } from 'react-native-svg';
 import PATHS from '../../brand/paths.json';
+import { PIP_COLOUR } from './palette';
 import type { Suit } from '@belot/engine';
 import { MADARICA_SUIT, SUIT_COLOUR, type SuitColourRole } from '@belot/i18n';
 
@@ -14,19 +15,15 @@ import { MADARICA_SUIT, SUIT_COLOUR, type SuitColourRole } from '@belot/i18n';
  * inside a full card face; `SuitPip` wraps it for standalone use.
  */
 
-/** Traditional mađarice colours, mapped from the shared role names. */
-export const PIP_COLOUR: Record<SuitColourRole, { fill: string; dark: string }> = {
-  brown: { fill: '#7a4a21', dark: '#4d2c10' }, // žir
-  green: { fill: '#2f7d3a', dark: '#1d5325' }, // list
-  red: { fill: '#c0202e', dark: '#8a121d' }, // srce
-  gold: { fill: '#d9a41c', dark: '#a3760a' }, // bundeva
-};
+/** The four suits' colours, from the deck's palette (a pure module the contrast test reads). */
+export { PIP_COLOUR };
 
 export function suitColour(suit: Suit): { fill: string; dark: string } {
-  return PIP_COLOUR[SUIT_COLOUR[suit]];
+  const role: SuitColourRole = SUIT_COLOUR[suit];
+  return PIP_COLOUR[role];
 }
 
-/** The corner index's ink: the suit's own colour, except bundeva's gold, which is too light on cream (its dark reads 4.6:1). */
+/** The corner index's ink: the suit's own colour, except bundeva's gold, which is too light on cream (its dark reads 4.7:1). */
 export function indexColour(suit: Suit): string {
   const role = SUIT_COLOUR[suit];
   return role === 'gold' ? PIP_COLOUR[role].dark : PIP_COLOUR[role].fill;

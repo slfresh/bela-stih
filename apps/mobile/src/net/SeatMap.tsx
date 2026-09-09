@@ -104,6 +104,7 @@ export const SeatMap = memo(function SeatMap({
                     size={puck}
                     deadline={null}
                     anchored={false}
+                    nameInk={ink.hi}
                   />
                   {hostSeat === seat && (
                     <View style={styles.crown}>

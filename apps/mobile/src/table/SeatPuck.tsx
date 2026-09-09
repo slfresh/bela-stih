@@ -56,6 +56,7 @@ export const SeatPuck = memo(function SeatPuck({
   gesture = null,
   tricks = 0,
   anchored = true,
+  nameInk,
 }: {
   seat: Seat;
   name: string;
@@ -91,6 +92,8 @@ export const SeatPuck = memo(function SeatPuck({
    * False for the viewer's own puck: their hand is that anchor.
    */
   anchored?: boolean;
+  /** The name's colour: the lobby's seat map sets its pucks on the lit baize, where the dim ink falls under 4.5:1. */
+  nameInk?: string;
 }) {
   const initial = (name.trim()[0] ?? '?').toUpperCase();
   // The chip ticks up as the deal lands (0 → 6 → 8) rather than jumping.
@@ -150,7 +153,7 @@ export const SeatPuck = memo(function SeatPuck({
                 x="50"
                 y="66"
                 fontSize="46"
-                fontWeight="bold"
+                fontFamily={font.bold}
                 fill={theme.cardFace}
                 textAnchor="middle"
                 opacity={connected ? 1 : 0.5}
@@ -217,7 +220,7 @@ export const SeatPuck = memo(function SeatPuck({
       </View>
 
       <View style={styles.nameRow}>
-        <Text style={styles.name} numberOfLines={1}>
+        <Text style={[styles.name, nameInk ? { color: nameInk } : null]} numberOfLines={1}>
           {name}
         </Text>
         {isBot && <Robot size={12} />}

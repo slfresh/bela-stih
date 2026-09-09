@@ -236,6 +236,17 @@ export function lifetimeOf(fx: Fx): number {
   }
 }
 
+/**
+ * Where the i-th of n confetti pieces falls, 0..1 across the overlay: one
+ * piece per n-th of the width, jittered by the seed. The old walk
+ * (seed·131 + i·197) mod 100 stepped −3 per piece, so 18 pieces filled one
+ * band over half the width and left the rest dry.
+ */
+export function confettiX(seed: number, i: number, n: number): number {
+  const jitter = ((seed * 131 + i * 197) % 100) / 100;
+  return (i + jitter) / n;
+}
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
