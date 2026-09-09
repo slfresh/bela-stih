@@ -1,10 +1,10 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { measure, render, SFX, toWav, TRIM } from './sfx-bank.mjs';
+import { manifest, measure, render, SFX, toWav, TRIM } from './sfx-bank.mjs';
 
 /**
- * Writes the sound bank to apps/mobile/assets/sfx. The sounds themselves live
- * in sfx-bank.mjs.
+ * Writes the sound bank to apps/mobile/assets/sfx — the files and the
+ * manifest the app plays them by. The sounds themselves live in sfx-bank.mjs.
  *
  *   node scripts/make-sfx.mjs
  *
@@ -23,9 +23,10 @@ for (const name of Object.keys(SFX)) {
   total += wav.length;
   const { rmsDb, peakDb } = measure(samples);
   console.log(
-    `  ${name.padEnd(10)} ${(wav.length / 1024).toFixed(1).padStart(6)}KB` +
+    `  ${name.padEnd(12)} ${(wav.length / 1024).toFixed(1).padStart(6)}KB` +
       `  rms ${rmsDb.toFixed(1)} dBFS (trim ${(TRIM[name] ?? 0) >= 0 ? '+' : ''}${TRIM[name] ?? 0})` +
       `  peak ${peakDb.toFixed(1)} dBFS`,
   );
 }
-console.log(`Done — ${(total / 1024).toFixed(0)}KB total.`);
+writeFileSync(join(OUT, 'manifest.json'), JSON.stringify(manifest(), null, 2) + '\n');
+console.log(`Done — ${(total / 1024).toFixed(0)}KB total, ${Object.keys(SFX).length} sounds + manifest.`);

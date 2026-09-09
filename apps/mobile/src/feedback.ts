@@ -1,4 +1,3 @@
-import * as Haptics from 'expo-haptics';
 import { teamOf, type Seat } from '@belot/engine';
 import type { TableEvent } from '@belot/table';
 import {
@@ -8,7 +7,7 @@ import {
   type PlayerProfile,
 } from '@belot/progression';
 import { playSfx, type PlayOptions, type Sfx } from './audio';
-import { notify, tripleBuzz } from './haptics';
+import { pattern, type Pattern } from './haptics';
 
 /**
  * Turns the table's event stream into sound, haptics and rewards.
@@ -23,7 +22,7 @@ import { notify, tripleBuzz } from './haptics';
  * that every other kind does — a new event kind that nobody scored is
  * otherwise a silence nobody notices.
  */
-export const SILENT_EVENTS: readonly TableEvent['kind'][] = ['declarationSkipped', 'matchStarted'];
+export const SILENT_EVENTS: readonly TableEvent['kind'][] = ['declarationSkipped'];
 
 /** What the player did this deal, accumulated from events as they arrive. */
 export interface DealTally {
@@ -49,16 +48,41 @@ export function mergeAward(a: Award | null, b: Award): Award {
  * from the director's onEventEnd, which never fires for a flushed event.
  */
 export function landingSound(e: TableEvent, mySeat: Seat): void {
-  if (e.kind === 'cardPlayed' && e.seat !== mySeat) playSfx('play', { rate: 0.95 });
-  // The pip (or the ×2) lands on the plaque as the beat ends.
-  if (e.kind === 'bidCalled' || e.kind === 'doubled') playSfx('stamp');
-  // The verdict, as the sheet slides up: the stinger and the phone's own
-  // made / failed pattern land together.
-  if (e.kind === 'dealScored') {
-    const mine = teamOf(mySeat);
-    const won = e.result.finalScore[mine] > e.result.finalScore[mine === 0 ? 1 : 0];
-    playSfx(won ? 'win' : 'lose');
-    notify(won ? 'success' : 'error');
+  switch (e.kind) {
+    case 'dealStarted':
+      // The real cards fan open as the backs fade.
+      playSfx('fan');
+      break;
+    case 'handsCompleted':
+      // The talon slides into its sorted place.
+      playSfx('sort');
+      break;
+    case 'cardPlayed':
+      if (e.seat !== mySeat) {
+        playSfx('play', { rate: 0.95 });
+        pattern('land');
+      }
+      break;
+    case 'bidCalled':
+    case 'doubled':
+      // The pip (or the ×2) lands on the plaque as the beat ends.
+      playSfx('stamp');
+      break;
+    case 'trickWon':
+      // The pile landing at the winner's puck.
+      playSfx('stack', { gain: teamOf(e.seat) === teamOf(mySeat) ? 1 : 0.7 });
+      break;
+    case 'dealScored': {
+      // The verdict, as the sheet slides up: the stinger and the phone's own
+      // made / failed pattern land together.
+      const mine = teamOf(mySeat);
+      const won = e.result.finalScore[mine] > e.result.finalScore[mine === 0 ? 1 : 0];
+      playSfx(won ? 'win' : 'lose');
+      pattern(won ? 'dealMade' : 'dealFailed');
+      break;
+    }
+    default:
+      break;
   }
 }
 
@@ -68,7 +92,6 @@ export interface ProcessOptions {
   /** Mutated in place as declarations and bela calls come in. */
   tally: DealTally;
   mySeat: Seat;
-  haptics: boolean;
   /**
    * True when events are being flushed past (fast-forward, compression):
    * progression still applies — XP and coins must never be lost — but sounds
@@ -82,7 +105,6 @@ export function processEvents({
   profile,
   tally,
   mySeat,
-  haptics,
   silent = false,
 }: ProcessOptions): { profile: PlayerProfile; award: Award | null } {
   const sfx = (name: Sfx, opts?: PlayOptions) => {
@@ -90,21 +112,25 @@ export function processEvents({
     if (opts) playSfx(name, opts);
     else playSfx(name);
   };
-  const buzz = (style: Haptics.ImpactFeedbackStyle) => {
-    if (!haptics || silent) return;
-    void Haptics.impactAsync(style).catch(() => {});
+  // The haptics module carries the Settings gate; `silent` is this batch's.
+  const buzz = (name: Pattern) => {
+    if (!silent) pattern(name);
   };
 
   let next = profile;
   let earned: Award | null = null;
-  let matchEnded = false;
 
   for (const e of events) {
     switch (e.kind) {
       case 'dealStarted':
         tally.zvanja = 0;
         tally.bela = false;
+        // The riffle: twelve slides matched to the backs flying.
         sfx('deal');
+        break;
+
+      case 'matchStarted':
+        sfx('shuffle', { gain: 0.6 });
         break;
 
       case 'cardPlayed':
@@ -113,7 +139,7 @@ export function processEvents({
         // (see `landingSound`) — a face-down card in flight makes no noise.
         if (e.seat === mySeat) {
           sfx('play');
-          buzz(Haptics.ImpactFeedbackStyle.Light);
+          buzz('play');
         }
         break;
 
@@ -121,9 +147,12 @@ export function processEvents({
         const mine = teamOf(e.seat) === teamOf(mySeat);
         // The last trick closes the deal and carries its own ten points: its
         // own sound. An ordinary trick sweeps a shade lower when it is theirs.
+        // Under either, the whoosh of the four cards leaving: its 250 ms rise
+        // meets the sweep's hold, so its peak is the moment they move.
+        sfx('sweep', { gain: 0.8 });
         if (e.isLastTrick) sfx('lastTrick');
         else sfx('trick', { rate: mine ? 1 : 0.85 });
-        if (mine) buzz(Haptics.ImpactFeedbackStyle.Medium);
+        if (mine) buzz(e.isLastTrick ? 'lastTrickMine' : 'trickMine');
         break;
       }
 
@@ -139,23 +168,27 @@ export function processEvents({
 
       case 'bidCalled':
         sfx('call');
-        if (e.seat === mySeat) buzz(Haptics.ImpactFeedbackStyle.Light);
+        if (e.seat === mySeat) buzz('trumpMine');
         break;
 
       case 'doubled':
         sfx('kontra', { rate: e.multiplier === 4 ? 1.12 : 1 });
-        if (teamOf(e.seat) === teamOf(mySeat)) buzz(Haptics.ImpactFeedbackStyle.Medium);
+        buzz(teamOf(e.seat) === teamOf(mySeat) ? 'kontraUs' : 'kontraThem');
         break;
 
       case 'handsCompleted':
-        // The talon is dealt and animated; it had no sound at all.
-        sfx('deal');
+        // The talon: two slides.
+        sfx('talon');
         break;
 
-      case 'declared':
-        sfx('zvanje');
+      case 'declared': {
+        // The bigger the zvanje, the higher the call: 20 / 50 / 100 / 150+.
+        const sum = e.declarations.reduce((a, d) => a + d.value, 0);
+        const weight = sum >= 150 ? 4 : sum >= 100 ? 3 : sum >= 50 ? 2 : 1;
+        sfx('zvanje', { rate: 1 + (weight - 1) * 0.06 });
         if (e.seat === mySeat) tally.zvanja += e.declarations.length;
         break;
+      }
 
       case 'declarationsRevealed':
         // The cards going up; the row plays its own coming-down.
@@ -164,7 +197,10 @@ export function processEvents({
 
       case 'belaCalled':
         sfx('bela');
-        if (e.seat === mySeat) tally.bela = true;
+        if (e.seat === mySeat) {
+          tally.bela = true;
+          buzz('belaMine');
+        }
         break;
 
       case 'dealScored': {
@@ -173,7 +209,10 @@ export function processEvents({
         const won = e.result.finalScore[mine] > e.result.finalScore[theirs];
         // The win / lose stinger plays at the END of the beat, with the sheet
         // (see `landingSound`); a štiglja announces itself as the beat starts.
-        if (e.result.valatTeam !== null) sfx('stiglja');
+        if (e.result.valatTeam !== null) {
+          sfx('stiglja');
+          buzz(e.result.valatTeam === mine ? 'stigljaUs' : 'stigljaThem');
+        }
         const r = applyDealOutcome(next, {
           won,
           points: e.result.finalScore[mine],
@@ -189,11 +228,7 @@ export function processEvents({
       case 'matchOver': {
         const won = e.winner === teamOf(mySeat);
         sfx(won ? 'matchWon' : 'matchLost');
-        if (haptics && !silent) {
-          if (won) tripleBuzz();
-          else notify('error');
-        }
-        matchEnded = true;
+        buzz(won ? 'matchWon' : 'matchLost');
         const r = applyMatchOutcome(next, won);
         next = r.profile;
         earned = mergeAward(earned, r.award);
@@ -205,13 +240,8 @@ export function processEvents({
     }
   }
 
-  // The match fanfare already says "you earned this": neither the coin ding
-  // nor the level-up run plays under it (a rising arpeggio under the falling
-  // "lost" motif was the worst of it). The scored deal that precedes a match
-  // end, a beat earlier, still dings its own coins — that is a separate call.
-  if (earned && !matchEnded) {
-    if (earned.levelUp !== null) sfx('levelup');
-    else if (earned.coins > 0) sfx('coin');
-  }
+  // The coins sound one by one as they fly to the wallet, and a level-up
+  // plays with the badge — both from the screens, off the award, once the
+  // sheet is up. Nothing dings here, under the stinger or the fanfare.
   return { profile: next, award: earned };
 }

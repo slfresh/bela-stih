@@ -3,6 +3,8 @@ export const RATE: number;
 export const TARGET_DBFS: number;
 export const PEAK_CEIL_DBFS: number;
 export const TRIM: Record<string, number>;
+export const MIX: Record<string, { trim: number; gain: number; poly: number; varied: boolean }>;
+export function manifest(): Record<string, { gain: number; poly: number; varied: boolean }>;
 export const SFX: Record<string, () => Float32Array>;
 export function deClick(buf: Float32Array): Float32Array;
 export function loudestRms(buf: Float32Array): number;

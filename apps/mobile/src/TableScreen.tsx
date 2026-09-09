@@ -71,7 +71,7 @@ import { FeltGlow } from './table/FeltGlow';
 import { PlayingCard } from './PlayingCard';
 import { SuitPip } from './deck';
 import { playSfx } from './audio';
-import { buzz } from './haptics';
+import { pattern } from './haptics';
 import { Button } from './ui/Button';
 import { PressScale } from './ui/PressScale';
 import { radius, team, theme } from './theme';
@@ -620,7 +620,8 @@ export function TableScreen(props: TableScreenProps) {
       {myTurn && !settled && <TurnBeacon reduced={reduced} />}
       <Pressable
         onLongPress={() => {
-          playSfx('tap');
+          playSfx('hold');
+          pattern('longPress');
           setArranging((a) => !a);
         }}
         delayLongPress={500}
@@ -1139,8 +1140,8 @@ function Hand({
     if (!chosen) return;
     if (needsConfirm && armed !== id) {
       // Arming is a decision too; it used to happen in silence.
-      playSfx('tap');
-      buzz('select');
+      playSfx('arm');
+      pattern('arm');
       setArmed(id);
       return;
     }

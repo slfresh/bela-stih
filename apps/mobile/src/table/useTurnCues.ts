@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { buzz, doubleBuzz } from '../haptics';
+import { pattern } from '../haptics';
 import { playSfx } from '../audio';
 
 /**
@@ -79,11 +79,12 @@ export function useTurnCues({
     was.current = now;
 
     if (edge === 'declare') {
-      doubleBuzz('medium');
-      playSfx('zvanje');
+      // A question, not a call: its own rising motif, no longer the zvanje reuse.
+      pattern('call');
+      playSfx('callPrompt');
       onDeclareEdgeRef.current?.();
     } else if (edge === 'turn') {
-      buzz('select');
+      pattern('turn');
       playSfx('turn');
       onTurnEdgeRef.current?.();
     }
@@ -97,8 +98,9 @@ export function useTurnCues({
       const wait = deadline - Date.now() - before;
       if (wait <= 0) return null;
       return setTimeout(() => {
-        buzz('heavy');
-        // The same woodblock, a shade higher as the clock gets shorter.
+        // The same woodblock, a shade higher and a harder buzz as the clock
+        // gets shorter.
+        pattern(before <= 2_000 ? 'clock2' : 'clock5');
         playSfx('tick', { rate: before <= 2_000 ? 1.25 : 1 });
       }, wait);
     }).filter((t): t is ReturnType<typeof setTimeout> => t !== null);

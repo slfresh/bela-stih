@@ -6,12 +6,16 @@
  * few numbers away from being retuned. If we later want recorded foley, these
  * drop out and CC0 samples drop in under the same filenames.
  *
- * This module only renders; `make-sfx.mjs` writes the files. Kept apart so the
- * bank test can render the kit in-process and check its levels without
- * touching the assets folder.
+ * This module only renders; `make-sfx.mjs` writes the files and the manifest.
+ * Kept apart so the bank test can render the kit in-process and check its
+ * levels without touching the assets folder.
+ *
+ * v2: 44.1 kHz, real attacks, additive bells for the coins and chimes, layered
+ * paper for the cards, and one MIX table that both levels the files and tells
+ * the app how to play them (gain, polyphony, pitch variation).
  */
 
-export const RATE = 22050;
+export const RATE = 44100;
 
 /**
  * Every file is levelled so its loudest 100 ms sits at this RMS, then trimmed
@@ -24,34 +28,62 @@ export const TARGET_DBFS = -18;
 export const PEAK_CEIL_DBFS = -1;
 
 /**
- * Per-sound trim in dB, on top of the target: the mix. A card landing should be
- * a touch under a fanfare; a tap is a texture, not an event.
+ * The mix. `trim` (dB) shapes the file itself on top of the target; `gain`
+ * is what the app plays it at (0–1, times the master volume); `poly` is how
+ * many can sound at once; `varied` sounds get a little pitch jitter per play,
+ * the way real cards and coins never sound twice the same — melodic ones do
+ * not, and neither does the clock, whose two pitches must stay tellable apart.
  */
-export const TRIM = {
-  deal: -2,
-  play: 0,
-  trick: 0,
-  lastTrick: 0,
-  zvanje: -1,
-  bela: 0,
-  win: 1,
-  lose: -1,
-  matchWon: 2,
-  matchLost: -1,
-  levelup: 1,
-  coin: -3,
-  tap: -4,
-  pop: -3,
-  turn: 0,
-  tick: -2,
-  knock: -3,
-  call: -1,
-  stamp: -2,
-  kontra: 0,
-  reveal: -1,
-  revealDown: -3,
-  stiglja: 1,
+export const MIX = {
+  // the cards
+  shuffle: { trim: -3, gain: 0.7, poly: 1, varied: true },
+  deal: { trim: -2, gain: 0.8, poly: 2, varied: true },
+  fan: { trim: -4, gain: 0.6, poly: 1, varied: true },
+  talon: { trim: -3, gain: 0.7, poly: 1, varied: true },
+  sort: { trim: -4, gain: 0.5, poly: 1, varied: true },
+  play: { trim: 0, gain: 0.9, poly: 3, varied: true },
+  sweep: { trim: -1, gain: 0.8, poly: 1, varied: true },
+  stack: { trim: -3, gain: 0.7, poly: 2, varied: true },
+  trick: { trim: 0, gain: 0.9, poly: 1, varied: true },
+  lastTrick: { trim: 0, gain: 1, poly: 1, varied: true },
+  // the bidding
+  knock: { trim: -3, gain: 0.7, poly: 2, varied: true },
+  call: { trim: -1, gain: 0.85, poly: 1, varied: false },
+  stamp: { trim: -2, gain: 0.7, poly: 1, varied: true },
+  kontra: { trim: 0, gain: 0.9, poly: 1, varied: false },
+  // the zvanja
+  zvanje: { trim: -1, gain: 0.85, poly: 1, varied: false },
+  reveal: { trim: -1, gain: 0.8, poly: 1, varied: false },
+  revealDown: { trim: -3, gain: 0.6, poly: 1, varied: false },
+  bela: { trim: 0, gain: 0.9, poly: 1, varied: false },
+  // the reckoning
+  stiglja: { trim: 1, gain: 1, poly: 1, varied: false },
+  win: { trim: 1, gain: 1, poly: 1, varied: false },
+  lose: { trim: -1, gain: 0.8, poly: 1, varied: false },
+  matchWon: { trim: 2, gain: 1, poly: 1, varied: false },
+  matchLost: { trim: -1, gain: 0.85, poly: 1, varied: false },
+  tick: { trim: -2, gain: 0.7, poly: 3, varied: false },
+  coin: { trim: -3, gain: 0.6, poly: 4, varied: true },
+  levelup: { trim: 1, gain: 1, poly: 1, varied: false },
+  // cues
+  turn: { trim: 0, gain: 0.9, poly: 1, varied: false },
+  callPrompt: { trim: 0, gain: 0.9, poly: 1, varied: false },
+  settle: { trim: -4, gain: 0.6, poly: 1, varied: true },
+  // the interface
+  arm: { trim: -4, gain: 0.6, poly: 2, varied: true },
+  tap: { trim: -4, gain: 0.5, poly: 2, varied: true },
+  press: { trim: -5, gain: 0.4, poly: 2, varied: true },
+  hold: { trim: -4, gain: 0.6, poly: 1, varied: false },
+  pop: { trim: -3, gain: 0.6, poly: 2, varied: true },
+  purchase: { trim: 0, gain: 0.9, poly: 1, varied: false },
+  denied: { trim: -2, gain: 0.7, poly: 1, varied: false },
+  seatJoin: { trim: -2, gain: 0.7, poly: 1, varied: false },
+  seatLeave: { trim: -3, gain: 0.6, poly: 1, varied: false },
+  reconnected: { trim: -1, gain: 0.8, poly: 1, varied: false },
 };
+
+/** The trims alone, for the leveller and the log. */
+export const TRIM = Object.fromEntries(Object.entries(MIX).map(([k, v]) => [k, v.trim]));
 
 // --- tiny synth -------------------------------------------------------------
 
@@ -81,19 +113,24 @@ function random() {
 const decay = (i, len, power = 4) => Math.pow(1 - i / len, power);
 
 /**
- * Decay with a real attack in front of it: a linear ramp over `attack` seconds.
- * Every sound used to start at full amplitude on sample one, which is a click
- * however short the de-click fade — and it made the chimes sound like taps.
+ * Attack, hold, decay: a linear ramp over `attack` seconds, flat for `hold`,
+ * then the exponential tail. Every sound used to start at full amplitude on
+ * sample one, which is a click however short the de-click fade — and it made
+ * the chimes sound like taps.
  */
-function env(i, len, { power = 4, attack = 0 } = {}) {
+function env(i, len, { power = 4, attack = 0, hold = 0 } = {}) {
   const a = n(attack);
+  const h = n(hold);
   const ramp = a > 0 ? Math.min(1, i / a) : 1;
-  return ramp * decay(i, len, power);
+  if (i < a + h) return ramp;
+  const j = i - a - h;
+  const rest = Math.max(1, len - a - h);
+  return decay(Math.min(j, rest), rest, power);
 }
 
 /** Short fade at both ends so nothing clicks on playback. */
 export function deClick(buf) {
-  const edge = Math.min(64, Math.floor(buf.length / 8));
+  const edge = Math.min(128, Math.floor(buf.length / 8));
   for (let i = 0; i < edge; i++) {
     buf[i] *= i / edge;
     buf[buf.length - 1 - i] *= i / edge;
@@ -101,27 +138,61 @@ export function deClick(buf) {
   return buf;
 }
 
-function tone(freq, seconds, { power = 4, gain = 0.5, harmonic = 0.35, attack = 0 } = {}) {
+function tone(freq, seconds, { power = 4, gain = 0.5, harmonic = 0.35, attack = 0, hold = 0 } = {}) {
   const len = n(seconds);
   const out = new Float32Array(len);
   for (let i = 0; i < len; i++) {
     const t = i / RATE;
-    const e = env(i, len, { power, attack });
+    const e = env(i, len, { power, attack, hold });
     out[i] =
       gain * e * (Math.sin(2 * Math.PI * freq * t) + harmonic * Math.sin(4 * Math.PI * freq * t));
   }
   return out;
 }
 
+/**
+ * Additive: a fundamental and its partials, each with its own weight and
+ * decay — what makes a bell a bell and a coin a coin. Ratios: a bell
+ * [1, 2.76, 5.4, 8.9]; struck metal [1, 1.5, 2.3, 3.7].
+ */
+function partials(freq, list, seconds, { gain = 0.4, attack = 0.003 } = {}) {
+  const len = n(seconds);
+  const out = new Float32Array(len);
+  const a = n(attack);
+  for (let i = 0; i < len; i++) {
+    const t = i / RATE;
+    const ramp = a > 0 ? Math.min(1, i / a) : 1;
+    let v = 0;
+    for (const p of list) {
+      v += p.amp * Math.exp(-t * p.decay) * Math.sin(2 * Math.PI * freq * p.ratio * t);
+    }
+    out[i] = gain * ramp * v;
+  }
+  return out;
+}
+
+const BELL = [
+  { ratio: 1, amp: 1, decay: 5 },
+  { ratio: 2.76, amp: 0.55, decay: 9 },
+  { ratio: 5.4, amp: 0.3, decay: 14 },
+  { ratio: 8.9, amp: 0.12, decay: 22 },
+];
+const METAL = [
+  { ratio: 1, amp: 1, decay: 7 },
+  { ratio: 1.5, amp: 0.6, decay: 11 },
+  { ratio: 2.3, amp: 0.35, decay: 16 },
+  { ratio: 3.7, amp: 0.15, decay: 24 },
+];
+
 /** Filtered noise — the basis of every paper/card sound. */
-function noise(seconds, { power = 3, gain = 0.4, smooth = 0.55 } = {}) {
+function noise(seconds, { power = 3, gain = 0.4, smooth = 0.55, attack = 0 } = {}) {
   const len = n(seconds);
   const out = new Float32Array(len);
   let last = 0;
   for (let i = 0; i < len; i++) {
     const white = random() * 2 - 1;
     last = last * smooth + white * (1 - smooth); // one-pole low pass
-    out[i] = gain * decay(i, len, power) * last;
+    out[i] = gain * env(i, len, { power, attack }) * last;
   }
   return out;
 }
@@ -131,7 +202,7 @@ function noise(seconds, { power = 3, gain = 0.4, smooth = 0.55 } = {}) {
  * between the two cutoffs. `lo`/`hi` are the smoothing factors, not hertz —
  * hi closer to 1 keeps less of the top.
  */
-function bandNoise(seconds, { power = 6, gain = 0.4, lo = 0.9, hi = 0.4 } = {}) {
+function bandNoise(seconds, { power = 6, gain = 0.4, lo = 0.9, hi = 0.4, attack = 0 } = {}) {
   const len = n(seconds);
   const out = new Float32Array(len);
   let fast = 0;
@@ -140,7 +211,7 @@ function bandNoise(seconds, { power = 6, gain = 0.4, lo = 0.9, hi = 0.4 } = {}) 
     const white = random() * 2 - 1;
     fast = fast * hi + white * (1 - hi);
     slow = slow * lo + fast * (1 - lo);
-    out[i] = gain * decay(i, len, power) * (fast - slow);
+    out[i] = gain * env(i, len, { power, attack }) * (fast - slow);
   }
   return out;
 }
@@ -161,21 +232,39 @@ function glide(f0, f1, seconds, { power = 5, gain = 0.4, harmonic = 0.2 } = {}) 
 
 /**
  * A whoosh: noise whose low-pass opens and closes again, under a hump
- * envelope — air moving, not paper falling.
+ * envelope — air moving, not paper falling. `rise` is where the hump peaks
+ * (0–1): a sweep rises slowly so its loudest moment meets the cards moving.
  */
-function whoosh(seconds, { gain = 0.5 } = {}) {
+function whoosh(seconds, { gain = 0.5, rise = 0.35 } = {}) {
   const len = n(seconds);
   const out = new Float32Array(len);
   let last = 0;
   for (let i = 0; i < len; i++) {
     const k = i / len;
-    const hump = Math.sin(Math.PI * Math.min(1, k * 1.15)) ** 1.5; // fast in, slow out
-    const smooth = 0.92 - 0.55 * Math.sin(Math.PI * k); // filter opens mid-flight
+    const hump =
+      k < rise ? Math.sin((Math.PI / 2) * (k / rise)) : Math.cos((Math.PI / 2) * ((k - rise) / (1 - rise)));
+    const smooth = 0.95 - 0.6 * Math.sin(Math.PI * k); // filter opens mid-flight
     const white = random() * 2 - 1;
     last = last * smooth + white * (1 - smooth);
-    out[i] = gain * hump * last;
+    out[i] = gain * hump * hump * last;
   }
   return out;
+}
+
+/** A paper slide: three noise bands under a soft body, the way a card actually sounds. */
+function slide(seconds, { gain = 0.5, body = 190 } = {}) {
+  return mix(
+    bandNoise(seconds, { gain: gain * 0.7, power: 3, lo: 0.97, hi: 0.5 }),
+    bandNoise(seconds * 0.7, { gain: gain * 0.5, power: 4, lo: 0.85, hi: 0.2 }),
+    noise(seconds * 0.5, { gain: gain * 0.35, power: 5, smooth: 0.8 }),
+    tone(body, seconds * 0.8, { gain: gain * 0.4, power: 6, harmonic: 0.1 }),
+  );
+}
+
+/** Gentle saturation on the hits, so a thud has a little weight without clipping. */
+function softClip(buf, drive = 1.6) {
+  for (let i = 0; i < buf.length; i++) buf[i] = Math.tanh(buf[i] * drive) / Math.tanh(drive);
+  return buf;
 }
 
 function silence(seconds) {
@@ -203,6 +292,11 @@ function mix(...parts) {
 /** A little run of notes, for wins and level-ups. */
 function arpeggio(freqs, step, dur, opts) {
   return mix(...freqs.map((f, i) => concat(silence(i * step), tone(f, dur, opts))));
+}
+
+/** A run of the same sound, `count` times, `step` apart, each a shade different. */
+function run(count, step, make) {
+  return mix(...Array.from({ length: count }, (_, i) => concat(silence(i * step), make(i))));
 }
 
 // --- levelling --------------------------------------------------------------
@@ -289,42 +383,111 @@ export function fromWav(buf) {
 // --- the kit ----------------------------------------------------------------
 
 export const SFX = {
-  // the deal: a riffle — a quick run of card slides, each a shade different
-  deal: () =>
+  // ---- the cards
+  // the pack being squared and riffled once before the deal
+  shuffle: () =>
     mix(
-      ...[0, 0.045, 0.085, 0.13, 0.18].map((at, i) =>
-        concat(
-          silence(at),
-          noise(0.09, { power: 3, gain: 0.34 - i * 0.03, smooth: 0.62 + i * 0.04 }),
-        ),
+      run(7, 0.028, (i) => bandNoise(0.05, { gain: 0.3 - i * 0.02, power: 4, lo: 0.9, hi: 0.35 })),
+      concat(
+        silence(0.22),
+        run(6, 0.03, (i) => bandNoise(0.05, { gain: 0.28 - i * 0.02, power: 4, lo: 0.9, hi: 0.4 })),
       ),
+      tone(140, 0.4, { gain: 0.15, power: 5, harmonic: 0.1 }),
     ),
 
-  // a card landing on the table: slide plus a soft body thump
-  play: () =>
-    mix(noise(0.11, { power: 3.5, gain: 0.55, smooth: 0.6 }), tone(190, 0.09, { gain: 0.22, power: 6 })),
+  // the deal: twelve slides, 75 ms apart, matched to the backs flying
+  deal: () => run(12, 0.075, (i) => slide(0.1, { gain: 0.42 - (i % 3) * 0.05 })),
 
-  // the trick being swept up: a whoosh with a soft landing thump at the end
+  // my six cards fanning open at once
+  fan: () =>
+    mix(run(6, 0.018, () => slide(0.07, { gain: 0.3 })), tone(240, 0.12, { gain: 0.15, power: 7 })),
+
+  // the talon: two slides, close together
+  talon: () => run(2, 0.11, () => slide(0.1, { gain: 0.45 })),
+
+  // the fan re-sorting: a quick flick of paper
+  sort: () => run(4, 0.022, () => slide(0.05, { gain: 0.28 })),
+
+  // a card landing on the table: paper and a soft body
+  play: () => mix(slide(0.11, { gain: 0.6 }), tone(190, 0.09, { gain: 0.25, power: 6 })),
+
+  // the four cards sweeping to the winner: air rising to meet them
+  sweep: () => whoosh(0.4, { gain: 0.5, rise: 0.55 }),
+
+  // the pile landing at the puck
+  stack: () =>
+    softClip(mix(tone(120, 0.1, { gain: 0.5, power: 6, harmonic: 0.2 }), slide(0.05, { gain: 0.3 }))),
+
+  // an ordinary trick: the sweep with a soft landing at the end
   trick: () =>
     mix(
-      whoosh(0.32, { gain: 0.5 }),
-      concat(silence(0.22), tone(240, 0.1, { gain: 0.22, power: 6 })),
+      whoosh(0.34, { gain: 0.5, rise: 0.45 }),
+      concat(silence(0.24), tone(240, 0.1, { gain: 0.22, power: 6 })),
     ),
 
   // the last trick: the same sweep, and the ten points it carries ring on top
   lastTrick: () =>
     mix(
-      whoosh(0.32, { gain: 0.5 }),
-      concat(silence(0.22), tone(240, 0.1, { gain: 0.22, power: 6 })),
-      concat(silence(0.2), tone(1047, 0.22, { gain: 0.18, power: 5, harmonic: 0.4, attack: 0.006 })),
-      concat(silence(0.3), tone(1319, 0.28, { gain: 0.16, power: 4, harmonic: 0.4, attack: 0.006 })),
+      whoosh(0.34, { gain: 0.5, rise: 0.45 }),
+      concat(silence(0.24), tone(240, 0.1, { gain: 0.22, power: 6 })),
+      concat(silence(0.2), partials(1047, BELL, 0.3, { gain: 0.16 })),
+      concat(silence(0.3), partials(1319, BELL, 0.35, { gain: 0.14 })),
     ),
 
-  // announcing zvanja — a polite two-note call
+  // ---- the bidding
+  // a pass: knuckles on the table — a damped low body and a short burst
+  knock: () =>
+    softClip(
+      mix(
+        tone(190, 0.11, { gain: 0.5, power: 7, harmonic: 0.15 }),
+        bandNoise(0.03, { gain: 0.35, power: 6, lo: 0.7, hi: 0.2 }),
+      ),
+    ),
+
+  // calling trump: a marimba pair, warmer and lower than the zvanja call
+  call: () => arpeggio([392, 523], 0.11, 0.22, { gain: 0.3, power: 6, harmonic: 0.15, attack: 0.003 }),
+
+  // the pip landing on the plaque: a soft thud with a little ring in it
+  stamp: () =>
+    softClip(
+      mix(
+        tone(150, 0.08, { gain: 0.45, power: 6, harmonic: 0.1 }),
+        concat(silence(0.01), partials(1568, METAL, 0.1, { gain: 0.1 })),
+      ),
+    ),
+
+  // kontra: two falling notes with a bit of brass in them — a challenge
+  kontra: () => arpeggio([440, 330], 0.13, 0.28, { gain: 0.3, power: 4, harmonic: 0.6, attack: 0.008 }),
+
+  // ---- the zvanja
+  // announcing zvanja — a polite two-note call (the weight is played by pitch)
   zvanje: () => arpeggio([587, 784], 0.09, 0.2, { gain: 0.3, power: 5, attack: 0.004 }),
 
-  // bela — brighter and prouder than zvanja
-  bela: () => arpeggio([659, 880, 1175], 0.075, 0.24, { gain: 0.32, power: 5, attack: 0.004 }),
+  // the zvanja going up: a quick bright shimmer, four notes climbing
+  reveal: () =>
+    arpeggio([784, 988, 1175, 1568], 0.055, 0.3, { gain: 0.22, power: 4, harmonic: 0.4, attack: 0.004 }),
+
+  // ...and coming down: two soft notes falling, no fuss
+  revealDown: () => arpeggio([988, 784], 0.1, 0.22, { gain: 0.22, power: 5, harmonic: 0.3, attack: 0.006 }),
+
+  // bela — a real little bell, brighter and prouder than zvanja
+  bela: () =>
+    mix(
+      partials(880, BELL, 0.45, { gain: 0.32 }),
+      concat(silence(0.09), partials(1175, BELL, 0.4, { gain: 0.24 })),
+    ),
+
+  // ---- the reckoning
+  // štiglja — every trick to one side: a low hit, then a fanfare climbing out of it
+  stiglja: () =>
+    mix(
+      tone(98, 0.5, { gain: 0.32, power: 3, harmonic: 0.5, attack: 0.004 }),
+      bandNoise(0.06, { gain: 0.3, power: 5, lo: 0.8, hi: 0.3 }),
+      concat(
+        silence(0.12),
+        arpeggio([392, 523, 659, 784], 0.075, 0.5, { gain: 0.28, power: 3, harmonic: 0.5, attack: 0.005 }),
+      ),
+    ),
 
   // taking the deal: the run, then the chord together — a proper fanfare
   win: () =>
@@ -341,11 +504,9 @@ export const SFX = {
     ),
 
   // losing it — the same shape, falling
-  lose: () =>
-    arpeggio([440, 392, 294], 0.1, 0.3, { gain: 0.26, power: 4, harmonic: 0.2, attack: 0.006 }),
+  lose: () => arpeggio([440, 392, 294], 0.1, 0.3, { gain: 0.26, power: 4, harmonic: 0.2, attack: 0.006 }),
 
-  // the match: a longer run and a held chord — the deal fanfare's big brother,
-  // so the last deal and the match are told apart by ear
+  // the match: a longer run and a held chord — the deal fanfare's big brother
   matchWon: () =>
     mix(
       arpeggio([523, 659, 784, 1047], 0.11, 0.36, { gain: 0.26, power: 4, attack: 0.005 }),
@@ -367,25 +528,47 @@ export const SFX = {
       concat(silence(0.3), tone(196, 0.7, { gain: 0.16, power: 2.5, harmonic: 0.1, attack: 0.03 })),
     ),
 
+  // the tally being written: a woodblock. Also the clock, a shade higher.
+  tick: () =>
+    mix(
+      bandNoise(0.05, { gain: 0.5, power: 5, lo: 0.85, hi: 0.35 }),
+      tone(1200, 0.04, { gain: 0.24, power: 9, harmonic: 0.1 }),
+    ),
+
+  // one coin landing: a small bright ding — the cascade plays one per coin
+  coin: () => partials(2093, METAL, 0.18, { gain: 0.3, attack: 0.002 }),
+
   // a level gained
   levelup: () =>
     arpeggio([523, 784, 1047, 1319, 1568], 0.07, 0.42, { gain: 0.28, power: 3.5, attack: 0.004 }),
 
-  // coins landing: a little cascade of dings, each one lighter
-  coin: () =>
+  // ---- cues
+  // your turn: a warm two-tone chime, soft attack, the fifth arriving just after the root
+  turn: () =>
     mix(
-      ...[
-        [1047, 0],
-        [1319, 0.05],
-        [1568, 0.105],
-        [1319, 0.165],
-      ].map(([f, at], i) =>
-        concat(silence(at), tone(f, 0.14, { gain: 0.24 - i * 0.04, power: 6, harmonic: 0.5 })),
-      ),
+      tone(523, 0.4, { gain: 0.3, power: 3, harmonic: 0.3, attack: 0.012 }),
+      concat(silence(0.07), tone(784, 0.36, { gain: 0.22, power: 3, harmonic: 0.3, attack: 0.012 })),
     ),
 
+  // "anything to call?": a rising question — three notes up, the last held
+  callPrompt: () =>
+    arpeggio([659, 784, 988], 0.08, 0.3, { gain: 0.26, power: 4, harmonic: 0.25, attack: 0.008 }),
+
+  // the director skipping ahead: a short settle of air
+  settle: () => whoosh(0.18, { gain: 0.35, rise: 0.3 }),
+
+  // ---- the interface
+  // arming a card: a softer, lower click than a button
+  arm: () => tone(660, 0.04, { gain: 0.3, power: 8, harmonic: 0.15 }),
+
   // ordinary button
-  tap: () => mix(tone(880, 0.045, { gain: 0.3, power: 8, harmonic: 0.2 })),
+  tap: () => tone(880, 0.045, { gain: 0.3, power: 8, harmonic: 0.2 }),
+
+  // finger down on a button: barely there
+  press: () => tone(520, 0.025, { gain: 0.25, power: 9, harmonic: 0.1 }),
+
+  // a long press taking hold: a low swell
+  hold: () => tone(196, 0.24, { gain: 0.3, power: 2, harmonic: 0.3, attack: 0.12 }),
 
   // an emote arriving: a cartoon bubble pop
   pop: () =>
@@ -394,71 +577,40 @@ export const SFX = {
       noise(0.03, { power: 6, gain: 0.2, smooth: 0.3 }),
     ),
 
-  // your turn: a warm two-tone chime, soft attack, the fifth arriving just
-  // after the root — unhurried, unlike every call around it. It used to be
-  // the emote pop, so a bubble and a turn were the same sound.
-  turn: () =>
+  // bought: a coin and a little confirming chord
+  purchase: () =>
     mix(
-      tone(523, 0.4, { gain: 0.3, power: 3, harmonic: 0.3, attack: 0.012 }),
-      concat(silence(0.07), tone(784, 0.36, { gain: 0.22, power: 3, harmonic: 0.3, attack: 0.012 })),
-    ),
-
-  // the clock: a woodblock — a burst of mid-band noise with a short body. Not
-  // the button tap, which it used to share; the two mean opposite things.
-  tick: () =>
-    mix(
-      bandNoise(0.05, { gain: 0.5, power: 5, lo: 0.85, hi: 0.35 }),
-      tone(1200, 0.04, { gain: 0.24, power: 9, harmonic: 0.1 }),
-    ),
-
-  // a pass: knuckles on the table — a damped low body and a short burst
-  knock: () =>
-    mix(
-      tone(190, 0.11, { gain: 0.5, power: 7, harmonic: 0.15 }),
-      bandNoise(0.03, { gain: 0.35, power: 6, lo: 0.7, hi: 0.2 }),
-    ),
-
-  // calling trump: a marimba pair, warmer and lower than the zvanja call
-  call: () =>
-    arpeggio([392, 523], 0.11, 0.22, { gain: 0.3, power: 6, harmonic: 0.15, attack: 0.003 }),
-
-  // the pip landing on the plaque: a soft thud with a little ring in it
-  stamp: () =>
-    mix(
-      tone(150, 0.08, { gain: 0.45, power: 6, harmonic: 0.1 }),
-      concat(silence(0.01), tone(1568, 0.09, { gain: 0.12, power: 8, harmonic: 0.3 })),
-    ),
-
-  // kontra: two falling notes with a bit of brass in them — a challenge
-  kontra: () =>
-    arpeggio([440, 330], 0.13, 0.28, { gain: 0.3, power: 4, harmonic: 0.6, attack: 0.008 }),
-
-  // the zvanja going up: a quick bright shimmer, four notes climbing
-  reveal: () =>
-    arpeggio([784, 988, 1175, 1568], 0.055, 0.3, { gain: 0.22, power: 4, harmonic: 0.4, attack: 0.004 }),
-
-  // ...and coming down: two soft notes falling, no fuss
-  revealDown: () =>
-    arpeggio([988, 784], 0.1, 0.22, { gain: 0.22, power: 5, harmonic: 0.3, attack: 0.006 }),
-
-  // štiglja — every trick to one side: a low hit, then a fanfare climbing out of it
-  stiglja: () =>
-    mix(
-      tone(98, 0.5, { gain: 0.32, power: 3, harmonic: 0.5, attack: 0.004 }),
-      bandNoise(0.06, { gain: 0.3, power: 5, lo: 0.8, hi: 0.3 }),
+      partials(2093, METAL, 0.2, { gain: 0.24 }),
       concat(
-        silence(0.12),
-        arpeggio([392, 523, 659, 784], 0.075, 0.5, { gain: 0.28, power: 3, harmonic: 0.5, attack: 0.005 }),
+        silence(0.08),
+        mix(
+          tone(784, 0.35, { gain: 0.18, power: 3, attack: 0.006 }),
+          tone(1175, 0.35, { gain: 0.14, power: 3, attack: 0.006 }),
+        ),
       ),
     ),
+
+  // refused: a short low buzz, no drama
+  denied: () => tone(140, 0.14, { gain: 0.35, power: 3, harmonic: 0.8, attack: 0.004, hold: 0.06 }),
+
+  // someone sat down / left / came back
+  seatJoin: () => arpeggio([659, 880], 0.09, 0.22, { gain: 0.26, power: 5, attack: 0.005 }),
+  seatLeave: () => arpeggio([880, 659], 0.09, 0.22, { gain: 0.24, power: 5, attack: 0.005 }),
+  reconnected: () => arpeggio([659, 784, 1047], 0.07, 0.28, { gain: 0.26, power: 4, attack: 0.005 }),
 };
 
-/**
- * Render one sound, de-clicked and then levelled: the exact samples that go in
- * the file. The fades come first — on a 45 ms tap they take a real bite out of
- * the energy, and levelling afterwards is what makes the measurement honest.
- */
+/** Render one sound, de-clicked and then levelled: the exact samples that go in the file. */
 export function render(name) {
   seed(name);
   return level(deClick(SFX[name]()), TRIM[name] ?? 0);
+}
+
+/** What the app needs to know about each file: how to play it. */
+export function manifest() {
+  return Object.fromEntries(
+    Object.keys(SFX).map((name) => {
+      const { gain, poly, varied } = MIX[name];
+      return [name, { gain, poly, varied }];
+    }),
+  );
 }

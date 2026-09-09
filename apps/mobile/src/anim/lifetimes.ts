@@ -111,6 +111,27 @@ export function coinsLandedMs(count: number): number {
   return count * COIN_STAGGER_MS + COIN_FLY_MS;
 }
 
+/**
+ * One ding and one soft tap per coin, as each lands: timers the caller clears
+ * on unmount. The sound and haptic modules are reached lazily so this file
+ * stays free of them for the tests.
+ */
+export function coinDingTimers(count: number, delayMs: number): ReturnType<typeof setTimeout>[] {
+  const timers: ReturnType<typeof setTimeout>[] = [];
+  for (let i = 0; i < count; i++) {
+    timers.push(
+      setTimeout(
+        () => {
+          void import('../audio').then((m) => m.playSfx('coin', { rate: 1 + i * 0.02 }));
+          void import('../haptics').then((m) => m.pattern('coinLand'));
+        },
+        delayMs + COIN_FLY_MS + i * COIN_STAGGER_MS,
+      ),
+    );
+  }
+  return timers;
+}
+
 export const CONFETTI_MS = 2100;
 /** A radial burst: out in the first third, then falling and fading. */
 export const BURST_MS = 1400;

@@ -12,6 +12,7 @@ import { Director, timingsFor, type MotionPolicy } from '../anim/director';
 import { FxBus } from '../anim/FxBus';
 import { makeFxSpawner, spawnEmote } from '../table/fx';
 import { useMotionPolicy } from '../anim/useMotionPolicy';
+import { pattern } from '../haptics';
 import { cueFor, type TableCue } from '../table/cues';
 import { playSfx } from '../audio';
 import { emptyTally, landingSound, processEvents } from '../feedback';
@@ -127,6 +128,7 @@ export function useNetGame(settings: Settings) {
   const [view, setView] = useState<PublicView | null>(null);
   const [idle, setIdle] = useState(true);
   const [seats, setSeats] = useState<SeatInfo[]>([]);
+  const seatsRef = useRef<SeatInfo[]>([]);
   const [hard, setHard] = useState(false);
   const [hostSeat, setHostSeat] = useState<Seat | null>(null);
   const [series, setSeries] = useState<[number, number]>([0, 0]);
@@ -162,8 +164,6 @@ export function useNetGame(settings: Settings) {
     [anchors, fxBus, lang],
   );
 
-  const hapticsRef = useRef(settings.haptics);
-  hapticsRef.current = settings.haptics;
   // The director is built inside attach() once; it reaches the spawner by ref.
   const fxRef = useRef(fx);
   fxRef.current = fx;
@@ -183,7 +183,6 @@ export function useNetGame(settings: Settings) {
         profile: profileRef.current,
         tally: tally.current,
         mySeat: mine,
-        haptics: hapticsRef.current,
         silent: flushed,
       });
       if (r.profile !== profileRef.current) {
@@ -265,6 +264,9 @@ export function useNetGame(settings: Settings) {
               if (mine !== null) landingSound(e, mine);
               fxRef.current.end(e);
             },
+            onSkip: (n) => {
+              if (n >= 2) playSfx('settle');
+            },
             onIdle: setIdle,
             // Anchors re-measure as each batch starts; the table bumps them too
             // whenever a row around the felt comes or goes.
@@ -277,6 +279,22 @@ export function useNetGame(settings: Settings) {
     });
 
     room.onMessage('room', (msg: RoomMessage) => {
+      // Someone sat down, or left: a note each way (bots and the first
+      // message excepted).
+      const before = seatsRef.current;
+      if (before.length === msg.seats.length) {
+        for (let i = 0; i < msg.seats.length; i++) {
+          const was = before[i]!;
+          const now = msg.seats[i]!;
+          if (i === mySeatRef.current) continue;
+          if (!was.bot && now.bot) playSfx('seatLeave');
+          else if (was.bot && !now.bot) {
+            playSfx('seatJoin');
+            pattern('seatJoin');
+          }
+        }
+      }
+      seatsRef.current = msg.seats;
       setSeats(msg.seats);
       setHard(msg.hard === true);
       setHostSeat(msg.hostSeat ?? null);
@@ -308,6 +326,8 @@ export function useNetGame(settings: Settings) {
 
     room.onMessage('error', (msg: { reason: string }) => {
       // The server refused a move — usually a stale tap. Not fatal.
+      playSfx('denied');
+      pattern('error');
       setError(msg.reason);
     });
 
@@ -321,6 +341,7 @@ export function useNetGame(settings: Settings) {
       roomRef.current = null;
       directorRef.current?.fastForward();
       setStatus('disconnected');
+      pattern('disconnect');
       setError(langRef.current.s.ui.disconnectedWithCode(code));
       // Our seat is being played by a bot from here; the server will hold it
       // for a minute, so spend that minute trying to get back into it.
@@ -381,6 +402,7 @@ export function useNetGame(settings: Settings) {
           directorRef.current?.dispose();
           directorRef.current = null;
           attach(room);
+          playSfx('reconnected');
           setError(null);
           return;
         } catch {

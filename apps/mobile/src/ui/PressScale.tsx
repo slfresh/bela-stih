@@ -1,7 +1,7 @@
 import { Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 import { playSfx, type Sfx } from '../audio';
-import { buzz, type Buzz } from '../haptics';
+import { pattern, type Pattern } from '../haptics';
 
 /**
  * A pressable that feels pressed: it gives a little under the finger (scale
@@ -19,7 +19,8 @@ export function PressScale({
   children,
   style,
   sound = 'tap',
-  haptic = 'select',
+  haptic = 'tap',
+  pressSound = null,
   scaleTo = 0.97,
   onPress,
   ...rest
@@ -27,7 +28,9 @@ export function PressScale({
   children?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   sound?: Sfx | null;
-  haptic?: Buzz | null;
+  haptic?: Pattern | null;
+  /** The down-click, for a button that should feel mechanical; the release still makes `sound`. */
+  pressSound?: Sfx | null;
   /** How far it gives: 0.97 for a button, a touch less for a big tile. */
   scaleTo?: number;
 }) {
@@ -41,6 +44,7 @@ export function PressScale({
       onPressIn={(e) => {
         s.value = withTiming(scaleTo, { duration: 80 });
         o.value = withTiming(0.88, { duration: 80 });
+        if (pressSound) playSfx(pressSound);
         rest.onPressIn?.(e);
       }}
       onPressOut={(e) => {
@@ -50,7 +54,7 @@ export function PressScale({
       }}
       onPress={(e) => {
         if (sound) playSfx(sound);
-        if (haptic) buzz(haptic);
+        if (haptic) pattern(haptic);
         onPress?.(e);
       }}
       style={[style, anim]}

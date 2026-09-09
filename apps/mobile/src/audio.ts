@@ -1,115 +1,65 @@
+import { Platform } from 'react-native';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
+import manifest from '../assets/sfx/manifest.json';
 
 /**
  * The sound bank.
  *
- * Players are created once, lazily, and reused: these are tiny one-shot effects
- * fired many times a deal, so allocating a player per play would churn native
- * objects for no reason. Everything is fire-and-forget — a failed sound must
- * never interrupt a card being played.
+ * Every sound has a small pool of players (its `poly` in the manifest that
+ * `scripts/make-sfx.mjs` writes next to the files): a play picks an idle one,
+ * so two cards 140 ms apart both sound, and a coin cascade overlaps. Players
+ * are created once and reused. Everything is fire-and-forget — a failed sound
+ * must never interrupt a card being played.
+ *
+ * The manifest is the source of truth for what exists and how loud it plays;
+ * the `require` table below has to list the same files by hand, because Metro
+ * bundles an asset only for a literal path — a test keeps the two in step.
  */
 
-export type Sfx =
-  | 'deal'
-  | 'play'
-  | 'trick'
-  | 'lastTrick'
-  | 'zvanje'
-  | 'bela'
-  | 'win'
-  | 'lose'
-  | 'matchWon'
-  | 'matchLost'
-  | 'levelup'
-  | 'coin'
-  | 'tap'
-  | 'pop'
-  | 'turn'
-  | 'tick'
-  | 'knock'
-  | 'call'
-  | 'stamp'
-  | 'kontra'
-  | 'reveal'
-  | 'revealDown'
-  | 'stiglja';
+export type Sfx = keyof typeof manifest;
 
 // require() rather than import so Metro bundles the asset and hands back a module id.
 const SOURCES: Record<Sfx, number> = {
+  shuffle: require('../assets/sfx/shuffle.wav'),
   deal: require('../assets/sfx/deal.wav'),
+  fan: require('../assets/sfx/fan.wav'),
+  talon: require('../assets/sfx/talon.wav'),
+  sort: require('../assets/sfx/sort.wav'),
   play: require('../assets/sfx/play.wav'),
+  sweep: require('../assets/sfx/sweep.wav'),
+  stack: require('../assets/sfx/stack.wav'),
   trick: require('../assets/sfx/trick.wav'),
   lastTrick: require('../assets/sfx/lastTrick.wav'),
-  zvanje: require('../assets/sfx/zvanje.wav'),
-  bela: require('../assets/sfx/bela.wav'),
-  win: require('../assets/sfx/win.wav'),
-  lose: require('../assets/sfx/lose.wav'),
-  matchWon: require('../assets/sfx/matchWon.wav'),
-  matchLost: require('../assets/sfx/matchLost.wav'),
-  levelup: require('../assets/sfx/levelup.wav'),
-  coin: require('../assets/sfx/coin.wav'),
-  tap: require('../assets/sfx/tap.wav'),
-  pop: require('../assets/sfx/pop.wav'),
-  turn: require('../assets/sfx/turn.wav'),
-  tick: require('../assets/sfx/tick.wav'),
   knock: require('../assets/sfx/knock.wav'),
   call: require('../assets/sfx/call.wav'),
   stamp: require('../assets/sfx/stamp.wav'),
   kontra: require('../assets/sfx/kontra.wav'),
+  zvanje: require('../assets/sfx/zvanje.wav'),
   reveal: require('../assets/sfx/reveal.wav'),
   revealDown: require('../assets/sfx/revealDown.wav'),
+  bela: require('../assets/sfx/bela.wav'),
   stiglja: require('../assets/sfx/stiglja.wav'),
+  win: require('../assets/sfx/win.wav'),
+  lose: require('../assets/sfx/lose.wav'),
+  matchWon: require('../assets/sfx/matchWon.wav'),
+  matchLost: require('../assets/sfx/matchLost.wav'),
+  tick: require('../assets/sfx/tick.wav'),
+  coin: require('../assets/sfx/coin.wav'),
+  levelup: require('../assets/sfx/levelup.wav'),
+  turn: require('../assets/sfx/turn.wav'),
+  callPrompt: require('../assets/sfx/callPrompt.wav'),
+  settle: require('../assets/sfx/settle.wav'),
+  arm: require('../assets/sfx/arm.wav'),
+  tap: require('../assets/sfx/tap.wav'),
+  press: require('../assets/sfx/press.wav'),
+  hold: require('../assets/sfx/hold.wav'),
+  pop: require('../assets/sfx/pop.wav'),
+  purchase: require('../assets/sfx/purchase.wav'),
+  denied: require('../assets/sfx/denied.wav'),
+  seatJoin: require('../assets/sfx/seatJoin.wav'),
+  seatLeave: require('../assets/sfx/seatLeave.wav'),
+  reconnected: require('../assets/sfx/reconnected.wav'),
 };
-
-/**
- * Playback gain per effect, on top of the bank's own levelling (every file
- * sits at the same loudness plus a small trim — see scripts/sfx-bank.mjs).
- * These are the game's mix decisions, how loud a tap is next to a fanfare,
- * and they belong here with the game rather than baked into the files.
- */
-const GAIN: Record<Sfx, number> = {
-  deal: 0.8,
-  play: 0.9,
-  trick: 0.9,
-  lastTrick: 1,
-  zvanje: 0.85,
-  bela: 0.9,
-  win: 1,
-  lose: 0.8,
-  matchWon: 1,
-  matchLost: 0.85,
-  levelup: 1,
-  coin: 0.6,
-  tap: 0.5,
-  pop: 0.6,
-  turn: 0.9,
-  tick: 0.7,
-  knock: 0.7,
-  call: 0.85,
-  stamp: 0.7,
-  kontra: 0.9,
-  reveal: 0.8,
-  revealDown: 0.6,
-  stiglja: 1,
-};
-
-/**
- * The percussive effects vary a little in pitch per play, the way real cards
- * and coins never sound twice the same. The melodic ones stay put — a detuned
- * fanfare just sounds wrong — and so does the clock, whose two pitches must
- * stay tellable apart.
- */
-const VARIED: ReadonlySet<Sfx> = new Set([
-  'deal',
-  'play',
-  'trick',
-  'lastTrick',
-  'coin',
-  'tap',
-  'pop',
-  'knock',
-  'stamp',
-]);
 
 export interface PlayOptions {
   /** Pitch and tempo multiplier on top of the effect's own variation; 1 plays it as made. */
@@ -118,20 +68,10 @@ export interface PlayOptions {
   gain?: number;
 }
 
-const players = new Map<Sfx, AudioPlayer>();
-
-/**
- * A rate change must change the PITCH — that is the whole point of the
- * 1.25 tick and the 0.85 opponent's trick. Native players default to pitch
- * correction (time-stretch, same note), which would make both cues
- * inaudible on the phone; the web player already leaves pitch alone.
- */
-function makePlayer(name: Sfx): AudioPlayer {
-  const player = createAudioPlayer(SOURCES[name]);
-  player.shouldCorrectPitch = false;
-  return player;
-}
+const pools = new Map<Sfx, AudioPlayer[]>();
+const next = new Map<Sfx, number>();
 let enabled = true;
+let master = 0.8;
 let configured = false;
 
 export function setSoundEnabled(on: boolean): void {
@@ -140,6 +80,11 @@ export function setSoundEnabled(on: boolean): void {
 
 export function isSoundEnabled(): boolean {
   return enabled;
+}
+
+/** The one volume knob, 0–1, from Settings. */
+export function setMasterVolume(v: number): void {
+  master = Math.max(0, Math.min(1, v));
 }
 
 /** Let the game be heard even when the phone is on silent — it is a game, not a notification. */
@@ -154,6 +99,29 @@ async function configureOnce(): Promise<void> {
 }
 
 /**
+ * A rate change must change the PITCH — that is the whole point of the
+ * 1.25 tick and the 0.85 opponent's trick. Native players default to pitch
+ * correction (time-stretch, same note), which would make both cues
+ * inaudible on the phone; the web player already leaves pitch alone.
+ */
+function makePlayer(name: Sfx): AudioPlayer {
+  const player = createAudioPlayer(SOURCES[name]);
+  player.shouldCorrectPitch = false;
+  return player;
+}
+
+function poolOf(name: Sfx): AudioPlayer[] {
+  let pool = pools.get(name);
+  if (!pool) {
+    pool = [];
+    pools.set(name, pool);
+  }
+  const want = manifest[name].poly;
+  while (pool.length < want) pool.push(makePlayer(name));
+  return pool;
+}
+
+/**
  * Create every player up front. Loading is asynchronous, so a player created
  * at first use plays its FIRST shot silently — the session's opening deal
  * riffle was going missing. One eager pass at app start fixes that for good.
@@ -162,41 +130,111 @@ export function preloadSfx(): void {
   void configureOnce();
   for (const name of Object.keys(SOURCES) as Sfx[]) {
     try {
-      if (!players.has(name)) players.set(name, makePlayer(name));
+      poolOf(name);
     } catch {
       // A player that fails to load simply stays silent; never block startup.
     }
   }
+  installWebUnlock();
+}
+
+/** An idle player from the pool, or round-robin when all are busy. */
+function pick(name: Sfx): AudioPlayer {
+  const pool = poolOf(name);
+  const idle = pool.find((p) => !p.playing);
+  if (idle) return idle;
+  const i = (next.get(name) ?? 0) % pool.length;
+  next.set(name, i + 1);
+  return pool[i]!;
 }
 
 export function playSfx(name: Sfx, opts: PlayOptions = {}): void {
   if (!enabled) return;
   void configureOnce();
   try {
-    let player = players.get(name);
-    if (!player) {
-      player = makePlayer(name);
-      players.set(name, player);
-    }
+    const { gain, varied } = manifest[name];
+    const player = pick(name);
     // Rewind first: the same effect often fires again before it has finished.
-    player.seekTo(0);
-    player.volume = Math.max(0, Math.min(1, GAIN[name] * (opts.gain ?? 1)));
-    const vary = VARIED.has(name) ? 0.92 + Math.random() * 0.16 : 1;
+    void player.seekTo(0);
+    player.volume = Math.max(0, Math.min(1, gain * master * (opts.gain ?? 1)));
+    const vary = varied ? 0.92 + Math.random() * 0.16 : 1;
     player.setPlaybackRate(vary * (opts.rate ?? 1));
     player.play();
+    watchForBlock(player);
   } catch {
     // A missing or busy player must never break the game loop.
   }
 }
 
-/** Release every native player. Called when the app tears the game down. */
-export function releaseSfx(): void {
-  for (const p of players.values()) {
-    try {
-      p.remove();
-    } catch {
-      /* already gone */
+// --- the web: audio needs a gesture ------------------------------------------
+
+/**
+ * Browsers refuse to play audio before the page has been touched, and iOS
+ * Safari unlocks each media element separately. On the first gesture every
+ * pooled player is played and paused at volume 0, inside the gesture, which
+ * unlocks them all; if a sound is asked for before that and never starts, the
+ * app is told so it can show a "tap to enable sound" chip.
+ */
+type BlockedListener = (blocked: boolean) => void;
+const blockedListeners = new Set<BlockedListener>();
+let unlocked = Platform.OS !== 'web';
+let blocked = false;
+let unlockInstalled = false;
+
+export function onAudioBlocked(l: BlockedListener): () => void {
+  blockedListeners.add(l);
+  l(blocked);
+  return () => {
+    blockedListeners.delete(l);
+  };
+}
+
+function setBlocked(b: boolean): void {
+  if (blocked === b) return;
+  blocked = b;
+  for (const l of blockedListeners) l(b);
+}
+
+/** Runs every pooled player silently, inside a user gesture. */
+export function unlockAudio(): void {
+  if (unlocked) return;
+  unlocked = true;
+  for (const pool of pools.values()) {
+    for (const p of pool) {
+      try {
+        const v = p.volume;
+        p.volume = 0;
+        p.play();
+        p.pause();
+        void p.seekTo(0);
+        p.volume = v;
+      } catch {
+        // one element refusing must not stop the rest
+      }
     }
   }
-  players.clear();
+  setBlocked(false);
+}
+
+function installWebUnlock(): void {
+  if (Platform.OS !== 'web' || unlockInstalled) return;
+  unlockInstalled = true;
+  const win = (globalThis as { window?: { addEventListener?: Function; removeEventListener?: Function } }).window;
+  if (!win?.addEventListener) return;
+  const once = () => {
+    unlockAudio();
+    for (const ev of ['pointerdown', 'keydown', 'touchend']) win.removeEventListener?.(ev, once);
+  };
+  for (const ev of ['pointerdown', 'keydown', 'touchend']) win.addEventListener(ev, once, { passive: true });
+}
+
+function watchForBlock(player: AudioPlayer): void {
+  if (Platform.OS !== 'web' || unlocked) return;
+  setTimeout(() => {
+    try {
+      if (!player.playing && !unlocked) setBlocked(true);
+    } catch {
+      /* ignore */
+    }
+  }, 300);
 }

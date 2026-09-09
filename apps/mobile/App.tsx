@@ -20,7 +20,8 @@ import {
   saveSettings,
   type Settings,
 } from './src/storage';
-import { preloadSfx, setSoundEnabled } from './src/audio';
+import { preloadSfx, setMasterVolume, setSoundEnabled } from './src/audio';
+import { AudioUnlockChip } from './src/ui/AudioUnlockChip';
 import { setHapticsEnabled } from './src/haptics';
 import { setCosmetics, setDeckStyle } from './src/cosmetics';
 import { ErrorBoundary } from './src/ui/ErrorBoundary';
@@ -66,10 +67,16 @@ export default function App() {
     return () => sub.remove();
   }, []);
 
-  setSoundEnabled(settings.sound);
-  setHapticsEnabled(settings.haptics);
+  // The cosmetics are read during the children's render, so they are set
+  // during ours; sound and haptics are only ever read on a press or a beat,
+  // which is never the first render, so those move to an effect.
   setCosmetics(profile);
   setDeckStyle(settings.deckStyle);
+  useEffect(() => {
+    setSoundEnabled(settings.sound);
+    setHapticsEnabled(settings.haptics);
+    setMasterVolume(settings.volume);
+  }, [settings.sound, settings.haptics, settings.volume]);
 
   const updateProfile = useCallback((p: PlayerProfile) => {
     saveProfile(p);
@@ -189,7 +196,15 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar style="light" />
       {/* On the web the app lives in a centred column; phones get the viewport. */}
-      {Platform.OS === 'web' ? <WebShell>{guarded}</WebShell> : guarded}
+      {Platform.OS === 'web' ? (
+        <WebShell>
+          {guarded}
+          {/* Browsers refuse audio before a gesture; this says so, once, if it happens. */}
+          <AudioUnlockChip label={lang.s.ui.soundBlocked} />
+        </WebShell>
+      ) : (
+        guarded
+      )}
     </SafeAreaProvider>
   );
 }

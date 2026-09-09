@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { teamOf } from '@belot/engine';
 import { Table, type TableEvent } from '@belot/table';
 import { emptyProfile } from '@belot/progression';
@@ -15,6 +15,7 @@ vi.mock('expo-haptics', () => ({
 import * as Haptics from 'expo-haptics';
 import { playSfx } from '../src/audio';
 import { emptyTally, landingSound, processEvents, SILENT_EVENTS } from '../src/feedback';
+import manifest from '../assets/sfx/manifest.json';
 
 /**
  * The event → sound switch, checked against the real event stream rather
@@ -79,15 +80,22 @@ function run(events: TableEvent[], silent = false) {
     profile: emptyProfile(),
     tally: emptyTally(),
     mySeat: MY_SEAT,
-    haptics: true,
     silent,
   });
 }
 
 beforeEach(() => {
+  // A multi-step pattern schedules its later taps on timers; frozen here so
+  // one test's fanfare cannot land inside the next test's silence.
+  vi.useFakeTimers();
   sfx.mockClear();
   vi.mocked(Haptics.impactAsync).mockClear();
   vi.mocked(Haptics.notificationAsync).mockClear();
+});
+
+afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
 });
 
 describe('every event kind is scored', () => {
@@ -104,6 +112,8 @@ describe('every event kind is scored', () => {
       run([e.kind === 'cardPlayed' ? { ...e, seat: MY_SEAT } : e]);
       if (kind === 'dealScored') landingSound(e, MY_SEAT);
       expect(heard().length > 0).toBe(!SILENT_EVENTS.includes(kind));
+      // ...and every name it asked for is a real file in the bank.
+      for (const name of heard()) expect(Object.keys(manifest)).toContain(name);
     });
   }
 
@@ -123,8 +133,10 @@ describe('a flushed replay', () => {
   it('makes no sound and no buzz, and pays out exactly the same', () => {
     const loud = run(aMatch);
     expect(heard().length).toBeGreaterThan(50);
+    expect(vi.mocked(Haptics.notificationAsync)).toHaveBeenCalled(); // the match's own verdict
     sfx.mockClear();
     vi.mocked(Haptics.impactAsync).mockClear();
+    vi.mocked(Haptics.notificationAsync).mockClear();
 
     const quiet = run(aMatch, true);
     expect(heard()).toEqual([]);
@@ -171,6 +183,7 @@ describe('the sounds that carry meaning', () => {
     expect(heard()).toContain(won ? 'matchWon' : 'matchLost');
     expect(heard()).not.toContain('coin');
     expect(heard()).not.toContain('levelup');
+    expect(vi.mocked(Haptics.notificationAsync)).toHaveBeenCalled(); // won or lost, the phone says so
 
     sfx.mockClear();
     const lost = { ...over, winner: (over.winner === 0 ? 1 : 0) as typeof over.winner };
@@ -178,15 +191,24 @@ describe('the sounds that carry meaning', () => {
     expect(heard()).toContain(won ? 'matchLost' : 'matchWon');
   });
 
-  it('a scored deal dings its coins at the start and its verdict at the end', () => {
+  it('a scored deal keeps its verdict for the end, and never dings here', () => {
     const scored = byKind.get('dealScored')! as Extract<TableEvent, { kind: 'dealScored' }>;
-    const r = run([scored]);
-    if ((r.award?.coins ?? 0) > 0 && r.award?.levelUp === null) expect(heard()).toContain('coin');
+    run([scored]);
+    expect(heard()).not.toContain('coin');
+    expect(heard()).not.toContain('levelup');
     expect(heard().some((n) => n === 'win' || n === 'lose')).toBe(false);
     sfx.mockClear();
     landingSound(scored, MY_SEAT);
     expect(heard().some((n) => n === 'win' || n === 'lose')).toBe(true);
     expect(vi.mocked(Haptics.notificationAsync)).toHaveBeenCalledTimes(1);
+  });
+
+  it('a bigger zvanje calls higher', () => {
+    const declared = byKind.get('declared')! as Extract<TableEvent, { kind: 'declared' }>;
+    run([{ ...declared, declarations: [{ ...declared.declarations[0]!, value: 20 }] }]);
+    expect(sfx).toHaveBeenLastCalledWith('zvanje', { rate: 1 });
+    run([{ ...declared, declarations: [{ ...declared.declarations[0]!, value: 150 }] }]);
+    expect(sfx).toHaveBeenLastCalledWith('zvanje', { rate: 1.18 });
   });
 
   it('a štiglja announces itself as the beat starts', () => {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Lang } from '@belot/i18n';
@@ -19,8 +19,8 @@ import { Avatar } from './avatars';
 import { Button } from './ui/Button';
 import { PressScale } from './ui/PressScale';
 import type { Settings } from './storage';
-import { playSfx } from './audio';
-import { coinsLandedMs } from './anim/lifetimes';
+import { coinDingTimers, coinsLandedMs } from './anim/lifetimes';
+import { pattern } from './haptics';
 import { useLaggedNumber } from './ui/useLaggedNumber';
 
 /** Coins a claim sends flying to the wallet. */
@@ -85,28 +85,29 @@ export function HomeScreen({
   // commit — so measuring afterwards read a detached node as (0, 0) and the
   // coins set off from the corner of the window.
   const claim = (fromKey: string, count: number, apply: () => void) => {
+    pattern('claim');
     void anchors.refresh().then(() => {
       const from = anchors.centre(fromKey);
       const to = anchors.centre(anchorId.wallet);
       apply();
-      if (from && to) fxBus.emit({ kind: 'coins', from, to, count });
+      if (from && to) {
+        fxBus.emit({ kind: 'coins', from, to, count });
+        // One ding per coin as it lands; the timers die with the screen.
+        dingTimers.current.push(...coinDingTimers(count, 0));
+      }
     });
   };
+  const dingTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => dingTimers.current.forEach(clearTimeout), []);
 
   const collect = () => {
     const r = claimDaily(profile, today);
-    if (r.coins > 0) {
-      playSfx('coin');
-      claim('bonus', BONUS_COINS, () => onProfileChange(r.profile));
-    }
+    if (r.coins > 0) claim('bonus', BONUS_COINS, () => onProfileChange(r.profile));
   };
 
   const collectQuest = (index: number) => {
     const r = claimQuest(profile, index);
-    if (r.coins > 0) {
-      playSfx('coin');
-      claim(`quest:${index}`, QUEST_COINS, () => onProfileChange(r.profile));
-    }
+    if (r.coins > 0) claim(`quest:${index}`, QUEST_COINS, () => onProfileChange(r.profile));
   };
 
   return (

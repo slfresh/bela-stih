@@ -75,6 +75,8 @@ export interface Settings {
    */
   confirmPlay: ConfirmPlay;
   motion: MotionSetting;
+  /** Master volume, 0–1. */
+  volume: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -87,6 +89,7 @@ export const DEFAULT_SETTINGS: Settings = {
   handSort: 'auto',
   confirmPlay: 'ambiguous',
   motion: 'system',
+  volume: 0.8,
 };
 
 function read<T>(key: string, fallback: T): T {

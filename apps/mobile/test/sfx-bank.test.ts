@@ -5,7 +5,9 @@ import { describe, expect, it } from 'vitest';
 import {
   fromWav,
   level,
+  manifest as bankManifest,
   measure,
+  MIX,
   PEAK_CEIL_DBFS,
   RATE,
   render,
@@ -14,6 +16,7 @@ import {
   toWav,
   TRIM,
 } from '../../../scripts/sfx-bank.mjs';
+import manifest from '../assets/sfx/manifest.json';
 
 /**
  * The bank is maths, so it is tested as maths: rendered in-process and
@@ -25,8 +28,19 @@ const here = dirname(fileURLToPath(import.meta.url));
 const NAMES = Object.keys(SFX);
 
 describe('the sound bank is levelled', () => {
-  it('has a trim for every sound and a sound for every trim', () => {
+  it('has a mix entry for every sound and a sound for every entry', () => {
     expect(new Set(Object.keys(TRIM))).toEqual(new Set(NAMES));
+    expect(new Set(Object.keys(MIX))).toEqual(new Set(NAMES));
+    for (const name of NAMES) {
+      const m = MIX[name as keyof typeof MIX];
+      expect(m.gain).toBeGreaterThan(0);
+      expect(m.gain).toBeLessThanOrEqual(1);
+      expect(m.poly).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('renders at 44.1 kHz', () => {
+    expect(RATE).toBe(44100);
   });
 
   it('renders every sound at the target loudness, or peak-limited just under the ceiling', () => {
@@ -79,6 +93,8 @@ describe('the files the app plays', () => {
     for (const name of NAMES) {
       expect(existsSync(join(here, `../assets/sfx/${name}.wav`)), `${name}.wav`).toBe(true);
     }
+    // The committed manifest is what the script would write today.
+    expect(manifest).toEqual(bankManifest());
     // The aliases are gone: two meanings, two files.
     expect(audio).not.toMatch(/turn: require\('\.\.\/assets\/sfx\/pop\.wav'\)/);
     expect(audio).not.toMatch(/tick: require\('\.\.\/assets\/sfx\/tap\.wav'\)/);

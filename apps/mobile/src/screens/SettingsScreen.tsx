@@ -56,6 +56,26 @@ export function SettingsScreen({
         {toggleRow(ui.haptics, settings.haptics, (haptics) =>
           onSettingsChange({ ...settings, haptics }),
         )}
+        <Text style={styles.rowLabel}>{ui.volumeLabel}</Text>
+        <View style={styles.localeRow}>
+          {(
+            [
+              { v: 0.4, label: ui.volumeQuiet },
+              { v: 0.7, label: ui.volumeMedium },
+              { v: 1, label: ui.volumeLoud },
+            ] as const
+          ).map((o) => (
+            <PressScale
+              key={o.v}
+              onPress={() => onSettingsChange({ ...settings, volume: o.v })}
+              style={[styles.localeChip, settings.volume === o.v && styles.localeChipOn]}
+            >
+              <Text style={[styles.localeText, settings.volume === o.v && styles.localeTextOn]}>
+                {o.label}
+              </Text>
+            </PressScale>
+          ))}
+        </View>
       </Panel>
 
       <Panel label={lang.s.deckStyleLabel}>

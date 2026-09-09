@@ -7,7 +7,8 @@ import { PressScale } from './PressScale';
 /**
  * The app's one button. Three tones — plain, strong (the call to action),
  * bela (the one gold button on the table) — a compact size for the landscape
- * rails, and the press feel, click and buzz of `PressScale` underneath.
+ * rails, and the press feel, click and buzz of `PressScale` underneath —
+ * plus a down-click on the way in, so a button feels mechanical.
  */
 export function Button({
   label,
@@ -39,6 +40,7 @@ export function Button({
     <PressScale
       onPress={onPress}
       sound={sound}
+      pressSound={sound === null ? null : 'press'}
       style={[styles.btn, toneStyle, compact && styles.compact, icon !== undefined && styles.withIcon, style]}
     >
       {icon}

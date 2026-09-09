@@ -102,7 +102,6 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
         profile: profileRef.current,
         tally: tally.current,
         mySeat: HUMAN,
-        haptics: settings.haptics,
         silent: flushed,
       });
       if (r.profile !== profileRef.current) {
@@ -135,6 +134,10 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
       onEventEnd: (e) => {
         landingSound(e, HUMAN);
         fx.end(e);
+      },
+      // A skip of any size is one short settle of air, not a hail of sounds.
+      onSkip: (n) => {
+        if (n >= 2) playSfx('settle');
       },
     },
   );

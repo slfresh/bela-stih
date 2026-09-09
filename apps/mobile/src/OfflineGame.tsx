@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useKeepAwake } from 'expo-keep-awake';
 import { teamOf } from '@belot/engine';
 import { anchorId } from './anim/FxBus';
-import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS } from './anim/lifetimes';
+import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS, coinDingTimers, coinsLandedMs } from './anim/lifetimes';
+import { playSfx } from './audio';
+import { pattern } from './haptics';
 import { TableScreen } from './TableScreen';
 import { HUMAN, useGame } from './useGame';
 import type { Settings } from './storage';
@@ -60,12 +62,24 @@ function OfflineMatch({
     lastBanner.current = g.banner;
     // From the sheet's "Upisano" total once the sheet has slid up and settled;
     // from the felt if there is no sheet (a UI timer, cancelled on unmount).
-    const t = setTimeout(() => {
-      const from = g.anchors.centre(anchorId.sheetTotal) ?? g.anchors.centre(anchorId.deck);
-      const to = g.anchors.centre(anchorId.wallet);
-      if (from && to) g.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
-    }, COIN_CASCADE_DELAY_MS);
-    return () => clearTimeout(t);
+    const timers = [
+      setTimeout(() => {
+        const from = g.anchors.centre(anchorId.sheetTotal) ?? g.anchors.centre(anchorId.deck);
+        const to = g.anchors.centre(anchorId.wallet);
+        if (from && to) g.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
+      }, COIN_CASCADE_DELAY_MS),
+      // One ding per coin as it lands, and the level-up run with the badge.
+      ...coinDingTimers(COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS),
+      ...(g.banner.levelUp !== null
+        ? [
+            setTimeout(() => {
+              playSfx('levelup');
+              pattern('levelUp');
+            }, COIN_CASCADE_DELAY_MS + coinsLandedMs(COIN_CASCADE_COUNT)),
+          ]
+        : []),
+    ];
+    return () => timers.forEach(clearTimeout);
   }, [g.banner, g.anchors, g.fxBus]);
 
   const cheered = useRef(false);

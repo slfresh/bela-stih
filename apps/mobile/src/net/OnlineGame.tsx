@@ -13,7 +13,9 @@ import { useKeepAwake } from 'expo-keep-awake';
 import type { Seat } from '@belot/engine';
 import { teamOf } from '@belot/engine';
 import { anchorId } from '../anim/FxBus';
-import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS } from '../anim/lifetimes';
+import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS, coinDingTimers, coinsLandedMs } from '../anim/lifetimes';
+import { playSfx } from '../audio';
+import { pattern } from '../haptics';
 import { TableScreen, type SeatMeta } from '../TableScreen';
 import { Button } from '../ui/Button';
 import { radius, theme } from '../theme';
@@ -61,12 +63,24 @@ export function OnlineGame({
     lastBanner.current = net.banner;
     // From the sheet's "Upisano" total once the sheet has slid up and settled;
     // from the felt if there is no sheet (a UI timer, cancelled on unmount).
-    const t = setTimeout(() => {
-      const from = net.anchors.centre(anchorId.sheetTotal) ?? net.anchors.centre(anchorId.deck);
-      const to = net.anchors.centre(anchorId.wallet);
-      if (from && to) net.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
-    }, COIN_CASCADE_DELAY_MS);
-    return () => clearTimeout(t);
+    const timers = [
+      setTimeout(() => {
+        const from = net.anchors.centre(anchorId.sheetTotal) ?? net.anchors.centre(anchorId.deck);
+        const to = net.anchors.centre(anchorId.wallet);
+        if (from && to) net.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
+      }, COIN_CASCADE_DELAY_MS),
+      // One ding per coin as it lands, and the level-up run with the badge.
+      ...coinDingTimers(COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS),
+      ...(net.banner.levelUp !== null
+        ? [
+            setTimeout(() => {
+              playSfx('levelup');
+              pattern('levelUp');
+            }, COIN_CASCADE_DELAY_MS + coinsLandedMs(COIN_CASCADE_COUNT)),
+          ]
+        : []),
+    ];
+    return () => timers.forEach(clearTimeout);
   }, [net.banner, net.anchors, net.fxBus]);
 
   // Everyone still connected has to accept; bots and empty seats never count.

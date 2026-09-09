@@ -1,0 +1,197 @@
+{
+  "shuffle": {
+    "gain": 0.7,
+    "poly": 1,
+    "varied": true
+  },
+  "deal": {
+    "gain": 0.8,
+    "poly": 2,
+    "varied": true
+  },
+  "fan": {
+    "gain": 0.6,
+    "poly": 1,
+    "varied": true
+  },
+  "talon": {
+    "gain": 0.7,
+    "poly": 1,
+    "varied": true
+  },
+  "sort": {
+    "gain": 0.5,
+    "poly": 1,
+    "varied": true
+  },
+  "play": {
+    "gain": 0.9,
+    "poly": 3,
+    "varied": true
+  },
+  "sweep": {
+    "gain": 0.8,
+    "poly": 1,
+    "varied": true
+  },
+  "stack": {
+    "gain": 0.7,
+    "poly": 2,
+    "varied": true
+  },
+  "trick": {
+    "gain": 0.9,
+    "poly": 1,
+    "varied": true
+  },
+  "lastTrick": {
+    "gain": 1,
+    "poly": 1,
+    "varied": true
+  },
+  "knock": {
+    "gain": 0.7,
+    "poly": 2,
+    "varied": true
+  },
+  "call": {
+    "gain": 0.85,
+    "poly": 1,
+    "varied": false
+  },
+  "stamp": {
+    "gain": 0.7,
+    "poly": 1,
+    "varied": true
+  },
+  "kontra": {
+    "gain": 0.9,
+    "poly": 1,
+    "varied": false
+  },
+  "zvanje": {
+    "gain": 0.85,
+    "poly": 1,
+    "varied": false
+  },
+  "reveal": {
+    "gain": 0.8,
+    "poly": 1,
+    "varied": false
+  },
+  "revealDown": {
+    "gain": 0.6,
+    "poly": 1,
+    "varied": false
+  },
+  "bela": {
+    "gain": 0.9,
+    "poly": 1,
+    "varied": false
+  },
+  "stiglja": {
+    "gain": 1,
+    "poly": 1,
+    "varied": false
+  },
+  "win": {
+    "gain": 1,
+    "poly": 1,
+    "varied": false
+  },
+  "lose": {
+    "gain": 0.8,
+    "poly": 1,
+    "varied": false
+  },
+  "matchWon": {
+    "gain": 1,
+    "poly": 1,
+    "varied": false
+  },
+  "matchLost": {
+    "gain": 0.85,
+    "poly": 1,
+    "varied": false
+  },
+  "tick": {
+    "gain": 0.7,
+    "poly": 3,
+    "varied": false
+  },
+  "coin": {
+    "gain": 0.6,
+    "poly": 4,
+    "varied": true
+  },
+  "levelup": {
+    "gain": 1,
+    "poly": 1,
+    "varied": false
+  },
+  "turn": {
+    "gain": 0.9,
+    "poly": 1,
+    "varied": false
+  },
+  "callPrompt": {
+    "gain": 0.9,
+    "poly": 1,
+    "varied": false
+  },
+  "settle": {
+    "gain": 0.6,
+    "poly": 1,
+    "varied": true
+  },
+  "arm": {
+    "gain": 0.6,
+    "poly": 2,
+    "varied": true
+  },
+  "tap": {
+    "gain": 0.5,
+    "poly": 2,
+    "varied": true
+  },
+  "press": {
+    "gain": 0.4,
+    "poly": 2,
+    "varied": true
+  },
+  "hold": {
+    "gain": 0.6,
+    "poly": 1,
+    "varied": false
+  },
+  "pop": {
+    "gain": 0.6,
+    "poly": 2,
+    "varied": true
+  },
+  "purchase": {
+    "gain": 0.9,
+    "poly": 1,
+    "varied": false
+  },
+  "denied": {
+    "gain": 0.7,
+    "poly": 1,
+    "varied": false
+  },
+  "seatJoin": {
+    "gain": 0.7,
+    "poly": 1,
+    "varied": false
+  },
+  "seatLeave": {
+    "gain": 0.6,
+    "poly": 1,
+    "varied": false
+  },
+  "reconnected": {
+    "gain": 0.8,
+    "poly": 1,
+    "varied": false
+  }
+}

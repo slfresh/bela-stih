@@ -108,6 +108,15 @@ describe('anchors measure on demand', () => {
     expect(src('table/RevealRow.tsx')).toMatch(/reduceMotion: ReduceMotion\.Never/);
   });
 
+  it('every haptic goes through the pattern table, behind one gate', () => {
+    // feedback.ts used to carry its own `haptics` flag and call expo-haptics
+    // directly; two gates drifted. Now only haptics.ts touches the module.
+    for (const f of ['feedback.ts', 'TableScreen.tsx', 'table/useTurnCues.ts', 'ui/PressScale.tsx', 'HomeScreen.tsx']) {
+      expect(src(f), f).not.toMatch(/from 'expo-haptics'/);
+    }
+    expect(src('feedback.ts')).not.toMatch(/haptics:/);
+  });
+
   it('the home screen no longer re-renders on every scroll event', () => {
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/setScrollTick/);

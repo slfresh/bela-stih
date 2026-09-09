@@ -152,6 +152,11 @@ export interface UiStrings {
   motionSystem: string;
   motionFull: string;
   motionReduced: string;
+  volumeLabel: string;
+  volumeQuiet: string;
+  volumeMedium: string;
+  volumeLoud: string;
+  soundBlocked: string;
   invite: string;
   inviteText: (url: string) => string;
 }
@@ -495,6 +500,11 @@ const hr: Strings = {
     motionSystem: 'Kao sustav',
     motionFull: 'Pune',
     motionReduced: 'Smanjene',
+    volumeLabel: 'Glasnoća',
+    volumeQuiet: 'Tiho',
+    volumeMedium: 'Srednje',
+    volumeLoud: 'Glasno',
+    soundBlocked: 'Zvuk je isključen — dodirni za uključivanje',
     invite: 'Pozovi prijatelje',
     inviteText: (url) => `Zaigraj Belu sa mnom! Pridruži se mom stolu: ${url}`,
   },
@@ -709,6 +719,11 @@ const srCyrl: Strings = {
     motionSystem: 'Као систем',
     motionFull: 'Пуне',
     motionReduced: 'Смањене',
+    volumeLabel: 'Јачина звука',
+    volumeQuiet: 'Тихо',
+    volumeMedium: 'Средње',
+    volumeLoud: 'Гласно',
+    soundBlocked: 'Звук је искључен — додирни за укључивање',
     invite: 'Позови пријатеље',
     inviteText: (url) => `Заиграј белу са мном! Придружи се мом столу: ${url}`,
   },
@@ -919,6 +934,11 @@ const en: Strings = {
     motionSystem: 'Follow system',
     motionFull: 'Full',
     motionReduced: 'Reduced',
+    volumeLabel: 'Volume',
+    volumeQuiet: 'Quiet',
+    volumeMedium: 'Medium',
+    volumeLoud: 'Loud',
+    soundBlocked: 'Sound is off — tap to turn it on',
     invite: 'Invite friends',
     inviteText: (url) => `Come play Bela with me! Join my table: ${url}`,
   },

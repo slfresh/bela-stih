@@ -28,6 +28,8 @@ export function useDirector(
     timings?: Timings;
     /** An animated event's end-commit has landed: landing sounds and stamps go here. */
     onEventEnd?: (e: TableEvent) => void;
+    /** The director flushed past `n` events without animating them. */
+    onSkip?: (n: number) => void;
   } = {},
 ) {
   const [view, setView] = useState<PublicView>(initialView);
@@ -41,6 +43,8 @@ export function useDirector(
   onBatchRef.current = onBatch;
   const onEventEndRef = useRef(opts.onEventEnd);
   onEventEndRef.current = opts.onEventEnd;
+  const onSkipRef = useRef(opts.onSkip);
+  onSkipRef.current = opts.onSkip;
 
   const directorRef = useRef<Director | null>(null);
   if (directorRef.current === null) {
@@ -54,6 +58,7 @@ export function useDirector(
         },
         onEventStart: (e, flushed, speed) => onEventRef.current(e, flushed, speed),
         onEventEnd: (e) => onEventEndRef.current?.(e),
+        onSkip: (n) => onSkipRef.current?.(n),
         onIdle: setIdle,
         onBatch: () => onBatchRef.current?.(),
       },

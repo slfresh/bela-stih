@@ -16,6 +16,7 @@ import { Avatar } from '../avatars';
 import { FELTS } from '../cosmetics';
 import { CardBackFace } from '../deck';
 import { playSfx } from '../audio';
+import { pattern } from '../haptics';
 import { radius, theme } from '../theme';
 import { Panel, ScreenShell } from './common';
 
@@ -45,7 +46,8 @@ export function ShopScreen({
         onProfileChange(selectCosmetic(profile, c));
       }
     } else if (canBuy(profile, c)) {
-      playSfx('coin');
+      playSfx('purchase');
+      pattern('purchase');
       onProfileChange(buy(profile, c));
     }
   };
