@@ -26,6 +26,7 @@ import {
   COIN_FLY_MS,
   COIN_STAGGER_MS,
   CONFETTI_MS,
+  DEALER_BADGE,
   DEAL_FADE_LEAD_MS,
   DEAL_FADE_MS,
   DEAL_FLY_MS,
@@ -197,7 +198,7 @@ function Flight({
                     0.06,
                     p.value < FLIGHT_FLIP_AT
                       ? 1 - p.value / FLIGHT_FLIP_AT
-                      : (p.value - FLIGHT_FLIP_AT) / FLIGHT_FLIP_AT,
+                      : (p.value - FLIGHT_FLIP_AT) / (1 - FLIGHT_FLIP_AT),
                   ),
             },
           ],
@@ -442,7 +443,7 @@ function Pulse({ at, speed }: { at: XY; speed: number }) {
 
 // --- the dealer's button -------------------------------------------------------
 
-const BADGE = 18;
+const BADGE = DEALER_BADGE;
 
 /** A chip hopping from one place to another: the dealer's "D", the last trick's +10. */
 function Badge({

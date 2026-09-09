@@ -28,20 +28,29 @@ export function setAndroidHaptics(on: boolean): void {
   android = on;
 }
 
+/**
+ * The Android constant's wire value, exactly as expo-haptics' `AndroidHaptics`
+ * enum spells it (hyphens). Typed as a string so the table loads without the
+ * native module; haptics.test.ts checks every value against the installed
+ * enum. `confirm` / `reject` exist from API 30, so a rejected call falls back
+ * to the pattern's own impact or notification.
+ */
+type AndroidName = 'confirm' | 'reject' | 'long-press' | 'clock-tick';
+
 type Step =
-  | { at: number; kind: 'impact'; style: Haptics.ImpactFeedbackStyle; android?: string }
-  | { at: number; kind: 'notify'; type: Haptics.NotificationFeedbackType; android?: string }
-  | { at: number; kind: 'select'; android?: string };
+  | { at: number; kind: 'impact'; style: Haptics.ImpactFeedbackStyle; android?: AndroidName }
+  | { at: number; kind: 'notify'; type: Haptics.NotificationFeedbackType; android?: AndroidName }
+  | { at: number; kind: 'select'; android?: AndroidName };
 
 const I = Haptics.ImpactFeedbackStyle;
 const N = Haptics.NotificationFeedbackType;
-const impact = (at: number, style: Haptics.ImpactFeedbackStyle, android?: string): Step => ({
+const impact = (at: number, style: Haptics.ImpactFeedbackStyle, android?: AndroidName): Step => ({
   at,
   kind: 'impact',
   style,
   android,
 });
-const notify = (at: number, type: Haptics.NotificationFeedbackType, android?: string): Step => ({
+const notify = (at: number, type: Haptics.NotificationFeedbackType, android?: AndroidName): Step => ({
   at,
   kind: 'notify',
   type,
@@ -52,9 +61,9 @@ const select = (at: number): Step => ({ at, kind: 'select' });
 export const PATTERNS = {
   // the interface
   tap: [select(0)],
-  toggle: [impact(0, I.Light, 'toggle_on')],
+  toggle: [impact(0, I.Light)],
   press: [select(0)],
-  longPress: [impact(0, I.Medium, 'long_press')],
+  longPress: [impact(0, I.Medium, 'long-press')],
   swap: [impact(0, I.Light)],
   purchase: [notify(0, N.Success, 'confirm')],
   claim: [impact(0, I.Light), impact(120, I.Light)],
@@ -66,7 +75,7 @@ export const PATTERNS = {
   // the cues
   turn: [select(0), impact(90, I.Light)],
   call: [impact(0, I.Medium), impact(90, I.Medium)],
-  clock5: [notify(0, N.Warning, 'clock_tick')],
+  clock5: [notify(0, N.Warning, 'clock-tick')],
   clock2: [impact(0, I.Heavy), impact(120, I.Heavy)],
   // the bidding
   trumpMine: [impact(0, I.Rigid)],
@@ -92,16 +101,27 @@ export const PATTERNS = {
 
 export type Pattern = keyof typeof PATTERNS;
 
-function fire(step: Step): void {
+/** The pattern's own step, on every platform. */
+function fireOwn(step: Step): void {
   const p =
-    android && step.android
-      ? Haptics.performAndroidHapticsAsync(step.android as Haptics.AndroidHaptics)
-      : step.kind === 'impact'
-        ? Haptics.impactAsync(step.style)
-        : step.kind === 'notify'
-          ? Haptics.notificationAsync(step.type)
-          : Haptics.selectionAsync();
+    step.kind === 'impact'
+      ? Haptics.impactAsync(step.style)
+      : step.kind === 'notify'
+        ? Haptics.notificationAsync(step.type)
+        : Haptics.selectionAsync();
   void p.catch(() => {});
+}
+
+function fire(step: Step): void {
+  // Read again here, not only when the pattern started: a later step of a
+  // pattern must not land after the setting was switched off.
+  if (!enabled) return;
+  if (android && step.android) {
+    // A constant the device's API level lacks rejects: then the impact.
+    Haptics.performAndroidHapticsAsync(step.android as Haptics.AndroidHaptics).catch(() => fireOwn(step));
+    return;
+  }
+  fireOwn(step);
 }
 
 /** Play a named pattern; later steps are scheduled on plain timers. */

@@ -1518,12 +1518,12 @@ function DealResult({
   const row = (
     label: string,
     v: readonly [number, number],
-    opts: { from?: readonly [number, number]; anchor?: string } = {},
+    opts: { from?: readonly [number, number]; anchor?: string; tick?: boolean } = {},
   ) => (
     <Animated.View style={styles.resultRow} key={label} entering={enter()}>
       <Text style={styles.resultLabel}>{label}</Text>
       {opts.from ? (
-        <CountedPair a={v[0]} b={v[1]} from={opts.from} reduced={reduced} anchor={opts.anchor} />
+        <CountedPair a={v[0]} b={v[1]} from={opts.from} reduced={reduced} anchor={opts.anchor} tick={opts.tick} />
       ) : (
         <Text style={styles.resultValue}>
           {v[0]} : {v[1]}
@@ -1571,7 +1571,7 @@ function DealResult({
       {/* The sheet mounts with the final numbers already in the view, so the
           two totals count from where they were: nought, and the match score
           before this deal was added to it. */}
-      {row(lang.s.recorded, result.finalScore, { from: [0, 0], anchor: anchorId.sheetTotal })}
+      {row(lang.s.recorded, result.finalScore, { from: [0, 0], anchor: anchorId.sheetTotal, tick: true })}
       {row(lang.s.matchScore, matchScores, {
         from: [
           Math.max(0, matchScores[0] - result.finalScore[0]),
@@ -1622,12 +1622,15 @@ function CountedPair({
   from,
   reduced,
   anchor,
+  tick = false,
 }: {
   a: number;
   b: number;
   from: readonly [number, number];
   reduced: boolean;
   anchor?: string;
+  /** Only one row ticks, or two tallies rattle under the stinger. */
+  tick?: boolean;
 }) {
   const steps = useRef(0);
   const av = useCountUp(a, 600, {
@@ -1635,7 +1638,7 @@ function CountedPair({
     from: from[0],
     // Every other step ticks, softly: a tally being written, not a rattle.
     onStep: () => {
-      if (++steps.current % 2 === 0) playSfx('tick', { gain: 0.25, rate: 1.4 });
+      if (tick && ++steps.current % 2 === 0) playSfx('tick', { gain: 0.6, rate: 1.4 });
     },
   });
   const bv = useCountUp(b, 600, { reduced, from: from[1] });

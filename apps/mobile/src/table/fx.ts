@@ -8,6 +8,7 @@ import { timingsFor } from '../anim/director';
 import { anchorId, type FxBus } from '../anim/FxBus';
 import {
   BACK_SCALE,
+  DEALER_BADGE,
   dealStagger,
   FADE_BUBBLE_MS,
   FADE_FLIGHT_MS,
@@ -80,6 +81,12 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
 
   /** The width of a card sitting in this seat's slot, or the fallback before the first layout. */
   const slotW = (seat: Seat): number => anchors.rect(anchorId.slot(seat))?.w ?? FALLBACK_CARD_W;
+  /** Where a seat's puck draws its dealer badge: 2 px outside its ring's top-left corner. */
+  const dealerBadgeAt = (seat: Seat): XY | null => {
+    const r = anchors.rect(anchorId.seat(seat));
+    if (!r) return null;
+    return { x: r.x - 2 + DEALER_BADGE / 2, y: r.y - 2 + DEALER_BADGE / 2 };
+  };
   /** Any measured slot will do for a sprite that is not bound to one seat. */
   const anySlotW = (): number => {
     for (const s of SEATS) {
@@ -273,8 +280,10 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
         // the beat so the switch lands as the sprite does.
         const dealer = view()?.dealer;
         if (dealer === undefined) break;
-        const from = anchors.centre(anchorId.seat(dealer));
-        const to = anchors.centre(anchorId.seat(((dealer + 1) % 4) as Seat));
+        // From corner to corner: the puck draws its D at its ring's top-left,
+        // so the hop lands exactly where the next puck's own D will appear.
+        const from = dealerBadgeAt(dealer);
+        const to = dealerBadgeAt(((dealer + 1) % 4) as Seat);
         if (from && to && !reduced) {
           bus.emit({ kind: 'badge', from, to, duration: beats().dealScored.dur * speed });
         }

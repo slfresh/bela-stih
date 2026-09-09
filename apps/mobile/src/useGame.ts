@@ -13,7 +13,7 @@ import { cueFor, type TableCue } from './table/cues';
 import { useMotionPolicy } from './anim/useMotionPolicy';
 import { BOT_EMOTES } from './emotes';
 import { playSfx } from './audio';
-import { emptyTally, landingSound, processEvents } from './feedback';
+import { emptyTally, landingSound, mergeAward, processEvents } from './feedback';
 import { loadProfile, saveProfile, type Settings } from './storage';
 
 /** Offline, the person always sits south. */
@@ -110,12 +110,18 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
         tally: tally.current,
         mySeat: HUMAN,
         silent: flushed,
+        reduced: motionRef.current === 'reduced',
       });
       if (r.profile !== profileRef.current) {
         profileRef.current = r.profile;
         saveProfile(r.profile);
       }
-      if (r.award) setBanner(r.award);
+      // The match's award joins the last deal's on the one banner: two
+      // banners a second apart lost the deal's coins and its level-up star.
+      if (r.award) {
+        const a = r.award;
+        setBanner((prev) => (e.kind === 'matchOver' ? mergeAward(prev, a) : a));
+      }
       if (!flushed) {
         fx.start(e, speed);
         // A seatless beat (the reveal, the deal, scoring) is nobody's move.
@@ -143,7 +149,7 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     {
       timings: timingsFor(motion),
       onEventEnd: (e, speed) => {
-        landingSound(e, HUMAN);
+        landingSound(e, HUMAN, motionRef.current === 'reduced');
         fx.end(e, speed);
         if (e.kind === 'dealScored') setDealerHop(false);
       },

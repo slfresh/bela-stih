@@ -3,10 +3,10 @@ import { Linking, StyleSheet, Switch, Text, View } from 'react-native';
 import { PressScale } from '../ui/PressScale';
 import type { Lang } from '@belot/i18n';
 import type { PlayerProfile } from '@belot/progression';
-import { resetProfile, type Settings } from '../storage';
+import { resetProfile, type Settings, VOLUME_OPTIONS } from '../storage';
 import { setDeckStyle } from '../cosmetics';
 import { PlayingCard } from '../PlayingCard';
-import { playSfx } from '../audio';
+import { playSfx, setMasterVolume, setSoundEnabled } from '../audio';
 import { radius, theme } from '../theme';
 import { APP_VERSION, Panel, ScreenShell } from './common';
 
@@ -40,6 +40,9 @@ export function SettingsScreen({
       <Switch
         value={value}
         onValueChange={(v) => {
+          // The sound gate is applied by App's effect a commit later; set it
+          // now too, or turning sound ON is silent and OFF clicks.
+          if (label === ui.sound) setSoundEnabled(v);
           playSfx('tap');
           set(v);
         }}
@@ -60,13 +63,15 @@ export function SettingsScreen({
         <View style={styles.localeRow}>
           {(
             [
-              { v: 0.4, label: ui.volumeQuiet },
-              { v: 0.7, label: ui.volumeMedium },
-              { v: 1, label: ui.volumeLoud },
+              { v: VOLUME_OPTIONS[0], label: ui.volumeQuiet },
+              { v: VOLUME_OPTIONS[1], label: ui.volumeMedium },
+              { v: VOLUME_OPTIONS[2], label: ui.volumeLoud },
             ] as const
           ).map((o) => (
             <PressScale
               key={o.v}
+              // Its own click already plays at the new level.
+              onPressIn={() => setMasterVolume(o.v)}
               onPress={() => onSettingsChange({ ...settings, volume: o.v })}
               style={[styles.localeChip, settings.volume === o.v && styles.localeChipOn]}
             >

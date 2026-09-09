@@ -205,6 +205,16 @@ describe('the sounds that carry meaning', () => {
     expect(vi.mocked(Haptics.notificationAsync)).toHaveBeenCalledTimes(1);
   });
 
+  it('under reduce-motion the riffle and the stinger keep up with the short beats', () => {
+    const started = byKind.get('dealStarted')!;
+    processEvents({ events: [started], profile: emptyProfile(), tally: emptyTally(), mySeat: MY_SEAT, reduced: true });
+    expect(sfx).toHaveBeenCalledWith('deal', { rate: 2 });
+    sfx.mockClear();
+    const scored = byKind.get('dealScored')! as Extract<TableEvent, { kind: 'dealScored' }>;
+    landingSound(scored, MY_SEAT, true);
+    expect(sfx.mock.calls.some((c) => (c[0] === 'win' || c[0] === 'lose') && c[1]?.rate === 1.4)).toBe(true);
+  });
+
   it('a bigger zvanje calls higher', () => {
     const declared = byKind.get('declared')! as Extract<TableEvent, { kind: 'declared' }>;
     run([{ ...declared, declarations: [{ ...declared.declarations[0]!, value: 20 }] }]);

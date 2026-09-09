@@ -133,6 +133,22 @@ describe('anchors measure on demand', () => {
     expect(src('feedback.ts')).not.toMatch(/haptics:/);
   });
 
+  it('the default volume is one of the chips, and the online cleanup is a departure', () => {
+    // A default that matches no chip lit nothing on a fresh install.
+    const storage = src('storage.ts');
+    const options = storage.match(/VOLUME_OPTIONS = \[([^\]]*)\]/)![1]!.split(',').map((v) => Number(v.trim()));
+    const dflt = Number(storage.match(/DEFAULT_SETTINGS: Settings = \{[^}]*volume: ([\d.]+)/s)![1]);
+    expect(options).toContain(dflt);
+    // colyseus fires onLeave for a consented leave too: the refs go first, or
+    // the drop handler buzzes and reconnects for a minute on the home screen.
+    expect(src('net/useNetGame.ts')).toMatch(/roomRef\.current = null;\s*reconnectTokenRef\.current = null;\s*void room\?\.leave\(true\)/);
+    // A banner change never clears the previous banner's timers.
+    for (const f of ['OfflineGame.tsx', 'net/OnlineGame.tsx']) {
+      expect(src(f), f).toMatch(/useEffect\(\(\) => \(\) => timers\.current\.forEach\(clearTimeout\), \[\]\)/);
+      expect(src(f), f).not.toMatch(/return \(\) => timers\.forEach\(clearTimeout\)/);
+    }
+  });
+
   it('the home screen no longer re-renders on every scroll event', () => {
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/setScrollTick/);

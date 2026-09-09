@@ -47,7 +47,7 @@ export function mergeAward(a: Award | null, b: Award): Award {
  * The sound of an event's end-of-beat, if it has one — played by the games
  * from the director's onEventEnd, which never fires for a flushed event.
  */
-export function landingSound(e: TableEvent, mySeat: Seat): void {
+export function landingSound(e: TableEvent, mySeat: Seat, reduced = false): void {
   switch (e.kind) {
     case 'dealStarted':
       // The real cards fan open as the backs fade.
@@ -77,7 +77,9 @@ export function landingSound(e: TableEvent, mySeat: Seat): void {
       // made / failed pattern land together.
       const mine = teamOf(mySeat);
       const won = e.result.finalScore[mine] > e.result.finalScore[mine === 0 ? 1 : 0];
-      playSfx(won ? 'win' : 'lose');
+      // Under reduce-motion the beats are a third as long: the stinger keeps
+      // up, or it would still be sounding under a match's fanfare.
+      playSfx(won ? 'win' : 'lose', { rate: reduced ? 1.4 : 1 });
       pattern(won ? 'dealMade' : 'dealFailed');
       break;
     }
@@ -106,6 +108,8 @@ export interface ProcessOptions {
    * and haptics stay quiet.
    */
   silent?: boolean;
+  /** Reduce-motion: the beats are short, so the long sounds play quick. */
+  reduced?: boolean;
 }
 
 export function processEvents({
@@ -114,6 +118,7 @@ export function processEvents({
   tally,
   mySeat,
   silent = false,
+  reduced = false,
 }: ProcessOptions): { profile: PlayerProfile; award: Award | null } {
   const sfx = (name: Sfx, opts?: PlayOptions) => {
     if (silent) return;
@@ -133,8 +138,9 @@ export function processEvents({
       case 'dealStarted':
         tally.zvanja = 0;
         tally.bela = false;
-        // The riffle: twelve slides matched to the backs flying.
-        sfx('deal');
+        // The riffle: twelve slides matched to the backs flying — twice as
+        // quick under reduce-motion, where the deal is a 250 ms beat.
+        sfx('deal', { rate: reduced ? 2 : 1 });
         break;
 
       case 'matchStarted':

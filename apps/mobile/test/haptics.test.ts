@@ -9,6 +9,8 @@ vi.mock('expo-haptics', () => ({
   performAndroidHapticsAsync: vi.fn(() => Promise.resolve()),
 }));
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import * as Haptics from 'expo-haptics';
 import { PATTERNS, pattern, setAndroidHaptics, setHapticsEnabled } from '../src/haptics';
 
@@ -27,6 +29,42 @@ describe('the haptic patterns', () => {
 
   it('escalate from the five-second clock to the two-second one', () => {
     expect(PATTERNS.clock2.length).toBeGreaterThan(PATTERNS.clock5.length);
+  });
+
+  it('name Android constants exactly as the installed expo-haptics spells them', () => {
+    // 'long_press' where the enum says 'long-press' is rejected by the native
+    // enum converter, swallowed, and silent — on every Android phone.
+    const dts = readFileSync(join(__dirname, '../../../node_modules/expo-haptics/build/Haptics.types.d.ts'), 'utf8');
+    const enumBody = dts.slice(dts.indexOf('enum AndroidHaptics'));
+    const values = new Set([...enumBody.matchAll(/=\s*"([a-z-]+)"/g)].map((m) => m[1]!));
+    expect(values.size).toBeGreaterThan(10);
+    for (const [name, steps] of Object.entries(PATTERNS)) {
+      for (const step of steps) {
+        if (step.android) expect(values.has(step.android), `${name}: ${step.android}`).toBe(true);
+      }
+    }
+  });
+
+  it('fall back to the pattern\'s own step when the Android constant is rejected (API < 30)', async () => {
+    setHapticsEnabled(true);
+    setAndroidHaptics(true);
+    vi.mocked(Haptics.performAndroidHapticsAsync).mockImplementationOnce(() => Promise.reject(new Error('unsupported')));
+    pattern('dealFailed');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(Haptics.notificationAsync).toHaveBeenCalledWith('error');
+    setAndroidHaptics(false);
+  });
+
+  it('stop a pattern already under way when haptics are switched off', () => {
+    vi.useFakeTimers();
+    setHapticsEnabled(true);
+    pattern('matchWon');
+    setHapticsEnabled(false);
+    vi.advanceTimersByTime(400);
+    expect(Haptics.impactAsync).not.toHaveBeenCalled();
+    vi.useRealTimers();
+    setHapticsEnabled(true);
   });
 
   it('use the named Android constant where one fits, and the iOS pattern elsewhere', () => {

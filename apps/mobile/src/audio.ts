@@ -170,16 +170,21 @@ export function playSfx(name: Sfx, opts: PlayOptions = {}): void {
 
 /**
  * Browsers refuse to play audio before the page has been touched, and iOS
- * Safari unlocks each media element separately. On the first gesture every
- * pooled player is played and paused at volume 0, inside the gesture, which
- * unlocks them all; if a sound is asked for before that and never starts, the
- * app is told so it can show a "tap to enable sound" chip.
+ * Safari unlocks each media element separately. On the first gesture that
+ * counts as activation every idle pooled player is played and paused at
+ * volume 0, inside the gesture, which unlocks them all — and a probe player
+ * proves it: only when it has actually advanced is the page unlocked, or the
+ * listeners stay for the next gesture. A refused play() surfaces as a
+ * NotAllowedError rejection that expo-audio drops on the floor; the window
+ * catches it and tells the app, which shows a "tap to enable sound" chip.
  */
 type BlockedListener = (blocked: boolean) => void;
 const blockedListeners = new Set<BlockedListener>();
 let unlocked = Platform.OS !== 'web';
 let blocked = false;
 let unlockInstalled = false;
+/** Which gestures a browser counts as activation: pointerdown only for a mouse; touch activates on the way up. */
+const ACTIVATION_EVENTS = ['pointerup', 'touchend', 'mousedown', 'keydown'];
 
 export function onAudioBlocked(l: BlockedListener): () => void {
   blockedListeners.add(l);
@@ -195,13 +200,18 @@ function setBlocked(b: boolean): void {
   for (const l of blockedListeners) l(b);
 }
 
-/** Runs every pooled player silently, inside a user gesture. */
+/**
+ * Runs every idle pooled player silently, inside a user gesture, then checks
+ * with a probe whether the browser really let audio through. Safe to call
+ * again: it does nothing once unlocked, and never touches a player that is
+ * sounding at that moment.
+ */
 export function unlockAudio(): void {
   if (unlocked) return;
-  unlocked = true;
   for (const pool of pools.values()) {
     for (const p of pool) {
       try {
+        if (p.playing) continue;
         const v = p.volume;
         p.volume = 0;
         p.play();
@@ -213,26 +223,75 @@ export function unlockAudio(): void {
       }
     }
   }
-  setBlocked(false);
+  // The probe: a short sound at volume 0. If it advances, the page is live.
+  try {
+    const probe = pick('press');
+    const v = probe.volume;
+    probe.volume = 0;
+    probe.play();
+    setTimeout(() => {
+      try {
+        const advanced = probe.currentTime > 0 || !probe.paused;
+        probe.volume = v;
+        if (advanced) markUnlocked();
+      } catch {
+        /* ignore */
+      }
+    }, 250);
+  } catch {
+    /* ignore */
+  }
 }
+
+function markUnlocked(): void {
+  if (unlocked) return;
+  unlocked = true;
+  setBlocked(false);
+  uninstallWebUnlock?.();
+}
+
+let uninstallWebUnlock: (() => void) | null = null;
 
 function installWebUnlock(): void {
   if (Platform.OS !== 'web' || unlockInstalled) return;
   unlockInstalled = true;
-  const win = (globalThis as { window?: { addEventListener?: Function; removeEventListener?: Function } }).window;
+  const win = (globalThis as {
+    window?: { addEventListener?: Function; removeEventListener?: Function };
+  }).window;
   if (!win?.addEventListener) return;
-  const once = () => {
-    unlockAudio();
-    for (const ev of ['pointerdown', 'keydown', 'touchend']) win.removeEventListener?.(ev, once);
+  const onGesture = () => unlockAudio();
+  for (const ev of ACTIVATION_EVENTS) win.addEventListener(ev, onGesture, { passive: true });
+  // The policy's own verdict: a refused play() rejects with NotAllowedError,
+  // which expo-audio never handles — and an AbortError is the play/pause
+  // pair of the unlock itself. Neither belongs in the console.
+  const onRejection = (e: { reason?: { name?: string }; preventDefault?: () => void }) => {
+    const name = e.reason?.name;
+    if (name === 'NotAllowedError') {
+      if (!unlocked) setBlocked(true);
+      e.preventDefault?.();
+    } else if (name === 'AbortError') {
+      e.preventDefault?.();
+    }
   };
-  for (const ev of ['pointerdown', 'keydown', 'touchend']) win.addEventListener(ev, once, { passive: true });
+  win.addEventListener('unhandledrejection', onRejection);
+  uninstallWebUnlock = () => {
+    for (const ev of ACTIVATION_EVENTS) win.removeEventListener?.(ev, onGesture);
+    // The rejection filter stays: a later AbortError is still noise.
+  };
 }
 
+/**
+ * Was that sound refused? Judged from the media element, not from expo-audio's
+ * `playing`, which it sets true the moment play() is called whatever the
+ * browser then decides — and clears when a short sound merely ends.
+ */
 function watchForBlock(player: AudioPlayer): void {
   if (Platform.OS !== 'web' || unlocked) return;
   setTimeout(() => {
     try {
-      if (!player.playing && !unlocked) setBlocked(true);
+      if (unlocked) return;
+      if (player.paused && player.currentTime === 0) setBlocked(true);
+      else markUnlocked();
     } catch {
       /* ignore */
     }

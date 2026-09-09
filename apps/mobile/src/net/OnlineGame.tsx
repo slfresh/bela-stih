@@ -59,39 +59,53 @@ export function OnlineGame({
   }, []);
 
   // Same celebration wiring as offline: coins to the wallet, confetti on a win.
+  // Every timer here dies with the screen and NOT with the next banner: a
+  // match's banner arrives a second after the last deal's, and clearing on
+  // that change swallowed the deal's coins and its level-up.
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const lastBanner = useRef<typeof net.banner>(null);
   useEffect(() => {
-    if (!(net.banner && net.banner !== lastBanner.current && net.banner.coins > 0)) {
-      lastBanner.current = net.banner;
-      return;
+    const banner = net.banner;
+    if (!banner || banner === lastBanner.current) return;
+    const previous = lastBanner.current;
+    lastBanner.current = banner;
+    // Coins only when this banner brought new ones (a merged match banner
+    // carries the deal's again).
+    const newCoins = banner.coins - (previous?.coins ?? 0);
+    const hasCoins = newCoins > 0 || (previous === null && banner.coins > 0);
+    if (hasCoins) {
+      // From the sheet's "Upisano" total once the sheet has slid up and
+      // settled; from the felt if there is no sheet.
+      timers.current.push(
+        setTimeout(() => {
+          // Measured again first: the sheet's total was measured as the sheet
+          // slid up, a viewport low on the web. No arc under reduce-motion —
+          // the wallet still counts, and the coins still ding.
+          if (net.motion === 'reduced') return;
+          void net.anchors.refresh().then(() => {
+            const from = net.anchors.centre(anchorId.sheetTotal) ?? net.anchors.centre(anchorId.deck);
+            const to = net.anchors.centre(anchorId.wallet);
+            if (from && to) net.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
+          });
+        }, COIN_CASCADE_DELAY_MS),
+        // One ding per coin as it lands.
+        ...coinDingTimers(COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS),
+      );
     }
-    lastBanner.current = net.banner;
-    // From the sheet's "Upisano" total once the sheet has slid up and settled;
-    // from the felt if there is no sheet (a UI timer, cancelled on unmount).
-    const timers = [
-      setTimeout(() => {
-        // Measured again first: the sheet's total was measured as the sheet
-        // slid up, a viewport low on the web. No arc under reduce-motion —
-        // the wallet still counts, and the coins still ding.
-        if (net.motion === 'reduced') return;
-        void net.anchors.refresh().then(() => {
-          const from = net.anchors.centre(anchorId.sheetTotal) ?? net.anchors.centre(anchorId.deck);
-          const to = net.anchors.centre(anchorId.wallet);
-          if (from && to) net.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
-        });
-      }, COIN_CASCADE_DELAY_MS),
-      // One ding per coin as it lands, and the level-up run with the badge.
-      ...coinDingTimers(COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS),
-      ...(net.banner.levelUp !== null
-        ? [
-            setTimeout(() => {
-              playSfx('levelup');
-              pattern('levelUp');
-            }, COIN_CASCADE_DELAY_MS + coinsLandedMs(COIN_CASCADE_COUNT)),
-          ]
-        : []),
-    ];
-    return () => timers.forEach(clearTimeout);
+    // The level-up: its own moment, after the coins if there are any, and
+    // whether or not there are — a level crossed on a lost deal counts too.
+    if (banner.levelUp !== null && banner.levelUp !== previous?.levelUp) {
+      timers.current.push(
+        setTimeout(
+          () => {
+            playSfx('levelup');
+            pattern('levelUp');
+          },
+          COIN_CASCADE_DELAY_MS + (hasCoins ? coinsLandedMs(COIN_CASCADE_COUNT) : 0),
+        ),
+      );
+    }
   }, [net.banner, net.anchors, net.fxBus, net.motion]);
 
   // Everyone still connected has to accept; bots and empty seats never count.

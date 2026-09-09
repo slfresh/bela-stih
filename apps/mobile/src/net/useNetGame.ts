@@ -15,7 +15,7 @@ import { useMotionPolicy } from '../anim/useMotionPolicy';
 import { pattern } from '../haptics';
 import { cueFor, type TableCue } from '../table/cues';
 import { playSfx } from '../audio';
-import { emptyTally, landingSound, processEvents } from '../feedback';
+import { emptyTally, landingSound, mergeAward, processEvents } from '../feedback';
 import { loadProfile, saveProfile, type Settings } from '../storage';
 
 /**
@@ -192,12 +192,18 @@ export function useNetGame(settings: Settings) {
         tally: tally.current,
         mySeat: mine,
         silent: flushed,
+        reduced: motionRef.current === 'reduced',
       });
       if (r.profile !== profileRef.current) {
         profileRef.current = r.profile;
         saveProfile(r.profile);
       }
-      if (r.award) setBanner(r.award);
+      // The match's award joins the last deal's on the one banner: two
+      // banners a second apart lost the deal's coins and its level-up star.
+      if (r.award) {
+        const a = r.award;
+        setBanner((prev) => (e.kind === 'matchOver' ? mergeAward(prev, a) : a));
+      }
       if (!flushed) {
         fx.start(e, speed);
         // A seatless beat (the reveal, the deal, scoring) is nobody's move.
@@ -248,7 +254,14 @@ export function useNetGame(settings: Settings) {
     });
     return () => {
       sub.remove();
-      void roomRef.current?.leave(true).catch(() => {});
+      // A departure, not a drop: colyseus fires onLeave for a consented leave
+      // too, so the refs are cleared FIRST or the handler would buzz a
+      // "disconnected" and start a minute of reconnect attempts on the home
+      // screen (the Android back button exits without leave()).
+      const room = roomRef.current;
+      roomRef.current = null;
+      reconnectTokenRef.current = null;
+      void room?.leave(true).catch(() => {});
       directorRef.current?.dispose();
     };
   }, []);
@@ -271,7 +284,7 @@ export function useNetGame(settings: Settings) {
             onEventStart: (e, f, s) => onEventRef.current(e, f, s),
             onEventEnd: (e, speed) => {
               const mine = mySeatRef.current;
-              if (mine !== null) landingSound(e, mine);
+              if (mine !== null) landingSound(e, mine, motionRef.current === 'reduced');
               fxRef.current.end(e, speed);
               if (e.kind === 'dealScored') setDealerHop(false);
             },

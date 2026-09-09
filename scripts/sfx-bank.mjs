@@ -419,11 +419,9 @@ export const SFX = {
     softClip(mix(tone(120, 0.1, { gain: 0.5, power: 6, harmonic: 0.2 }), slide(0.05, { gain: 0.3 }))),
 
   // an ordinary trick: the sweep with a soft landing at the end
-  trick: () =>
-    mix(
-      whoosh(0.34, { gain: 0.5, rise: 0.45 }),
-      concat(silence(0.24), tone(240, 0.1, { gain: 0.22, power: 6 })),
-    ),
+  // The sweep alone: the cards land 570–690 ms in, on 'stack' — a landing
+  // tone at 240 ms here answered nothing on screen.
+  trick: () => whoosh(0.34, { gain: 0.55, rise: 0.45 }),
 
   // the last trick: the same sweep, and the ten points it carries ring on top
   lastTrick: () =>

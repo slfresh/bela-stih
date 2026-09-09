@@ -159,6 +159,8 @@ export const LAST_TRICK_CHIP_MS = 600;
 export const FALLBACK_CARD_W = 46;
 /** Dealt and swept backs are drawn smaller than a card sitting in its slot. */
 export const BACK_SCALE = 0.65;
+/** The dealer's "D" and the +10 chip: the puck draws its D at this size, at its ring's top-left corner. */
+export const DEALER_BADGE = 18;
 
 /**
  * How long a sprite is visibly MOVING — until the last card has landed or the
@@ -214,7 +216,9 @@ export function lifetimeOf(fx: Fx): number {
     case 'pulse':
       return motionOf(fx) + 50;
     case 'badge':
-      return motionOf(fx) + 60;
+      // The dealer's D lands as the puck's own D appears (the end-commit):
+      // any tail would show two. The +10 chip may linger on the count.
+      return motionOf(fx) + (fx.tone === 'points' ? 60 : 0);
     case 'stamp':
       return motionOf(fx) + 60;
     case 'coins':

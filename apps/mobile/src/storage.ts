@@ -48,6 +48,9 @@ const KEY = {
 
 export type ConfirmPlay = 'off' | 'ambiguous' | 'always';
 /** Animation: follow the system's reduce-motion switch, or force either way. */
+/** The three volumes Settings offers; the default must be one of them, or no chip is lit. */
+export const VOLUME_OPTIONS = [0.35, 0.7, 1] as const;
+
 export type MotionSetting = 'system' | 'full' | 'reduced';
 
 export interface Settings {
@@ -75,7 +78,7 @@ export interface Settings {
    */
   confirmPlay: ConfirmPlay;
   motion: MotionSetting;
-  /** Master volume, 0–1. */
+  /** Master volume, 0–1: one of VOLUME_OPTIONS. */
   volume: number;
 }
 
@@ -89,7 +92,7 @@ export const DEFAULT_SETTINGS: Settings = {
   handSort: 'auto',
   confirmPlay: 'ambiguous',
   motion: 'system',
-  volume: 0.8,
+  volume: 0.7,
 };
 
 function read<T>(key: string, fallback: T): T {
