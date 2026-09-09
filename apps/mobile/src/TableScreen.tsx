@@ -1722,9 +1722,9 @@ function DealResult({
             </View>
           )}
           {award.levelUp !== null && (
-            <View style={styles.levelBadge}>
+            <View style={styles.sheetLevel}>
               <Star size={14} />
-              <Text style={styles.levelBadgeText}>
+              <Text style={styles.sheetLevelText}>
                 {lang.s.ui.level} {award.levelUp}
               </Text>
             </View>
@@ -2149,7 +2149,7 @@ const styles = StyleSheet.create({
   },
   sheetAwardCoins: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   sheetAwardText: { color: theme.okInk, fontWeight: '800', ...type.body },
-  levelBadge: {
+  sheetLevel: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -2160,7 +2160,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.accent,
   },
-  levelBadgeText: { color: theme.accent, ...type.sub, fontWeight: '800' },
+  sheetLevelText: { color: theme.accent, ...type.sub, fontWeight: '800' },
   sheetFoot: { gap: space.sm, alignItems: 'center', marginTop: space.sm },
   resultButtons: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginTop: space.sm },
 });
