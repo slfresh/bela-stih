@@ -227,3 +227,49 @@ describe('suit colours', () => {
     expect(isRedSuit('clubs')).toBe(false);
   });
 });
+
+/**
+ * Register: the app speaks to one player, informally — "tvoje karte", not
+ * "vaše"; "označi", not "označite". Formal plural crept in string by string
+ * and read as a bank's letter next to the drawn cards. Every string in every
+ * locale uses the typographic ellipsis, never three full stops.
+ */
+describe('register and typography', () => {
+  const FORMAL_HR = [/Vaš[ea]?/, /vam/i, /zovete/, /Imate li/, /Sami pazite/, /[A-ZČĆŠŽĐ][a-zčćšžđ]+ite/];
+  const FORMAL_SR = [/Ваш[еа]?/, /вам/i, /зовете/, /Имате ли/, /Сами пазите/, /[А-ЯЂЈЉЊЋЏ][а-яђјљњћџ]+ите/];
+
+  function strings(l: Lang): string[] {
+    const out: string[] = [];
+    const walk = (v: unknown) => {
+      if (typeof v === 'string') out.push(v);
+      else if (typeof v === 'function') {
+        try {
+          const r = (v as (...a: unknown[]) => unknown)(2, 2, 2);
+          if (typeof r === 'string') out.push(r);
+        } catch {
+          /* a function that needs richer arguments: skip */
+        }
+      } else if (v && typeof v === 'object') Object.values(v as object).forEach(walk);
+    };
+    walk(l.s);
+    return out;
+  }
+
+  it('hr addresses the player informally', () => {
+    for (const str of strings(new Lang('hr'))) {
+      for (const re of FORMAL_HR) expect(str, str).not.toMatch(re);
+    }
+  });
+
+  it('sr addresses the player informally', () => {
+    for (const str of strings(new Lang('sr-Cyrl'))) {
+      for (const re of FORMAL_SR) expect(str, str).not.toMatch(re);
+    }
+  });
+
+  it('never types three full stops', () => {
+    for (const id of LOCALE_IDS) {
+      for (const str of strings(new Lang(id))) expect(str, `${id}: ${str}`).not.toContain('...');
+    }
+  });
+});
