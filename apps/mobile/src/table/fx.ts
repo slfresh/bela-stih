@@ -147,9 +147,11 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
       if (!hand || !fit) return seats[mySeat!]!;
       const pos = perRound === 2 ? k + 6 : k;
       const span = fit.cardW + (total - 1) * fit.advance;
+      // The fan's arc: the outer cards sit lower (Hand's baseY), so the backs do too.
+      const off = pos - (total - 1) / 2;
       return {
         x: hand.x + (hand.w - span) / 2 + pos * fit.advance + fit.cardW / 2,
-        y: hand.y + hand.h * 0.6,
+        y: hand.y + hand.h * 0.6 + Math.pow(Math.abs(off), 1.6) * 3.2 * fit.scale,
       };
     };
     const backs: XY[] = [];

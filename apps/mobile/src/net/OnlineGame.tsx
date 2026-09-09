@@ -94,8 +94,9 @@ export function OnlineGame({
         ...coinDingTimers(COIN_CASCADE_COUNT, delay),
       );
     }
-    // The level-up: its own moment, after the coins if there are any, and
-    // whether or not there are — a level crossed on a lost deal counts too.
+    // The level-up: its own moment, when the badge swells — the profile bar
+    // lags the level by the coins' full flight whether or not coins flew, so
+    // a level crossed on a lost deal counts too, and lands with its sound.
     if (banner.levelUp !== null) {
       timers.current.push(
         setTimeout(
@@ -103,7 +104,7 @@ export function OnlineGame({
             playSfx('levelup');
             pattern('levelUp');
           },
-          delay + (banner.coins > 0 ? coinsLandedMs(COIN_CASCADE_COUNT) : 0),
+          delay + coinsLandedMs(COIN_CASCADE_COUNT),
         ),
       );
     }
