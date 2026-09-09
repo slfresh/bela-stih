@@ -22,7 +22,7 @@ const PALETTE_FILES = new Set(['theme.ts', 'cosmetics.ts', 'avatars.tsx', 'emote
 const LITERAL_BASELINE: Record<string, number> = {
   'HomeScreen.tsx': 4,
   'PlayingCard.tsx': 2,
-  'TableScreen.tsx': 13,
+  'TableScreen.tsx': 10,
   'anim/EffectsOverlay.tsx': 1,
   'net/OnlineGame.tsx': 1,
   'screens/ProfileScreen.tsx': 1,

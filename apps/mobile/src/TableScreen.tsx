@@ -71,17 +71,18 @@ import { EmoteStrip } from './table/EmoteStrip';
 import { useTurnCues } from './table/useTurnCues';
 import { TurnBeacon } from './table/TurnBeacon';
 import { FeltArt, RIM_W } from './table/FeltArt';
+import { garb } from './deck/palette';
 
 /** `styles.felt` padding: the cloth's margin inside the rim. Pinned with the border and margin. */
 const FELT_PAD = 5;
 import { PlayingCard } from './PlayingCard';
-import { SuitPip } from './deck';
+import { CardBackFace, SuitPip } from './deck';
 import { playSfx } from './audio';
 import { pattern } from './haptics';
 import { Button } from './ui/Button';
 import { Coin } from './ui/icons';
 import { PressScale } from './ui/PressScale';
-import { radius, team, theme } from './theme';
+import { ink, radius, stroke, surface, team, theme } from './theme';
 import { isPartner, seatTone } from './table/teamColour';
 
 /**
@@ -428,18 +429,43 @@ export function TableScreen(props: TableScreenProps) {
   // Trump, multiplier and who called it: a plate on the baize in portrait,
   // a row in the left rail in landscape (the trick cross fills a sideways
   // felt from rim to rim, and a plate anywhere on it covered a slot).
+  // A wooden plate in the rim's own wood, lit on top and shaded underneath.
+  // Bidding: three tiny backs and the question. Called: the pip on a cream
+  // disc, and the ×2 / ×4 as a badge beside it.
   const plaque = (
-    <Anchor id={anchorId.plaque} style={[styles.plaque, land ? styles.plaqueRail : styles.plaquePortrait]}>
+    <Anchor
+      id={anchorId.plaque}
+      style={[
+        styles.plaque,
+        land ? styles.plaqueRail : styles.plaquePortrait,
+        { backgroundColor: baize.rim, borderTopColor: baize.rimLight, borderBottomColor: baize.rimDark },
+      ]}
+    >
       <View style={styles.plaqueRow}>
         {trump ? (
           <>
-            <SuitPip suit={trump} size={22} />
-            {view.multiplier > 1 && <Text style={styles.plaqueMult}>×{view.multiplier}</Text>}
+            <View style={styles.plaqueDisc}>
+              <SuitPip suit={trump} size={24} />
+            </View>
+            {view.multiplier > 1 && (
+              <View style={styles.multBadge}>
+                <Text style={styles.plaqueMult}>×{view.multiplier}</Text>
+              </View>
+            )}
           </>
         ) : (
-          <Text style={[styles.plaqueUndecided, styles.centreText]} numberOfLines={2}>
-            {lang.s.trumpUndecided}
-          </Text>
+          <>
+            <View style={styles.miniFan} accessibilityLabel={lang.s.trumpUndecided}>
+              {[-16, 0, 16].map((deg, i) => (
+                <View key={deg} style={[styles.miniBack, i > 0 && styles.miniBackNext, { transform: [{ rotate: `${deg}deg` }] }]}>
+                  <CardBackFace width={13} variant={cosmetics().cardBack} />
+                </View>
+              ))}
+            </View>
+            <Text style={styles.plaqueUndecided} numberOfLines={1}>
+              {lang.s.trumpQuestion}
+            </Text>
+          </>
         )}
       </View>
       {view.callerSeat !== null && (
@@ -518,7 +544,8 @@ export function TableScreen(props: TableScreenProps) {
                 </>
               ) : (
                 <SlotGhost
-                  colour={seatTone(s, mySeat).dim}
+                  colour={seatTone(s, mySeat).edge}
+                  side={pos}
                   breathing={spotlightSeat === s}
                   reduced={reduced}
                 />
@@ -1464,10 +1491,13 @@ const cardEntering = () => {
 /** An empty slot; the one whose seat is acting breathes a little. */
 const SlotGhost = memo(function SlotGhost({
   colour,
+  side,
   breathing,
   reduced,
 }: {
+  /** The seat's team colour: a small tab on the seat's side of the mat says whose place this is. */
   colour: string;
+  side: Position;
   breathing: boolean;
   reduced: boolean;
 }) {
@@ -1489,8 +1519,20 @@ const SlotGhost = memo(function SlotGhost({
     return () => cancelAnimation(o);
   }, [o, breathing, reduced]);
   const style = useAnimatedStyle(() => ({ opacity: o.value }));
-  return <Animated.View style={[styles.slotGhost, { borderColor: colour }, style]} />;
+  return (
+    <Animated.View style={[styles.slotGhost, style]}>
+      <View style={[styles.slotTab, SLOT_TAB[side], { backgroundColor: colour }]} />
+    </Animated.View>
+  );
 });
+
+/** Where the mat's tab sits: on the edge nearest the seat. */
+const SLOT_TAB: Record<Position, ViewStyle> = {
+  bottom: { bottom: -1, left: '50%', marginLeft: -7, width: 14, height: 3 },
+  top: { top: -1, left: '50%', marginLeft: -7, width: 14, height: 3 },
+  left: { left: -1, top: '50%', marginTop: -7, width: 3, height: 14 },
+  right: { right: -1, top: '50%', marginTop: -7, width: 3, height: 14 },
+};
 
 /** Bidding, declaring, and the explicit bela call. */
 function NonCardActions({
@@ -1804,36 +1846,61 @@ const styles = StyleSheet.create({
   // A plate, not a pip floating in space — and a small one: ~44px tall.
   plaque: {
     alignItems: 'center',
-    gap: 1,
-    backgroundColor: 'rgba(0,0,0,0.28)',
-    borderRadius: radius.panel,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    paddingHorizontal: 10,
+    gap: 2,
+    borderRadius: radius.sm,
+    // The plate's depth: a lit hairline on top, a shaded one beneath (the
+    // colours come from the room, inline).
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     maxWidth: 132,
   },
-  plaqueRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  plaqueUndecided: { color: theme.textDim, fontSize: 11 },
+  plaqueRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  plaqueDisc: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: theme.cardFace,
+    borderWidth: 1,
+    borderColor: stroke.shade,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  multBadge: {
+    backgroundColor: garb.redDark,
+    borderRadius: radius.pill,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderWidth: 1,
+    borderColor: stroke.edge,
+  },
+  miniFan: { flexDirection: 'row', alignItems: 'flex-end', height: 22, paddingHorizontal: 4 },
+  miniBack: { width: 13, height: 19 },
+  miniBackNext: { marginLeft: -5 },
+  plaqueUndecided: { color: ink.mid, fontSize: 11, fontWeight: '700' },
   // Portrait: at the left end of the partner's row, which is as tall as a puck.
   plaquePortrait: { position: 'absolute', left: 0, top: 0 },
   // In the rail it is a row in the flow, the width of the rail.
   plaqueRail: { alignSelf: 'stretch', paddingHorizontal: 6, paddingVertical: 3 },
-  plaqueMult: { color: theme.accent, fontSize: 13, fontWeight: '800' },
-  plaqueCaller: { color: theme.textDim, fontSize: 11 },
+  plaqueMult: { color: theme.cardFace, fontSize: 12, fontWeight: '800' },
+  plaqueCaller: { color: ink.mid, fontSize: 11 },
 
   slot: { position: 'absolute', width: 46, height: 67 },
   slotGhost: {
-    // A place a card will go, marked the way a table mat is: a dashed outline
-    // in the seat's colour over a shade of shadow. Four hard-edged boxes read
-    // as placeholders that failed to load; four faint ones read as nothing.
-    // (Opacity is animated: the acting seat's slot breathes.)
+    // A place a card will go, marked the way a table mat is: a shallow well
+    // with a hairline edge and a small tab in the seat's colour on the seat's
+    // side. Four hard-edged boxes read as placeholders that failed to load;
+    // four faint ones read as nothing. (Opacity is animated: the acting
+    // seat's slot breathes.)
     flex: 1,
     borderRadius: radius.card,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    backgroundColor: 'rgba(0,0,0,0.12)',
+    borderWidth: 1,
+    borderColor: stroke.hair,
+    backgroundColor: surface.well,
+    overflow: 'visible',
   },
+  slotTab: { position: 'absolute', borderRadius: 2 },
   // Sits 3px outside the played card, so the card's own edge cannot cover it.
   slotRing: {
     position: 'absolute',

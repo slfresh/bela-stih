@@ -71,6 +71,8 @@ export const surface = {
   panel: 'rgba(0,0,0,0.22)',
   /** Something set INTO a surface: a track, a well, the plaque's plate. */
   sunk: 'rgba(0,0,0,0.28)',
+  /** A shallower well: the place an absent card will go. */
+  well: 'rgba(0,0,0,0.16)',
   /** A chip or a plain button. */
   chip: 'rgba(255,255,255,0.07)',
   /** A surface lifted a hair off its parent. */

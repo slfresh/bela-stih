@@ -184,6 +184,8 @@ interface Strings {
 
   trump: string;
   trumpUndecided: string;
+  /** The plaque while the trump is being called: a question, two words at most. */
+  trumpQuestion: string;
   calledBy: (who: string) => string;
   score: string;
   trick: string;
@@ -353,6 +355,7 @@ const hr: Strings = {
 
   trump: 'adut',
   trumpUndecided: 'adut još nije određen',
+  trumpQuestion: 'adut?',
   calledBy: (who) => `zvao ${who}`,
   score: 'Rezultat',
   trick: 'Štih',
@@ -572,6 +575,7 @@ const srCyrl: Strings = {
 
   trump: 'адут',
   trumpUndecided: 'адут још није одређен',
+  trumpQuestion: 'адут?',
   calledBy: (who) => `звао ${who}`,
   score: 'Резултат',
   trick: 'Штих',
@@ -790,6 +794,7 @@ const en: Strings = {
 
   trump: 'trump',
   trumpUndecided: 'trump not yet chosen',
+  trumpQuestion: 'trump?',
   calledBy: (who) => `called by ${who}`,
   score: 'Score',
   trick: 'Trick',
