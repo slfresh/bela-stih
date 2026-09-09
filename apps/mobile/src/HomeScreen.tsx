@@ -298,10 +298,13 @@ function ModeTile({
     <PressScale onPress={onPress} style={styles.tile} scaleTo={0.98}>
       <View style={styles.tileIcon}>{icon}</View>
       <View style={styles.tileText}>
-        <Text style={styles.tileTitle} numberOfLines={1}>
+        {/* Two lines each: side by side on a 360 dp phone the tile's text
+            column is ~90 dp, and "Igraj protiv botova" was clipped to
+            "Igraj proti…" on the first screen of the app. */}
+        <Text style={styles.tileTitle} numberOfLines={2}>
           {title}
         </Text>
-        <Text style={styles.tileSub} numberOfLines={1}>
+        <Text style={styles.tileSub} numberOfLines={2}>
           {sub}
         </Text>
       </View>
@@ -339,11 +342,13 @@ const styles = StyleSheet.create({
   brand: { alignItems: 'center', gap: 2 },
   sub: { color: ink.mid, ...type.sub },
 
-  modeRow: { flexDirection: 'row', gap: space.sm + 2 },
+  // Both tiles take the taller one's height, so the row stays a pair.
+  modeRow: { flexDirection: 'row', gap: space.sm + 2, alignItems: 'stretch' },
   tile: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'center',
+    // The icon sits with the first line, not floating beside two of them.
+    alignItems: 'flex-start',
     gap: space.sm + 2,
     backgroundColor: surface.panel,
     borderRadius: radius.md,

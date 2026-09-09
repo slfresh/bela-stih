@@ -5,9 +5,10 @@ import { AVATAR_IDS } from '../avatarIds';
 import type { RoomStyle } from '../cosmetics';
 import { garb } from '../deck/palette';
 import { FeltArt } from '../table/FeltArt';
-import { font, radius, space, stroke, type } from '../theme';
+import { font, radius, stroke } from '../theme';
 import { PressScale } from '../ui/PressScale';
 import { guestsFor } from './guests';
+import { HERO_ASPECT, heroLayout } from './heroLayout';
 
 /**
  * The home screen's table: a real felt, two of the house's characters
@@ -19,6 +20,9 @@ import { guestsFor } from './guests';
  * browser's scrollbar is not counted in it. Measured from a parent instead,
  * the lobby mounted without the hero and dropped every panel 329 px when
  * the width arrived a frame later.
+ *
+ * Every position and the word's own size come from `heroLayout`, which the
+ * test holds to one rule: the word never lands on a character.
  */
 export const TableHero = memo(function TableHero({
   avatar,
@@ -36,9 +40,8 @@ export const TableHero = memo(function TableHero({
   onPress: () => void;
 }) {
   const [width, setWidth] = useState(0);
-  const height = Math.round(width * 0.5);
-  const seat = Math.round(Math.min(56, width * 0.14));
   const guests = guestsFor(day, avatar, AVATAR_IDS);
+  const l = width > 0 ? heroLayout(width, label) : null;
   return (
     <View
       style={styles.box}
@@ -47,24 +50,32 @@ export const TableHero = memo(function TableHero({
         setWidth((prev) => (Math.abs(prev - w) < 1 ? prev : w));
       }}
     >
-      {width > 0 && (
+      {l && (
         <PressScale onPress={onPress} scaleTo={0.985} style={StyleSheet.absoluteFill}>
-          <FeltArt width={width} height={height} room={room} grain={false} />
+          <FeltArt width={l.width} height={l.height} room={room} grain={false} />
           {/* the two across the table */}
-          <View style={[styles.guest, { top: Math.round(height * 0.1), left: Math.round(width * 0.2) }]}>
-            <Avatar id={guests[0]!} size={seat} />
+          <View style={[styles.guest, { top: l.guestTop, left: l.guestInset }]}>
+            <Avatar id={guests[0]!} size={l.seat} />
           </View>
-          <View style={[styles.guest, { top: Math.round(height * 0.1), right: Math.round(width * 0.2) }]}>
-            <Avatar id={guests[1]!} size={seat} />
+          <View style={[styles.guest, { top: l.guestTop, right: l.guestInset }]}>
+            <Avatar id={guests[1]!} size={l.seat} />
           </View>
           {/* you, in your chair */}
-          <View style={[styles.you, { bottom: Math.round(height * 0.07) }]}>
-            <Avatar id={avatar} size={Math.round(seat * 1.12)} />
+          <View style={[styles.you, { bottom: l.youBottom }]}>
+            <Avatar id={avatar} size={l.youSize} />
           </View>
           {/* the word on the baize */}
           <View style={styles.centre} pointerEvents="none">
-            <View style={styles.pill}>
-              <Text style={styles.label}>{label}</Text>
+            <View style={[styles.pill, { paddingHorizontal: l.pill.padH, paddingVertical: l.pill.padV }]}>
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.label,
+                  { fontSize: l.pill.fontSize, lineHeight: l.pill.lineHeight, letterSpacing: l.pill.letterSpacing },
+                ]}
+              >
+                {label}
+              </Text>
             </View>
           </View>
         </PressScale>
@@ -74,8 +85,8 @@ export const TableHero = memo(function TableHero({
 });
 
 const styles = StyleSheet.create({
-  /** Twice as wide as tall, at the width the column gives it. */
-  box: { alignSelf: 'stretch', aspectRatio: 2 },
+  /** The table's box, reserved before the width is known so nothing jumps. */
+  box: { alignSelf: 'stretch', aspectRatio: HERO_ASPECT },
   guest: { position: 'absolute' },
   you: { position: 'absolute', alignSelf: 'center' },
   centre: {
@@ -92,8 +103,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: stroke.lit,
-    paddingHorizontal: space.xxxl,
-    paddingVertical: space.md,
   },
-  label: { color: garb.ink, ...type.h1, fontFamily: font.black, letterSpacing: 3 },
+  label: { color: garb.ink, fontFamily: font.black },
 });

@@ -254,6 +254,20 @@ describe('the first frame and the last resort', () => {
     expect(app.slice(open, close)).toMatch(/onReset=/);
   });
 
+  it('the phone-sized lobby stays legible', () => {
+    // Both were found on a real 360 dp phone with the release build: the
+    // word on the baize sat across all three characters, and the two mode
+    // tiles clipped their own titles to "Igraj proti…".
+    const hero = src('home/TableHero.tsx');
+    expect(hero).toMatch(/heroLayout\(width, label\)/);
+    expect(hero).not.toMatch(/\.\.\.type\.h1/);
+    expect(hero).not.toMatch(/paddingHorizontal: space\./);
+    const home = src('HomeScreen.tsx');
+    const tile = home.slice(home.indexOf('function ModeTile'), home.indexOf('const styles'));
+    expect(tile).not.toMatch(/numberOfLines=\{1\}/);
+    expect((tile.match(/numberOfLines=\{2\}/g) ?? []).length).toBe(2);
+  });
+
   it('the web template paints dark before the bundle parses', () => {
     const html = readFileSync(join(here, '../public/index.html'), 'utf8');
     expect(html).toMatch(/<html lang="hr">/);
@@ -285,7 +299,7 @@ describe('the first frame and the last resort', () => {
     expect(src('table/fx.ts')).toMatch(/anchors\.rect\(anchorId\.puck\(seat\)\) \?\? anchors\.rect\(anchorId\.seat\(seat\)\)/);
     // The hero reserves its box and measures itself; the lobby no longer measures the scroller.
     const hero = src('home/TableHero.tsx');
-    expect(hero).toMatch(/aspectRatio: 2/);
+    expect(hero).toMatch(/aspectRatio: HERO_ASPECT/);
     expect(hero).toMatch(/onLayout=/);
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/<TableHero[^>]*width=/s);
