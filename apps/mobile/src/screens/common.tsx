@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { playSfx } from '../audio';
+import { PressScale } from '../ui/PressScale';
 import { radius, theme } from '../theme';
 
 /** The version shown in settings; keep in step with app.json. */
@@ -23,16 +23,9 @@ export function ScreenShell({
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.header}>
-        <Pressable
-          onPress={() => {
-            playSfx('tap');
-            onBack();
-          }}
-          hitSlop={12}
-          style={styles.backButton}
-        >
+        <PressScale onPress={onBack} hitSlop={12} style={styles.backButton}>
           <Text style={styles.backText}>‹</Text>
-        </Pressable>
+        </PressScale>
         <Text style={styles.title}>{title}</Text>
         <View style={styles.backButton} />
       </View>

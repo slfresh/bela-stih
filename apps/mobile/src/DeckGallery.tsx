@@ -5,7 +5,7 @@ import { SUITS } from '@belot/engine';
 import { Lang } from '@belot/i18n';
 import { cosmetics } from './cosmetics';
 import { CardBackFace, CardFace } from './deck';
-import { Button } from './TableScreen';
+import { Button } from './ui/Button';
 import { theme } from './theme';
 
 /**

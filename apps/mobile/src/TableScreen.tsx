@@ -57,8 +57,10 @@ import { TurnBeacon } from './table/TurnBeacon';
 import { FeltGlow } from './table/FeltGlow';
 import { PlayingCard } from './PlayingCard';
 import { SuitPip } from './deck';
-import { playSfx, type Sfx } from './audio';
+import { playSfx } from './audio';
 import { buzz } from './haptics';
+import { Button } from './ui/Button';
+import { PressScale } from './ui/PressScale';
 import { radius, team, theme } from './theme';
 import { isPartner, seatTone } from './table/teamColour';
 
@@ -150,6 +152,10 @@ export function TableScreen(props: TableScreenProps) {
   const m = useTableMetrics();
   const land = m.orientation === 'landscape';
   const reduced = reducedMotion;
+  // The fan swells a hair over a long press, so the hold reads as "something
+  // is about to happen" rather than as a dead tap.
+  const hold = useSharedValue(1);
+  const holdStyle = useAnimatedStyle(() => ({ transform: [{ scale: hold.value }] }));
 
   // The trick cross is sized against the felt it is drawn in, not the window:
   // a landscape felt is a short wide ellipse and window-sized cards hang out
@@ -541,7 +547,14 @@ export function TableScreen(props: TableScreenProps) {
           setArranging((a) => !a);
         }}
         delayLongPress={500}
+        onPressIn={() => {
+          hold.value = withTiming(reduced ? 1 : 1.02, { duration: 500 });
+        }}
+        onPressOut={() => {
+          hold.value = withTiming(1, { duration: 150 });
+        }}
       >
+        <Animated.View style={holdStyle}>
         <Hand
           cards={hand.cards}
           options={options}
@@ -560,6 +573,7 @@ export function TableScreen(props: TableScreenProps) {
           reduced={reduced}
           armCaption={lang.s.ui.play}
         />
+        </Animated.View>
       </Pressable>
       {/* online, my own turn is on the clock too — show it */}
       {myTurn && turnDeadline !== null && (
@@ -600,13 +614,13 @@ export function TableScreen(props: TableScreenProps) {
   ) : null;
 
   const emoteToggle = onEmote ? (
-    <Pressable
+    <PressScale
       onPress={() => setTrayOpen((o) => !o)}
       hitSlop={8}
       style={[styles.emoteToggle, trayOpen && styles.emoteToggleOn]}
     >
       <Text style={styles.emoteToggleText}>😄</Text>
-    </Pressable>
+    </PressScale>
   ) : null;
 
   // Every row that comes and goes around the felt — status line, zvanja
@@ -1289,52 +1303,6 @@ function DealResult({
   );
 }
 
-export function Button({
-  label,
-  onPress,
-  tone = 'plain',
-  compact = false,
-  sound = 'tap',
-}: {
-  label: string;
-  onPress: () => void;
-  tone?: 'plain' | 'strong' | 'bela';
-  /** Landscape rail size: caption type, tighter padding, a label wraps at most once. */
-  compact?: boolean;
-  /**
-   * The click. Every button makes it — the bid, declare and rematch buttons
-   * were mute while the leave button clicked — and the button makes it
-   * itself, so no caller wraps its handler in a second one. `null` for a
-   * press whose own sound follows at once (claiming coins).
-   */
-  sound?: Sfx | null;
-}) {
-  const toneStyle: StyleProp<ViewStyle> =
-    tone === 'strong' ? styles.btnStrong : tone === 'bela' ? styles.btnBela : styles.btnPlain;
-  return (
-    <Pressable
-      onPress={() => {
-        if (sound) playSfx(sound);
-        buzz('select');
-        onPress();
-      }}
-      style={({ pressed }) => [
-        styles.btn,
-        toneStyle,
-        compact && styles.btnCompact,
-        pressed && styles.pressed,
-      ]}
-    >
-      <Text
-        style={[styles.btnText, compact && styles.btnTextCompact]}
-        numberOfLines={compact ? 2 : undefined}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.feltDeep },
   root: { flex: 1, padding: 12, gap: 8 },
@@ -1556,20 +1524,6 @@ const styles = StyleSheet.create({
   emoteToggleOn: { borderColor: theme.accent },
   emoteToggleText: { fontSize: 20 },
 
-  pressed: { opacity: 0.7, transform: [{ translateY: 2 }] },
-  btn: {
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: theme.line,
-  },
-  btnPlain: { backgroundColor: 'rgba(255,255,255,0.07)' },
-  btnStrong: { backgroundColor: theme.wood, borderColor: theme.accent },
-  btnBela: { backgroundColor: theme.accent, borderColor: theme.accent },
-  btnText: { color: theme.text, fontSize: 14, fontWeight: '600' },
-  btnCompact: { paddingHorizontal: 8, paddingVertical: 7 },
-  btnTextCompact: { fontSize: 11, textAlign: 'center' },
 
   resultBackdrop: {
     position: 'absolute',

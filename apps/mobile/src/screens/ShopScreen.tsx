@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { PressScale } from '../ui/PressScale';
 import type { Lang } from '@belot/i18n';
 import {
   canBuy,
@@ -60,11 +61,13 @@ export function ShopScreen({
             const affordable = canBuy(profile, c);
             const locked = !owned && level < c.requiredLevel;
             return (
-              <Pressable
+              <PressScale
                 key={c.id}
                 onPress={() => act(c)}
                 disabled={selected || (!owned && !affordable)}
                 style={[styles.item, selected && styles.itemSelected]}
+                sound={null}
+                scaleTo={0.98}
               >
                 <View style={styles.preview}>
                   {kind === 'cardBack' ? (
@@ -99,7 +102,7 @@ export function ShopScreen({
                     {c.price} ●
                   </Text>
                 )}
-              </Pressable>
+              </PressScale>
             );
           })}
         </View>

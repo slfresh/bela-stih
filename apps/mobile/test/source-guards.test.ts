@@ -69,6 +69,22 @@ describe('anchors measure on demand', () => {
     expect(src('net/useNetGame.ts')).toMatch(/timingsFor\(motionRef\.current\)/);
   });
 
+  it('every button and chip presses through PressScale, which clicks for it', () => {
+    // A press that plays its own tap on top of PressScale's would click twice;
+    // a bare Pressable would neither give nor click.
+    expect(src('TableScreen.tsx')).not.toMatch(/function Button\(/);
+    for (const f of ['HomeScreen.tsx', 'screens/common.tsx', 'table/EmoteStrip.tsx', 'screens/SettingsScreen.tsx', 'screens/ShopScreen.tsx']) {
+      expect(src(f), f).not.toMatch(/<Pressable\b/);
+    }
+    for (const f of ['HomeScreen.tsx', 'screens/common.tsx', 'table/EmoteStrip.tsx']) {
+      expect(src(f), f).not.toMatch(/playSfx\('tap'\)/);
+    }
+    // The shop tile is silent itself; act() clicks only when a selection really changes.
+    expect(src('screens/ShopScreen.tsx')).toMatch(/sound=\{null\}/);
+    // The Switch is not a pressable; its click stays.
+    expect(src('screens/SettingsScreen.tsx').match(/playSfx\('tap'\)/g)?.length ?? 0).toBe(1);
+  });
+
   it('the home screen no longer re-renders on every scroll event', () => {
     const home = src('HomeScreen.tsx');
     expect(home).not.toMatch(/setScrollTick/);

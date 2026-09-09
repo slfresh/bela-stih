@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Lang } from '@belot/i18n';
 import {
@@ -16,7 +16,8 @@ import { AnchorMap, Anchor, AnchorHost } from './anim/AnchorRegistry';
 import { EffectsOverlay } from './anim/EffectsOverlay';
 import { anchorId, FxBus } from './anim/FxBus';
 import { Avatar } from './avatars';
-import { Button } from './TableScreen';
+import { Button } from './ui/Button';
+import { PressScale } from './ui/PressScale';
 import type { Settings } from './storage';
 import { playSfx } from './audio';
 import { coinsLandedMs } from './anim/lifetimes';
@@ -72,12 +73,8 @@ export function HomeScreen({
   // The wallet changes when the last coin of a claim lands on it.
   const coins = useLaggedNumber(profile.coins, coinsLandedMs(BONUS_COINS));
 
+  // Every pressable clicks and gives for itself now (PressScale / Button).
   const go = (l: Launch) => onLaunch(l);
-  // For the bare pressables (hero, gear, wallet); a Button clicks for itself.
-  const open = (fn: () => void) => () => {
-    playSfx('tap');
-    fn();
-  };
 
   // Scrolling moves the anchors without any layout changing, so ask them to
   // re-measure at the one moment it matters: just before the coins fly. This
@@ -119,10 +116,11 @@ export function HomeScreen({
           <ScrollView contentContainerStyle={styles.scroll}>
             {/* identity header */}
             <View style={styles.headerRow}>
-              <Pressable
-                onPress={open(onOpenProfile)}
+              <PressScale
+                onPress={onOpenProfile}
                 style={[styles.identity, styles.identityFlex]}
                 hitSlop={6}
+                scaleTo={0.98}
               >
                 <Avatar id={profile.selectedAvatar} size={42} />
                 <View style={[styles.identityText, styles.identityFlex]}>
@@ -133,18 +131,18 @@ export function HomeScreen({
                     {ui.level} {level.level}
                   </Text>
                 </View>
-              </Pressable>
+              </PressScale>
 
-              <Pressable onPress={open(onOpenShop)} hitSlop={6}>
+              <PressScale onPress={onOpenShop} hitSlop={6}>
                 <Anchor id={anchorId.wallet}>
                   <View style={styles.coinChip}>
                     <Text style={styles.coinText}>{coins} ●</Text>
                   </View>
                 </Anchor>
-              </Pressable>
-              <Pressable onPress={open(onOpenSettings)} hitSlop={6} style={styles.gear}>
+              </PressScale>
+              <PressScale onPress={onOpenSettings} hitSlop={6} style={styles.gear}>
                 <Text style={styles.gearText}>⚙️</Text>
-              </Pressable>
+              </PressScale>
             </View>
 
             <View style={styles.brand}>
@@ -156,9 +154,9 @@ export function HomeScreen({
             </View>
 
             {/* the hero: online quick play */}
-            <Pressable onPress={open(() => go({ mode: 'quick' }))} style={styles.hero}>
+            <PressScale onPress={() => go({ mode: 'quick' })} style={styles.hero} scaleTo={0.985}>
               <Text style={styles.heroText}>{ui.play}</Text>
-            </Pressable>
+            </PressScale>
 
             <View style={styles.modeRow}>
               <Button label={ui.playBots} tone="plain" onPress={() => go({ mode: 'offline' })} />

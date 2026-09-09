@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Linking, StyleSheet, Switch, Text, View } from 'react-native';
+import { PressScale } from '../ui/PressScale';
 import type { Lang } from '@belot/i18n';
 import type { PlayerProfile } from '@belot/progression';
 import { resetProfile, type Settings } from '../storage';
@@ -67,10 +68,9 @@ export function SettingsScreen({
               { id: 'simple', label: lang.s.deckSimple },
             ] as const
           ).map((d) => (
-            <Pressable
+            <PressScale
               key={d.id}
               onPress={() => {
-                playSfx('tap');
                 setDeckStyle(d.id);
                 onSettingsChange({ ...settings, deckStyle: d.id });
               }}
@@ -81,7 +81,7 @@ export function SettingsScreen({
               >
                 {d.label}
               </Text>
-            </Pressable>
+            </PressScale>
           ))}
         </View>
         {/* live preview in the selected style */}
@@ -101,10 +101,9 @@ export function SettingsScreen({
               { id: 'manual', label: ui.sortManual },
             ] as const
           ).map((o) => (
-            <Pressable
+            <PressScale
               key={o.id}
               onPress={() => {
-                playSfx('tap');
                 onSettingsChange({ ...settings, handSort: o.id });
               }}
               style={[styles.localeChip, settings.handSort === o.id && styles.localeChipOn]}
@@ -112,7 +111,7 @@ export function SettingsScreen({
               <Text style={[styles.localeText, settings.handSort === o.id && styles.localeTextOn]}>
                 {o.label}
               </Text>
-            </Pressable>
+            </PressScale>
           ))}
         </View>
         <Text style={styles.hint}>{ui.arrangeHint}</Text>
@@ -127,10 +126,9 @@ export function SettingsScreen({
               { id: 'always', label: ui.confirmAlways },
             ] as const
           ).map((o) => (
-            <Pressable
+            <PressScale
               key={o.id}
               onPress={() => {
-                playSfx('tap');
                 onSettingsChange({ ...settings, confirmPlay: o.id });
               }}
               style={[styles.localeChip, settings.confirmPlay === o.id && styles.localeChipOn]}
@@ -138,7 +136,7 @@ export function SettingsScreen({
               <Text style={[styles.localeText, settings.confirmPlay === o.id && styles.localeTextOn]}>
                 {o.label}
               </Text>
-            </Pressable>
+            </PressScale>
           ))}
         </View>
       </Panel>
@@ -152,10 +150,9 @@ export function SettingsScreen({
               { id: 'reduced', label: ui.motionReduced },
             ] as const
           ).map((o) => (
-            <Pressable
+            <PressScale
               key={o.id}
               onPress={() => {
-                playSfx('tap');
                 onSettingsChange({ ...settings, motion: o.id });
               }}
               style={[styles.localeChip, settings.motion === o.id && styles.localeChipOn]}
@@ -163,7 +160,7 @@ export function SettingsScreen({
               <Text style={[styles.localeText, settings.motion === o.id && styles.localeTextOn]}>
                 {o.label}
               </Text>
-            </Pressable>
+            </PressScale>
           ))}
         </View>
       </Panel>
@@ -176,10 +173,9 @@ export function SettingsScreen({
               { hard: true, label: lang.s.difficultyHard },
             ] as const
           ).map((d) => (
-            <Pressable
+            <PressScale
               key={String(d.hard)}
               onPress={() => {
-                playSfx('tap');
                 onSettingsChange({ ...settings, hardMode: d.hard });
               }}
               style={[styles.localeChip, settings.hardMode === d.hard && styles.localeChipOn]}
@@ -189,7 +185,7 @@ export function SettingsScreen({
               >
                 {d.label}
               </Text>
-            </Pressable>
+            </PressScale>
           ))}
         </View>
         {settings.hardMode && <Text style={styles.hint}>{lang.s.difficultyHardHint}</Text>}
@@ -198,10 +194,9 @@ export function SettingsScreen({
       <Panel label={ui.language}>
         <View style={styles.localeRow}>
           {LOCALES.map((l) => (
-            <Pressable
+            <PressScale
               key={l.id}
               onPress={() => {
-                playSfx('tap');
                 onSettingsChange({ ...settings, locale: l.id });
               }}
               style={[styles.localeChip, settings.locale === l.id && styles.localeChipOn]}
@@ -211,39 +206,37 @@ export function SettingsScreen({
               >
                 {l.label}
               </Text>
-            </Pressable>
+            </PressScale>
           ))}
         </View>
       </Panel>
 
       <Panel>
-        <Pressable
+        <PressScale
           onPress={() => {
             if (!armed) {
               setArmed(true);
               return;
             }
-            playSfx('tap');
             setArmed(false);
             onProfileChange(resetProfile());
           }}
           style={[styles.resetButton, armed && styles.resetArmed]}
         >
           <Text style={styles.resetText}>{armed ? ui.resetConfirm : ui.resetProgress}</Text>
-        </Pressable>
+        </PressScale>
       </Panel>
 
       {/* Google Play's User Data policy requires the policy reachable in-app. */}
       <Panel>
-        <Pressable
+        <PressScale
           onPress={() => {
-            playSfx('tap');
             void Linking.openURL('https://belastih.com').catch(() => {});
           }}
           hitSlop={6}
         >
           <Text style={styles.link}>{ui.privacyPolicy} ↗</Text>
-        </Pressable>
+        </PressScale>
       </Panel>
 
       <Text style={styles.version}>

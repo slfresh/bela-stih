@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { PressScale } from '../ui/PressScale';
 import type { Lang } from '@belot/i18n';
 import { EMOTES, emoteText } from '../emotes';
 import { radius, theme } from '../theme';
@@ -37,17 +38,18 @@ export function EmoteStrip({
       {open && (
         <View style={[styles.row, vertical ? styles.phraseCol : styles.phraseRow]}>
           {PHRASES.map((e) => (
-            <Pressable key={e.id} onPress={() => onSend(e.id)} style={styles.phraseChip}>
+            <PressScale key={e.id} onPress={() => onSend(e.id)} style={styles.phraseChip} sound={null}>
               <Text style={styles.phrase}>{emoteText(lang, e.id)}</Text>
-            </Pressable>
+            </PressScale>
           ))}
         </View>
       )}
+      {/* The bubble's pop is the sound of an emote; no click on top of it. */}
       <View style={[styles.row, vertical && styles.col, dimmed && styles.faded]}>
         {GLYPHS.map((e) => (
-          <Pressable key={e.id} onPress={() => onSend(e.id)} style={styles.chip} hitSlop={4}>
+          <PressScale key={e.id} onPress={() => onSend(e.id)} style={styles.chip} hitSlop={4} sound={null}>
             <Text style={styles.glyph}>{emoteText(lang, e.id)}</Text>
-          </Pressable>
+          </PressScale>
         ))}
       </View>
     </View>

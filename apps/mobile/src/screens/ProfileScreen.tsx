@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { Lang } from '@belot/i18n';
 import { levelProgress, type PlayerProfile } from '@belot/progression';
 import { Avatar } from '../avatars';
-import { Button } from '../TableScreen';
+import { Button } from '../ui/Button';
 import type { Settings } from '../storage';
 import { radius, theme } from '../theme';
 import { Panel, ScreenShell } from './common';
