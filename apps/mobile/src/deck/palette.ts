@@ -13,6 +13,7 @@ export const garb = {
   red: '#c0202e',
   redDark: '#8a121d',
   green: '#2f7d3a',
+  greenLight: '#7cae3e',
   greenDark: '#1d5325',
   gold: '#d9a41c',
   goldDark: '#a3760a',
