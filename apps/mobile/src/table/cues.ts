@@ -13,7 +13,9 @@ export type TableCue =
   | { kind: 'nod'; seat: Seat; n: number }
   | { kind: 'pulse'; seat: Seat; n: number }
   | { kind: 'shake'; amp: number; n: number }
-  | { kind: 'glow'; cardIds: string[]; n: number };
+  | { kind: 'glow'; cardIds: string[]; n: number }
+  /** Every trick to one side: the felt shakes and a burst goes up from its centre. */
+  | { kind: 'stiglja'; n: number };
 
 /** A declaration's weight, 1–4, from its summed value: 20 / 50 / 100 / 150 and up. */
 export function declarationWeight(values: number[]): 1 | 2 | 3 | 4 {
@@ -36,6 +38,8 @@ export function cueFor(e: TableEvent, mySeat: Seat, view: PublicView | null, n: 
       return { kind: 'nod', seat: e.seat, n };
     case 'doubled':
       return { kind: 'shake', amp: e.multiplier === 4 ? 5 : 3, n };
+    case 'dealScored':
+      return e.result.valatTeam !== null ? { kind: 'stiglja', n } : null;
     case 'declared':
       return declarationWeight(e.declarations.map((d) => d.value)) >= 3
         ? { kind: 'pulse', seat: e.seat, n }

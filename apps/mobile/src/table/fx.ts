@@ -1,12 +1,18 @@
 import type { PublicView, Seat, Suit } from '@belot/engine';
-import { cardId, SEATS } from '@belot/engine';
+import { cardId, SEATS, teamOf } from '@belot/engine';
 import type { TableEvent } from '@belot/table';
 import type { Lang } from '@belot/i18n';
 import type { AnchorMap } from '../anim/AnchorRegistry';
 import type { XY } from '../anim/FxBus';
 import { DEFAULT_TIMINGS } from '../anim/director';
 import { anchorId, type FxBus } from '../anim/FxBus';
-import { BACK_SCALE, dealStagger, FALLBACK_CARD_W, flightDuration } from '../anim/lifetimes';
+import {
+  BACK_SCALE,
+  dealStagger,
+  FALLBACK_CARD_W,
+  flightDuration,
+  LAST_TRICK_CHIP_MS,
+} from '../anim/lifetimes';
 import { emoteText, isGlyphEmote } from '../emotes';
 import { declarationWeight } from './cues';
 
@@ -177,6 +183,21 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
         if (cards.length > 0 && to) {
           bus.emit({ kind: 'trickSweep', cards, to, winner: e.seat, speed, width: anySlotW() });
         }
+        // The last trick's ten points, from the felt to the running count.
+        if (e.isLastTrick) {
+          const chipFrom = anchors.centre(anchorId.deck);
+          const chipTo = anchors.centre(anchorId.running);
+          if (chipFrom && chipTo) {
+            bus.emit({
+              kind: 'badge',
+              from: chipFrom,
+              to: chipTo,
+              duration: LAST_TRICK_CHIP_MS * speed,
+              text: '+10',
+              tone: 'points',
+            });
+          }
+        }
         break;
       }
 
@@ -224,6 +245,12 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
         const to = anchors.centre(anchorId.seat(((dealer + 1) % 4) as Seat));
         if (from && to) {
           bus.emit({ kind: 'badge', from, to, duration: DEFAULT_TIMINGS.dealScored.dur * speed });
+        }
+        // Štiglja: the word itself, stamped on the felt in the sweeping side's colour.
+        if (e.result.valatTeam !== null) {
+          const at = anchors.centre(anchorId.deck);
+          const ours = mySeat !== null && teamOf(mySeat) === e.result.valatTeam;
+          if (at) bus.emit({ kind: 'stamp', at, text: lang.s.valat, tone: ours ? 'ok' : 'danger', speed: 1 });
         }
         break;
       }

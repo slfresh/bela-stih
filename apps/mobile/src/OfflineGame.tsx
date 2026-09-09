@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useKeepAwake } from 'expo-keep-awake';
 import { teamOf } from '@belot/engine';
 import { anchorId } from './anim/FxBus';
-import { COIN_CASCADE_COUNT } from './anim/lifetimes';
+import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS } from './anim/lifetimes';
 import { TableScreen } from './TableScreen';
 import { HUMAN, useGame } from './useGame';
 import type { Settings } from './storage';
@@ -53,12 +53,19 @@ function OfflineMatch({
   // state changes so online can reuse the identical pattern.
   const lastBanner = useRef<typeof g.banner>(null);
   useEffect(() => {
-    if (g.banner && g.banner !== lastBanner.current && g.banner.coins > 0) {
-      const from = g.anchors.centre(anchorId.deck);
-      const to = g.anchors.centre(anchorId.wallet);
-      if (from && to) g.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
+    if (!(g.banner && g.banner !== lastBanner.current && g.banner.coins > 0)) {
+      lastBanner.current = g.banner;
+      return;
     }
     lastBanner.current = g.banner;
+    // From the sheet's "Upisano" total once the sheet has slid up and settled;
+    // from the felt if there is no sheet (a UI timer, cancelled on unmount).
+    const t = setTimeout(() => {
+      const from = g.anchors.centre(anchorId.sheetTotal) ?? g.anchors.centre(anchorId.deck);
+      const to = g.anchors.centre(anchorId.wallet);
+      if (from && to) g.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
+    }, COIN_CASCADE_DELAY_MS);
+    return () => clearTimeout(t);
   }, [g.banner, g.anchors, g.fxBus]);
 
   const cheered = useRef(false);
@@ -66,6 +73,8 @@ function OfflineMatch({
     if (matchOver && !cheered.current && g.table.winner() === teamOf(HUMAN)) {
       cheered.current = true;
       g.fxBus.emit({ kind: 'confetti' });
+      const at = g.anchors.centre(anchorId.deck);
+      if (at) g.fxBus.emit({ kind: 'burst', at, count: 40 });
     }
   }, [matchOver, g.table, g.fxBus]);
 

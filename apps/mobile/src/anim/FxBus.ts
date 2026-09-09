@@ -71,11 +71,13 @@ export type Fx =
       weight?: 1 | 2 | 3 | 4;
     }
   /** The pip (or the ×2) landing on the plaque as a call's beat ends. */
-  | { kind: 'stamp'; at: XY; pip?: Suit; text?: string; tone: 'gold' | 'danger'; speed: number }
+  | { kind: 'stamp'; at: XY; pip?: Suit; text?: string; tone: 'gold' | 'danger' | 'ok'; speed: number }
   /** A ring of light bursting from a point — the "your turn" cue's visible twin. */
   | { kind: 'pulse'; at: XY; speed: number }
-  /** The dealer's button passing to the next seat over the scoring beat. */
-  | { kind: 'badge'; from: XY; to: XY; duration: number }
+  /** A small chip flying from one place to another: the dealer's button, the last trick's +10. */
+  | { kind: 'badge'; from: XY; to: XY; duration: number; text?: string; tone?: 'dealer' | 'points' }
+  /** A radial burst of confetti from a point, then the pieces fall. */
+  | { kind: 'burst'; at: XY; count: number }
   | { kind: 'coins'; from: XY; to: XY; count: number }
   | { kind: 'confetti' };
 
@@ -105,6 +107,11 @@ export const anchorId = {
   deck: 'deck',
   plaque: 'plaque',
   wallet: 'wallet',
+  /** The running count in the header: where the last trick's +10 flies. */
+  running: 'running',
+  /** The "Upisano" total on the result sheet: where the coins set off from. */
+  sheetTotal: 'sheetTotal',
+
   /**
    * The one card just tapped in the fan — set by the card at press time and
    * deleted by the spawner on its one read. The single exception to "no

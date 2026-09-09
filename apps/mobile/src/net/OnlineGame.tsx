@@ -13,7 +13,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import type { Seat } from '@belot/engine';
 import { teamOf } from '@belot/engine';
 import { anchorId } from '../anim/FxBus';
-import { COIN_CASCADE_COUNT } from '../anim/lifetimes';
+import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS } from '../anim/lifetimes';
 import { TableScreen, type SeatMeta } from '../TableScreen';
 import { Button } from '../ui/Button';
 import { radius, theme } from '../theme';
@@ -54,12 +54,19 @@ export function OnlineGame({
   // Same celebration wiring as offline: coins to the wallet, confetti on a win.
   const lastBanner = useRef<typeof net.banner>(null);
   useEffect(() => {
-    if (net.banner && net.banner !== lastBanner.current && net.banner.coins > 0) {
-      const from = net.anchors.centre(anchorId.deck);
-      const to = net.anchors.centre(anchorId.wallet);
-      if (from && to) net.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
+    if (!(net.banner && net.banner !== lastBanner.current && net.banner.coins > 0)) {
+      lastBanner.current = net.banner;
+      return;
     }
     lastBanner.current = net.banner;
+    // From the sheet's "Upisano" total once the sheet has slid up and settled;
+    // from the felt if there is no sheet (a UI timer, cancelled on unmount).
+    const t = setTimeout(() => {
+      const from = net.anchors.centre(anchorId.sheetTotal) ?? net.anchors.centre(anchorId.deck);
+      const to = net.anchors.centre(anchorId.wallet);
+      if (from && to) net.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
+    }, COIN_CASCADE_DELAY_MS);
+    return () => clearTimeout(t);
   }, [net.banner, net.anchors, net.fxBus]);
 
   // Everyone still connected has to accept; bots and empty seats never count.
@@ -78,6 +85,8 @@ export function OnlineGame({
     ) {
       cheeredMatch.current = net.matchNumber;
       net.fxBus.emit({ kind: 'confetti' });
+      const at = net.anchors.centre(anchorId.deck);
+      if (at) net.fxBus.emit({ kind: 'burst', at, count: 40 });
     }
   }, [net.matchOver, net.matchNumber, net.winnerTeam, net.seat, net.fxBus]);
 

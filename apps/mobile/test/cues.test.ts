@@ -59,6 +59,15 @@ describe('cueFor', () => {
     if (cue?.kind === 'glow') expect(cue.cardIds).toHaveLength(2);
   });
 
+  it('a štiglja shakes the table; an ordinary deal does not', () => {
+    const scored = (() => {
+      const t = new Table({ seed: 7, humanSeats: [] });
+      return t.drainEvents().find((e): e is Extract<TableEvent, { kind: 'dealScored' }> => e.kind === 'dealScored')!;
+    })();
+    expect(cueFor({ ...scored, result: { ...scored.result, valatTeam: 0 } }, 0, view, 9)).toEqual({ kind: 'stiglja', n: 9 });
+    expect(cueFor({ ...scored, result: { ...scored.result, valatTeam: null } }, 0, view, 9)).toBeNull();
+  });
+
   it('a seatless beat, a card, a trick: no cue', () => {
     expect(cueFor({ kind: 'matchStarted', matchNumber: 2 }, 0, view, 1)).toBeNull();
     expect(cueFor({ kind: 'trickWon', seat: 1, trickNumber: 1, points: 10, isLastTrick: false }, 0, view, 1)).toBeNull();

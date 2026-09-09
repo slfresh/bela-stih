@@ -54,6 +54,7 @@ export const SeatPuck = memo(function SeatPuck({
   thinking = false,
   reduced = false,
   gesture = null,
+  tricks = 0,
 }: {
   seat: Seat;
   name: string;
@@ -82,6 +83,8 @@ export const SeatPuck = memo(function SeatPuck({
   reduced?: boolean;
   /** A one-off: a nod (a pass) or a pulse of the team ring (a big zvanje, a bela). */
   gesture?: { kind: 'nod' | 'pulse'; n: number } | null;
+  /** Tricks this seat's side has taken this deal: a little pile by the puck. */
+  tricks?: number;
 }) {
   const initial = (name.trim()[0] ?? '?').toUpperCase();
   // The chip ticks up as the deal lands (0 → 6 → 8) rather than jumping.
@@ -203,6 +206,13 @@ export const SeatPuck = memo(function SeatPuck({
             <Text style={styles.countText}>{shownCards}</Text>
           </View>
         )}
+        {tricks > 0 && (
+          <View style={styles.pile} pointerEvents="none">
+            <View style={[styles.pileCard, styles.pileCardBack]} />
+            <View style={styles.pileCard} />
+            <Text style={styles.pileText}>{tricks}</Text>
+          </View>
+        )}
       </View>
 
       <Text style={styles.name} numberOfLines={1}>
@@ -247,4 +257,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   countText: { color: theme.text, fontSize: 11, fontWeight: '700' },
+  // Two tiny backs, stacked, with the count: the side's pile of tricks.
+  pile: { position: 'absolute', top: -4, right: -6, width: 22, height: 18 },
+  pileCard: {
+    position: 'absolute',
+    left: 0,
+    top: 2,
+    width: 12,
+    height: 9,
+    borderRadius: 2,
+    backgroundColor: theme.cardBack,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  pileCardBack: { left: 2, top: 0 },
+  pileText: { position: 'absolute', right: 0, top: 3, color: theme.text, fontSize: 10, fontWeight: '800' },
+
 });

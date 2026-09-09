@@ -99,6 +99,15 @@ export function coinsLandedMs(count: number): number {
 }
 
 export const CONFETTI_MS = 2100;
+/** A radial burst: out in the first third, then falling and fading. */
+export const BURST_MS = 1400;
+/**
+ * The coins set off from the sheet's total this long after the deal is
+ * scored — the sheet slides up at the beat's end (700 ms) and settles first.
+ */
+export const COIN_CASCADE_DELAY_MS = 900;
+/** The last trick's +10 chip, from the felt to the running count. */
+export const LAST_TRICK_CHIP_MS = 600;
 
 // --- sizes -----------------------------------------------------------------------
 
@@ -134,6 +143,8 @@ export function motionOf(fx: Fx): number {
       return coinsLandedMs(fx.count);
     case 'confetti':
       return CONFETTI_MS;
+    case 'burst':
+      return BURST_MS;
   }
 }
 
@@ -158,6 +169,8 @@ export function lifetimeOf(fx: Fx): number {
       return motionOf(fx) + 250;
     case 'confetti':
       return CONFETTI_MS;
+    case 'burst':
+      return BURST_MS + 100;
   }
 }
 

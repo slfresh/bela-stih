@@ -8,6 +8,7 @@ import {
   type PlayerProfile,
 } from '@belot/progression';
 import { playSfx, type PlayOptions, type Sfx } from './audio';
+import { notify, tripleBuzz } from './haptics';
 
 /**
  * Turns the table's event stream into sound, haptics and rewards.
@@ -51,6 +52,14 @@ export function landingSound(e: TableEvent, mySeat: Seat): void {
   if (e.kind === 'cardPlayed' && e.seat !== mySeat) playSfx('play', { rate: 0.95 });
   // The pip (or the ×2) lands on the plaque as the beat ends.
   if (e.kind === 'bidCalled' || e.kind === 'doubled') playSfx('stamp');
+  // The verdict, as the sheet slides up: the stinger and the phone's own
+  // made / failed pattern land together.
+  if (e.kind === 'dealScored') {
+    const mine = teamOf(mySeat);
+    const won = e.result.finalScore[mine] > e.result.finalScore[mine === 0 ? 1 : 0];
+    playSfx(won ? 'win' : 'lose');
+    notify(won ? 'success' : 'error');
+  }
 }
 
 export interface ProcessOptions {
@@ -162,7 +171,9 @@ export function processEvents({
         const mine = teamOf(mySeat);
         const theirs = mine === 0 ? 1 : 0;
         const won = e.result.finalScore[mine] > e.result.finalScore[theirs];
-        sfx(won ? 'win' : 'lose');
+        // The win / lose stinger plays at the END of the beat, with the sheet
+        // (see `landingSound`); a štiglja announces itself as the beat starts.
+        if (e.result.valatTeam !== null) sfx('stiglja');
         const r = applyDealOutcome(next, {
           won,
           points: e.result.finalScore[mine],
@@ -178,6 +189,10 @@ export function processEvents({
       case 'matchOver': {
         const won = e.winner === teamOf(mySeat);
         sfx(won ? 'matchWon' : 'matchLost');
+        if (haptics && !silent) {
+          if (won) tripleBuzz();
+          else notify('error');
+        }
         matchEnded = true;
         const r = applyMatchOutcome(next, won);
         next = r.profile;

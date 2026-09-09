@@ -22,6 +22,7 @@ import {
   BUBBLE_MIN_MS,
   BUBBLE_OUT_MS,
   BUBBLE_SETTLE_IN_MS,
+  BURST_MS,
   COIN_FLY_MS,
   COIN_STAGGER_MS,
   CONFETTI_MS,
@@ -29,13 +30,13 @@ import {
   DEAL_FLY_MS,
   DEAL_HOLD_MS,
   FLIGHT_FLIP_AT,
+  lifetimeOf,
   PULSE_MS,
   STAMP_MS,
   SWEEP_FLIP_AT,
   SWEEP_FLY_MS,
   SWEEP_HOLD_MS,
   SWEEP_STAGGER_MS,
-  lifetimeOf,
 } from './lifetimes';
 
 /**
@@ -129,7 +130,17 @@ function Sprite({ fx, origin }: { fx: FxWithId; origin: XY }) {
     case 'pulse':
       return <Pulse at={local(fx.at)} speed={fx.speed} />;
     case 'badge':
-      return <Badge from={local(fx.from)} to={local(fx.to)} duration={fx.duration} />;
+      return (
+        <Badge
+          from={local(fx.from)}
+          to={local(fx.to)}
+          duration={fx.duration}
+          text={fx.text}
+          tone={fx.tone}
+        />
+      );
+    case 'burst':
+      return <Burst at={local(fx.at)} count={fx.count} seed={fx.id} />;
     case 'coins':
       return <Coins from={local(fx.from)} to={local(fx.to)} count={fx.count} />;
     case 'confetti':
@@ -376,8 +387,20 @@ function Pulse({ at, speed }: { at: XY; speed: number }) {
 
 const BADGE = 18;
 
-/** The "D" hopping from the old dealer's puck to the new one. */
-function Badge({ from, to, duration }: { from: XY; to: XY; duration: number }) {
+/** A chip hopping from one place to another: the dealer's "D", the last trick's +10. */
+function Badge({
+  from,
+  to,
+  duration,
+  text = 'D',
+  tone = 'dealer',
+}: {
+  from: XY;
+  to: XY;
+  duration: number;
+  text?: string;
+  tone?: 'dealer' | 'points';
+}) {
   const p = useSharedValue(0);
   useEffect(() => {
     p.value = withTiming(1, { duration, easing: Easing.inOut(Easing.cubic) });
@@ -393,10 +416,67 @@ function Badge({ from, to, duration }: { from: XY; to: XY; duration: number }) {
     };
   });
   return (
-    <Animated.View style={[styles.sprite, styles.badge, style]}>
-      <Text style={styles.badgeText}>D</Text>
+    <Animated.View style={[styles.sprite, styles.badge, tone === 'points' && styles.badgePoints, style]}>
+      <Text style={[styles.badgeText, tone === 'points' && styles.badgePointsText]}>{text}</Text>
     </Animated.View>
   );
+}
+
+// --- a burst ---------------------------------------------------------------------
+
+/** Confetti from a point: out fast in every direction, then falling and fading. */
+function Burst({ at, count, seed }: { at: XY; count: number; seed: number }) {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: count }).map((_, i) => ({
+        key: i,
+        angle: ((i * 137.5 + seed * 31) % 360) * (Math.PI / 180),
+        reach: 70 + ((i * 53 + seed * 7) % 90),
+        colour: CONFETTI_COLOURS[i % CONFETTI_COLOURS.length]!,
+        spin: ((i * 89) % 2 ? 1 : -1) * (180 + ((i * 71) % 360)),
+      })),
+    [count, seed],
+  );
+  return (
+    <>
+      {pieces.map(({ key, ...c }) => (
+        <BurstPiece key={key} at={at} {...c} />
+      ))}
+    </>
+  );
+}
+
+function BurstPiece({
+  at,
+  angle,
+  reach,
+  colour,
+  spin,
+}: {
+  at: XY;
+  angle: number;
+  reach: number;
+  colour: string;
+  spin: number;
+}) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    p.value = withTiming(1, { duration: BURST_MS, easing: Easing.linear });
+  }, [p]);
+  const style = useAnimatedStyle(() => {
+    // Out with a quick ease, then gravity takes over.
+    const out = 1 - Math.pow(1 - Math.min(1, p.value * 2.2), 3);
+    const fall = Math.max(0, p.value - 0.25);
+    return {
+      opacity: 1 - Math.max(0, (p.value - 0.7) / 0.3),
+      transform: [
+        { translateX: at.x + Math.cos(angle) * reach * out },
+        { translateY: at.y + Math.sin(angle) * reach * out * 0.7 + fall * fall * 320 },
+        { rotateZ: `${p.value * spin}deg` },
+      ],
+    };
+  });
+  return <Animated.View style={[styles.sprite, styles.confetto, { backgroundColor: colour }, style]} />;
 }
 
 // --- the stamp -----------------------------------------------------------------
@@ -415,7 +495,7 @@ function Stamp({
   at: XY;
   pip?: Suit;
   text?: string;
-  tone: 'gold' | 'danger';
+  tone: 'gold' | 'danger' | 'ok';
   speed: number;
 }) {
   const p = useSharedValue(0);
@@ -424,10 +504,13 @@ function Stamp({
     drop.value = withSpring(1, { damping: 12, stiffness: 240, mass: 0.5 });
     p.value = withTiming(1, { duration: STAMP_MS * speed, easing: Easing.out(Easing.cubic) });
   }, [p, drop, speed]);
+  // A word (Štiglja) needs a wider plate than a pip or a ×2.
+  const wide = text !== undefined && text.length > 3;
+  const w = wide ? STAMP_WIDE : STAMP_SIZE;
   const body = useAnimatedStyle(() => ({
     opacity: 1 - Math.max(0, (p.value - 0.7) / 0.3),
     transform: [
-      { translateX: at.x - STAMP_SIZE / 2 },
+      { translateX: at.x - w / 2 },
       { translateY: at.y - STAMP_SIZE / 2 },
       { scale: drop.value },
     ],
@@ -442,12 +525,31 @@ function Stamp({
   }));
   return (
     <>
-      <Animated.View style={[styles.sprite, styles.stampRing, tone === 'danger' && styles.stampRingDanger, ring]} />
-      <Animated.View style={[styles.sprite, styles.stamp, body]}>
+      {!wide && (
+        <Animated.View
+          style={[
+            styles.sprite,
+            styles.stampRing,
+            tone === 'danger' && styles.stampRingDanger,
+            tone === 'ok' && styles.stampRingOk,
+            ring,
+          ]}
+        />
+      )}
+      <Animated.View style={[styles.sprite, styles.stamp, wide && styles.stampWide, body]}>
         {pip !== undefined ? (
           <SuitPip suit={pip} size={STAMP_SIZE - 8} />
         ) : (
-          <Text style={[styles.stampText, tone === 'danger' && styles.stampTextDanger]}>{text}</Text>
+          <Text
+            style={[
+              styles.stampText,
+              tone === 'danger' && styles.stampTextDanger,
+              tone === 'ok' && styles.stampTextOk,
+              wide && styles.stampTextWide,
+            ]}
+          >
+            {text}
+          </Text>
         )}
       </Animated.View>
     </>
@@ -455,6 +557,7 @@ function Stamp({
 }
 
 const STAMP_SIZE = 36;
+const STAMP_WIDE = 150;
 
 // --- speech bubble -----------------------------------------------------------
 
@@ -703,6 +806,18 @@ const styles = StyleSheet.create({
   },
   stampText: { color: garb.gold, fontSize: 20, fontWeight: '800' },
   stampTextDanger: { color: theme.danger },
+  stampTextOk: { color: theme.ok },
+  stampWide: { width: STAMP_WIDE },
+  stampTextWide: { fontSize: 30, letterSpacing: 1 },
+  stampRingOk: { borderColor: theme.ok },
+  badgePoints: {
+    width: 34,
+    borderRadius: 9,
+    backgroundColor: theme.accent,
+    borderColor: garb.goldDark,
+  },
+  badgePointsText: { fontSize: 12 },
+
   stampRing: {
     width: STAMP_SIZE,
     height: STAMP_SIZE,

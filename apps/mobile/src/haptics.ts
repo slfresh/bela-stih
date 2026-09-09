@@ -40,3 +40,24 @@ export function doubleBuzz(kind: Buzz = 'medium'): void {
   buzz(kind);
   setTimeout(() => buzz(kind), 90);
 }
+
+/** Three heavy taps: the match is won. */
+export function tripleBuzz(): void {
+  if (!enabled) return;
+  buzz('heavy');
+  setTimeout(() => buzz('heavy'), 150);
+  setTimeout(() => buzz('heavy'), 300);
+}
+
+const NOTIFY = {
+  success: Haptics.NotificationFeedbackType.Success,
+  warning: Haptics.NotificationFeedbackType.Warning,
+  error: Haptics.NotificationFeedbackType.Error,
+} as const;
+
+/** The system's own verdict patterns: a deal made, a deal failed, a warning. */
+export function notify(kind: keyof typeof NOTIFY): void {
+  if (!enabled) return;
+  void Haptics.notificationAsync(NOTIFY[kind]).catch(() => {});
+}
+

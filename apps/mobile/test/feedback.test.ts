@@ -6,8 +6,10 @@ import { emptyProfile } from '@belot/progression';
 vi.mock('../src/audio', () => ({ playSfx: vi.fn() }));
 vi.mock('expo-haptics', () => ({
   ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
+  NotificationFeedbackType: { Success: 'success', Warning: 'warning', Error: 'error' },
   impactAsync: vi.fn(() => Promise.resolve()),
   selectionAsync: vi.fn(() => Promise.resolve()),
+  notificationAsync: vi.fn(() => Promise.resolve()),
 }));
 
 import * as Haptics from 'expo-haptics';
@@ -85,6 +87,7 @@ function run(events: TableEvent[], silent = false) {
 beforeEach(() => {
   sfx.mockClear();
   vi.mocked(Haptics.impactAsync).mockClear();
+  vi.mocked(Haptics.notificationAsync).mockClear();
 });
 
 describe('every event kind is scored', () => {
@@ -96,8 +99,10 @@ describe('every event kind is scored', () => {
     it(`${kind}: ${SILENT_EVENTS.includes(kind) ? 'is silent by declaration' : 'makes a sound'}`, () => {
       const e = byKind.get(kind)!;
       // A card of MINE sounds as it leaves the hand; another seat's sounds as
-      // it lands, from the end-of-beat (tested below).
+      // it lands, from the end-of-beat (tested below). A scored deal's
+      // stinger is at the end too, with the sheet.
       run([e.kind === 'cardPlayed' ? { ...e, seat: MY_SEAT } : e]);
+      if (kind === 'dealScored') landingSound(e, MY_SEAT);
       expect(heard().length > 0).toBe(!SILENT_EVENTS.includes(kind));
     });
   }
@@ -124,6 +129,7 @@ describe('a flushed replay', () => {
     const quiet = run(aMatch, true);
     expect(heard()).toEqual([]);
     expect(vi.mocked(Haptics.impactAsync)).not.toHaveBeenCalled();
+    expect(vi.mocked(Haptics.notificationAsync)).not.toHaveBeenCalled();
     expect(quiet.profile).toEqual(loud.profile);
     expect(quiet.award).toEqual(loud.award);
   });
@@ -172,10 +178,20 @@ describe('the sounds that carry meaning', () => {
     expect(heard()).toContain(won ? 'matchLost' : 'matchWon');
   });
 
-  it('a scored deal still dings its coins', () => {
-    const scored = byKind.get('dealScored')!;
+  it('a scored deal dings its coins at the start and its verdict at the end', () => {
+    const scored = byKind.get('dealScored')! as Extract<TableEvent, { kind: 'dealScored' }>;
     const r = run([scored]);
     if ((r.award?.coins ?? 0) > 0 && r.award?.levelUp === null) expect(heard()).toContain('coin');
+    expect(heard().some((n) => n === 'win' || n === 'lose')).toBe(false);
+    sfx.mockClear();
+    landingSound(scored, MY_SEAT);
     expect(heard().some((n) => n === 'win' || n === 'lose')).toBe(true);
+    expect(vi.mocked(Haptics.notificationAsync)).toHaveBeenCalledTimes(1);
+  });
+
+  it('a štiglja announces itself as the beat starts', () => {
+    const scored = byKind.get('dealScored')! as Extract<TableEvent, { kind: 'dealScored' }>;
+    run([{ ...scored, result: { ...scored.result, valatTeam: 1 } }]);
+    expect(heard()).toContain('stiglja');
   });
 });

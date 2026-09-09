@@ -12,6 +12,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Animated, {
   cancelAnimation,
   Easing,
+  FadeIn,
+  FadeInDown,
+  LinearTransition,
+  SlideInDown,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
@@ -19,7 +23,6 @@ import Animated, {
   withSequence,
   withSpring,
   withTiming,
-  LinearTransition,
   ZoomIn,
 } from 'react-native-reanimated';
 import { useCountUp } from './anim/useCountUp';
@@ -41,7 +44,7 @@ import { EffectsOverlay } from './anim/EffectsOverlay';
 import { REVEAL_MS } from './anim/director';
 import { RevealRow } from './table/RevealRow';
 import { REVEAL_EXIT_MS, type RevealPhase } from './table/revealTiming';
-import { COIN_CASCADE_COUNT, coinsLandedMs } from './anim/lifetimes';
+import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS, coinsLandedMs } from './anim/lifetimes';
 import { useLaggedNumber } from './ui/useLaggedNumber';
 import { anchorId, type FxBus } from './anim/FxBus';
 import { SeatPuck } from './table/SeatPuck';
@@ -174,8 +177,12 @@ export function TableScreen(props: TableScreenProps) {
   const feltShake = useSharedValue(0);
   const feltShakeStyle = useAnimatedStyle(() => ({ transform: [{ translateX: feltShake.value }] }));
   useEffect(() => {
-    if (cue?.kind !== 'shake' || reduced) return;
-    const a = cue.amp * m.scale;
+    if (cue?.kind === 'stiglja') {
+      const at = anchors.centre(anchorId.deck);
+      if (at && !reduced) fxBus.emit({ kind: 'burst', at, count: 40 });
+    }
+    if ((cue?.kind !== 'shake' && cue?.kind !== 'stiglja') || reduced) return;
+    const a = (cue.kind === 'stiglja' ? 6 : cue.amp) * m.scale;
     feltShake.value = withSequence(
       withTiming(a, { duration: 40 }),
       withTiming(-a, { duration: 80 }),
@@ -183,7 +190,7 @@ export function TableScreen(props: TableScreenProps) {
       withTiming(-a * 0.6, { duration: 80 }),
       withTiming(0, { duration: 60 }),
     );
-  }, [cue, feltShake, reduced, m.scale]);
+  }, [cue, feltShake, reduced, m.scale, anchors, fxBus]);
 
   // The trick cross is sized against the felt it is drawn in, not the window:
   // a landscape felt is a short wide ellipse and window-sized cards hang out
@@ -269,6 +276,7 @@ export function TableScreen(props: TableScreenProps) {
       thinking={spotlightSeat === s}
       reduced={reduced}
       gesture={cue && (cue.kind === 'nod' || cue.kind === 'pulse') && cue.seat === s ? cue : null}
+      tricks={view.dealProgress?.tricksWon[teamOf(s)] ?? 0}
     />
     </Animated.View>
   );
@@ -712,10 +720,16 @@ export function TableScreen(props: TableScreenProps) {
     anchors.bump();
   }, [anchors, reflowKey]);
 
+  const lostMatch = matchOver && winnerTeam !== null && winnerTeam !== teamOf(mySeat);
   const resultSheet = settled ? (
-    <View style={styles.resultBackdrop} pointerEvents="box-none">
+    <Animated.View
+      style={[styles.resultBackdrop, lostMatch && styles.resultBackdropLost]}
+      pointerEvents="box-none"
+      entering={reduced ? undefined : FadeIn.duration(220)}
+    >
       <DealResult
         lang={lang}
+        reduced={reduced}
         maxHeight={Math.round(m.height * 0.92)}
         result={lastDealResult}
         matchScores={matchScores}
@@ -735,7 +749,7 @@ export function TableScreen(props: TableScreenProps) {
         onFinish={onFinish}
         finishLabel={finishLabel}
       />
-    </View>
+    </Animated.View>
   ) : null;
 
   return (
@@ -757,6 +771,7 @@ export function TableScreen(props: TableScreenProps) {
                   progress={view.dealProgress}
                   vertical
                   reduced={reduced}
+                  winner={matchOver ? winnerTeam : null}
                 />
                 {plaque}
                 {calls}
@@ -797,6 +812,7 @@ export function TableScreen(props: TableScreenProps) {
                 matchScores={matchScores}
                 progress={view.dealProgress}
                 reduced={reduced}
+                winner={matchOver ? winnerTeam : null}
               />
 
               {felt}
@@ -845,6 +861,7 @@ const TableHeader = memo(function TableHeader({
   progress,
   vertical = false,
   reduced = false,
+  winner = null,
 }: {
   lang: Lang;
   mySeat: Seat;
@@ -853,6 +870,8 @@ const TableHeader = memo(function TableHeader({
   /** Landscape puts the whole strip in the left rail, stacked. */
   vertical?: boolean;
   reduced?: boolean;
+  /** The match is over and this side took it: its pill swells for a moment. */
+  winner?: TeamId | null;
 }) {
   const us = teamOf(mySeat);
   const them = (1 - us) as TeamId;
@@ -861,6 +880,16 @@ const TableHeader = memo(function TableHeader({
   const themScore = useCountUp(matchScores[them], 500, { reduced });
   const usRun = useCountUp(progress?.running[us] ?? 0, 350, { reduced });
   const themRun = useCountUp(progress?.running[them] ?? 0, 350, { reduced });
+  const swell = useSharedValue(1);
+  useEffect(() => {
+    if (winner === null || reduced) return;
+    swell.value = withSequence(
+      withTiming(1.18, { duration: 220, easing: Easing.out(Easing.quad) }),
+      withTiming(1, { duration: 360, easing: Easing.inOut(Easing.quad) }),
+    );
+  }, [winner, swell, reduced]);
+  const swellUs = useAnimatedStyle(() => ({ transform: [{ scale: winner === us ? swell.value : 1 }] }));
+  const swellThem = useAnimatedStyle(() => ({ transform: [{ scale: winner === them ? swell.value : 1 }] }));
 
   // While trick 1 is open a later zvanje can still move the target, so the
   // count is shown dimmed rather than hidden — it is honest, just not final.
@@ -873,29 +902,36 @@ const TableHeader = memo(function TableHeader({
   return (
     <View style={[styles.scoreRow, vertical && styles.scoreCol]}>
       <View style={[styles.pillRow, vertical && styles.pillCol]}>
-        <View style={[styles.teamPill, { backgroundColor: team.usDim, borderColor: team.usEdge }]}>
+        <Animated.View
+          style={[styles.teamPill, { backgroundColor: team.usDim, borderColor: team.usEdge }, swellUs]}
+        >
           <Text style={styles.pillLabel}>{lang.team(us, mySeat)}</Text>
           <Text style={[styles.pillValue, { color: team.usInk }]}>{usScore}</Text>
-        </View>
-        <View style={[styles.teamPill, { backgroundColor: team.themDim, borderColor: team.themEdge }]}>
+        </Animated.View>
+        <Animated.View
+          style={[styles.teamPill, { backgroundColor: team.themDim, borderColor: team.themEdge }, swellThem]}
+        >
           {/* Side by side the two pills mirror each other around the centre;
               stacked in a rail there is no centre, so both read label, value. */}
           {vertical && <Text style={styles.pillLabel}>{lang.team(them, mySeat)}</Text>}
           <Text style={[styles.pillValue, { color: team.themInk }]}>{themScore}</Text>
           {!vertical && <Text style={styles.pillLabel}>{lang.team(them, mySeat)}</Text>}
-        </View>
+        </Animated.View>
       </View>
 
       {progress ? (
-        <Text style={[live!, vertical && styles.centreText]}>
-          {usRun} : {themRun}
-          <Text style={styles.subDim}>
-            {vertical ? '\n' : '   '}
-            {progress.callerNeeds === 0
-              ? lang.s.contractSafe
-              : lang.s.needsMore(progress.callerNeeds)}
+        // The last trick's +10 flies here.
+        <Anchor id={anchorId.running}>
+          <Text style={[live!, vertical && styles.centreText]}>
+            {usRun} : {themRun}
+            <Text style={styles.subDim}>
+              {vertical ? '\n' : '   '}
+              {progress.callerNeeds === 0
+                ? lang.s.contractSafe
+                : lang.s.needsMore(progress.callerNeeds)}
+            </Text>
           </Text>
-        </Text>
+        </Anchor>
       ) : (
         <Text style={styles.subDim}>{lang.s.gameToTarget(1001)}</Text>
       )}
@@ -909,6 +945,7 @@ const TableHeader = memo(function TableHeader({
   a.mySeat === b.mySeat &&
   a.vertical === b.vertical &&
   a.reduced === b.reduced &&
+  a.winner === b.winner &&
   a.matchScores[0] === b.matchScores[0] &&
   a.matchScores[1] === b.matchScores[1] &&
   (a.progress === null) === (b.progress === null) &&
@@ -933,20 +970,38 @@ const ProfileBar = memo(
   }) {
     const p = levelProgress(profile.xp);
     // The total changes when the last coin lands on it, not when the deal is
-    // scored with the coins still in the air.
-    const coins = useLaggedNumber(profile.coins, coinsLandedMs(COIN_CASCADE_COUNT));
+    // scored with the coins still in the air — and the coins set off from the
+    // sheet's total, a moment after the sheet has slid up.
+    const coins = useLaggedNumber(profile.coins, COIN_CASCADE_DELAY_MS + coinsLandedMs(COIN_CASCADE_COUNT));
+    // The XP bar fills rather than jumps; a new level swells the badge.
+    const fill = useSharedValue(p.fraction);
+    useEffect(() => {
+      fill.value = withTiming(p.fraction, { duration: 600, easing: Easing.out(Easing.cubic) });
+    }, [fill, p.fraction]);
+    const fillStyle = useAnimatedStyle(() => ({ width: `${Math.round(fill.value * 100)}%` }));
+    const badge = useSharedValue(1);
+    const level = useRef(p.level);
+    useEffect(() => {
+      if (level.current === p.level) return;
+      level.current = p.level;
+      badge.value = withSequence(
+        withTiming(1.35, { duration: 220, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 320, easing: Easing.inOut(Easing.quad) }),
+      );
+    }, [badge, p.level]);
+    const badgeStyle = useAnimatedStyle(() => ({ transform: [{ scale: badge.value }] }));
     return (
       <Pressable
         onLongPress={onLongPress}
         delayLongPress={600}
         style={[styles.profileBar, vertical && styles.profileBarCol]}
       >
-        <View style={styles.levelBadge}>
+        <Animated.View style={[styles.levelBadge, badgeStyle]}>
           <Text style={styles.levelText}>{p.level}</Text>
-        </View>
+        </Animated.View>
         <View style={[styles.xpWrap, vertical && styles.xpWrapCol]}>
           <View style={styles.xpTrack}>
-            <View style={[styles.xpFill, { width: `${Math.round(p.fraction * 100)}%` }]} />
+            <Animated.View style={[styles.xpFill, fillStyle]} />
           </View>
         </View>
         <Anchor id={anchorId.wallet}>
@@ -1392,8 +1447,10 @@ function DealResult({
   onNext,
   onFinish,
   finishLabel,
+  reduced = false,
 }: {
   lang: Lang;
+  reduced?: boolean;
   /** The sheet scrolls rather than run off a short (landscape) screen. */
   maxHeight: number;
   result: DealScoreResult | null;
@@ -1414,21 +1471,32 @@ function DealResult({
   finishLabel: string;
 }) {
   if (!result) return null;
-  const row = (label: string, v: readonly [number, number]) => (
-    <View style={styles.resultRow} key={label}>
+  // Rows arrive one after another; the totals count up to their values.
+  let order = 0;
+  const enter = () => (reduced ? undefined : FadeInDown.delay(order++ * 60).duration(220));
+  const row = (label: string, v: readonly [number, number], opts: { count?: boolean; anchor?: string } = {}) => (
+    <Animated.View style={styles.resultRow} key={label} entering={enter()}>
       <Text style={styles.resultLabel}>{label}</Text>
-      <Text style={styles.resultValue}>
-        {v[0]} : {v[1]}
-      </Text>
-    </View>
+      {opts.count ? (
+        <CountedPair a={v[0]} b={v[1]} reduced={reduced} anchor={opts.anchor} />
+      ) : (
+        <Text style={styles.resultValue}>
+          {v[0]} : {v[1]}
+        </Text>
+      )}
+    </Animated.View>
   );
+  const stiglja = result.valatTeam !== null;
 
   return (
+    <Animated.View entering={reduced ? undefined : SlideInDown.duration(280)}>
     <ScrollView
       style={[styles.resultPanel, { maxHeight }]}
       contentContainerStyle={styles.resultContent}
     >
-      <Text style={styles.resultTitle}>{lang.s.dealResult}</Text>
+      <Text style={[styles.resultTitle, stiglja && styles.resultTitleStiglja]}>
+        {stiglja ? `${lang.s.valat}!` : lang.s.dealResult}
+      </Text>
       {row(lang.s.cardsAndLastTrick, result.trickPoints)}
       {result.valatTeam !== null && row(lang.s.valat, result.valatBonus)}
       {result.declarationPoints[0] + result.declarationPoints[1] > 0 &&
@@ -1441,16 +1509,22 @@ function DealResult({
       {result.bela[0] + result.bela[1] > 0 && row(lang.s.bela, result.bela)}
       {row(lang.s.total, result.rawTotal)}
       {renonsText ? (
-        <Text style={[styles.verdict, styles.failed]}>
+        <Animated.Text
+          style={[styles.verdict, styles.failed]}
+          entering={reduced ? undefined : ZoomIn.springify().damping(14).delay(order * 60)}
+        >
           {lang.s.renonsTitle} {renonsText}
-        </Text>
+        </Animated.Text>
       ) : (
-        <Text style={[styles.verdict, result.callerMade ? styles.made : styles.failed]}>
+        <Animated.Text
+          style={[styles.verdict, result.callerMade ? styles.made : styles.failed]}
+          entering={reduced ? undefined : ZoomIn.springify().damping(14).delay(order * 60)}
+        >
           {result.callerMade ? lang.s.callerMade : lang.s.callerFailed}
-        </Text>
+        </Animated.Text>
       )}
-      {row(lang.s.recorded, result.finalScore)}
-      {row(lang.s.matchScore, matchScores)}
+      {row(lang.s.recorded, result.finalScore, { count: true, anchor: anchorId.sheetTotal })}
+      {row(lang.s.matchScore, matchScores, { count: true })}
 
       {matchOver ? (
         <>
@@ -1484,7 +1558,37 @@ function DealResult({
         </View>
       )}
     </ScrollView>
+    </Animated.View>
   );
+}
+
+/** "a : b", each counting up to its value; optionally the anchor coins set off from. */
+function CountedPair({
+  a,
+  b,
+  reduced,
+  anchor,
+}: {
+  a: number;
+  b: number;
+  reduced: boolean;
+  anchor?: string;
+}) {
+  const steps = useRef(0);
+  const av = useCountUp(a, 600, {
+    reduced,
+    // Every other step ticks, softly: a tally being written, not a rattle.
+    onStep: () => {
+      if (++steps.current % 2 === 0) playSfx('tick', { gain: 0.25, rate: 1.4 });
+    },
+  });
+  const bv = useCountUp(b, 600, { reduced });
+  const text = (
+    <Text style={styles.resultValue}>
+      {av} : {bv}
+    </Text>
+  );
+  return anchor ? <Anchor id={anchor}>{text}</Anchor> : text;
 }
 
 const styles = StyleSheet.create({
@@ -1740,6 +1844,8 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     backgroundColor: 'rgba(0,0,0,0.35)',
   },
+  // A lost match: the room dims a shade more, no vignette imagery.
+  resultBackdropLost: { backgroundColor: 'rgba(0,0,0,0.55)' },
   resultPanel: {
     backgroundColor: theme.feltDeep,
     borderTopLeftRadius: radius.panel + 6,
@@ -1750,6 +1856,7 @@ const styles = StyleSheet.create({
   },
   resultContent: { padding: 16, gap: 4 },
   resultTitle: { color: theme.text, fontWeight: '800', fontSize: 16, marginBottom: 4 },
+  resultTitleStiglja: { color: theme.accent, fontSize: 20 },
   resultRow: { flexDirection: 'row', justifyContent: 'space-between' },
   resultLabel: { color: theme.textDim, fontSize: 14 },
   voidNote: { color: theme.danger, fontSize: 12, fontStyle: 'italic' },

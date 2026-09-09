@@ -41,6 +41,7 @@ function fakeAnchors(withSlots = true): AnchorMap {
   }
   rects.set('deck', { x: 180, y: 160, w: 10, h: 10 });
   rects.set('plaque', { x: 170, y: 90, w: 40, h: 40 });
+  rects.set('running', { x: 160, y: 10, w: 60, h: 16 });
   const map = {
     rect: (k: string) => rects.get(k) ?? null,
     centre: (k: string) => {
@@ -339,5 +340,38 @@ describe('the bidding beats', () => {
       if (fx.kind !== 'bubble') continue;
       expect([1, 2, 3, 4]).toContain(fx.weight);
     }
+  });
+});
+
+describe('the scoring beats', () => {
+  it('the last trick sends its +10 to the running count, inside the trick beat', () => {
+    const chips = spritesOfADeal(1).filter((s) => s.fx.kind === 'badge' && s.fx.text === '+10');
+    expect(chips.length).toBe(1);
+    const fx = chips[0]!.fx;
+    if (fx.kind !== 'badge') return;
+    expect(fx.to).toEqual({ x: 190, y: 18 });
+    expect(chips[0]!.kind).toBe('trickWon');
+  });
+
+  it('a štiglja stamps the word on the felt in the sweeping side\'s colour', () => {
+    const anchors = fakeAnchors();
+    const table = new Table({ seed: 7, humanSeats: [] });
+    const scored = table.drainEvents().find((e): e is Extract<TableEvent, { kind: 'dealScored' }> => e.kind === 'dealScored');
+    expect(scored).toBeDefined();
+    const bus = new FxBus();
+    const out: Fx[] = [];
+    bus.subscribe((fx) => out.push(fx));
+    const fx = makeFxSpawner({
+      anchors,
+      bus,
+      lang: new Lang('hr'),
+      mySeat: () => 0,
+      view: () => table.view(0 as Seat),
+    });
+    fx.start({ ...scored!, result: { ...scored!.result, valatTeam: 1 } }, 1);
+    const stamp = out.find((f) => f.kind === 'stamp');
+    expect(stamp?.kind === 'stamp' && stamp.text).toBe('Štiglja');
+    expect(stamp?.kind === 'stamp' && stamp.tone).toBe('danger');
+    expect(motionOf(stamp!)).toBeLessThanOrEqual(DEFAULT_TIMINGS.dealScored.dur);
   });
 });

@@ -50,6 +50,7 @@ export const TRIM = {
   kontra: 0,
   reveal: -1,
   revealDown: -3,
+  stiglja: 1,
 };
 
 // --- tiny synth -------------------------------------------------------------
@@ -419,6 +420,17 @@ export const SFX = {
   // ...and coming down: two soft notes falling, no fuss
   revealDown: () =>
     arpeggio([988, 784], 0.1, 0.22, { gain: 0.22, power: 5, harmonic: 0.3, attack: 0.006 }),
+
+  // štiglja — every trick to one side: a low hit, then a fanfare climbing out of it
+  stiglja: () =>
+    mix(
+      tone(98, 0.5, { gain: 0.32, power: 3, harmonic: 0.5, attack: 0.004 }),
+      bandNoise(0.06, { gain: 0.3, power: 5, lo: 0.8, hi: 0.3 }),
+      concat(
+        silence(0.12),
+        arpeggio([392, 523, 659, 784], 0.075, 0.5, { gain: 0.28, power: 3, harmonic: 0.5, attack: 0.005 }),
+      ),
+    ),
 };
 
 /**
