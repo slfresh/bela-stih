@@ -64,6 +64,14 @@ ui_bounds() {
   python "$(basename "$UI_DIR")/ui_bounds.py" "$b64" < "$UI_XML"
 }
 
+# The full bounds ("x1 y1 x2 y2") of the first node whose text OR
+# accessibility label matches exactly.
+ui_box() {
+  local b64
+  b64=$(printf '%s' "$1" | base64 -w0 2>/dev/null || printf '%s' "$1" | base64)
+  python "$(basename "$UI_DIR")/ui_bounds.py" --box "$b64" < "$UI_XML"
+}
+
 ui_tap() {
   ui_dump || return 1
   local xy

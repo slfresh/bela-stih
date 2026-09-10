@@ -54,6 +54,14 @@ export interface TableMetrics {
    * 62 dp once pushed the action buttons off every 647–676 dp phone.
    */
   promptReserve: boolean;
+  /**
+   * Portrait where even the lowest floor cannot pay for the busiest moment (a
+   * calls chip and a prompt at once). There the two rows that are no use
+   * while the table asks a question — the emote strip and the online bot
+   * line — give way while a prompt is up, so the buttons that answer it stay
+   * on the screen.
+   */
+  shortColumn: boolean;
 }
 
 const REF_W = 390;
@@ -70,15 +78,27 @@ export const SELF_PUCK_GAP = 8;
 
 /**
  * Portrait's rows that do not flex, in dp, as measured on a 360 dp Samsung
- * with Rubik: the root's padding (24), the profile strip with the leave
- * button (35), the online "— igra bot" line (16), the score strip (34), one
- * calls chip (22), the emote strip (34), the actions row (40), and the eight
- * gaps between nine rows (64). The hand and my puck are added from their own
+ * with Rubik at the busiest moment of a deal — declaring, online: the root's
+ * padding (24), the profile strip with the leave button (35), the "— igra
+ * bot" line (16), the score strip (34), a calls chip (24), the zvanja prompt
+ * (58), the emote strip (34), the actions row (40), and the nine gaps
+ * between ten rows (72). The hand and my puck are added from their own
  * sizes; the felt takes what is left.
+ *
+ * The prompt is counted whether or not its row is reserved: an unreserved
+ * prompt still appears, and the felt must be able to give it the room. The
+ * first version counted it only when reserved, and on the Samsung the zvanja
+ * question pushed "Prijavi" and "Nemam" under the navigation bar.
  */
-export const PORTRAIT_CHROME = 24 + 35 + 16 + 34 + 22 + 34 + 40 + 8 * 8;
-/** The prompt reserve's row and its gap. */
-export const PROMPT_RESERVE = 54 + 8;
+export const PORTRAIT_CHROME = 24 + 35 + 16 + 34 + 24 + 58 + 34 + 40 + 9 * 8;
+/**
+ * Bidding's own band: four trump buttons wrap the actions row onto two lines
+ * (92), with no chip and no prompt beside them — so it must never need more
+ * than declaring's chip, prompt and one line of buttons.
+ */
+export const BIDDING_ACTIONS = 92;
+/** What a short column sheds while a prompt is up: the emote strip (34) and the bot line (16), with their gaps. */
+export const PROMPT_SHED = 34 + 8 + 16 + 8;
 /** The felt's floor where the phone can pay for it, and how far it may give. */
 export const FELT_FLOOR = 260;
 export const FELT_FLOOR_MIN = 180;
@@ -116,10 +136,9 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
   // felt keeps its whole floor with it; without it, the floor gives before
   // the actions row is pushed off the bottom of a short phone.
   const portraitFixed = PORTRAIT_CHROME + handMinHeight + selfPuck + 10;
-  const promptReserve = !landscape && usableH - portraitFixed - PROMPT_RESERVE >= FELT_FLOOR;
-  const feltMinHeight = landscape
-    ? 0
-    : clamp(usableH - portraitFixed - (promptReserve ? PROMPT_RESERVE : 0), FELT_FLOOR_MIN, FELT_FLOOR);
+  const promptReserve = !landscape && usableH - portraitFixed >= FELT_FLOOR;
+  const feltMinHeight = landscape ? 0 : clamp(usableH - portraitFixed, FELT_FLOOR_MIN, FELT_FLOOR);
+  const shortColumn = !landscape && usableH - portraitFixed < FELT_FLOOR_MIN;
 
   return {
     orientation: landscape ? 'landscape' : 'portrait',
@@ -149,6 +168,7 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
     compact: usableH < 620,
     tightRail: landscape && usableH < 520,
     promptReserve,
+    shortColumn,
   };
 }
 

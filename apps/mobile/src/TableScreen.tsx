@@ -704,11 +704,24 @@ export function TableScreen(props: TableScreenProps) {
   // prompt coming or going never moves the hand under your thumb; a shorter
   // phone cannot spare it, and landscape flexes the felt instead.
   const prompts = m.promptReserve ? <View style={styles.promptsReserve}>{promptRows}</View> : promptRows;
+  // Is the table asking me something right now? (The prompt rows' own conditions.)
+  const hasPrompt =
+    declaring ||
+    (!settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0) ||
+    (!settled && view.canDeclare === true) ||
+    arranging ||
+    (!settled && view.canAnnounceBela && !hardMode);
+  // A short phone sheds the rows that are no use while it asks, so the
+  // buttons that answer stay on the screen (see metrics' shortColumn).
+  const shed = m.shortColumn && hasPrompt;
 
   // My hand, fanned; the seat anchor for sprites sits underneath it.
   const handBlock = (
     <Anchor id={anchorId.seat(mySeat)} style={[styles.handArea, { minHeight: m.handMinHeight }]}>
       <Pressable
+        // The hand, named: a screen reader says what the block is, and the
+        // device harness finds the fan by it wherever the layout moves it.
+        accessibilityLabel={lang.s.yourCards}
         onLongPress={() => {
           playSfx('hold');
           pattern('longPress');
@@ -949,7 +962,7 @@ export function TableScreen(props: TableScreenProps) {
                 </View>
                 {leaveButton}
               </View>
-              {status ? <Text style={styles.status}>{status}</Text> : null}
+              {status && !shed ? <Text style={styles.status}>{status}</Text> : null}
 
               {/* score strip: match score, plus this deal's running count */}
               <TableHeader
@@ -967,7 +980,7 @@ export function TableScreen(props: TableScreenProps) {
               {handBlock}
               {/* My own disc, centred under my cards and above the faces. */}
               <View style={styles.selfRow}>{selfPuck}</View>
-              {emotes}
+              {!shed && emotes}
 
               {/* actions: bidding, declaring, bela — leaving is the top corner */}
               {!settled && (
@@ -2109,7 +2122,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   promptText: { color: theme.accent, fontFamily: font.bold, fontSize: 13 },
-  promptsReserve: { minHeight: 54, justifyContent: 'flex-end', gap: 8 },
+  // The zvanja prompt measures 58 on a phone; a shorter reserve still moved the hand.
+  promptsReserve: { minHeight: 58, justifyContent: 'flex-end', gap: 8 },
   promptHint: { color: theme.textDim, fontSize: 12 },
 
   handArea: { justifyContent: 'flex-end' },

@@ -295,7 +295,7 @@ describe('the first frame and the last resort', () => {
     const portrait = t.slice(t.indexOf('{/* wallet / level strip'));
     const hand = portrait.indexOf('{handBlock}');
     const puck = portrait.indexOf('<View style={styles.selfRow}>{selfPuck}</View>');
-    const faces = portrait.indexOf('{emotes}');
+    const faces = portrait.indexOf('{!shed && emotes}');
     expect(hand).toBeGreaterThan(-1);
     expect(puck).toBeGreaterThan(hand);
     expect(faces).toBeGreaterThan(puck);
@@ -312,6 +312,10 @@ describe('the first frame and the last resort', () => {
     expect(t).toMatch(/setBackGuard\(/);
     const app = readFileSync(join(here, '../App.tsx'), 'utf8');
     expect(app).toMatch(/if \(runBackGuard\(\)\) return true;/);
+    // A short phone sheds the emote strip and the bot line while a prompt is up.
+    expect(t).toMatch(/const shed = m\.shortColumn && hasPrompt;/);
+    expect(portrait).toMatch(/\{!shed && emotes\}/);
+    expect(portrait).toMatch(/\{status && !shed \?/);
     // The corner letters are gone from the cards.
     const face = src('deck/CardFace.tsx');
     expect(face).not.toMatch(/CornerIndex|cornerIndex|indexColour/);

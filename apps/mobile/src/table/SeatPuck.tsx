@@ -154,6 +154,11 @@ export const SeatPuck = memo(function SeatPuck({
         {yourTurn && (
           <Animated.View
             pointerEvents="none"
+            // Decorative, and it moves every frame: kept out of the
+            // accessibility tree, which would otherwise hear that it changed
+            // sixty times a second (and a UI dump never sees the screen idle).
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
             style={[
               styles.ping,
               { width: ringSize, height: ringSize, borderRadius: ringSize / 2 },
@@ -162,7 +167,11 @@ export const SeatPuck = memo(function SeatPuck({
           />
         )}
         <Anchor id={anchored ? anchorId.seat(seat) : anchorId.puck(seat)} style={[StyleSheet.absoluteFill, styles.centre]}>
-          <Animated.View style={yourTurn && !reduced ? yourTurnBreath : undefined}>
+          <Animated.View
+            style={yourTurn && !reduced ? yourTurnBreath : undefined}
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
+          >
           {portrait ? (
             <View style={{ opacity: connected ? 1 : 0.45 }}>
               <Avatar id={portrait} size={size} />
@@ -195,6 +204,8 @@ export const SeatPuck = memo(function SeatPuck({
           <Animated.View
             style={[StyleSheet.absoluteFill, thinking && !reduced ? thinkPulse : undefined]}
             pointerEvents="none"
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
           >
             <Animated.View
               style={[

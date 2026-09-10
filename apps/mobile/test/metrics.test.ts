@@ -4,8 +4,9 @@ import {
   FELT_FLOOR,
   FELT_FLOOR_MIN,
   FELT_HAND_GAP,
+  BIDDING_ACTIONS,
   PORTRAIT_CHROME,
-  PROMPT_RESERVE,
+  PROMPT_SHED,
   SELF_PUCK_GAP,
 } from '../src/table/metrics';
 import { fanHeight, fitHand } from '../src/table/geometry';
@@ -74,8 +75,8 @@ function portraitNeed(w: number, h: number) {
   const m = computeTableMetrics(w, h);
   return {
     m,
-    need:
-      PORTRAIT_CHROME + m.handMinHeight + m.selfPuck + 10 + (m.promptReserve ? PROMPT_RESERVE : 0) + m.feltMinHeight,
+    // The chrome already counts one prompt row, reserved or not.
+    need: PORTRAIT_CHROME + m.handMinHeight + m.selfPuck + 10 + m.feltMinHeight,
   };
 }
 
@@ -111,10 +112,40 @@ describe('the portrait column', () => {
     for (const [w, h] of LANDSCAPE) expect(computeTableMetrics(w, h).promptReserve).toBe(false);
   });
 
-  it('fits the 360 dp Samsung it was measured on, calls chip and online line included', () => {
+  it('fits the 360 dp Samsung it was measured on at its busiest: chip, zvanja prompt and online line', () => {
+    // Before, the floor stayed at 260 with the prompt unreserved, and the
+    // zvanja question pushed "Prijavi" and "Nemam" under the navigation bar.
     const { m, need } = portraitNeed(360, 723);
     expect(need).toBeLessThanOrEqual(723);
-    expect(m.feltMinHeight).toBeGreaterThanOrEqual(240);
+    expect(m.promptReserve).toBe(false);
+    expect(m.feltMinHeight).toBeLessThan(FELT_FLOOR);
+    expect(m.feltMinHeight).toBeGreaterThanOrEqual(FELT_FLOOR_MIN);
+  });
+
+  it('keeps the buttons that answer a prompt on the screen, down to a 360x640 phone', () => {
+    for (const [w, h] of PHONES) {
+      if (h < 640) continue; // a 320x568 phone is below what the table can hold at its busiest
+      const { m, need } = portraitNeed(w, h);
+      const shed = m.shortColumn ? PROMPT_SHED : 0;
+      expect(need - shed, `${w}x${h}`).toBeLessThanOrEqual(h);
+    }
+  });
+
+  it('sheds rows only where the lowest floor cannot pay, and never sideways', () => {
+    expect(computeTableMetrics(360, 723).shortColumn).toBe(false);
+    expect(computeTableMetrics(412, 915).shortColumn).toBe(false);
+    expect(computeTableMetrics(360, 640).shortColumn).toBe(true);
+    for (const [w, h] of LANDSCAPE) expect(computeTableMetrics(w, h).shortColumn).toBe(false);
+  });
+
+  it('never needs more for bidding than for declaring', () => {
+    // Bidding: two lines of trump buttons, no chip, no prompt. Declaring: a
+    // chip, the prompt and one line of buttons — the band the chrome counts.
+    const CALLS = 24;
+    const PROMPT = 58;
+    const ACTIONS = 40;
+    const GAP = 8;
+    expect(BIDDING_ACTIONS).toBeLessThanOrEqual(CALLS + GAP + PROMPT + GAP + ACTIONS);
   });
 });
 

@@ -28,6 +28,13 @@ for round in $(seq 1 "$MAX"); do
     exit 0
   fi
 
+  # The zvanja question: the sweep cannot mark a run of cards, so answer it.
+  if ui_has "Nemam"; then
+    ui_tap "Nemam" >/dev/null && echo "round $round: no zvanja"
+    sleep 1
+    continue
+  fi
+
   # Announce zvanja whenever offered — it is the only way they can score.
   if ui_has "zovi zvanja"; then
     ui_tap "zovi zvanja" >/dev/null && echo "round $round: announced zvanja"
@@ -44,25 +51,24 @@ for round in $(seq 1 "$MAX"); do
     fi
   done
 
-  # Otherwise it is a card decision: sweep the fan, which arcs above the leave
-  # button ("Natrag" offline, "Napusti stol" online — it was "Izađi" until the
-  # offline screen took the shared back label, and this anchor went stale
-  # without the script noticing: it just reported "no hand on screen").
-  # Lifted (playable) cards sit higher, edge cards lower — three rows cover
-  # all. The offsets are measured UP from the leave button, and M5 put two
-  # rows between it and the fan (the emote strip and the actions row), so the
-  # old -70..-230 landed on the emotes and sent a bot a thumbs-up every round.
-  base=$(ui_bounds "Natrag" 2>/dev/null | awk '{print $2}')
-  [ -z "$base" ] && base=$(ui_bounds "Napusti stol" 2>/dev/null | awk '{print $2}')
-  if [ -z "$base" ]; then
+  # Otherwise it is a card decision: sweep the fan. The hand carries its own
+  # label ("Tvoje karte"), so the sweep finds the fan wherever the layout has
+  # put it — it was anchored on a leave button that moved twice ("Izađi",
+  # then "Natrag" in the actions row, now in the top corner).
+  box=$(ui_box "Tvoje karte" 2>/dev/null)
+  if [ -z "$box" ]; then
     echo "round $round: no hand on screen"
     sleep 1
     continue
   fi
-  for dy in -470 -390 -310; do
-    # From the fan's left edge: M5 stands the player's own puck to its left.
-    for x in 300 374 448 522 596 670 744 818 892 966 1040; do
-      "$ADB" shell input tap "$x" $((base + dy))
+  read -r x1 y1 x2 y2 <<<"$box"
+  w=$((x2 - x1)); h=$((y2 - y1))
+  # Lifted (playable) cards sit higher, edge cards lower; the cards fill the
+  # lower part of the hand's block (its top is the room a lifted card needs).
+  for fy in 55 70 85; do
+    y=$((y1 + h * fy / 100))
+    for i in 0 1 2 3 4 5 6 7 8 9 10; do
+      "$ADB" shell input tap $((x1 + w * (5 + i * 9) / 100)) "$y"
     done
   done
   sleep 2
