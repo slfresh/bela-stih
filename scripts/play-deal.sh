@@ -47,13 +47,17 @@ for round in $(seq 1 "$MAX"); do
     continue
   fi
 
-  # Bidding: take a contract rather than passing the deal around.
+  # Bidding: take a contract rather than passing the deal around. A short
+  # phone labels the button with the suit alone (its pip says "zovi"), and
+  # ui_has reads the dump's text, so try both.
   for suit in "zovi list" "zovi srce" "zovi bundeva" "zovi žir"; do
-    if ui_has "$suit"; then
-      ui_tap "$suit" >/dev/null && echo "round $round: bid $suit"
-      sleep 1
-      continue 2
-    fi
+    for label in "$suit" "${suit#zovi }"; do
+      if ui_has "$label"; then
+        ui_tap "$label" >/dev/null && echo "round $round: bid $suit"
+        sleep 1
+        continue 3
+      fi
+    done
   done
 
   # Otherwise it is a card decision: sweep the fan. The hand carries its own

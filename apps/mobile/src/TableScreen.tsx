@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -61,7 +61,7 @@ import {
   type Position,
 } from './table/geometry';
 import { useTableMetrics } from './table/useTableMetrics';
-import { EMOTE_TOGGLE, LAND_GAP, LAND_TRAY_H, SELF_PUCK_GAP } from './table/metrics';
+import { EMOTE_TOGGLE, FAN_REST_SHORT, LAND_GAP, LAND_TRAY_H, SELF_NESTLE, SELF_PUCK_GAP } from './table/metrics';
 import { useHandOrder, type HandSort } from './table/useHandOrder';
 import type { ConfirmPlay } from './storage';
 import { cosmetics, room, roomStyle, type DeckStyle } from './cosmetics';
@@ -266,6 +266,31 @@ export function TableScreen(props: TableScreenProps) {
   }, [declaring, view.dealer, view.declareTurn]);
   const hand = useHandOrder(view.hand, view.context.trumpSuit, handSort, onHandSortChange ?? (() => {}));
 
+  // Is the table asking me something right now? The prompt rows' own
+  // conditions — and a bid, whose buttons wrap to three lines on a phone.
+  const bidding = options.some((a) => a.type === 'BID_CALL' || a.type === 'BID_PASS');
+  // The bela buttons are an answer in every mode; only their hint is hard mode's to skip.
+  const belaOffered = !settled && view.canAnnounceBela;
+  const askingBesidesArranging =
+    bidding ||
+    declaring ||
+    (!settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0) ||
+    (!settled && view.canDeclare === true) ||
+    (belaOffered && !hardMode);
+  const asking = askingBesidesArranging || arranging;
+  // A short phone sheds the rows that are no use while it asks — or while the
+  // bela buttons are up, hard mode included — so the buttons that answer stay
+  // on the screen (see metrics' shortColumn).
+  const shed = m.shortColumn && (asking || belaOffered);
+  // And portrait's short column is built tighter throughout (metrics'
+  // SHORT_CHROME counts every style this switches on).
+  const short = !land && m.shortColumn;
+  // A short column arranges in the faces' own slot when the faces were on
+  // screen: they give way to it, so nothing moves. When a question had already
+  // shed them, a new row under the fan would lift the fan under the finger, so
+  // the hint asks above the fan instead, where the felt pays for it.
+  const arrangeInSlot = short && arranging && !askingBesidesArranging && !belaOffered && !settled && !!onEmote;
+
   // The tray closes on send; the cooldown mirrors the server's rate limit so
   // a spammed tap dies here instead of being silently dropped over the wire.
   const [trayOpen, setTrayOpen] = useState(false);
@@ -274,9 +299,11 @@ export function TableScreen(props: TableScreenProps) {
   // (a four- or five-button bid on a phone held sideways; two two-line bela
   // buttons on the shortest rails) takes the room: the box gives way, as
   // portrait's short column sheds its strip, the tray shuts with it, and the
-  // toggle rests until the question is answered.
+  // toggle rests until the question is answered. Portrait's toggle rests the
+  // same way while a short column has shed the faces: there is no strip for
+  // the phrases to open into.
   const [trayFits, setTrayFits] = useState(false);
-  const trayShown = !land || trayFits;
+  const trayShown = land ? trayFits : !shed;
   // What is drawn: never an open tray behind a resting toggle, even when a
   // press that began before the box gave way ends after it.
   const trayOpenShown = trayOpen && trayShown;
@@ -545,6 +572,8 @@ export function TableScreen(props: TableScreenProps) {
         // Landscape hangs the partner over the far rim, so the felt starts
         // just below their disc rather than below their whole puck.
         land && { marginTop: Math.round(m.puck * 0.5) },
+        // A short column drops the margin; its floor is lower by as much.
+        short && styles.feltFlush,
       ]}
     >
       {/* the table itself, drawn under everything: rim, baize, bevel */}
@@ -678,88 +707,101 @@ export function TableScreen(props: TableScreenProps) {
   const revealedSeats = new Set(view.revealedDeclarations.map((d) => d.seat));
   const spokenCalls = view.announcedDeclarations.filter((d) => !revealedSeats.has(d.seat));
   // Gone with the deal: the chips were still hanging over the result sheet.
+  // A short column writes each call as a tally, the caller over the call,
+  // side by side: three calls take one row where they took three lines. The
+  // call itself is never cut — the rank at its end is the tie-break.
+  const callChip = (key: string | number, name: string, call: string, gold: boolean) =>
+    short ? (
+      <View
+        key={key}
+        style={[styles.callChip, gold && styles.callChipGold, short && styles.callChipShort, gold && short && styles.callChipGoldShort]}
+        accessible
+        accessibilityLabel={`${name}: ${call}`}
+      >
+        <Text style={styles.callChipName} numberOfLines={1}>
+          {name}
+        </Text>
+        <Text style={styles.callChipCall}>{call}</Text>
+      </View>
+    ) : (
+      <View key={key} style={[styles.callChip, gold && styles.callChipGold, land && styles.callChipLand]}>
+        <Text style={[styles.callChipText, land && styles.callChipTextLand]}>
+          {name}: {call}
+        </Text>
+      </View>
+    );
   const calls =
     !settled && (spokenCalls.length > 0 || view.belaAnnouncedBy !== null) ? (
-      <View style={[styles.callsRow, land && styles.callsCol]}>
-        {spokenCalls.map((d, i) => (
-          <View key={i} style={[styles.callChip, land && styles.callChipLand]}>
-            <Text style={[styles.callChipText, land && styles.callChipTextLand]}>
-              {meta(d.seat).name}: {lang.declaration(d)}
-            </Text>
-          </View>
-        ))}
-        {view.belaAnnouncedBy !== null && (
-          <View style={[styles.callChip, styles.callChipGold, land && styles.callChipLand]}>
-            <Text style={[styles.callChipText, land && styles.callChipTextLand]}>
-              {meta(view.belaAnnouncedBy).name}: {lang.s.bela} (20)
-            </Text>
-          </View>
-        )}
+      <View style={[styles.callsRow, land && styles.callsCol, short && styles.callsRowShort]}>
+        {spokenCalls.map((d, i) => callChip(i, meta(d.seat).name, lang.declaration(d), false))}
+        {view.belaAnnouncedBy !== null &&
+          callChip('bela', meta(view.belaAnnouncedBy).name, `${lang.s.bela} (20)`, true)}
       </View>
     ) : null;
 
-  // Prompts that need words, not just buttons.
-  const promptRows = (
-    <>
-      {declaring && (
-        <View style={styles.promptRow}>
-          <Text style={styles.promptText}>{lang.s.askZvanja}</Text>
-          <Text style={styles.promptHint}>
-            {marked.length === 0
-              ? lang.s.markZvanjaHint
-              : markingIsZvanje
-                ? lang.s.markingOk
-                : lang.s.markingNotZvanje}
-          </Text>
-        </View>
-      )}
-      {!settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0 && (
-        <View style={styles.promptRow}>
-          <Text style={styles.promptText}>
-            {lang.s.declarations}:{' '}
-            {view.myDeclarations.map((d) => lang.declaration({ ...d, seat: mySeat })).join(', ')}
-          </Text>
-          {!m.compact && <Text style={styles.promptHint}>{lang.s.declareHint}</Text>}
-        </View>
-      )}
-      {!settled && view.canDeclare === true && (
-        <View style={styles.promptRow}>
-          <Text style={styles.promptHint}>{lang.s.claimZvanjaHint}</Text>
-        </View>
-      )}
-      {arranging && (
-        <View style={styles.promptRow}>
-          <Text style={styles.promptText}>{lang.s.ui.arrangeHint}</Text>
-          <Button label={lang.s.ui.arrangeDone} tone="strong" onPress={() => setArranging(false)} />
-        </View>
-      )}
-      {!settled && view.canAnnounceBela && !hardMode && (
-        <View style={styles.promptRow}>
-          <Text style={styles.promptText}>{lang.s.belaHint}</Text>
-        </View>
-      )}
-    </>
-  );
+  // Prompts that need words, not just buttons. A short column's are tighter,
+  // and it asks one thing at a time, the first of these. Its arrange hint takes
+  // the faces' slot under my puck when the faces were showing (arrangeInSlot),
+  // and otherwise asks here, second only to the zvanja question.
+  const promptRow = [styles.promptRow, short && styles.promptRowShort];
+  const promptText = [styles.promptText, short && styles.promptLineShort];
+  const promptHint = [styles.promptHint, short && styles.promptLineShort];
+  const promptList = [
+    declaring && (
+      <View key="zvanja" style={promptRow}>
+        <Text style={promptText}>{lang.s.askZvanja}</Text>
+        <Text style={promptHint}>
+          {marked.length === 0
+            ? lang.s.markZvanjaHint
+            : markingIsZvanje
+              ? lang.s.markingOk
+              : lang.s.markingNotZvanje}
+        </Text>
+      </View>
+    ),
+    short && arranging && !arrangeInSlot && (
+      <View key="arrange" style={[promptRow, short && styles.promptInline]}>
+        <Text style={[promptText, short && styles.promptInlineText]} numberOfLines={2}>
+          {lang.s.ui.arrangeHint}
+        </Text>
+        <Button label={lang.s.ui.arrangeDone} tone="strong" compact onPress={() => setArranging(false)} />
+      </View>
+    ),
+    !settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0 && (
+      <View key="declarations" style={promptRow}>
+        <Text style={promptText}>
+          {lang.s.declarations}:{' '}
+          {view.myDeclarations.map((d) => lang.declaration({ ...d, seat: mySeat })).join(', ')}
+        </Text>
+        {!m.compact && <Text style={promptHint}>{lang.s.declareHint}</Text>}
+      </View>
+    ),
+    !settled && view.canDeclare === true && (
+      <View key="claim" style={promptRow}>
+        <Text style={promptHint}>{lang.s.claimZvanjaHint}</Text>
+      </View>
+    ),
+    arranging && !short && (
+      <View key="arrange" style={promptRow}>
+        <Text style={promptText}>{lang.s.ui.arrangeHint}</Text>
+        <Button label={lang.s.ui.arrangeDone} tone="strong" onPress={() => setArranging(false)} />
+      </View>
+    ),
+    !settled && view.canAnnounceBela && !hardMode && (
+      <View key="bela" style={promptRow}>
+        <Text style={promptText}>{lang.s.belaHint}</Text>
+      </View>
+    ),
+  ].filter((p): p is ReactElement => Boolean(p));
+  const promptRows = <>{short ? promptList.slice(0, 1) : promptList}</>;
   // Portrait reserves the row's height where the column can afford it, so a
   // prompt coming or going never moves the hand under your thumb; a shorter
   // phone cannot spare it, and landscape flexes the felt instead.
   const prompts = m.promptReserve ? <View style={styles.promptsReserve}>{promptRows}</View> : promptRows;
-  // Is the table asking me something right now? The prompt rows' own
-  // conditions — and a bid, whose buttons wrap to three lines on a phone.
-  const asking =
-    options.some((a) => a.type === 'BID_CALL' || a.type === 'BID_PASS') ||
-    declaring ||
-    (!settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0) ||
-    (!settled && view.canDeclare === true) ||
-    arranging ||
-    (!settled && view.canAnnounceBela && !hardMode);
-  // A short phone sheds the rows that are no use while it asks, so the
-  // buttons that answer stay on the screen (see metrics' shortColumn).
-  const shed = m.shortColumn && asking;
 
   // My hand, fanned; the seat anchor for sprites sits underneath it.
   const handBlock = (
-    <Anchor id={anchorId.seat(mySeat)} style={[styles.handArea, { minHeight: m.handMinHeight }]}>
+    <Anchor id={anchorId.seat(mySeat)} style={[styles.handArea, { minHeight: m.handMinHeight }, short && styles.handNestle]}>
       <Pressable
         // The hand, named: a screen reader says what the block is, and the
         // device harness finds the fan by it wherever the layout moves it.
@@ -797,6 +839,7 @@ export function TableScreen(props: TableScreenProps) {
           reduced={reduced}
           armCaption={lang.s.ui.play}
           glow={cue?.kind === 'glow' ? cue : null}
+          restFloor={short ? FAN_REST_SHORT : 0}
         />
         </Animated.View>
       </Pressable>
@@ -889,7 +932,7 @@ export function TableScreen(props: TableScreenProps) {
   // mid-deal, and a question before it acts. A finished match's own sheet
   // says what comes next, so the corner is empty then.
   const leaveButton = !matchOver ? (
-    <Button label={finishLabel} tone="plain" compact onPress={requestLeave} />
+    <Button label={finishLabel} tone="plain" compact style={short ? styles.leaveSlim : undefined} onPress={requestLeave} />
   ) : null;
 
   // Every row that comes and goes around the felt — status line, zvanja
@@ -906,6 +949,8 @@ export function TableScreen(props: TableScreenProps) {
     !settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0 ? 1 : 0,
     arranging ? 1 : 0,
     !settled && view.canAnnounceBela && !hardMode ? 1 : 0,
+    // Hard mode's bela buttons shed rows too, with no hint row of their own.
+    shed ? 1 : 0,
   ].join('|');
   useEffect(() => {
     anchors.bump();
@@ -951,7 +996,7 @@ export function TableScreen(props: TableScreenProps) {
     <AnchorHost map={anchors}>
       <SafeAreaView style={[styles.safe, { backgroundColor: baize.page }]} edges={['top', 'bottom', 'left', 'right']}>
         {/* A rotation or a window resize moves everything at once. */}
-        <View style={[styles.root, land && styles.rootLand]} onLayout={() => anchors.bump()}>
+        <View style={[styles.root, land && styles.rootLand, short && styles.rootShort]} onLayout={() => anchors.bump()}>
           {land ? (
             // Turned sideways there is no vertical room to stack chrome above
             // and below the felt, so everything that is not the table itself
@@ -1017,7 +1062,7 @@ export function TableScreen(props: TableScreenProps) {
               {/* wallet / level strip, and leaving in the top corner */}
               <View style={styles.topRow}>
                 <View style={styles.topRowGrow}>
-                  <ProfileBar profile={profile} holdMs={awardHold} onLongPress={toggleProbe} />
+                  <ProfileBar profile={profile} slim={short} holdMs={awardHold} onLongPress={toggleProbe} />
                 </View>
                 {leaveButton}
               </View>
@@ -1029,6 +1074,7 @@ export function TableScreen(props: TableScreenProps) {
                 mySeat={mySeat}
                 matchScores={matchScores}
                 progress={view.dealProgress}
+                slim={short}
                 reduced={reduced}
                 winner={matchOver ? winnerTeam : null}
               />
@@ -1037,16 +1083,29 @@ export function TableScreen(props: TableScreenProps) {
               {calls}
               {prompts}
               {handBlock}
-              {/* My own disc, centred under my cards and above the faces. */}
-              <View style={styles.selfRow}>{selfPuck}</View>
+              {/* My own disc, centred under my cards and above the faces. Its
+                  row lets touches through: a short column tucks it into the
+                  fan's arc, under the outer cards' corners. */}
+              <View style={styles.selfRow} pointerEvents="box-none">{selfPuck}</View>
               {!shed && emotes}
+              {/* A short column's arrange hint takes the faces' own slot when
+                  the faces were showing, so the long-press that starts
+                  arranging moves nothing under the finger. */}
+              {arrangeInSlot && (
+                <View style={styles.arrangeSlot}>
+                  <Text style={styles.arrangeSlotText} numberOfLines={2}>
+                    {lang.s.ui.arrangeHint}
+                  </Text>
+                  <Button label={lang.s.ui.arrangeDone} tone="strong" compact onPress={() => setArranging(false)} />
+                </View>
+              )}
 
               {/* actions: bidding, declaring, bela — leaving is the top corner */}
               {!settled && (
                 <View style={styles.actionsRow}>
                   {emoteToggle}
                   {declareButtons ?? (
-                    <NonCardActions options={options} lang={lang} onChoose={onAction} />
+                    <NonCardActions options={options} lang={lang} onChoose={onAction} short={short} />
                   )}
                 </View>
               )}
@@ -1096,6 +1155,7 @@ const TableHeader = memo(function TableHeader({
   matchScores,
   progress,
   vertical = false,
+  slim = false,
   reduced = false,
   winner = null,
 }: {
@@ -1105,6 +1165,8 @@ const TableHeader = memo(function TableHeader({
   progress: DealProgress | null;
   /** Landscape puts the whole strip in the left rail, stacked. */
   vertical?: boolean;
+  /** Portrait's short column: the strip on pinned lines, without its breathing room. */
+  slim?: boolean;
   reduced?: boolean;
   /** The match is over and this side took it: its pill swells for a moment. */
   winner?: TeamId | null;
@@ -1139,18 +1201,18 @@ const TableHeader = memo(function TableHeader({
     <View style={[styles.scoreRow, vertical && styles.scoreCol]}>
       <View style={[styles.pillRow, vertical && styles.pillCol]}>
         <Animated.View
-          style={[styles.teamPill, { backgroundColor: team.usDim, borderColor: team.usEdge }, swellUs]}
+          style={[styles.teamPill, slim && styles.teamPillSlim, { backgroundColor: team.usDim, borderColor: team.usEdge }, swellUs]}
         >
           <Text style={styles.pillLabel}>{lang.team(us, mySeat)}</Text>
-          <Text style={[styles.pillValue, { color: team.usInk }]}>{usScore}</Text>
+          <Text style={[styles.pillValue, slim && styles.pillValueSlim, { color: team.usInk }]}>{usScore}</Text>
         </Animated.View>
         <Animated.View
-          style={[styles.teamPill, { backgroundColor: team.themDim, borderColor: team.themEdge }, swellThem]}
+          style={[styles.teamPill, slim && styles.teamPillSlim, { backgroundColor: team.themDim, borderColor: team.themEdge }, swellThem]}
         >
           {/* Side by side the two pills mirror each other around the centre;
               stacked in a rail there is no centre, so both read label, value. */}
           {vertical && <Text style={styles.pillLabel}>{lang.team(them, mySeat)}</Text>}
-          <Text style={[styles.pillValue, { color: team.themInk }]}>{themScore}</Text>
+          <Text style={[styles.pillValue, slim && styles.pillValueSlim, { color: team.themInk }]}>{themScore}</Text>
           {!vertical && <Text style={styles.pillLabel}>{lang.team(them, mySeat)}</Text>}
         </Animated.View>
       </View>
@@ -1158,7 +1220,7 @@ const TableHeader = memo(function TableHeader({
       {progress ? (
         // The last trick's +10 flies here.
         <Anchor id={anchorId.running}>
-          <Text style={[live!, vertical && styles.centreText]}>
+          <Text style={[live!, vertical && styles.centreText, slim && styles.liveSlim]}>
             {usRun} : {themRun}
             <Text style={styles.subDim}>
               {vertical ? '\n' : '   '}
@@ -1180,6 +1242,7 @@ const TableHeader = memo(function TableHeader({
   a.lang === b.lang &&
   a.mySeat === b.mySeat &&
   a.vertical === b.vertical &&
+  a.slim === b.slim &&
   a.reduced === b.reduced &&
   a.winner === b.winner &&
   a.matchScores[0] === b.matchScores[0] &&
@@ -1197,11 +1260,14 @@ const ProfileBar = memo(
   function ProfileBar({
     profile,
     vertical = false,
+    slim = false,
     holdMs = 0,
     onLongPress,
   }: {
     profile: PlayerProfile;
     vertical?: boolean;
+    /** Portrait's short column: the strip without its breathing room. */
+    slim?: boolean;
     /** Extra wait before the wallet and the level move: a match's fanfare plays first. */
     holdMs?: number;
     /** Dev builds: toggles the frame/render probe. */
@@ -1237,7 +1303,7 @@ const ProfileBar = memo(
       <Pressable
         onLongPress={onLongPress}
         delayLongPress={600}
-        style={[styles.profileBar, vertical && styles.profileBarCol]}
+        style={[styles.profileBar, vertical && styles.profileBarCol, slim && styles.profileBarSlim]}
       >
         <Animated.View style={[styles.levelBadge, badgeStyle]}>
           <Text style={styles.levelText}>{p.level}</Text>
@@ -1260,6 +1326,7 @@ const ProfileBar = memo(
     a.profile.xp === b.profile.xp &&
     a.profile.coins === b.profile.coins &&
     a.vertical === b.vertical &&
+    a.slim === b.slim &&
     a.onLongPress === b.onLongPress,
 );
 
@@ -1283,6 +1350,7 @@ function Hand({
   reduced = false,
   armCaption,
   glow = null,
+  restFloor = 0,
 }: {
   cards: Card[];
   options: Action[];
@@ -1308,6 +1376,12 @@ function Hand({
   reduced?: boolean;
   /** What the second tap on an armed card does, on the card. */
   armCaption?: string;
+  /**
+   * Where a resting card may come down to, above the fan's floor. A short
+   * column tucks my puck up into the fan, and a small hand's flattened arc
+   * would otherwise bring the middle cards down onto it.
+   */
+  restFloor?: number;
   /** Cards to glow gold for a moment: my bela's king and queen. */
   glow?: { cardIds: string[]; n: number } | null;
 }) {
@@ -1425,7 +1499,7 @@ function Hand({
   const onPressCard = useCallback((id: string) => pressRef.current(id), []);
 
   return (
-    <View style={[styles.fan, { paddingBottom: drop }]}>
+    <View style={[styles.fan, { paddingBottom: Math.max(drop, restFloor) }]}>
       {cards.map((card, i) => {
         const id = cardId(card);
         const inPlayMoment = plays.length > 0;
@@ -1701,11 +1775,18 @@ function NonCardActions({
   lang,
   onChoose,
   compact = false,
+  short = false,
 }: {
   options: Action[];
   lang: Lang;
   onChoose: (a: Action) => void;
   compact?: boolean;
+  /**
+   * Portrait's short column: a trump call is the suit alone and a bela button
+   * drops its suit (the pip says both), so five bids take two lines at 320 dp
+   * and the bela pair one. A screen reader still hears the whole call.
+   */
+  short?: boolean;
 }) {
   const buttons = options.filter((a) => a.type !== 'PLAY_CARD' || a.announceBela === true);
   return (
@@ -1713,16 +1794,30 @@ function NonCardActions({
       {buttons.map((a, i) => {
         const isBela = a.type === 'PLAY_CARD';
         const strong = a.type === 'DECLARE_ANNOUNCE' || a.type === 'BID_CALL';
+        const label =
+          // In the rail the pip says "zovi": the label is the suit alone.
+          (compact || short) && a.type === 'BID_CALL'
+            ? lang.suitName(a.suit)
+            : short && a.type === 'PLAY_CARD'
+              ? `${lang.rankShort(a.card.rank)} ${lang.s.withBela}`
+              : lang.action(a);
         return (
           <Button
             key={i}
-            // In the rail the pip says "zovi": the label is the suit alone.
-            label={compact && a.type === 'BID_CALL' ? lang.suitName(a.suit) : lang.action(a)}
+            label={label}
             accessibilityLabel={lang.action(a)}
             tone={isBela ? 'bela' : strong ? 'strong' : 'plain'}
             compact={compact}
-            // The suit itself on a trump-call button, not only its name.
-            icon={a.type === 'BID_CALL' ? <SuitPip suit={a.suit} size={compact ? 14 : 16} /> : undefined}
+            style={short && (a.type === 'BID_CALL' || a.type === 'BID_PASS') ? styles.bidShort : undefined}
+            // The suit itself on a trump-call button, not only its name; and on
+            // a short column's bela button, whose label dropped it.
+            icon={
+              a.type === 'BID_CALL' ? (
+                <SuitPip suit={a.suit} size={compact ? 14 : 16} />
+              ) : short && a.type === 'PLAY_CARD' ? (
+                <SuitPip suit={a.card.suit} size={16} />
+              ) : undefined
+            }
             onPress={() => onChoose(a)}
           />
         );
@@ -2174,6 +2269,31 @@ const styles = StyleSheet.create({
   // at the end of it is the tie-break.
   callChipTextLand: { ...type.caption },
   callChipLand: { paddingHorizontal: 8, alignSelf: 'stretch' },
+  // Portrait's short column: metrics' SHORT_CHROME is these numbers.
+  rootShort: { paddingVertical: 4, gap: 4 },
+  profileBarSlim: { paddingVertical: 2 },
+  leaveSlim: { paddingVertical: 4 },
+  teamPillSlim: { paddingVertical: 1 },
+  pillValueSlim: { lineHeight: 20 },
+  liveSlim: { lineHeight: 18 },
+  feltFlush: { marginVertical: 0 },
+  // A call as a tally, the caller over the call, beside the others; the row
+  // never wraps, the tallies share its width, and a call wraps inside its own.
+  callsRowShort: { flexWrap: 'nowrap', gap: 4 },
+  callChipShort: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm, flexShrink: 1, minWidth: 0 },
+  callChipGoldShort: { paddingVertical: 1 },
+  callChipName: { color: ink.mid, ...type.caption },
+  callChipCall: { color: theme.text, ...type.caption },
+  promptRowShort: { paddingVertical: 4, paddingHorizontal: 10, gap: 0 },
+  promptLineShort: { lineHeight: 16 },
+  // The arrange hint as a short column's prompt: its Done beside it, one row.
+  promptInline: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  promptInlineText: { flexShrink: 1 },
+  handNestle: { marginBottom: -SELF_NESTLE },
+  // The arrange hint in the faces' own 34 dp, with its Done beside it.
+  arrangeSlot: { height: 34, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
+  arrangeSlotText: { flex: 1, color: theme.accent, ...type.caption },
+  bidShort: { paddingHorizontal: 10 },
 
 
   promptRow: {

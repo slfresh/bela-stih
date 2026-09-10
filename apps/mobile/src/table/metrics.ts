@@ -53,7 +53,8 @@ export interface TableMetrics {
    * calls chip and a prompt at once). There the two rows that are no use
    * while the table asks a question — the emote strip and the online bot
    * line — give way while a prompt is up, so the buttons that answer it stay
-   * on the screen.
+   * on the screen; and the whole column is built tighter (SHORT_CHROME), so
+   * every moment of a deal fits a 320x568 phone.
    */
   shortColumn: boolean;
 }
@@ -117,6 +118,40 @@ export const PROMPT_SHED = 34 + 8 + 16 + 8;
 export const FELT_FLOOR = 260;
 export const FELT_FLOOR_MIN = 180;
 
+/*
+ * The short column — a portrait phone that cannot pay the busiest moment with
+ * the felt at FELT_FLOOR_MIN (shortColumn) — is built tighter: 4 dp of padding
+ * and gaps, slim strips, each call a two-line tally beside the others, one
+ * prompt at a time, suit-only bids, my puck tucked into the fan's arc. These
+ * are its numbers; Android's lines are pinned there, so the web draws the same.
+ */
+/** styles.felt's vertical margin, which the short column drops. */
+export const FELT_MARGIN = 4;
+/** So this floor leaves exactly the baize the old 180 left. */
+export const FELT_FLOOR_SHORT = FELT_FLOOR_MIN - 2 * FELT_MARGIN;
+/**
+ * How far the short column's floor may give, and no further: at 152 the trick
+ * cross's bottom mat ends 3.3 dp past the rim, inside the 4 dp gap below it.
+ */
+export const FELT_FLOOR_SOFT = 152;
+/** My puck tucks this far up into the empty middle of the fan's arc. */
+export const SELF_NESTLE = 10;
+/**
+ * A short column's resting fan stops this far above its floor, not lower, so a
+ * small hand's flattened arc never brings the middle cards down onto my tucked
+ * puck's trick pile and dealer badge (the nestle less the root's gap, plus the
+ * pile's 4 dp overhang, and air). It stays inside the room the hand keeps for
+ * eight cards, so nothing outside the fan moves.
+ */
+export const FAN_REST_SHORT = SELF_NESTLE + 8;
+/**
+ * The short column's tallest moment, less the felt, the fan and my puck:
+ * online play with a bot line on two lines, three calls whose spoken values
+ * wrap, the faces and a line of buttons — padding 8, top strip 30, bot line
+ * 32, score strip 24, calls 46, faces 34, buttons 42, and eight gaps of 4.
+ */
+export const SHORT_CHROME = 8 + 30 + 32 + 24 + 46 + 34 + 42 + 8 * 4;
+
 export function computeTableMetrics(usableW: number, usableH: number): TableMetrics {
   const landscape = usableW >= usableH;
   // Portrait is width-bound and landscape is height-bound: scale by whichever
@@ -161,8 +196,16 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
   // the actions row is pushed off the bottom of a short phone.
   const portraitFixed = PORTRAIT_CHROME + handMinHeight + selfPuck + 10;
   const promptReserve = !landscape && usableH - portraitFixed >= FELT_FLOOR;
-  const feltMinHeight = landscape ? 0 : clamp(usableH - portraitFixed, FELT_FLOOR_MIN, FELT_FLOOR);
   const shortColumn = !landscape && usableH - portraitFixed < FELT_FLOOR_MIN;
+  // The short column is built tighter (SHORT_CHROME). Its floor leaves the old
+  // baize where the phone can pay for it, and gives, down to the soft floor,
+  // rather than push an answer off a 320x548 screen.
+  const shortFixed = SHORT_CHROME + handMinHeight + selfPuck + 10 - SELF_NESTLE;
+  const feltMinHeight = landscape
+    ? 0
+    : shortColumn
+      ? clamp(usableH - shortFixed, FELT_FLOOR_SOFT, FELT_FLOOR_SHORT)
+      : clamp(usableH - portraitFixed, FELT_FLOOR_MIN, FELT_FLOOR);
 
   return {
     orientation: landscape ? 'landscape' : 'portrait',
@@ -184,7 +227,11 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
     // fan is also drawn from.
     feltMaxHeight: landscape
       ? Math.max(0, usableH - handMinHeight - FELT_HAND_GAP)
-      : Math.round(usableH * 0.48),
+      : shortColumn
+        ? // A short column has no baize to spare: the felt takes every dp, so a
+          // row that comes or goes above the fan is always the felt's to pay.
+          usableH
+        : Math.round(usableH * 0.48),
     slotW: Math.round(46 * scale),
     slotH: Math.round(67 * scale),
     puck,

@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   computeTableMetrics,
+  FAN_REST_SHORT,
   FELT_FLOOR,
   FELT_FLOOR_MIN,
+  FELT_FLOOR_SHORT,
+  FELT_FLOOR_SOFT,
   FELT_HAND_GAP,
+  FELT_MARGIN,
   BIDDING_ACTIONS,
   EMOTE_TOGGLE,
   LAND_GAP,
@@ -13,9 +17,11 @@ import {
   PORTRAIT_CHROME,
   PUCK_NAME_ROOM,
   PROMPT_SHED,
+  SELF_NESTLE,
   SELF_PUCK_GAP,
+  SHORT_CHROME,
 } from '../src/table/metrics';
-import { fanHeight, fitHand } from '../src/table/geometry';
+import { FAN_PAD, fanArc, fanHeight, fitHand, fitTrickCross, slotOffsets } from '../src/table/geometry';
 
 /**
  * The table's dimensions as a function of the usable box. Phones first: the
@@ -59,9 +65,11 @@ describe('computeTableMetrics', () => {
     for (const [w, h] of PORTRAIT) {
       const m = computeTableMetrics(w, h);
       expect(m.orientation).toBe('portrait');
-      expect(m.feltMaxHeight).toBe(Math.round(h * 0.48));
-      expect(m.feltMinHeight).toBeGreaterThanOrEqual(FELT_FLOOR_MIN);
-      expect(m.feltMinHeight).toBeLessThanOrEqual(FELT_FLOOR);
+      // A short column's felt takes every spare dp: no baize to spare there.
+      expect(m.feltMaxHeight).toBe(m.shortColumn ? h : Math.round(h * 0.48));
+      // A short column's floor is its own (see 'the short column').
+      expect(m.feltMinHeight).toBeGreaterThanOrEqual(m.shortColumn ? FELT_FLOOR_SOFT : FELT_FLOOR_MIN);
+      expect(m.feltMinHeight).toBeLessThanOrEqual(m.shortColumn ? FELT_FLOOR_SHORT : FELT_FLOOR);
       expect(m.railW).toBe(0);
     }
     // A tall phone keeps the whole floor.
@@ -113,12 +121,12 @@ describe('the portrait column', () => {
     ['declaring (a chip and the zvanja question)', DECLARING],
     ['bidding (three lines of buttons)', BIDDING],
   ] as const) {
-    it(`keeps the answering buttons on screen while ${name}, down to a 360x640 phone`, () => {
+    it(`keeps the answering buttons on screen while ${name} wherever the full column fits`, () => {
       for (const [w, h] of PHONES) {
-        if (h < 640) continue; // a 320x568 phone is below what the table can hold at its busiest
         const m = computeTableMetrics(w, h);
-        // The table asks in both moments, so a short column sheds its rows.
-        const need = rows + m.handMinHeight + m.selfPuck + 10 + m.feltMinHeight - (m.shortColumn ? SHED : 0);
+        // A short column is built tighter, with a budget of its own: 'the short column'.
+        if (m.shortColumn) continue;
+        const need = rows + m.handMinHeight + m.selfPuck + 10 + m.feltMinHeight;
         expect(need, `${w}x${h}`).toBeLessThanOrEqual(h);
       }
     });
@@ -146,6 +154,160 @@ describe('the portrait column', () => {
     expect(computeTableMetrics(412, 915).shortColumn).toBe(false);
     expect(computeTableMetrics(360, 640).shortColumn).toBe(true);
     for (const [w, h] of LANDSCAPE) expect(computeTableMetrics(w, h).shortColumn).toBe(false);
+  });
+});
+
+/**
+ * The short column's rows, with Android's lines pinned (a pinned line is the
+ * same height on the web; measured there at 320 dp) — owned by this test, so
+ * metrics' SHORT_CHROME cannot pass by agreeing with itself.
+ */
+const S = {
+  pad: 8, top: 30, status: 16, status2: 32, header: 24,
+  /** Three calls whose spoken values wrap in their tallies; four, or a carré, take a third line. */
+  calls: 46, callsWorst: 60,
+  zvanja: 42, bela: 26, faces: 34, slot: 34, line: 42, lines2: 90, gap: 4,
+  /** The arrange hint above the fan, its compact Done beside it: 33.7 dp and the row's 10. */
+  arrange: 44,
+};
+/** Every moment a short column must hold: its rows other than the felt, the fan and my puck, gaps included. */
+const SHORT_STATES = {
+  'the zvanja question with three calls': S.pad + S.top + S.header + S.calls + S.zvanja + S.line + 7 * S.gap,
+  'my bid, five buttons on two lines': S.pad + S.top + S.header + S.lines2 + 5 * S.gap,
+  'my bid while arranging': S.pad + S.top + S.header + S.arrange + S.lines2 + 6 * S.gap,
+  'the bela pair while arranging, three calls': S.pad + S.top + S.header + S.calls + S.arrange + S.line + 7 * S.gap,
+  'play while arranging, three calls': S.pad + S.top + S.header + S.calls + S.slot + S.line + 7 * S.gap,
+  'the hard-mode bela pair with three calls': S.pad + S.top + S.header + S.calls + S.line + 6 * S.gap,
+  'the bela pair with three calls': S.pad + S.top + S.header + S.calls + S.bela + S.line + 7 * S.gap,
+  'the zvanja question with four calls or a carré': S.pad + S.top + S.header + S.callsWorst + S.zvanja + S.line + 7 * S.gap,
+  'online play, the bot line on two lines, three calls': S.pad + S.top + S.status2 + S.header + S.calls + S.faces + S.line + 8 * S.gap,
+} as const;
+type ShortState = keyof typeof SHORT_STATES;
+/** The moments with an answer on screen, which may never be pushed off it. */
+const ANSWERING: ShortState[] = [
+  'the zvanja question with three calls',
+  'my bid, five buttons on two lines',
+  'my bid while arranging',
+  'the bela pair with three calls',
+  'the bela pair while arranging, three calls',
+  'the hard-mode bela pair with three calls',
+];
+
+describe('the short column', () => {
+  const SHORT_PHONES = [
+    [320, 568],
+    [320, 548], // an iPhone SE under its status bar
+    [320, 533], // a 320 dp Android
+    [360, 640],
+    [375, 647],
+    [360, 668],
+    [412, 683],
+    [360, 704],
+  ] as const;
+  const need = (m: ReturnType<typeof computeTableMetrics>, rows: number) =>
+    rows + m.handMinHeight + m.selfPuck + 10 - SELF_NESTLE + m.feltMinHeight;
+
+  it('counts its tallest moment', () => {
+    for (const [name, rows] of Object.entries(SHORT_STATES)) expect(SHORT_CHROME, name).toBeGreaterThanOrEqual(rows);
+    expect(SHORT_CHROME).toBe(Math.max(...Object.values(SHORT_STATES)));
+  });
+
+  it('holds every moment of a deal on a 320x568 phone and up', () => {
+    for (const [w, h] of SHORT_PHONES) {
+      if (h < 568) continue;
+      const m = computeTableMetrics(w, h);
+      expect(m.shortColumn, `${w}x${h}`).toBe(true);
+      for (const [name, rows] of Object.entries(SHORT_STATES)) {
+        expect(need(m, rows), `${w}x${h}: ${name}`).toBeLessThanOrEqual(h);
+      }
+    }
+  });
+
+  it('keeps every answer on screen below that, the felt giving first', () => {
+    for (const [w, h] of SHORT_PHONES) {
+      if (h >= 568) continue;
+      const m = computeTableMetrics(w, h);
+      // The buttons end above the root's bottom padding (4) and the actions row's own (2).
+      for (const name of ANSWERING) expect(need(m, SHORT_STATES[name]) - 4 - 2, `${w}x${h}: ${name}`).toBeLessThanOrEqual(h);
+      // A fourth call, or a carré's third line, still fits an iPhone SE.
+      if (h >= 548) {
+        const worst = need(m, SHORT_STATES['the zvanja question with four calls or a carré']) - 4 - 2;
+        expect(worst, `${w}x${h}: four calls`).toBeLessThanOrEqual(h);
+      }
+    }
+  });
+
+  it('keeps the old baize where the phone can pay for it, and gives no further than the soft floor', () => {
+    expect(FELT_FLOOR_SHORT).toBe(FELT_FLOOR_MIN - 2 * FELT_MARGIN);
+    expect(computeTableMetrics(360, 640).feltMinHeight).toBe(FELT_FLOOR_SHORT);
+    expect(computeTableMetrics(320, 568).feltMinHeight).toBe(158);
+    expect(computeTableMetrics(320, 548).feltMinHeight).toBe(FELT_FLOOR_SOFT);
+    expect(computeTableMetrics(320, 533).feltMinHeight).toBe(FELT_FLOOR_SOFT);
+  });
+
+  it('keeps the trick cross inside the rim at the short floor, and within the gap below at the soft one', () => {
+    // The partner's row above the felt at 320 dp as Android draws it, and the
+    // felt's frame (styles.felt / feltInner): rim 6, padding 5, border 1, both sides.
+    const PARTNER_ROW = 71;
+    const FRAME = 2 * (6 + 5 + 1);
+    const pastTheRim = (floor: number) => {
+      const box = floor - PARTNER_ROW - FRAME; // the slots' box: no margin in a short column
+      const slot = fitTrickCross(200, box, 67);
+      const bottom = 0.55 * box + slotOffsets(slot.slotW, slot.slotH).bottom.marginTop + slot.slotH;
+      return bottom - box - FRAME / 2;
+    };
+    expect(pastTheRim(FELT_FLOOR_SHORT)).toBeLessThanOrEqual(0);
+    expect(pastTheRim(FELT_FLOOR_SOFT)).toBeLessThanOrEqual(S.gap);
+    // The soft floor is where that stops being true: two dp lower is too low.
+    expect(pastTheRim(FELT_FLOOR_SOFT - 2)).toBeGreaterThan(S.gap);
+  });
+
+  it('starting to arrange moves nothing under the finger', () => {
+    // In play the arrange hint takes the faces' own slot: the same height.
+    expect(S.slot).toBe(S.faces);
+    // During a bid the faces are already shed, so it asks above the fan, and
+    // the felt, which has no ceiling in a short column, pays for all of it.
+    for (const [w, h] of SHORT_PHONES) {
+      if (h < 548) continue; // the soft floor binds at 533: the fan gives 1 dp there
+      const m = computeTableMetrics(w, h);
+      expect(m.feltMaxHeight, `${w}x${h}`).toBe(h);
+      const feltInTheBid = h - (need(m, SHORT_STATES['my bid, five buttons on two lines']) - m.feltMinHeight);
+      expect(feltInTheBid - (S.arrange + S.gap), `${w}x${h}`).toBeGreaterThanOrEqual(m.feltMinHeight);
+    }
+  });
+
+  it("rests a small hand clear of my tucked puck, inside the fan's own room", () => {
+    // How far my puck's row reaches up into the hand's box — the nestle less the
+    // root's gap — plus the trick pile's overhang above the ring (SeatPuck: top -4).
+    const reach = SELF_NESTLE - S.gap + 4;
+    for (const [w, h] of SHORT_PHONES) {
+      const m = computeTableMetrics(w, h);
+      for (let n = 1; n <= 8; n++) {
+        const fit = fitHand(m.handWidth, n, m.handCardMax);
+        const floor = Math.max(fanArc(n) * fit.scale, FAN_REST_SHORT);
+        // The fan still fits the room the hand keeps for eight cards: nothing outside it moves.
+        expect(FAN_PAD + fit.cardH + floor, `${w}x${h}, ${n} cards`).toBeLessThanOrEqual(m.handMinHeight);
+        // Every card over the puck rests above its pile and badge.
+        for (let i = 0; i < n; i++) {
+          const off = i - (n - 1) / 2;
+          if (Math.abs(off) > 1.5) continue;
+          const bottom = floor - Math.pow(Math.abs(off), 1.6) * 3.2 * fit.scale;
+          expect(bottom, `${w}x${h}, ${n} cards, card ${i}`).toBeGreaterThanOrEqual(reach);
+        }
+      }
+    }
+  });
+
+  it('changes nothing from the Samsung up, or sideways', () => {
+    for (let w = 360; w <= 480; w += 12) {
+      for (let h = 723; h <= 1100; h += 17) {
+        const m = computeTableMetrics(w, h);
+        const fixed = PORTRAIT_CHROME + m.handMinHeight + m.selfPuck + 10;
+        expect(m.shortColumn, `${w}x${h}`).toBe(false);
+        expect(m.feltMinHeight, `${w}x${h}`).toBe(Math.max(FELT_FLOOR_MIN, Math.min(FELT_FLOOR, h - fixed)));
+      }
+    }
+    for (const [w, h] of LANDSCAPE) expect(computeTableMetrics(w, h).shortColumn, `${w}x${h}`).toBe(false);
   });
 });
 

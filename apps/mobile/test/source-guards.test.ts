@@ -197,7 +197,7 @@ describe('anchors measure on demand', () => {
 
   it('the rail\'s trump buttons say the suit alone and read the full call aloud', () => {
     const t = src('TableScreen.tsx');
-    expect(t).toMatch(/label=\{compact && a\.type === 'BID_CALL' \? lang\.suitName\(a\.suit\) : lang\.action\(a\)\}/);
+    expect(t).toMatch(/\(compact \|\| short\) && a\.type === 'BID_CALL'\s*\? lang\.suitName\(a\.suit\)/);
     expect(t).toMatch(/accessibilityLabel=\{lang\.action\(a\)\}/);
   });
 
@@ -294,7 +294,7 @@ describe('the first frame and the last resort', () => {
     // Portrait: the fan, then my puck centred, then the faces.
     const portrait = t.slice(t.indexOf('{/* wallet / level strip'));
     const hand = portrait.indexOf('{handBlock}');
-    const puck = portrait.indexOf('<View style={styles.selfRow}>{selfPuck}</View>');
+    const puck = portrait.indexOf('<View style={styles.selfRow} pointerEvents="box-none">{selfPuck}</View>');
     const faces = portrait.indexOf('{!shed && emotes}');
     expect(hand).toBeGreaterThan(-1);
     expect(puck).toBeGreaterThan(hand);
@@ -318,7 +318,7 @@ describe('the first frame and the last resort', () => {
     const app = readFileSync(join(here, '../App.tsx'), 'utf8');
     expect(app).toMatch(/if \(runBackGuard\(\)\) return true;/);
     // A short phone sheds the emote strip and the bot line while a prompt is up.
-    expect(t).toMatch(/const shed = m\.shortColumn && asking;/);
+    expect(t).toMatch(/const shed = m\.shortColumn && \(asking \|\| belaOffered\);/);
     expect(t).toMatch(/a\.type === 'BID_CALL' \|\| a\.type === 'BID_PASS'/);
     // The dialog never outlives the match it was about.
     expect(t).toMatch(/\{leaving && !matchOver && \(/);
@@ -376,7 +376,7 @@ describe('the first frame and the last resort', () => {
     expect(rail).toMatch(/\{trayFits && emotes \? \(\s*<View style=\{styles\.traySlot\} pointerEvents="box-none">/);
     expect(t).toMatch(/railGap: \{ flex: 1, alignSelf: 'stretch', overflow: 'hidden' \}/);
     expect(t).toMatch(/traySlot: \{ position: 'absolute', top: 0, left: 0, right: 0, height: LAND_TRAY_H \}/);
-    expect(t).toMatch(/const trayShown = !land \|\| trayFits;/);
+    expect(t).toMatch(/const trayShown = land \? trayFits : !shed;/);
     expect(t).toMatch(/if \(!trayShown\) setTrayOpen\(false\);/);
     expect(t).toMatch(/disabled=\{!trayShown\}/);
     // A tap meant for a face cannot land on the bid that took its place.
@@ -397,7 +397,61 @@ describe('the first frame and the last resort', () => {
     expect(src('ui/PressScale.tsx')).toMatch(/onPress=\{\(e\) => \{[\s\S]*?if \(rest\.disabled\) return;\s*if \(sound\) playSfx\(sound\);/);
     // Portrait keeps answering at once: its guard never arms.
     const portrait = t.slice(t.indexOf('{/* wallet / level strip'));
-    expect(portrait).toMatch(/<NonCardActions options=\{options\} lang=\{lang\} onChoose=\{onAction\} \/>/);
+    expect(portrait).toMatch(/<NonCardActions options=\{options\} lang=\{lang\} onChoose=\{onAction\} short=\{short\} \/>/);
+  });
+
+  it('a short column is built from the numbers its budget counts, and only there', () => {
+    const t = src('TableScreen.tsx');
+    expect(src('table/metrics.ts')).toMatch(/export const SHORT_CHROME = 8 \+ 30 \+ 32 \+ 24 \+ 46 \+ 34 \+ 42 \+ 8 \* 4;/);
+    // Each number the sum uses, in the style that draws it.
+    expect(t).toMatch(/rootShort: \{ paddingVertical: 4, gap: 4 \}/);
+    expect(t).toMatch(/profileBarSlim: \{ paddingVertical: 2 \}/);
+    expect(t).toMatch(/leaveSlim: \{ paddingVertical: 4 \}/);
+    expect(t).toMatch(/teamPillSlim: \{ paddingVertical: 1 \}/);
+    expect(t).toMatch(/pillValueSlim: \{ lineHeight: 20 \}/);
+    expect(t).toMatch(/feltFlush: \{ marginVertical: 0 \}/);
+    expect(t).toMatch(/callsRowShort: \{ flexWrap: 'nowrap', gap: 4 \}/);
+    expect(t).toMatch(/callChipShort: \{[^}]*paddingVertical: 2[^}]*flexShrink: 1, minWidth: 0 \}/);
+    expect(t).toMatch(/promptRowShort: \{ paddingVertical: 4, paddingHorizontal: 10, gap: 0 \}/);
+    expect(t).toMatch(/promptLineShort: \{ lineHeight: 16 \}/);
+    expect(t).toMatch(/handNestle: \{ marginBottom: -SELF_NESTLE \}/);
+    expect(t).toMatch(/arrangeSlot: \{ height: 34,/);
+    // The call is never cut: only the caller's name may ellipsize.
+    expect(t).toMatch(/<Text style=\{styles\.callChipName\} numberOfLines=\{1\}>/);
+    expect(t).toMatch(/<Text style=\{styles\.callChipCall\}>\{call\}<\/Text>/);
+    // One question at a time.
+    expect(t).toMatch(/const promptRows = <>\{short \? promptList\.slice\(0, 1\) : promptList\}<\/>;/);
+    // The arrange hint takes the faces' own slot, right after them.
+    const portrait = t.slice(t.indexOf('{/* wallet / level strip'));
+    expect(portrait.indexOf('{arrangeInSlot && (')).toBeGreaterThan(portrait.indexOf('{!shed && emotes}'));
+    // …but only when the faces were showing; a question that shed them keeps
+    // the hint above the fan, where the felt pays, and the felt has no ceiling.
+    expect(t).toMatch(/const arrangeInSlot = short && arranging && !askingBesidesArranging && !belaOffered && !settled && !!onEmote;/);
+    expect(t).toMatch(/short && arranging && !arrangeInSlot && \(\s*<View key="arrange"/);
+    expect(t).toMatch(/!settled && view\.canAnnounceBela && !hardMode && \(\s*<View key="bela"/);
+    expect(src('table/metrics.ts')).toMatch(/: shortColumn\s*\?[\s\S]*?usableH\s*: Math\.round\(usableH \* 0\.48\)/);
+    // A small hand rests clear of my tucked puck.
+    expect(t).toMatch(/restFloor=\{short \? FAN_REST_SHORT : 0\}/);
+    expect(t).toMatch(/paddingBottom: Math\.max\(drop, restFloor\)/);
+    // The bela buttons shed in hard mode too, and a shed re-measures the anchors.
+    expect(t).toMatch(/const belaOffered = !settled && view\.canAnnounceBela;/);
+    expect(t).toMatch(/shed \? 1 : 0,\s*\]\.join\('\|'\);/);
+    // Every short style hangs on the short column, on the line that uses it.
+    for (const name of ['rootShort', 'profileBarSlim', 'leaveSlim', 'teamPillSlim', 'pillValueSlim', 'liveSlim', 'feltFlush',
+      'callsRowShort', 'callChipShort', 'callChipGoldShort', 'promptRowShort', 'promptLineShort', 'handNestle', 'bidShort',
+      'promptInline', 'promptInlineText']) {
+      const uses = [...t.matchAll(new RegExp(`styles\\.${name}\\b`, 'g'))];
+      expect(uses.length, name).toBeGreaterThan(0);
+      for (const u of uses) {
+        const line = t.slice(t.lastIndexOf('\n', u.index!) + 1, t.indexOf('\n', u.index!));
+        expect(line, `${name}: ${line.trim()}`).toMatch(/\b(short|slim)\b/);
+      }
+    }
+    expect(t).toMatch(/const short = !land && m\.shortColumn;/);
+    // The toggle rests while the faces are shed.
+    expect(t).toMatch(/const trayShown = land \? trayFits : !shed;/);
+    // The harness bids by the suit alone, too.
+    expect(readFileSync(join(here, '../../../scripts/play-deal.sh'), 'utf8')).toMatch(/for label in "\$suit" "\$\{suit#zovi \}"; do/);
   });
 
   it('the web template paints dark before the bundle parses', () => {
