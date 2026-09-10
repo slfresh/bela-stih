@@ -83,7 +83,8 @@ export interface UiStrings {
   streakDays: (days: number) => string;
   startStreak: string;
   claim: string;
-  bonusClaimed: (days: number) => string;
+  /** The claimed state's title. The streak is the line under it; repeated here it cut the title short on a phone. */
+  bonusClaimed: string;
   dailyQuests: string;
   questLabel: (kind: 'playDeals' | 'winDeals' | 'callZvanja' | 'callBela' | 'winMatch') => string;
   level: string;
@@ -461,7 +462,7 @@ const hr: Strings = {
     streakDays: (days) => `Niz: ${days} ${hrDan(days)}`,
     startStreak: 'Počni niz danas',
     claim: 'Pokupi',
-    bonusClaimed: (days) => `Dnevni bonus pokupljen · niz ${days} ${hrDan(days)}`,
+    bonusClaimed: 'Dnevni bonus pokupljen',
     dailyQuests: 'Dnevni zadaci',
     questLabel: (kind) => HR_QUESTS[kind],
     level: 'Nivo',
@@ -692,7 +693,7 @@ const srCyrl: Strings = {
     streakDays: (days) => `Низ: ${days} ${srDan(days)}`,
     startStreak: 'Почни низ данас',
     claim: 'Покупи',
-    bonusClaimed: (days) => `Дневни бонус покупљен · низ ${days} ${srDan(days)}`,
+    bonusClaimed: 'Дневни бонус покупљен',
     dailyQuests: 'Дневни задаци',
     questLabel: (kind) => SR_QUESTS[kind],
     level: 'Ниво',
@@ -919,7 +920,7 @@ const en: Strings = {
     streakDays: (days) => `Streak: ${days} ${days === 1 ? 'day' : 'days'}`,
     startStreak: 'Start a streak today',
     claim: 'Claim',
-    bonusClaimed: (days) => `Daily bonus claimed · streak ${days} ${days === 1 ? 'day' : 'days'}`,
+    bonusClaimed: 'Daily bonus claimed',
     dailyQuests: 'Daily quests',
     questLabel: (kind) => EN_QUESTS[kind],
     level: 'Level',

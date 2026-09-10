@@ -191,7 +191,7 @@ export function HomeScreen({
                     <Text style={styles.bonusTitle} numberOfLines={1}>
                       {claimable
                         ? ui.dailyBonus(previewDaily(profile, today).coins)
-                        : ui.bonusClaimed(profile.streakDays)}
+                        : ui.bonusClaimed}
                     </Text>
                     {claimable && <Coin size={15} />}
                   </View>

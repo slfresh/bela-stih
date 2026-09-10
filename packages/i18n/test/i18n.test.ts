@@ -197,7 +197,7 @@ describe('app-shell ui strings', () => {
         ui.back,
         ui.dailyBonus(100),
         ui.streakDays(3),
-        ui.bonusClaimed(1),
+        ui.bonusClaimed,
         ui.questLabel('winMatch'),
         ui.buy(500),
         ui.needsLevel(8),
@@ -340,6 +340,12 @@ describe('register and typography', () => {
 
 describe('the words the player asked for', () => {
   const LATIN = /[A-Za-zČĆŠŽĐčćšžđ]/;
+  it('titles a claimed bonus without repeating the streak shown under it', () => {
+    // "Dnevni bonus pokupljen · niz 1 dan" was cut to "… pokupljen • …" on a 360 dp phone.
+    for (const id of LOCALE_IDS) expect(new Lang(id).s.ui.bonusClaimed, id).not.toMatch(/\d/);
+    expect(new Lang('hr').s.ui.bonusClaimed).toBe('Dnevni bonus pokupljen');
+  });
+
   it('says "Prošli" when the caller made it', () => {
     expect(new Lang('hr').s.madeShort).toBe('Prošli');
     expect(new Lang('sr-Cyrl').s.madeShort).toBe('Прошли');
