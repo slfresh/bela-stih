@@ -42,12 +42,6 @@ export interface TableMetrics {
   /** Short screens hide what they must rather than squashing everything. */
   compact: boolean;
   /**
-   * Landscape where the right rail cannot hold the leave button, the six
-   * emote faces and five bid buttons at once (about 514 dp with its padding):
-   * the faces float over the felt's edge while the tray is open instead.
-   */
-  tightRail: boolean;
-  /**
    * Portrait keeps a row's height free under the felt so a prompt coming or
    * going never moves the hand — but only where the column can pay for it:
    * with the reserve the felt must still get its full floor. The reserve's
@@ -79,6 +73,21 @@ export const SELF_PUCK_GAP = 8;
 export const PUCK_NAME_ROOM = 32;
 /** Landscape's gap between each rail and the centre column (styles.rootLand). */
 export const LAND_GAP = 6;
+
+/**
+ * Landscape's emote box, in the right rail's free gap under the leave button:
+ * the six 34 dp faces two abreast in three rows or, while the tray is open,
+ * the four phrases one under another in the same height, so the swap moves
+ * nothing. Inside the rail it can never reach a puck: the right-hand player's
+ * box ends LAND_GAP short of the rail. TableScreen measures the gap, and the
+ * box gives way where a question's buttons leave it less than this.
+ */
+export const LAND_TRAY_W = 2 * 34 + 6;
+export const LAND_TRAY_H = 3 * 34 + 2 * 6;
+/** A phrase in that box: four of them and their three gaps fill it. */
+export const LAND_PHRASE_H = (LAND_TRAY_H - 3 * 6) / 4;
+/** The emote toggle, a 40 dp square — which is also how the device harness finds it (120 px). */
+export const EMOTE_TOGGLE = 40;
 
 /**
  * Portrait's rows that do not flex, in dp, as measured on a 360 dp Samsung
@@ -116,8 +125,10 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
     ? clamp(usableH / REF_W, 0.72, 1.3)
     : clamp(Math.min(usableW / REF_W, usableH / REF_H), 0.78, 1.3);
 
-  // In landscape the rails take the sides, so the hand gets the middle.
-  const railW = landscape ? Math.round(96 * scale) : 0;
+  // In landscape the rails take the sides, so the hand gets the middle —
+  // never narrower than the emote box's two faces abreast, which 96 x scale
+  // would clip on a window under about 299 dp tall.
+  const railW = landscape ? Math.max(LAND_TRAY_W, Math.round(96 * scale)) : 0;
   const puck = Math.round((landscape ? 44 : 54) * scale);
   // My own puck: centred under the fan in portrait, so the fan has the whole
   // width; beside the fan in landscape, where height is the scarce thing, so
@@ -179,7 +190,6 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
     puck,
     selfPuck,
     compact: usableH < 620,
-    tightRail: landscape && usableH < 520,
     promptReserve,
     shortColumn,
   };

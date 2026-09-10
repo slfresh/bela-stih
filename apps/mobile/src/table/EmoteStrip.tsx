@@ -1,20 +1,22 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { PressScale } from '../ui/PressScale';
 import type { Lang } from '@belot/i18n';
 import { EMOTES, emoteText } from '../emotes';
 import { EmoteFace, hasEmoteFace } from '../emoteArt';
 import { font, radius, theme } from '../theme';
+import { LAND_PHRASE_H, LAND_TRAY_H, LAND_TRAY_W } from './metrics';
 
 /**
  * The emote bar.
  *
  * The old tray sat in the flex column, so opening it shrank the felt by ~120px,
  * moved every sprite anchor and forced a re-measure mid-animation. This one
- * costs a constant 34px whether it is open or shut: the six glyphs are up (one
+ * keeps one fixed box whether it is open or shut: the six glyphs are up (one
  * tap, no chrome) until the toggle swaps them for the four phrases, in the
- * same row. The phrases used to float above the glyphs — over my own puck,
- * once it moved there, so opening the tray covered my face. In landscape the
- * strip runs down the rail and the phrases still float out over the felt.
+ * same box. Portrait's box is a 34px row under my puck; landscape's is 74x114
+ * in the right rail, the faces two abreast in three rows. Nothing floats: the
+ * phrases once floated above the faces, which covered my own puck in portrait
+ * and the right-hand player in landscape.
  */
 
 const GLYPHS = EMOTES.filter((e) => e.glyph);
@@ -28,30 +30,40 @@ export function EmoteStrip({
   onSend,
 }: {
   lang: Lang;
-  /** Phrases showing? In portrait they take the glyphs' place. */
+  /** Phrases showing? They take the glyphs' place, in either orientation. */
   open: boolean;
   /** Fade back while the player is deciding a card. */
   dimmed: boolean;
-  /** Landscape: the strip lives in the right rail and runs down it. */
+  /** Landscape: the box in the right rail, under the leave button. */
   vertical?: boolean;
   onSend: (id: string) => void;
 }) {
-  // Portrait's row above the strip is my puck: nothing may float up over it.
-  const inPlace = !vertical;
   return (
-    <View style={[styles.wrap, vertical && styles.wrapCol]} pointerEvents="box-none">
+    <View style={[styles.wrap, vertical && styles.wrapRail]} pointerEvents="box-none">
       {open && (
-        <View style={[styles.row, inPlace ? styles.phraseRow : styles.phraseCol]}>
+        <View style={vertical ? styles.phraseStack : [styles.row, styles.phraseRow]}>
           {PHRASES.map((e) => (
-            <PressScale key={e.id} onPress={() => onSend(e.id)} style={styles.phraseChip} sound={null}>
-              <Text style={styles.phrase}>{emoteText(lang, e.id)}</Text>
+            <PressScale
+              key={e.id}
+              onPress={() => onSend(e.id)}
+              style={[styles.phraseChip, vertical && styles.phraseChipRail]}
+              hitSlop={vertical ? 3 : undefined}
+              sound={null}
+            >
+              <Text
+                style={[styles.phrase, vertical && styles.phraseRail]}
+                numberOfLines={vertical ? 1 : undefined}
+                maxFontSizeMultiplier={vertical ? 1.2 : undefined}
+              >
+                {emoteText(lang, e.id)}
+              </Text>
             </PressScale>
           ))}
         </View>
       )}
       {/* The bubble's pop is the sound of an emote; no click on top of it. */}
-      {!(open && inPlace) && (
-        <View style={[styles.row, vertical && styles.col, dimmed && styles.faded]}>
+      {!open && (
+        <View style={[styles.row, vertical && styles.faceGrid, dimmed && styles.faded]}>
           {GLYPHS.map((e) => (
             <PressScale
               key={e.id}
@@ -72,14 +84,16 @@ export function EmoteStrip({
 
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'flex-end', minHeight: 34 },
-  wrapCol: { justifyContent: 'flex-start', minHeight: 0 },
+  // Landscape: the rail's box, one height open or shut, so the swap moves nothing.
+  wrapRail: { height: LAND_TRAY_H, minHeight: 0, alignSelf: 'stretch', justifyContent: 'flex-start' },
   // The glyphs' own 34px, exactly: a larger system font may crowd the chips,
   // but it can never make the row taller and move the fan above it.
   phraseRow: { height: 34, alignItems: 'center', flexWrap: 'nowrap' },
-  // Landscape: phrases open leftwards, over the felt, never over the rail.
-  phraseCol: { position: 'absolute', right: 40, top: 0, width: 150, alignItems: 'flex-end' },
+  // Landscape: the four phrases one under another, filling the faces' box.
+  phraseStack: { gap: 6, alignSelf: 'stretch', alignItems: 'center' },
   row: { flexDirection: 'row', gap: 6, justifyContent: 'center', flexWrap: 'wrap' },
-  col: { flexDirection: 'column', flexWrap: 'nowrap' },
+  // Two faces abreast, then the next two: 34 + 6 + 34.
+  faceGrid: { width: LAND_TRAY_W },
   faded: { opacity: 0.55 },
   chip: {
     width: 34,
@@ -101,5 +115,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
+  // A rail phrase: four of them and three gaps fill the faces' 114, so 24
+  // each; 6 a side, so "Thanks!" at the 1.2 font cap (75 dp) fits the
+  // narrowest phone's 79 dp rail, and a longer phrase ellipsizes.
+  phraseChipRail: { height: LAND_PHRASE_H, paddingVertical: 0, paddingHorizontal: 6, justifyContent: 'center', maxWidth: '100%' },
   phrase: { color: theme.text, fontSize: 13, fontFamily: font.bold },
+  // Android pads a 13px line to its font's whole box, about 21dp; pinned at
+  // 17 it sits inside the 24dp chip with room to spare.
+  phraseRail: { lineHeight: 17, ...Platform.select({ android: { includeFontPadding: false }, default: {} }) },
 });

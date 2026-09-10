@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -61,7 +61,7 @@ import {
   type Position,
 } from './table/geometry';
 import { useTableMetrics } from './table/useTableMetrics';
-import { LAND_GAP, SELF_PUCK_GAP } from './table/metrics';
+import { EMOTE_TOGGLE, LAND_GAP, LAND_TRAY_H, SELF_PUCK_GAP } from './table/metrics';
 import { useHandOrder, type HandSort } from './table/useHandOrder';
 import type { ConfirmPlay } from './storage';
 import { cosmetics, room, roomStyle, type DeckStyle } from './cosmetics';
@@ -269,6 +269,44 @@ export function TableScreen(props: TableScreenProps) {
   // The tray closes on send; the cooldown mirrors the server's rate limit so
   // a spammed tap dies here instead of being silently dropped over the wire.
   const [trayOpen, setTrayOpen] = useState(false);
+  // Landscape keeps the faces in a fixed box in the right rail's free gap,
+  // measured below. A question whose buttons leave that gap too short for it
+  // (a four- or five-button bid on a phone held sideways; two two-line bela
+  // buttons on the shortest rails) takes the room: the box gives way, as
+  // portrait's short column sheds its strip, the tray shuts with it, and the
+  // toggle rests until the question is answered.
+  const [trayFits, setTrayFits] = useState(false);
+  const trayShown = !land || trayFits;
+  // What is drawn: never an open tray behind a resting toggle, even when a
+  // press that began before the box gave way ends after it.
+  const trayOpenShown = trayOpen && trayShown;
+  useEffect(() => {
+    if (!trayShown) setTrayOpen(false);
+  }, [trayShown]);
+  // Every entry into landscape measures afresh: a fit left over from before a
+  // turn to portrait would draw the box, for a frame, over a bid's buttons.
+  useEffect(() => {
+    if (!land) setTrayFits(false);
+  }, [land]);
+  // The box and a question's buttons trade places under a finger, both ways:
+  // for a moment after the box gives way a tap aimed at a face must not land
+  // as a bid, and for a moment after it comes back a second tap on the bid
+  // must not land as a face.
+  const railQuietUntil = useRef(0);
+  const faceQuietUntil = useRef(0);
+  const boxWasUp = useRef(false);
+  const boxUp = land && trayFits;
+  useLayoutEffect(() => {
+    if (land && boxWasUp.current && !boxUp && !settled) railQuietUntil.current = Date.now() + 300;
+    if (land && !boxWasUp.current && boxUp && !settled) faceQuietUntil.current = Date.now() + 300;
+    boxWasUp.current = boxUp;
+  }, [land, boxUp, settled]);
+  const answer = useCallback(
+    (a: Action) => {
+      if (Date.now() >= railQuietUntil.current) onAction(a);
+    },
+    [onAction],
+  );
 
   // Leaving a match in progress asks first — from the leave button in the top
   // corner, from the result sheet between deals, and from Android's back. A
@@ -301,6 +339,8 @@ export function TableScreen(props: TableScreenProps) {
   }, []);
   const emoteReadyAt = useRef(0);
   const sendEmote = (id: string) => {
+    // The second tap of a bid, landing on the face that just came back.
+    if (Date.now() < faceQuietUntil.current) return;
     setTrayOpen(false);
     if (!onEmote || Date.now() < emoteReadyAt.current) return;
     emoteReadyAt.current = Date.now() + 2500;
@@ -794,10 +834,11 @@ export function TableScreen(props: TableScreenProps) {
     />
   );
 
-  // A fixed 34px (or one column wide), so it never reflows the felt.
+  // A fixed box — portrait's 34px row, landscape's 74x114 in the rail — so
+  // opening or shutting it never reflows the felt.
   const emotes =
     !settled && onEmote ? (
-      <EmoteStrip lang={lang} open={trayOpen} dimmed={myTurn} vertical={land} onSend={sendEmote} />
+      <EmoteStrip lang={lang} open={trayOpenShown} dimmed={myTurn} vertical={land} onSend={sendEmote} />
     ) : null;
 
   // "Prijavi" / "Nemam" — the two answers, and nothing else while the table is
@@ -811,25 +852,36 @@ export function TableScreen(props: TableScreenProps) {
         onPress={() => {
           if (marked.length < 3 || !markingIsZvanje) return;
           const cards = hand.cards.filter((c) => marked.includes(cardId(c)));
-          onAction({ type: 'DECLARE_ANNOUNCE', seat: mySeat, cards });
+          answer({ type: 'DECLARE_ANNOUNCE', seat: mySeat, cards });
         }}
       />
       <Button
         label={lang.s.noneToDeclare}
         tone="plain"
         compact={land}
-        onPress={() => onAction({ type: 'DECLARE_SKIP', seat: mySeat })}
+        onPress={() => answer({ type: 'DECLARE_SKIP', seat: mySeat })}
       />
     </>
   ) : null;
 
   const emoteToggle = onEmote ? (
     <PressScale
-      onPress={() => setTrayOpen((o) => !o)}
+      onPress={() => {
+        if (trayShown) setTrayOpen((o) => !o);
+      }}
       hitSlop={8}
-      style={[styles.emoteToggle, trayOpen && styles.emoteToggleOn]}
+      // Resting while a question has the box's room: no click, no tray.
+      disabled={!trayShown}
+      style={[styles.emoteToggle, trayOpenShown && styles.emoteToggleOn]}
     >
-      <EmoteFace id="smile" size={24} />
+      {trayShown ? (
+        <EmoteFace id="smile" size={24} />
+      ) : (
+        // Greyed on a child: PressScale's animated opacity overrides its own.
+        <View style={styles.emoteToggleIdle} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+          <EmoteFace id="smile" size={24} />
+        </View>
+      )}
     </PressScale>
   ) : null;
 
@@ -935,22 +987,27 @@ export function TableScreen(props: TableScreenProps) {
 
               <View style={[styles.rail, styles.railRight, { width: m.railW }]}>
                 {leaveButton}
-                {!m.tightRail && emotes}
-                <View style={styles.railGap} />
+                {/* The emote box, in the rail's free gap under the leave
+                    button: never over the table. (A float here once put the
+                    faces on the right-hand player's disc.) It gives way when
+                    a question's buttons leave the gap shorter than the box;
+                    the gap clips the one frame before it hears. */}
+                <View
+                  style={styles.railGap}
+                  onLayout={(e) => setTrayFits(e.nativeEvent.layout.height >= LAND_TRAY_H)}
+                >
+                  {trayFits && emotes ? (
+                    <View style={styles.traySlot} pointerEvents="box-none">
+                      {emotes}
+                    </View>
+                  ) : null}
+                </View>
                 {!settled && (
                   <View style={styles.actionsCol}>
                     {declareButtons ?? (
-                      <NonCardActions options={options} lang={lang} onChoose={onAction} compact />
+                      <NonCardActions options={options} lang={lang} onChoose={answer} compact />
                     )}
                     {emoteToggle}
-                  </View>
-                )}
-                {/* No column for six faces on a short phone (with five bid
-                    buttons under them they ran off the top): they float over
-                    the felt's edge while the tray is open. */}
-                {m.tightRail && trayOpen && (
-                  <View style={[styles.emoteFloat, { right: m.railW + 6 }]} pointerEvents="box-none">
-                    {emotes}
                   </View>
                 )}
               </View>
@@ -1911,7 +1968,10 @@ const styles = StyleSheet.create({
   rootLand: { flexDirection: 'row', paddingVertical: 6, gap: LAND_GAP },
   rail: { gap: 6, alignItems: 'center' },
   railRight: { justifyContent: 'flex-end' },
-  railGap: { flex: 1 },
+  // The right rail's free gap, and the emote box's home: stretched, because the
+  // rail centres its children, and clipping, for the frame before onLayout.
+  railGap: { flex: 1, alignSelf: 'stretch', overflow: 'hidden' },
+  traySlot: { position: 'absolute', top: 0, left: 0, right: 0, height: LAND_TRAY_H },
   centre: { flex: 1, gap: 6 },
 
   profileBar: {
@@ -2171,8 +2231,8 @@ const styles = StyleSheet.create({
   actionsCol: { gap: 6, alignItems: 'stretch', alignSelf: 'stretch' },
 
   emoteToggle: {
-    width: 40,
-    height: 40,
+    width: EMOTE_TOGGLE,
+    height: EMOTE_TOGGLE,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: theme.line,
@@ -2181,7 +2241,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   emoteToggleOn: { borderColor: theme.accent },
-  emoteFloat: { position: 'absolute', top: 0 },
+  emoteToggleIdle: { opacity: 0.4 },
 
 
   resultBackdrop: {

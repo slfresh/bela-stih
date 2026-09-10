@@ -53,6 +53,10 @@ export function PressScale({
         rest.onPressOut?.(e);
       }}
       onPress={(e) => {
+        // A press that began before the control was disabled still ends here
+        // (Pressability checks `disabled` only when the press starts): a
+        // disabled control neither clicks nor acts.
+        if (rest.disabled) return;
         if (sound) playSfx(sound);
         if (haptic) pattern(haptic);
         onPress?.(e);

@@ -342,7 +342,7 @@ describe('the first frame and the last resort', () => {
     expect(existsSync(join(here, '../src/deck/cornerIndex.ts'))).toBe(false);
   });
 
-  it('the phrases open in the faces\' own row, never over my puck under the fan', () => {
+  it('the phrases open in the faces\' own place, never over a puck, in either orientation', () => {
     const s = src('table/EmoteStrip.tsx');
     // Portrait: the phrase row is the glyph row's 34px, in the flow — it used
     // to float 40px up, which is where my puck has stood since 1.2.2.
@@ -351,8 +351,53 @@ describe('the first frame and the last resort', () => {
     expect(row).not.toMatch(/absolute/);
     expect(row).toMatch(/height: 34\b/);
     // …and the glyphs make way while it is open, or the strip would be two rows.
-    expect(s).toMatch(/const inPlace = !vertical;/);
-    expect(s).toMatch(/\{!\(open && inPlace\) && \(/);
+    expect(s).toMatch(/\{!open && \(/);
+    // Landscape: nothing floats either — the phrases once opened over the
+    // right-hand player. They fill the faces' own 74x114 box in the rail.
+    expect(s).not.toMatch(/position: 'absolute'/);
+    expect(s).not.toMatch(/phraseCol|inPlace/);
+    expect(s).toMatch(/wrapRail: \{[^}]*height: LAND_TRAY_H/);
+    expect(s).toMatch(/faceGrid: \{[^}]*width: LAND_TRAY_W/);
+    expect(s).toMatch(/phraseChipRail: \{[^}]*height: LAND_PHRASE_H/);
+    expect(s).toMatch(/phraseChipRail: \{[^}]*paddingHorizontal: 6/);
+    expect(s).toMatch(/includeFontPadding: false/);
+  });
+
+  it('the landscape emote box lives in the right rail, never over the table beside it', () => {
+    const t = src('TableScreen.tsx');
+    // The float that stood here put the faces' right edge on the right-hand
+    // player's box, and the phrases over the rest of the disc.
+    expect(t).not.toMatch(/emoteFloat/);
+    expect(t).not.toMatch(/right: m\.railW/);
+    expect(t).not.toMatch(/tightRail/);
+    // The box is the rail's measured free gap's; it gives way when a question takes the room.
+    const rail = t.slice(t.indexOf('styles.railRight'), t.indexOf('{/* wallet / level strip'));
+    expect(rail).toMatch(/<View\s+style=\{styles\.railGap\}\s+onLayout=\{\(e\) => setTrayFits\(e\.nativeEvent\.layout\.height >= LAND_TRAY_H\)\}\s*>/);
+    expect(rail).toMatch(/\{trayFits && emotes \? \(\s*<View style=\{styles\.traySlot\} pointerEvents="box-none">/);
+    expect(t).toMatch(/railGap: \{ flex: 1, alignSelf: 'stretch', overflow: 'hidden' \}/);
+    expect(t).toMatch(/traySlot: \{ position: 'absolute', top: 0, left: 0, right: 0, height: LAND_TRAY_H \}/);
+    expect(t).toMatch(/const trayShown = !land \|\| trayFits;/);
+    expect(t).toMatch(/if \(!trayShown\) setTrayOpen\(false\);/);
+    expect(t).toMatch(/disabled=\{!trayShown\}/);
+    // A tap meant for a face cannot land on the bid that took its place.
+    expect(t).toMatch(/useLayoutEffect\(\(\) => \{\s*if \(land && boxWasUp\.current && !boxUp && !settled\) railQuietUntil\.current = Date\.now\(\) \+ 300;/);
+    expect(t).toMatch(/if \(Date\.now\(\) >= railQuietUntil\.current\) onAction\(a\);/);
+    expect(rail).toMatch(/<NonCardActions options=\{options\} lang=\{lang\} onChoose=\{answer\} compact \/>/);
+    expect(t).toMatch(/answer\(\{ type: 'DECLARE_SKIP', seat: mySeat \}\)/);
+    // Never an open tray behind a resting toggle; every landscape entry measures afresh.
+    expect(t).toMatch(/const trayOpenShown = trayOpen && trayShown;/);
+    expect(t).toMatch(/open=\{trayOpenShown\}/);
+    expect(t).toMatch(/trayOpenShown && styles\.emoteToggleOn/);
+    expect(t).toMatch(/if \(trayShown\) setTrayOpen\(\(o\) => !o\);/);
+    expect(t).toMatch(/if \(!land\) setTrayFits\(false\);/);
+    // …and a second tap on the bid cannot land on the face that came back.
+    expect(t).toMatch(/if \(land && !boxWasUp\.current && boxUp && !settled\) faceQuietUntil\.current = Date\.now\(\) \+ 300;/);
+    expect(t).toMatch(/const sendEmote = \(id: string\) => \{\s*\/\/[^\n]*\n\s*if \(Date\.now\(\) < faceQuietUntil\.current\) return;/);
+    // A press that outlives its control's enabling neither clicks nor acts.
+    expect(src('ui/PressScale.tsx')).toMatch(/onPress=\{\(e\) => \{[\s\S]*?if \(rest\.disabled\) return;\s*if \(sound\) playSfx\(sound\);/);
+    // Portrait keeps answering at once: its guard never arms.
+    const portrait = t.slice(t.indexOf('{/* wallet / level strip'));
+    expect(portrait).toMatch(/<NonCardActions options=\{options\} lang=\{lang\} onChoose=\{onAction\} \/>/);
   });
 
   it('the web template paints dark before the bundle parses', () => {
@@ -378,8 +423,8 @@ describe('the first frame and the last resort', () => {
     expect(t).toMatch(/<Anchor id=\{anchorId\.plaque\} style=\{styles\.plaqueDisc\}>/);
     expect(t).toMatch(/<Anchor id=\{anchorId\.plaque\} style=\{styles\.miniFan\}>/);
     expect(t).not.toMatch(/<Anchor\s+id=\{anchorId\.plaque\}\s+style=\{\[\s*styles\.plaque,/s);
-    // A short phone's rails: the faces float, and who called trump is never dropped.
-    expect(t).toMatch(/\{!m\.tightRail && emotes\}/);
+    // A short phone's rails: who called trump is never dropped. (The emote box
+    // has its own guard: 'the landscape emote box lives in the right rail'.)
     expect(t).not.toMatch(/m\.tightRail && selfPuck|m\.tightRail \? selfPuck/);
     expect(t).not.toMatch(/view\.callerSeat !== null && !m\.tightRail/);
     expect(t).toMatch(/numberOfLines=\{land \? 2 : 1\}/);
