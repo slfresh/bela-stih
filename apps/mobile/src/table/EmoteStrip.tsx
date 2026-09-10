@@ -10,8 +10,11 @@ import { font, radius, theme } from '../theme';
  *
  * The old tray sat in the flex column, so opening it shrank the felt by ~120px,
  * moved every sprite anchor and forced a re-measure mid-animation. This one
- * costs a constant 34px whether it is open or shut: the six glyphs are always
- * visible (one tap, no chrome) and the four phrases float above them.
+ * costs a constant 34px whether it is open or shut: the six glyphs are up (one
+ * tap, no chrome) until the toggle swaps them for the four phrases, in the
+ * same row. The phrases used to float above the glyphs — over my own puck,
+ * once it moved there, so opening the tray covered my face. In landscape the
+ * strip runs down the rail and the phrases still float out over the felt.
  */
 
 const GLYPHS = EMOTES.filter((e) => e.glyph);
@@ -25,7 +28,7 @@ export function EmoteStrip({
   onSend,
 }: {
   lang: Lang;
-  /** Phrases showing? The glyph row is always up. */
+  /** Phrases showing? In portrait they take the glyphs' place. */
   open: boolean;
   /** Fade back while the player is deciding a card. */
   dimmed: boolean;
@@ -33,11 +36,12 @@ export function EmoteStrip({
   vertical?: boolean;
   onSend: (id: string) => void;
 }) {
+  // Portrait's row above the strip is my puck: nothing may float up over it.
+  const inPlace = !vertical;
   return (
     <View style={[styles.wrap, vertical && styles.wrapCol]} pointerEvents="box-none">
-      {/* The phrases float, so opening them cannot move the felt or the hand. */}
       {open && (
-        <View style={[styles.row, vertical ? styles.phraseCol : styles.phraseRow]}>
+        <View style={[styles.row, inPlace ? styles.phraseRow : styles.phraseCol]}>
           {PHRASES.map((e) => (
             <PressScale key={e.id} onPress={() => onSend(e.id)} style={styles.phraseChip} sound={null}>
               <Text style={styles.phrase}>{emoteText(lang, e.id)}</Text>
@@ -46,20 +50,22 @@ export function EmoteStrip({
         </View>
       )}
       {/* The bubble's pop is the sound of an emote; no click on top of it. */}
-      <View style={[styles.row, vertical && styles.col, dimmed && styles.faded]}>
-        {GLYPHS.map((e) => (
-          <PressScale
-            key={e.id}
-            onPress={() => onSend(e.id)}
-            style={styles.chip}
-            hitSlop={4}
-            sound={null}
-            accessibilityLabel={e.id}
-          >
-            {hasEmoteFace(e.id) ? <EmoteFace id={e.id} size={26} /> : <Text style={styles.glyph}>{emoteText(lang, e.id)}</Text>}
-          </PressScale>
-        ))}
-      </View>
+      {!(open && inPlace) && (
+        <View style={[styles.row, vertical && styles.col, dimmed && styles.faded]}>
+          {GLYPHS.map((e) => (
+            <PressScale
+              key={e.id}
+              onPress={() => onSend(e.id)}
+              style={styles.chip}
+              hitSlop={4}
+              sound={null}
+              accessibilityLabel={e.id}
+            >
+              {hasEmoteFace(e.id) ? <EmoteFace id={e.id} size={26} /> : <Text style={styles.glyph}>{emoteText(lang, e.id)}</Text>}
+            </PressScale>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
@@ -67,7 +73,9 @@ export function EmoteStrip({
 const styles = StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'flex-end', minHeight: 34 },
   wrapCol: { justifyContent: 'flex-start', minHeight: 0 },
-  phraseRow: { position: 'absolute', bottom: 40, left: 0, right: 0 },
+  // The glyphs' own 34px, exactly: a larger system font may crowd the chips,
+  // but it can never make the row taller and move the fan above it.
+  phraseRow: { height: 34, alignItems: 'center', flexWrap: 'nowrap' },
   // Landscape: phrases open leftwards, over the felt, never over the rail.
   phraseCol: { position: 'absolute', right: 40, top: 0, width: 150, alignItems: 'flex-end' },
   row: { flexDirection: 'row', gap: 6, justifyContent: 'center', flexWrap: 'wrap' },

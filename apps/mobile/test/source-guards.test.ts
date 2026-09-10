@@ -342,6 +342,19 @@ describe('the first frame and the last resort', () => {
     expect(existsSync(join(here, '../src/deck/cornerIndex.ts'))).toBe(false);
   });
 
+  it('the phrases open in the faces\' own row, never over my puck under the fan', () => {
+    const s = src('table/EmoteStrip.tsx');
+    // Portrait: the phrase row is the glyph row's 34px, in the flow — it used
+    // to float 40px up, which is where my puck has stood since 1.2.2.
+    const row = s.match(/phraseRow: \{[^}]*\}/)?.[0] ?? '';
+    expect(row).not.toBe('');
+    expect(row).not.toMatch(/absolute/);
+    expect(row).toMatch(/height: 34\b/);
+    // …and the glyphs make way while it is open, or the strip would be two rows.
+    expect(s).toMatch(/const inPlace = !vertical;/);
+    expect(s).toMatch(/\{!\(open && inPlace\) && \(/);
+  });
+
   it('the web template paints dark before the bundle parses', () => {
     const html = readFileSync(join(here, '../public/index.html'), 'utf8');
     expect(html).toMatch(/<html lang="hr">/);
