@@ -75,6 +75,10 @@ export const FELT_HAND_GAP = 12;
 
 /** Between the fan and my puck beside it, in landscape's hand row. */
 export const SELF_PUCK_GAP = 8;
+/** Room a puck gives its name beside the disc: a puck's box is its disc plus this. SeatPuck reads it. */
+export const PUCK_NAME_ROOM = 32;
+/** Landscape's gap between each rail and the centre column (styles.rootLand). */
+export const LAND_GAP = 6;
 
 /**
  * Portrait's rows that do not flex, in dp, as measured on a 360 dp Samsung
@@ -92,11 +96,12 @@ export const SELF_PUCK_GAP = 8;
  */
 export const PORTRAIT_CHROME = 24 + 35 + 16 + 34 + 24 + 58 + 34 + 40 + 9 * 8;
 /**
- * Bidding's own band: four trump buttons wrap the actions row onto two lines
- * (92), with no chip and no prompt beside them — so it must never need more
- * than declaring's chip, prompt and one line of buttons.
+ * Bidding's own band: the emote toggle, "dalje" and four trump buttons wrap
+ * the actions row onto three lines on a phone (3 x 40 + 2 gaps of 8 + 2 of
+ * padding), with no chip and no prompt beside them — so it must never need
+ * more than declaring's chip, prompt and one line of buttons.
  */
-export const BIDDING_ACTIONS = 92;
+export const BIDDING_ACTIONS = 3 * 40 + 2 * 8 + 2;
 /** What a short column sheds while a prompt is up: the emote strip (34) and the bot line (16), with their gaps. */
 export const PROMPT_SHED = 34 + 8 + 16 + 8;
 /** The felt's floor where the phone can pay for it, and how far it may give. */
@@ -118,7 +123,15 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
   // width; beside the fan in landscape, where height is the scarce thing, so
   // the fan gives up that much width there (it is capped well short of it).
   const selfPuck = Math.round(puck * 0.85);
-  const handWidth = Math.max(240, usableW - 24 - railW * 2 - (landscape ? selfPuck + SELF_PUCK_GAP : 0));
+  // Landscape's centre column is the width less the root's padding, both
+  // rails and the two gaps beside them; my puck's box (its disc plus the
+  // room for its name) and the row's gap come off that.
+  const handWidth = Math.max(
+    240,
+    landscape
+      ? usableW - 24 - railW * 2 - LAND_GAP * 2 - (selfPuck + PUCK_NAME_ROOM) - SELF_PUCK_GAP
+      : usableW - 24,
+  );
 
   // Landscape has width to burn and no height, so the hand takes a fixed
   // slice of the screen instead of the biggest card that fits across it.

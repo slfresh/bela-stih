@@ -19,6 +19,7 @@ import { garb } from '../deck/palette';
 import { font, radius, signal, stroke, theme } from '../theme';
 import { Robot } from '../ui/icons';
 import { useCountUp } from '../anim/useCountUp';
+import { PUCK_NAME_ROOM } from './metrics';
 
 /**
  * One seat at the table, the social-poker way: a person, not a text label.
@@ -142,7 +143,7 @@ export const SeatPuck = memo(function SeatPuck({
   // The name sits under the disc and needs room for a couple of words; a
   // smaller puck must give that room back, or a shrunk seat still costs 86px
   // of the table's width. 54 + 32 is exactly the old fixed width.
-  const width = size + 32;
+  const width = size + PUCK_NAME_ROOM;
   const colour = AVATAR_COLOURS[seat % AVATAR_COLOURS.length]!;
   const ringSize = size + 10;
   const portrait = avatar && hasAvatar(avatar) ? avatar : null;
@@ -296,8 +297,9 @@ const yourTurnPing: CSSAnimationProperties = {
 const styles = StyleSheet.create({
   root: { alignItems: 'center', gap: 2 },
   ping: { position: 'absolute', top: 0, left: 0, borderWidth: 3, borderColor: signal.turn },
-  // Reduce-motion: the ring holds still, lit, instead of pinging.
-  pingStill: { opacity: 0.85 },
+  // Reduce-motion: the ring holds still, lit, instead of pinging — a little
+  // outside the team ring and the clock, which are drawn over it and hid it.
+  pingStill: { opacity: 0.85, transform: [{ scale: 1.2 }] },
   centre: { alignItems: 'center', justifyContent: 'center' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: 84 },
   name: { color: theme.textDim, fontSize: 12, flexShrink: 1 },

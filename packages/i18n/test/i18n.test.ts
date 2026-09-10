@@ -337,3 +337,25 @@ describe('register and typography', () => {
     for (const str of strings(new Lang('sr-Cyrl'))) expect(str, str).not.toMatch(/лј|нј|дж/i);
   });
 });
+
+describe('the words the player asked for', () => {
+  const LATIN = /[A-Za-zČĆŠŽĐčćšžđ]/;
+  it('says "Prošli" when the caller made it', () => {
+    expect(new Lang('hr').s.madeShort).toBe('Prošli');
+    expect(new Lang('sr-Cyrl').s.madeShort).toBe('Прошли');
+    expect(new Lang('en').s.madeShort).toBe('Made');
+  });
+
+  it('asks before leaving, in every locale, and never in Latin letters in Cyrillic', () => {
+    expect(new Lang('hr').s.ui.leaveConfirm).toBe('Želiš li stvarno napustiti stol?');
+    for (const id of LOCALE_IDS) {
+      const ui = new Lang(id).s.ui;
+      for (const v of [ui.leaveConfirm, ui.leaveConfirmYes, ui.leaveConfirmNo]) {
+        expect(v.trim().length, `${id}`).toBeGreaterThan(0);
+        if (id === 'sr-Cyrl') expect(v, `${id}: ${v}`).not.toMatch(LATIN);
+      }
+      // The safe answer and the irreversible one are different words.
+      expect(ui.leaveConfirmYes).not.toBe(ui.leaveConfirmNo);
+    }
+  });
+});

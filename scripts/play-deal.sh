@@ -7,6 +7,11 @@
 # never blunder into "next deal" or "leave table".
 #
 #   bash scripts/play-deal.sh [maxRounds]
+#
+# Set the app's own Settings > Animacije to "Smanjene" first. On the player's
+# turn their disc breathes and pings without end, and uiautomator never sees a
+# screen that animates forever as idle ("could not get idle state"), so every
+# dump on your own turn fails at full motion. Put it back to "Kao sustav" after.
 set -u
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 source scripts/ui.sh

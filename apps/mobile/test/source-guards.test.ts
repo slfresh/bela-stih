@@ -303,8 +303,13 @@ describe('the first frame and the last resort', () => {
     expect(portrait.slice(0, portrait.indexOf('<TableHeader'))).toMatch(/\{leaveButton\}/);
     expect(t).toMatch(/<View style=\{\[styles\.rail, styles\.railRight, \{ width: m\.railW \}\]\}>\s*\{leaveButton\}/);
     // …and nowhere in the actions row a thumb reaches for mid-deal.
-    const row = portrait.slice(portrait.indexOf('<View style={styles.actionsRow}>'));
-    expect(row.slice(0, row.indexOf('</View>'))).not.toMatch(/finishLabel|onFinish/);
+    const rowAt = portrait.indexOf('<View style={styles.actionsRow}>');
+    expect(rowAt).toBeGreaterThan(-1);
+    const row = portrait.slice(rowAt);
+    const rowEnd = row.indexOf('</View>');
+    expect(rowEnd).toBeGreaterThan(0);
+    expect(row.slice(0, rowEnd)).toMatch(/emoteToggle/); // the slice is really the row
+    expect(row.slice(0, rowEnd)).not.toMatch(/finishLabel|onFinish/);
     // Every way out asks first while a match is on.
     expect(t).toMatch(/onPress=\{requestLeave\}/);
     expect(t).toMatch(/onFinish=\{requestLeave\}/);
@@ -313,12 +318,27 @@ describe('the first frame and the last resort', () => {
     const app = readFileSync(join(here, '../App.tsx'), 'utf8');
     expect(app).toMatch(/if \(runBackGuard\(\)\) return true;/);
     // A short phone sheds the emote strip and the bot line while a prompt is up.
-    expect(t).toMatch(/const shed = m\.shortColumn && hasPrompt;/);
+    expect(t).toMatch(/const shed = m\.shortColumn && asking;/);
+    expect(t).toMatch(/a\.type === 'BID_CALL' \|\| a\.type === 'BID_PASS'/);
+    // The dialog never outlives the match it was about.
+    expect(t).toMatch(/\{leaving && !matchOver && \(/);
+    expect(t).toMatch(/if \(!matchOverRef\.current\) onFinish\(\);/);
+    // The constants the budget uses are the ones the styles use.
+    expect(t).toMatch(/rootLand: \{[^}]*gap: LAND_GAP/);
+    expect(src('table/SeatPuck.tsx')).toMatch(/const width = size \+ PUCK_NAME_ROOM;/);
     expect(portrait).toMatch(/\{!shed && emotes\}/);
     expect(portrait).toMatch(/\{status && !shed \?/);
     // The corner letters are gone from the cards.
     const face = src('deck/CardFace.tsx');
     expect(face).not.toMatch(/CornerIndex|cornerIndex|indexColour/);
+    // Whatever a corner index is called, it is text away from the centre line:
+    // every SVG text on a mađarica is the printing's own, at x = 50.
+    const xs = [...face.matchAll(/<SvgText\s+x=(\{[^}]*\}|"[^"]*")/g)].map((m) => m[1]);
+    expect(xs.length).toBeGreaterThan(0);
+    for (const x of xs) expect(x, 'an SvgText off the centre line').toBe('"50"');
+    // The vintage card is the photograph alone: no text or overlay drawn on it.
+    expect(face).not.toMatch(/<RNText|Text as RNText/);
+    expect(face).toMatch(/if \(style === 'starinske'\) \{\s*return \(\s*<RNImage/);
     expect(existsSync(join(here, '../src/deck/cornerIndex.ts'))).toBe(false);
   });
 

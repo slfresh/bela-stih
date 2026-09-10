@@ -61,7 +61,7 @@ import {
   type Position,
 } from './table/geometry';
 import { useTableMetrics } from './table/useTableMetrics';
-import { SELF_PUCK_GAP } from './table/metrics';
+import { LAND_GAP, SELF_PUCK_GAP } from './table/metrics';
 import { useHandOrder, type HandSort } from './table/useHandOrder';
 import type { ConfirmPlay } from './storage';
 import { cosmetics, room, roomStyle, type DeckStyle } from './cosmetics';
@@ -704,8 +704,10 @@ export function TableScreen(props: TableScreenProps) {
   // prompt coming or going never moves the hand under your thumb; a shorter
   // phone cannot spare it, and landscape flexes the felt instead.
   const prompts = m.promptReserve ? <View style={styles.promptsReserve}>{promptRows}</View> : promptRows;
-  // Is the table asking me something right now? (The prompt rows' own conditions.)
-  const hasPrompt =
+  // Is the table asking me something right now? The prompt rows' own
+  // conditions — and a bid, whose buttons wrap to three lines on a phone.
+  const asking =
+    options.some((a) => a.type === 'BID_CALL' || a.type === 'BID_PASS') ||
     declaring ||
     (!settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0) ||
     (!settled && view.canDeclare === true) ||
@@ -713,7 +715,7 @@ export function TableScreen(props: TableScreenProps) {
     (!settled && view.canAnnounceBela && !hardMode);
   // A short phone sheds the rows that are no use while it asks, so the
   // buttons that answer stay on the screen (see metrics' shortColumn).
-  const shed = m.shortColumn && hasPrompt;
+  const shed = m.shortColumn && asking;
 
   // My hand, fanned; the seat anchor for sprites sits underneath it.
   const handBlock = (
@@ -1000,7 +1002,9 @@ export function TableScreen(props: TableScreenProps) {
           <EffectsOverlay bus={fxBus} />
           {__DEV__ && probe && <PerfProbe />}
 
-          {leaving && (
+          {/* Not once the match is over: offline the same button then means a
+              new match, and "Napusti" must never start one. */}
+          {leaving && !matchOver && (
             <ConfirmDialog
               title={lang.s.ui.leaveConfirm}
               confirmLabel={lang.s.ui.leaveConfirmYes}
@@ -1010,7 +1014,7 @@ export function TableScreen(props: TableScreenProps) {
               onCancel={() => setLeaving(false)}
               onConfirm={() => {
                 setLeaving(false);
-                onFinish();
+                if (!matchOverRef.current) onFinish();
               }}
             />
           )}
@@ -1904,7 +1908,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.feltDeep },
   root: { flex: 1, padding: 12, gap: 8 },
   // Landscape: two narrow rails of chrome with the table between them.
-  rootLand: { flexDirection: 'row', paddingVertical: 6, gap: 6 },
+  rootLand: { flexDirection: 'row', paddingVertical: 6, gap: LAND_GAP },
   rail: { gap: 6, alignItems: 'center' },
   railRight: { justifyContent: 'flex-end' },
   railGap: { flex: 1 },

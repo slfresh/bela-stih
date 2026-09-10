@@ -5,7 +5,9 @@ import {
   FELT_FLOOR_MIN,
   FELT_HAND_GAP,
   BIDDING_ACTIONS,
+  LAND_GAP,
   PORTRAIT_CHROME,
+  PUCK_NAME_ROOM,
   PROMPT_SHED,
   SELF_PUCK_GAP,
 } from '../src/table/metrics';
@@ -70,15 +72,18 @@ describe('computeTableMetrics', () => {
   });
 });
 
-/** The column's worst case in portrait: every fixed row, the fan, my puck's row, the felt's floor. */
-function portraitNeed(w: number, h: number) {
-  const m = computeTableMetrics(w, h);
-  return {
-    m,
-    // The chrome already counts one prompt row, reserved or not.
-    need: PORTRAIT_CHROME + m.handMinHeight + m.selfPuck + 10 + m.feltMinHeight,
-  };
-}
+/**
+ * Portrait's rows, as measured on the Samsung with Rubik — owned by this test,
+ * so an understated budget in metrics.ts cannot pass by agreeing with itself.
+ */
+const ROW = { pad: 24, top: 35, status: 16, header: 34, calls: 24, prompt: 58, emotes: 34, line: 40, gap: 8 };
+/** The two busiest moments of a deal, online: every row they render but the felt, the hand and my puck. */
+const DECLARING =
+  ROW.pad + ROW.top + ROW.status + ROW.header + ROW.calls + ROW.prompt + ROW.emotes + ROW.line + 9 * ROW.gap;
+const BIDDING =
+  ROW.pad + ROW.top + ROW.status + ROW.header + ROW.emotes + (3 * ROW.line + 2 * ROW.gap + 2) + 7 * ROW.gap;
+/** What a short column sheds while it asks: the emote strip and the bot line, with their gaps. */
+const SHED = ROW.emotes + ROW.gap + ROW.status + ROW.gap;
 
 describe('the portrait column', () => {
   const PHONES = [
@@ -93,59 +98,50 @@ describe('the portrait column', () => {
     [480, 1000],
   ] as const;
 
-  it('never asks for more height than the phone has, down to the smallest phone it can hold', () => {
-    for (const [w, h] of PHONES) {
-      const { m, need } = portraitNeed(w, h);
-      // The floor gives before the actions row is pushed off the bottom; only
-      // a phone too short even for the lowest floor overflows.
-      if (m.feltMinHeight > FELT_FLOOR_MIN) expect(need, `${w}x${h}`).toBeLessThanOrEqual(h);
-    }
+  it('counts at least the rows the busiest moments render', () => {
+    expect(PORTRAIT_CHROME).toBeGreaterThanOrEqual(DECLARING);
+    expect(BIDDING).toBeLessThanOrEqual(DECLARING);
+    expect(BIDDING_ACTIONS).toBe(3 * ROW.line + 2 * ROW.gap + 2);
+    expect(PROMPT_SHED).toBe(SHED);
   });
+
+  for (const [name, rows] of [
+    ['declaring (a chip and the zvanja question)', DECLARING],
+    ['bidding (three lines of buttons)', BIDDING],
+  ] as const) {
+    it(`keeps the answering buttons on screen while ${name}, down to a 360x640 phone`, () => {
+      for (const [w, h] of PHONES) {
+        if (h < 640) continue; // a 320x568 phone is below what the table can hold at its busiest
+        const m = computeTableMetrics(w, h);
+        // The table asks in both moments, so a short column sheds its rows.
+        const need = rows + m.handMinHeight + m.selfPuck + 10 + m.feltMinHeight - (m.shortColumn ? SHED : 0);
+        expect(need, `${w}x${h}`).toBeLessThanOrEqual(h);
+      }
+    });
+  }
 
   it('keeps the prompt reserve only where the felt keeps its whole floor with it', () => {
     for (const [w, h] of PHONES) {
-      const { m } = portraitNeed(w, h);
+      const m = computeTableMetrics(w, h);
       if (m.promptReserve) expect(m.feltMinHeight, `${w}x${h}`).toBe(FELT_FLOOR);
     }
     expect(computeTableMetrics(412, 915).promptReserve).toBe(true);
+    expect(computeTableMetrics(360, 723).promptReserve).toBe(false);
     expect(computeTableMetrics(375, 647).promptReserve).toBe(false);
     for (const [w, h] of LANDSCAPE) expect(computeTableMetrics(w, h).promptReserve).toBe(false);
   });
 
-  it('fits the 360 dp Samsung it was measured on at its busiest: chip, zvanja prompt and online line', () => {
-    // Before, the floor stayed at 260 with the prompt unreserved, and the
-    // zvanja question pushed "Prijavi" and "Nemam" under the navigation bar.
-    const { m, need } = portraitNeed(360, 723);
-    expect(need).toBeLessThanOrEqual(723);
-    expect(m.promptReserve).toBe(false);
+  it('lets the floor give on the Samsung, but no lower than it must', () => {
+    const m = computeTableMetrics(360, 723);
     expect(m.feltMinHeight).toBeLessThan(FELT_FLOOR);
     expect(m.feltMinHeight).toBeGreaterThanOrEqual(FELT_FLOOR_MIN);
-  });
-
-  it('keeps the buttons that answer a prompt on the screen, down to a 360x640 phone', () => {
-    for (const [w, h] of PHONES) {
-      if (h < 640) continue; // a 320x568 phone is below what the table can hold at its busiest
-      const { m, need } = portraitNeed(w, h);
-      const shed = m.shortColumn ? PROMPT_SHED : 0;
-      expect(need - shed, `${w}x${h}`).toBeLessThanOrEqual(h);
-    }
+    expect(m.shortColumn).toBe(false);
   });
 
   it('sheds rows only where the lowest floor cannot pay, and never sideways', () => {
-    expect(computeTableMetrics(360, 723).shortColumn).toBe(false);
     expect(computeTableMetrics(412, 915).shortColumn).toBe(false);
     expect(computeTableMetrics(360, 640).shortColumn).toBe(true);
     for (const [w, h] of LANDSCAPE) expect(computeTableMetrics(w, h).shortColumn).toBe(false);
-  });
-
-  it('never needs more for bidding than for declaring', () => {
-    // Bidding: two lines of trump buttons, no chip, no prompt. Declaring: a
-    // chip, the prompt and one line of buttons — the band the chrome counts.
-    const CALLS = 24;
-    const PROMPT = 58;
-    const ACTIONS = 40;
-    const GAP = 8;
-    expect(BIDDING_ACTIONS).toBeLessThanOrEqual(CALLS + GAP + PROMPT + GAP + ACTIONS);
   });
 });
 
@@ -159,13 +155,17 @@ describe('my puck', () => {
     }
   });
 
-  it('stands beside the fan in landscape at no cost to the cards', () => {
+  it('stands beside the fan in landscape: the fan fits the cell it is really given, at no cost to the cards', () => {
     for (const [w, h] of LANDSCAPE) {
       const m = computeTableMetrics(w, h);
-      expect(m.handWidth).toBe(Math.max(240, w - 24 - m.railW * 2 - m.selfPuck - SELF_PUCK_GAP));
-      const withPuck = fitHand(m.handWidth, 8, m.handCardMax).cardW;
-      const without = fitHand(m.handWidth + m.selfPuck + SELF_PUCK_GAP, 8, m.handCardMax).cardW;
-      expect(withPuck, `${w}x${h}`).toBeCloseTo(without, 5);
+      // The centre column, and the cell the hand gets in it beside my puck's box.
+      const centre = w - 24 - m.railW * 2 - LAND_GAP * 2;
+      const cell = centre - (m.selfPuck + PUCK_NAME_ROOM) - SELF_PUCK_GAP;
+      expect(m.handWidth, `${w}x${h}`).toBeLessThanOrEqual(Math.max(240, cell));
+      // Capped cards: the puck costs the fan nothing.
+      const inCell = fitHand(m.handWidth, 8, m.handCardMax).cardW;
+      const alone = fitHand(centre, 8, m.handCardMax).cardW;
+      expect(inCell, `${w}x${h}`).toBeCloseTo(alone, 5);
     }
   });
 });
@@ -198,6 +198,15 @@ describe('the landscape rails', () => {
       const faces = m.tightRail ? 0 : FACES + GAP;
       const right = LEAVE + GAP + faces + 5 * BUTTON + 4 * GAP + GAP + TOGGLE;
       expect(right, `${w}x${h} right rail`).toBeLessThanOrEqual(h - ROOT_PAD);
+    }
+  });
+
+  it('floats the faces exactly where the full right rail does not fit', () => {
+    // The right rail's full stack: the leave button, six faces, five bid buttons and the toggle.
+    const full = LEAVE + GAP + FACES + GAP + 5 * BUTTON + 4 * GAP + GAP + TOGGLE;
+    for (let h = 300; h <= 800; h += 10) {
+      const m = computeTableMetrics(Math.round(h * 2), h);
+      expect(m.tightRail, `landscape ${Math.round(h * 2)}x${h}`).toBe(full > h - ROOT_PAD);
     }
   });
 
