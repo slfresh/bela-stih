@@ -22,6 +22,7 @@ import {
 } from './src/storage';
 import { preloadSfx, setMasterVolume, setSoundEnabled } from './src/audio';
 import { AudioUnlockChip } from './src/ui/AudioUnlockChip';
+import { runBackGuard } from './src/ui/backGuard';
 import { setAndroidHaptics, setHapticsEnabled } from './src/haptics';
 import { useFonts } from 'expo-font';
 
@@ -117,6 +118,8 @@ export default function App() {
     if (Platform.OS === 'web') return; // no hardware back; the API only logs an error there
     if (launch === null && menu === 'home') return; // at the root, let back close the app
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      // A match in progress asks before it is abandoned (see ui/backGuard).
+      if (runBackGuard()) return true;
       if (launch !== null) exitToHome();
       else setMenu('home');
       return true; // handled

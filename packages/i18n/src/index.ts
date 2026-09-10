@@ -133,6 +133,10 @@ export interface UiStrings {
   waitingForPlayers: (seated: number) => string;
   shareCode: string;
   leaveTable: string;
+  /** Asked before a match in progress is abandoned: the leave button, the result sheet's, Android's back. */
+  leaveConfirm: string;
+  leaveConfirmYes: string;
+  leaveConfirmNo: string;
   botPlaysFor: (names: string) => string;
   startWithBots: string;
   sitHere: string;
@@ -432,7 +436,7 @@ const hr: Strings = {
   matchScore: 'Rezultat meča',
   callerMade: 'Zvač je prošao.',
   callerFailed: 'PAD — zvač nije prošao, sve ide protivnicima.',
-  madeShort: 'Prošlo',
+  madeShort: 'Prošli',
   failedShort: 'Pad',
   winner: (team) => `Pobjeđuje ${team}`,
   nextDeal: 'Sljedeće dijeljenje',
@@ -502,6 +506,9 @@ const hr: Strings = {
     waitingForPlayers: (seated) => `Čekamo igrače… ${seated}/4`,
     shareCode: 'Pošalji je prijateljima da ti se pridruže.',
     leaveTable: 'Napusti stol',
+    leaveConfirm: 'Želiš li stvarno napustiti stol?',
+    leaveConfirmYes: 'Napusti',
+    leaveConfirmNo: 'Ostani',
     botPlaysFor: (names) => `${names} — igra bot`,
     startWithBots: 'Počni s botovima',
     sitHere: 'sjedni ovdje',
@@ -660,7 +667,7 @@ const srCyrl: Strings = {
   matchScore: 'Резултат меча',
   callerMade: 'Звач је прошао.',
   callerFailed: 'ПАД — звач није прошао, све иде противницима.',
-  madeShort: 'Прошло',
+  madeShort: 'Прошли',
   failedShort: 'Пад',
   winner: (team) => `Побеђује ${team}`,
   nextDeal: 'Следеће дељење',
@@ -730,6 +737,9 @@ const srCyrl: Strings = {
     waitingForPlayers: (seated) => `Чекамо играче… ${seated}/4`,
     shareCode: 'Пошаљи је пријатељима да ти се придруже.',
     leaveTable: 'Напусти сто',
+    leaveConfirm: 'Желиш ли стварно да напустиш сто?',
+    leaveConfirmYes: 'Напусти',
+    leaveConfirmNo: 'Остани',
     botPlaysFor: (names) => `${names} — игра бот`,
     startWithBots: 'Почни са ботовима',
     sitHere: 'седни овде',
@@ -954,6 +964,9 @@ const en: Strings = {
     waitingForPlayers: (seated) => `Waiting for players… ${seated}/4`,
     shareCode: 'Send it to friends so they can join you.',
     leaveTable: 'Leave table',
+    leaveConfirm: 'Do you really want to leave the table?',
+    leaveConfirmYes: 'Leave',
+    leaveConfirmNo: 'Stay',
     botPlaysFor: (names) => `${names} — a bot plays for them`,
     startWithBots: 'Start with bots',
     sitHere: 'sit here',

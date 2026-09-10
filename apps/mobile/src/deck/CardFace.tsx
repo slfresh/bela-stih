@@ -3,13 +3,12 @@ import Svg, { Circle, G, Line, Path, Rect, Text as SvgText } from 'react-native-
 import type { Card, Rank, Suit } from '@belot/engine';
 import { cardLang, type DeckStyle } from '../cosmetics';
 import { counters } from '../dev/counters';
-import { indexColour, PipShape, suitColour } from './pips';
-import { cornerIndexLayout, INDEX_PIP_SCALE } from './cornerIndex';
+import { PipShape, suitColour } from './pips';
 import { SeasonScene } from './scenes';
 import { CourtHalf } from './courts';
 import { garb } from './palette';
 import { font } from '../theme';
-import { Image as RNImage, StyleSheet, Text as RNText, View } from 'react-native';
+import { Image as RNImage, StyleSheet } from 'react-native';
 import { FrenchFace, frenchColour } from './french';
 import { SimpleFace } from './simple';
 import { vintageSource } from './vintage';
@@ -83,7 +82,6 @@ export const CardFace = memo(CardFaceImpl, (a, b) =>
   a.card.rank === b.card.rank &&
   a.width === b.width &&
   a.style === b.style &&
-  a.index === b.index &&
   a.locale === b.locale,
 );
 
@@ -91,14 +89,11 @@ function CardFaceImpl({
   card,
   width,
   style,
-  index = true,
   locale: _locale,
 }: {
   card: Card;
   width: number;
   style: DeckStyle;
-  /** The corner index: on by default; the gallery may show the bare printing. */
-  index?: boolean;
   /**
    * The locale the labels are set in. Read through cardLang() during render;
    * passed as a prop only so the memo re-renders a mounted face when the
@@ -109,10 +104,10 @@ function CardFaceImpl({
   counters.cardFace++;
   const height = width * 1.45;
 
-  // The vintage deck is photographic: a real printed card, rounded and framed
-  // — the index is a small cream chip laid over the corner, the photo untouched.
+  // The vintage deck is photographic: a real printed card, rounded and
+  // framed, the photo untouched — its own printing is the whole face.
   if (style === 'starinske') {
-    const image = (
+    return (
       <RNImage
         source={vintageSource(card)}
         style={{
@@ -124,32 +119,6 @@ function CardFaceImpl({
         }}
         resizeMode="cover"
       />
-    );
-    if (!index) return image;
-    const chip = Math.max(14, Math.round(width * 0.22));
-    return (
-      <View style={{ width, height }}>
-        {image}
-        <View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            left: Math.round(width * 0.05),
-            top: Math.round(width * 0.05),
-            height: chip,
-            minWidth: chip,
-            paddingHorizontal: 3,
-            borderRadius: chip / 3,
-            backgroundColor: garb.cream,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <RNText style={{ color: indexColour(card.suit), fontSize: Math.round(chip * 0.7), fontFamily: font.black }}>
-            {cardLang().rankShort(card.rank)}
-          </RNText>
-        </View>
-      </View>
     );
   }
 
@@ -179,43 +148,7 @@ function CardFaceImpl({
       ) : (
         <Pips rank={card.rank} suit={card.suit} />
       )}
-      {/* the corner index, at both ends, on the mađarice only: the other faces carry their own */}
-      {index && style === 'madarice' && (
-        <>
-          <CornerIndex card={card} />
-          <G transform="rotate(180 50 72.5)">
-            <CornerIndex card={card} />
-          </G>
-        </>
-      )}
     </Svg>
-  );
-}
-
-/**
- * The rank in the corner — and on courts and aces the pip too, since their
- * own pips sit inboard or low. Number cards show the numeral alone: their
- * pips are the suit, and the top-left one starts where a corner pip would.
- */
-function CornerIndex({ card }: { card: Card }) {
-  const withPip = card.rank === 'A' || COURTS.includes(card.rank);
-  const l = cornerIndexLayout(cardLang().rankShort(card.rank), withPip);
-  const ink = indexColour(card.suit);
-  return (
-    <G>
-      {/* A long run (Roman VIII) is condensed about its centre to stay inside
-          the box; the face is the app's own, so the width is known. */}
-      <G transform={l.scaleX < 1 ? `translate(${l.x} 0) scale(${l.scaleX} 1) translate(${-l.x} 0)` : undefined}>
-        <SvgText x={l.x} y={l.y} fontSize={l.fontSize} fontFamily={font.bold} fill={ink} textAnchor="middle">
-          {l.label}
-        </SvgText>
-      </G>
-      {l.pip && (
-        <G transform={`translate(${l.pip.x} ${l.pip.y}) scale(${INDEX_PIP_SCALE})`}>
-          <PipShape suit={card.suit} />
-        </G>
-      )}
-    </G>
   );
 }
 

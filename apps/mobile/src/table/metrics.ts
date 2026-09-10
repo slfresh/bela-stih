@@ -42,18 +42,16 @@ export interface TableMetrics {
   /** Short screens hide what they must rather than squashing everything. */
   compact: boolean;
   /**
-   * Landscape on a phone: the left rail cannot stack the profile, the score,
-   * the plate, my puck, the calls and the leave button in 360 dp, so my puck
-   * stands in the right rail by the buttons, the plate drops its caller line
-   * and the emote faces float while the tray is open.
+   * Landscape where the right rail cannot hold the leave button, the six
+   * emote faces and five bid buttons at once (about 514 dp with its padding):
+   * the faces float over the felt's edge while the tray is open instead.
    */
   tightRail: boolean;
   /**
    * Portrait keeps a row's height free under the felt so a prompt coming or
-   * going never moves the hand — but only where the column can pay for it.
-   * With the felt at its 260 floor, the fixed rows (profile, score, hand,
-   * emotes, actions, gaps) need ~610px; the reserve's 62 more pushed the
-   * action buttons off every 647–676px phone (iPhone SE/8, 360x720 Android).
+   * going never moves the hand — but only where the column can pay for it:
+   * with the reserve the felt must still get its full floor. The reserve's
+   * 62 dp once pushed the action buttons off every 647–676 dp phone.
    */
   promptReserve: boolean;
 }
@@ -67,8 +65,23 @@ const REF_H = 844;
  */
 export const FELT_HAND_GAP = 12;
 
-/** Between my puck and the fan, in the hand's row. */
+/** Between the fan and my puck beside it, in landscape's hand row. */
 export const SELF_PUCK_GAP = 8;
+
+/**
+ * Portrait's rows that do not flex, in dp, as measured on a 360 dp Samsung
+ * with Rubik: the root's padding (24), the profile strip with the leave
+ * button (35), the online "— igra bot" line (16), the score strip (34), one
+ * calls chip (22), the emote strip (34), the actions row (40), and the eight
+ * gaps between nine rows (64). The hand and my puck are added from their own
+ * sizes; the felt takes what is left.
+ */
+export const PORTRAIT_CHROME = 24 + 35 + 16 + 34 + 22 + 34 + 40 + 8 * 8;
+/** The prompt reserve's row and its gap. */
+export const PROMPT_RESERVE = 54 + 8;
+/** The felt's floor where the phone can pay for it, and how far it may give. */
+export const FELT_FLOOR = 260;
+export const FELT_FLOOR_MIN = 180;
 
 export function computeTableMetrics(usableW: number, usableH: number): TableMetrics {
   const landscape = usableW >= usableH;
@@ -81,10 +94,11 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
   // In landscape the rails take the sides, so the hand gets the middle.
   const railW = landscape ? Math.round(96 * scale) : 0;
   const puck = Math.round((landscape ? 44 : 54) * scale);
-  // My own puck sits at the left end of the hand's row in portrait (the
-  // rail holds it in landscape); the fan gives up that much width.
+  // My own puck: centred under the fan in portrait, so the fan has the whole
+  // width; beside the fan in landscape, where height is the scarce thing, so
+  // the fan gives up that much width there (it is capped well short of it).
   const selfPuck = Math.round(puck * 0.85);
-  const handWidth = Math.max(240, usableW - 24 - railW * 2 - (landscape ? 0 : selfPuck + SELF_PUCK_GAP));
+  const handWidth = Math.max(240, usableW - 24 - railW * 2 - (landscape ? selfPuck + SELF_PUCK_GAP : 0));
 
   // Landscape has width to burn and no height, so the hand takes a fixed
   // slice of the screen instead of the biggest card that fits across it.
@@ -97,6 +111,16 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
   const fit = fitHand(handWidth, 8, handCardMax);
   const handMinHeight = Math.ceil(fanHeight(fit.cardW, 8));
 
+  // Portrait's budget: the fixed rows, the fan, and my puck's row (the ring
+  // around the disc; no name is drawn there). The reserve is kept only if the
+  // felt keeps its whole floor with it; without it, the floor gives before
+  // the actions row is pushed off the bottom of a short phone.
+  const portraitFixed = PORTRAIT_CHROME + handMinHeight + selfPuck + 10;
+  const promptReserve = !landscape && usableH - portraitFixed - PROMPT_RESERVE >= FELT_FLOOR;
+  const feltMinHeight = landscape
+    ? 0
+    : clamp(usableH - portraitFixed - (promptReserve ? PROMPT_RESERVE : 0), FELT_FLOOR_MIN, FELT_FLOOR);
+
   return {
     orientation: landscape ? 'landscape' : 'portrait',
     width: usableW,
@@ -106,10 +130,10 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
     railW,
     handCardMax,
     handMinHeight,
-    // Portrait can afford a generous floor. Sideways it must be zero: the
-    // felt is the only flexible row, so any floor it cannot meet is paid for
-    // by pushing the hand off the bottom of the screen.
-    feltMinHeight: landscape ? 0 : 260,
+    // Portrait: a generous floor where the column can pay for it, less where
+    // it cannot. Sideways it must be zero: the felt is the only flexible row,
+    // so any floor it cannot meet is paid for by pushing the hand off.
+    feltMinHeight,
     // Portrait: the table may take about half the height and no more. Beyond
     // that it is just empty baize, and the cards are what people read.
     // Landscape: whatever the hand leaves, and never what the hand needs —
@@ -123,8 +147,8 @@ export function computeTableMetrics(usableW: number, usableH: number): TableMetr
     puck,
     selfPuck,
     compact: usableH < 620,
-    tightRail: landscape && usableH < 440,
-    promptReserve: !landscape && usableH >= 700,
+    tightRail: landscape && usableH < 520,
+    promptReserve,
   };
 }
 

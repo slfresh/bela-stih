@@ -16,7 +16,7 @@ import { TurnRing } from '../anim/TurnRing';
 import type { TeamTone } from './teamColour';
 import { Avatar, hasAvatar } from '../avatars';
 import { garb } from '../deck/palette';
-import { font, radius, stroke, theme } from '../theme';
+import { font, radius, signal, stroke, theme } from '../theme';
 import { Robot } from '../ui/icons';
 import { useCountUp } from '../anim/useCountUp';
 
@@ -57,6 +57,8 @@ export const SeatPuck = memo(function SeatPuck({
   tricks = 0,
   anchored = true,
   nameInk,
+  yourTurn = false,
+  showName = true,
 }: {
   seat: Seat;
   name: string;
@@ -94,6 +96,14 @@ export const SeatPuck = memo(function SeatPuck({
   anchored?: boolean;
   /** The name's colour: the lobby's seat map sets its pucks on the lit baize, where the dim ink falls under 4.5:1. */
   nameInk?: string;
+  /**
+   * The viewer's own puck while the table waits on them: the disc breathes
+   * and a ring of light pings out of it. From the RENDERED turn prop only, so
+   * it stops the moment a drain begins and is never held on.
+   */
+  yourTurn?: boolean;
+  /** The name under the disc; the viewer's own puck under the fan goes without. */
+  showName?: boolean;
 }) {
   const initial = (name.trim()[0] ?? '?').toUpperCase();
   // The chip ticks up as the deal lands (0 → 6 → 8) rather than jumping.
@@ -140,7 +150,19 @@ export const SeatPuck = memo(function SeatPuck({
   return (
     <Animated.View style={[styles.root, { width }, nodStyle]}>
       <View style={{ width: ringSize, height: ringSize }}>
+        {/* Your turn: a ring of light pinging out from behind the disc. */}
+        {yourTurn && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.ping,
+              { width: ringSize, height: ringSize, borderRadius: ringSize / 2 },
+              reduced ? styles.pingStill : yourTurnPing,
+            ]}
+          />
+        )}
         <Anchor id={anchored ? anchorId.seat(seat) : anchorId.puck(seat)} style={[StyleSheet.absoluteFill, styles.centre]}>
+          <Animated.View style={yourTurn && !reduced ? yourTurnBreath : undefined}>
           {portrait ? (
             <View style={{ opacity: connected ? 1 : 0.45 }}>
               <Avatar id={portrait} size={size} />
@@ -162,6 +184,7 @@ export const SeatPuck = memo(function SeatPuck({
               </SvgText>
             </Svg>
           )}
+          </Animated.View>
         </Anchor>
 
         {/* Team ring: static, and deliberately NOT the countdown ring — that
@@ -219,12 +242,14 @@ export const SeatPuck = memo(function SeatPuck({
         )}
       </View>
 
-      <View style={styles.nameRow}>
-        <Text style={[styles.name, nameInk ? { color: nameInk } : null]} numberOfLines={1}>
-          {name}
-        </Text>
-        {isBot && <Robot size={12} />}
-      </View>
+      {showName && (
+        <View style={styles.nameRow}>
+          <Text style={[styles.name, nameInk ? { color: nameInk } : null]} numberOfLines={1}>
+            {name}
+          </Text>
+          {isBot && <Robot size={12} />}
+        </View>
+      )}
     </Animated.View>
   );
 });
@@ -237,8 +262,31 @@ const thinkPulse: CSSAnimationProperties = {
   animationTimingFunction: 'ease-in-out',
 };
 
+/** Your turn: the disc breathes… */
+const yourTurnBreath: CSSAnimationProperties = {
+  animationName: { from: { transform: [{ scale: 1 }] }, to: { transform: [{ scale: 1.07 }] } },
+  animationDuration: 650,
+  animationIterationCount: 'infinite',
+  animationDirection: 'alternate',
+  animationTimingFunction: 'ease-in-out',
+};
+
+/** …and a ring of light pings out of it, over and over, until you move. */
+const yourTurnPing: CSSAnimationProperties = {
+  animationName: {
+    from: { opacity: 0.9, transform: [{ scale: 1 }] },
+    to: { opacity: 0, transform: [{ scale: 1.55 }] },
+  },
+  animationDuration: 1300,
+  animationIterationCount: 'infinite',
+  animationTimingFunction: 'ease-out',
+};
+
 const styles = StyleSheet.create({
   root: { alignItems: 'center', gap: 2 },
+  ping: { position: 'absolute', top: 0, left: 0, borderWidth: 3, borderColor: signal.turn },
+  // Reduce-motion: the ring holds still, lit, instead of pinging.
+  pingStill: { opacity: 0.85 },
   centre: { alignItems: 'center', justifyContent: 'center' },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 3, maxWidth: 84 },
   name: { color: theme.textDim, fontSize: 12, flexShrink: 1 },

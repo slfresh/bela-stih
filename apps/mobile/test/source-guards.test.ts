@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -52,14 +52,15 @@ describe('anchors measure on demand', () => {
     expect(table.match(/onLayout=\{\(\) => anchors\.bump\(\)\}/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
   });
 
-  it('the turn beacon and the fan lift read only rendered turn state', () => {
+  it('my turn lights my own puck, from the rendered turn state alone', () => {
     // Turn visuals may fade OUT across a drain but must never be held ON by
     // anything the director suppresses on intermediate views.
     const table = src('TableScreen.tsx');
-    expect(table).toMatch(/\{myTurn && !settled && <TurnBeacon/);
+    expect(table).toMatch(/yourTurn=\{myTurn && !settled\}/);
     expect(table).not.toMatch(/spotlightSeat === mySeat/);
-    // The beacon knows nothing of the director: no view, no event stream.
-    expect(src('table/TurnBeacon.tsx')).not.toMatch(/anim\/director|useDirector|view\.|PublicView/);
+    // The bar along the top of the hand is gone: the puck is the signal now.
+    expect(table).not.toMatch(/TurnBeacon/);
+    expect(existsSync(join(here, '../src/table/TurnBeacon.tsx'))).toBe(false);
   });
 
   it('the motion policy has one source: the table reads a prop, the games read the hook', () => {
@@ -206,8 +207,9 @@ describe('anchors measure on demand', () => {
     expect(overlay).toMatch(/MAX_LIVE_SPRITES = 40/);
     expect(overlay).toMatch(/CONFETTI_PIECES = Platform\.OS === 'web' \? 18 : 26/);
     // A loop on a shared value is a JS timer on the web; a CSS animation is the compositor's.
-    expect(src('table/TurnBeacon.tsx')).not.toMatch(/withRepeat/);
-    expect(src('table/TurnBeacon.tsx')).toMatch(/animationIterationCount: 'infinite'/);
+    expect(src('table/SeatPuck.tsx')).not.toMatch(/withRepeat/);
+    expect(src('table/SeatPuck.tsx')).toMatch(/const yourTurnPing: CSSAnimationProperties/);
+    expect(src('table/SeatPuck.tsx')).toMatch(/const yourTurnBreath: CSSAnimationProperties/);
     expect(src('table/SeatPuck.tsx')).toMatch(/const thinkPulse: CSSAnimationProperties/);
     expect(src('TableScreen.tsx')).toMatch(/const ghostBreath: CSSAnimationProperties/);
   });
@@ -287,6 +289,35 @@ describe('the first frame and the last resort', () => {
     expect(build).toMatch(/ws:\/\/localhost:2567" in blob/);
   });
 
+  it('the table as the player asked for it: my puck under my cards, leaving in a corner and asked first', () => {
+    const t = src('TableScreen.tsx');
+    // Portrait: the fan, then my puck centred, then the faces.
+    const portrait = t.slice(t.indexOf('{/* wallet / level strip'));
+    const hand = portrait.indexOf('{handBlock}');
+    const puck = portrait.indexOf('<View style={styles.selfRow}>{selfPuck}</View>');
+    const faces = portrait.indexOf('{emotes}');
+    expect(hand).toBeGreaterThan(-1);
+    expect(puck).toBeGreaterThan(hand);
+    expect(faces).toBeGreaterThan(puck);
+    // Leaving: in the top row beside the profile strip, and at the top of the right rail.
+    expect(portrait.slice(0, portrait.indexOf('<TableHeader'))).toMatch(/\{leaveButton\}/);
+    expect(t).toMatch(/<View style=\{\[styles\.rail, styles\.railRight, \{ width: m\.railW \}\]\}>\s*\{leaveButton\}/);
+    // …and nowhere in the actions row a thumb reaches for mid-deal.
+    const row = portrait.slice(portrait.indexOf('<View style={styles.actionsRow}>'));
+    expect(row.slice(0, row.indexOf('</View>'))).not.toMatch(/finishLabel|onFinish/);
+    // Every way out asks first while a match is on.
+    expect(t).toMatch(/onPress=\{requestLeave\}/);
+    expect(t).toMatch(/onFinish=\{requestLeave\}/);
+    expect(t).toMatch(/<ConfirmDialog/);
+    expect(t).toMatch(/setBackGuard\(/);
+    const app = readFileSync(join(here, '../App.tsx'), 'utf8');
+    expect(app).toMatch(/if \(runBackGuard\(\)\) return true;/);
+    // The corner letters are gone from the cards.
+    const face = src('deck/CardFace.tsx');
+    expect(face).not.toMatch(/CornerIndex|cornerIndex|indexColour/);
+    expect(existsSync(join(here, '../src/deck/cornerIndex.ts'))).toBe(false);
+  });
+
   it('the web template paints dark before the bundle parses', () => {
     const html = readFileSync(join(here, '../public/index.html'), 'utf8');
     expect(html).toMatch(/<html lang="hr">/);
@@ -310,10 +341,11 @@ describe('the first frame and the last resort', () => {
     expect(t).toMatch(/<Anchor id=\{anchorId\.plaque\} style=\{styles\.plaqueDisc\}>/);
     expect(t).toMatch(/<Anchor id=\{anchorId\.plaque\} style=\{styles\.miniFan\}>/);
     expect(t).not.toMatch(/<Anchor\s+id=\{anchorId\.plaque\}\s+style=\{\[\s*styles\.plaque,/s);
-    // A short phone's rails: my puck by the buttons, the faces floating.
-    expect(t).toMatch(/\{!m\.tightRail && selfPuck\}/);
-    expect(t).toMatch(/\{m\.tightRail \? selfPuck : emotes\}/);
-    expect(t).toMatch(/view\.callerSeat !== null && !m\.tightRail/);
+    // A short phone's rails: the faces float, and who called trump is never dropped.
+    expect(t).toMatch(/\{!m\.tightRail && emotes\}/);
+    expect(t).not.toMatch(/m\.tightRail && selfPuck|m\.tightRail \? selfPuck/);
+    expect(t).not.toMatch(/view\.callerSeat !== null && !m\.tightRail/);
+    expect(t).toMatch(/numberOfLines=\{land \? 2 : 1\}/);
     // The dealer's badge hops between pucks, mine included.
     expect(src('table/fx.ts')).toMatch(/anchors\.rect\(anchorId\.puck\(seat\)\) \?\? anchors\.rect\(anchorId\.seat\(seat\)\)/);
     // The hero reserves its box and measures itself; the lobby no longer measures the scroller.

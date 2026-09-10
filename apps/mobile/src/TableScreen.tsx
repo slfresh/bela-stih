@@ -68,7 +68,8 @@ import { cosmetics, room, roomStyle, type DeckStyle } from './cosmetics';
 import { PerfProbe } from './dev/PerfProbe';
 import { EmoteStrip } from './table/EmoteStrip';
 import { useTurnCues } from './table/useTurnCues';
-import { TurnBeacon } from './table/TurnBeacon';
+import { ConfirmDialog } from './ui/ConfirmDialog';
+import { setBackGuard } from './ui/backGuard';
 import { FeltArt, RIM_W } from './table/FeltArt';
 import { garb } from './deck/palette';
 
@@ -268,6 +269,36 @@ export function TableScreen(props: TableScreenProps) {
   // The tray closes on send; the cooldown mirrors the server's rate limit so
   // a spammed tap dies here instead of being silently dropped over the wire.
   const [trayOpen, setTrayOpen] = useState(false);
+
+  // Leaving a match in progress asks first — from the leave button in the top
+  // corner, from the result sheet between deals, and from Android's back. A
+  // finished match leaves at once: there is nothing left to lose.
+  const [leaving, setLeaving] = useState(false);
+  const requestLeave = useCallback(() => {
+    if (matchOver) onFinish();
+    else setLeaving(true);
+  }, [matchOver, onFinish]);
+  // A match that ends under an open question closes it: offline the same
+  // button then means "a new match", and "Napusti" must not start one.
+  useEffect(() => {
+    if (matchOver) setLeaving(false);
+  }, [matchOver]);
+  const leavingRef = useRef(leaving);
+  leavingRef.current = leaving;
+  const matchOverRef = useRef(matchOver);
+  matchOverRef.current = matchOver;
+  useEffect(() => {
+    setBackGuard(() => {
+      if (leavingRef.current) {
+        setLeaving(false); // back answers the question safely
+        return true;
+      }
+      if (matchOverRef.current) return false;
+      setLeaving(true);
+      return true;
+    });
+    return () => setBackGuard(null);
+  }, []);
   const emoteReadyAt = useRef(0);
   const sendEmote = (id: string) => {
     setTrayOpen(false);
@@ -454,9 +485,11 @@ export function TableScreen(props: TableScreenProps) {
           </>
         )}
       </View>
-      {/* A short phone's rail has no line to spare: the caller is in the bubble it came in. */}
-      {view.callerSeat !== null && !m.tightRail && (
-        <Text style={styles.plaqueCaller} numberOfLines={1}>
+      {/* Who called trump, always — in the rail over two lines if it must. A
+          short phone once dropped the line for room, and then nobody could
+          read who had called. */}
+      {view.callerSeat !== null && (
+        <Text style={styles.plaqueCaller} numberOfLines={land ? 2 : 1}>
           {view.callerSeat === mySeat ? lang.s.calledByYou : lang.s.calledBy(meta(view.callerSeat).name)}
         </Text>
       )}
@@ -675,9 +708,6 @@ export function TableScreen(props: TableScreenProps) {
   // My hand, fanned; the seat anchor for sprites sits underneath it.
   const handBlock = (
     <Anchor id={anchorId.seat(mySeat)} style={[styles.handArea, { minHeight: m.handMinHeight }]}>
-      {/* "Your turn", as light along the top of the hand. On the RENDERED
-          turn prop: it fades across a drain and is never held on. */}
-      {myTurn && !settled && <TurnBeacon reduced={reduced} />}
       <Pressable
         onLongPress={() => {
           playSfx('hold');
@@ -719,8 +749,8 @@ export function TableScreen(props: TableScreenProps) {
   );
 
   // My own puck: the same disc as everyone else's, a shade smaller, with my
-  // clock on it. Its anchor is NOT the seat's — the hand is where my cards
-  // fly from and to.
+  // clock on it — centred under my fan in portrait, beside it in landscape.
+  // Its anchor is NOT the seat's: the hand is where my cards fly from and to.
   const selfPuck = (
     <SeatPuck
       seat={mySeat}
@@ -735,9 +765,13 @@ export function TableScreen(props: TableScreenProps) {
       size={m.selfPuck}
       deadline={myTurn ? turnDeadline : null}
       totalMs={turnTotalMs}
-      // No spotlight on myself: my own move needs no "thinking" pulse, and my
-      // turn cues read only rendered turn state (see the source guard).
+      // The "thinking" pulse is for the others' moves. Mine is the turn itself,
+      // from the RENDERED turn prop, so it is never held on across a drain.
       thinking={false}
+      yourTurn={myTurn && !settled}
+      // Under the fan the disc is plainly mine and the row's height is the
+      // scarce thing; beside the fan in landscape there is room for the name.
+      showName={land}
       reduced={reduced}
       gesture={cue && (cue.kind === 'nod' || cue.kind === 'pulse') && cue.seat === mySeat ? cue : null}
       tricks={view.dealProgress?.tricksWon[teamOf(mySeat)] ?? 0}
@@ -782,6 +816,13 @@ export function TableScreen(props: TableScreenProps) {
     >
       <EmoteFace id="smile" size={24} />
     </PressScale>
+  ) : null;
+
+  // Leaving: a top corner, away from every button a thumb reaches for
+  // mid-deal, and a question before it acts. A finished match's own sheet
+  // says what comes next, so the corner is empty then.
+  const leaveButton = !matchOver ? (
+    <Button label={finishLabel} tone="plain" compact onPress={requestLeave} />
   ) : null;
 
   // Every row that comes and goes around the felt — status line, zvanja
@@ -833,7 +874,7 @@ export function TableScreen(props: TableScreenProps) {
         onRematch={onRematch}
         onForceRematch={onForceRematch}
         onNext={onNext}
-        onFinish={onFinish}
+        onFinish={requestLeave}
         finishLabel={finishLabel}
       />
     </Animated.View>
@@ -861,24 +902,25 @@ export function TableScreen(props: TableScreenProps) {
                   winner={matchOver ? winnerTeam : null}
                 />
                 {plaque}
-                {/* A 360 dp-tall phone cannot stack the puck here too: it
-                    pushed the leave button off the screen and squashed the
-                    zvanje chips to nothing. There it stands by the buttons. */}
-                {!m.tightRail && selfPuck}
                 {calls}
-                <View style={styles.railGap} />
-                <Button label={finishLabel} tone="plain" compact onPress={onFinish} />
               </View>
 
               <View style={styles.centre}>
                 {status ? <Text style={styles.status}>{status}</Text> : null}
                 {felt}
                 {prompts}
-                {handBlock}
+                {/* My puck beside my fan, on the faces' side: between my cards
+                    and the emotes, at the bottom, as portrait has it under the
+                    fan. The rails have no height to spare for it. */}
+                <View style={styles.landHandRow}>
+                  <View style={styles.handGrow}>{handBlock}</View>
+                  {selfPuck}
+                </View>
               </View>
 
               <View style={[styles.rail, styles.railRight, { width: m.railW }]}>
-                {m.tightRail ? selfPuck : emotes}
+                {leaveButton}
+                {!m.tightRail && emotes}
                 <View style={styles.railGap} />
                 {!settled && (
                   <View style={styles.actionsCol}>
@@ -900,8 +942,13 @@ export function TableScreen(props: TableScreenProps) {
             </>
           ) : (
             <>
-              {/* wallet / level strip */}
-              <ProfileBar profile={profile} holdMs={awardHold} onLongPress={toggleProbe} />
+              {/* wallet / level strip, and leaving in the top corner */}
+              <View style={styles.topRow}>
+                <View style={styles.topRowGrow}>
+                  <ProfileBar profile={profile} holdMs={awardHold} onLongPress={toggleProbe} />
+                </View>
+                {leaveButton}
+              </View>
               {status ? <Text style={styles.status}>{status}</Text> : null}
 
               {/* score strip: match score, plus this deal's running count */}
@@ -917,20 +964,18 @@ export function TableScreen(props: TableScreenProps) {
               {felt}
               {calls}
               {prompts}
-              <View style={styles.handRow}>
-                {selfPuck}
-                <View style={styles.handGrow}>{handBlock}</View>
-              </View>
+              {handBlock}
+              {/* My own disc, centred under my cards and above the faces. */}
+              <View style={styles.selfRow}>{selfPuck}</View>
               {emotes}
 
-              {/* actions: bidding, declaring, bela, leave */}
+              {/* actions: bidding, declaring, bela — leaving is the top corner */}
               {!settled && (
                 <View style={styles.actionsRow}>
                   {emoteToggle}
                   {declareButtons ?? (
                     <NonCardActions options={options} lang={lang} onChoose={onAction} />
                   )}
-                  <Button label={finishLabel} tone="plain" onPress={onFinish} />
                 </View>
               )}
             </>
@@ -941,6 +986,21 @@ export function TableScreen(props: TableScreenProps) {
           {/* sprites, always last */}
           <EffectsOverlay bus={fxBus} />
           {__DEV__ && probe && <PerfProbe />}
+
+          {leaving && (
+            <ConfirmDialog
+              title={lang.s.ui.leaveConfirm}
+              confirmLabel={lang.s.ui.leaveConfirmYes}
+              cancelLabel={lang.s.ui.leaveConfirmNo}
+              ground={baize.page}
+              reduced={reduced}
+              onCancel={() => setLeaving(false)}
+              onConfirm={() => {
+                setLeaving(false);
+                onFinish();
+              }}
+            />
+          )}
         </View>
       </SafeAreaView>
     </AnchorHost>
@@ -2053,9 +2113,14 @@ const styles = StyleSheet.create({
   promptHint: { color: theme.textDim, fontSize: 12 },
 
   handArea: { justifyContent: 'flex-end' },
-  // Portrait: my puck at the left end of the hand's row, the fan filling the rest.
-  handRow: { flexDirection: 'row', alignItems: 'flex-end', gap: SELF_PUCK_GAP },
+  // Landscape: the fan, and my puck beside it on the faces' side.
+  landHandRow: { flexDirection: 'row', alignItems: 'flex-end', gap: SELF_PUCK_GAP },
   handGrow: { flex: 1 },
+  // Portrait: my puck centred under the fan.
+  selfRow: { alignItems: 'center' },
+  // The profile strip, and the leave button in the top corner beside it.
+  topRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  topRowGrow: { flex: 1, minWidth: 0 },
   fan: {
     flexDirection: 'row',
     justifyContent: 'center',

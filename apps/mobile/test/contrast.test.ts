@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ROOMS } from '../src/cosmetics';
-import { garb, PIP_COLOUR } from '../src/deck/palette';
+import { garb } from '../src/deck/palette';
 import { ink, signal, surface, team, theme } from '../src/theme';
 
 /**
@@ -99,14 +99,6 @@ describe('the ink on the grounds', () => {
     for (const c of [signal.clockFull, signal.clockMid, signal.clockLow]) {
       expect(contrast(c, theme.felt)).toBeGreaterThanOrEqual(LARGE);
     }
-  });
-
-  it('the corner index reads on the card stock in every suit', () => {
-    for (const c of [PIP_COLOUR.brown.fill, PIP_COLOUR.green.fill, PIP_COLOUR.red.fill, PIP_COLOUR.gold.dark]) {
-      expect(contrast(c, garb.cream)).toBeGreaterThanOrEqual(BODY);
-    }
-    // …which is why the bells take their dark, not their gold.
-    expect(contrast(PIP_COLOUR.gold.fill, garb.cream)).toBeLessThan(LARGE);
   });
 
   it('the inks the verification caught read in every room', () => {

@@ -33,10 +33,7 @@ export const garb = {
 
 /**
  * Traditional mađarice colours, by the shared role names. `fill` is the pip
- * and the suit's ink; `dark` its deeper tone. Bundeva's gold is the one
- * fill too light to read on the card stock (2.4:1), so its corner index is
- * set in the dark: an ochre that clears 4.5:1 on cream and still says gold
- * beside žir's brown.
+ * and the suit's ink; `dark` its deeper tone.
  */
 export const PIP_COLOUR = {
   brown: { fill: '#7a4a21', dark: '#4d2c10' }, // žir
