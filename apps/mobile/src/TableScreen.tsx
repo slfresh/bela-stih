@@ -14,6 +14,7 @@ import Animated, {
   Easing,
   FadeIn,
   FadeInDown,
+  runOnJS,
   SlideInDown,
   useAnimatedStyle,
   useSharedValue,
@@ -1479,18 +1480,10 @@ function Hand({
   const fit = fitHand(width, cards.length, maxCardW);
   const mid = (cards.length - 1) / 2;
   const lift = 14 * fit.scale;
-  // The arc pushes the outer cards DOWN, and the cards already stand on the
-  // floor of the row — so they hung out of the bottom of the hand and under
-  // the emote strip, covering the faces you are choosing between.
+  // The arc pushes the outer cards DOWN, and `alignItems: flex-end` had already
+  // put them on the floor of the row — so they hung out of the bottom of the
+  // hand and under the emote strip, covering the faces you are choosing between.
   const drop = fanArc(cards.length) * fit.scale;
-  // Where each card stands across the fan: the span centred in the fan's
-  // width, one advance apart — the very numbers the dealt backs land on
-  // (table/fx.ts). The cards are placed by these, not by flex, so that
-  // closing up or re-sorting slides them on their own values (FanCard) and
-  // React never moves a card's view.
-  const span = cards.length <= 1 ? fit.cardW : fit.cardW + (cards.length - 1) * fit.advance;
-  const left = (width - span) / 2;
-  const floor = Math.max(drop, restFloor);
 
   /** What a tap on this card means right now. Reads the latest render's state. */
   const chosenFor = (card: Card) => {
@@ -1546,9 +1539,7 @@ function Hand({
   const onPressCard = useCallback((id: string) => pressRef.current(id), []);
 
   return (
-    // As tall as the row of cards stood on its floor, with the room above for
-    // a lift (FAN_PAD, which fanHeight() reserves too).
-    <View style={[styles.fan, { width, height: FAN_PAD + (cards.length > 0 ? fit.cardH : 0) + floor }]}>
+    <View style={[styles.fan, { paddingBottom: Math.max(drop, restFloor) }]}>
       {cards.map((card, i) => {
         const id = cardId(card);
         const inPlayMoment = plays.length > 0;
@@ -1565,7 +1556,7 @@ function Hand({
             width={fit.cardW}
             deckStyle={deckStyle}
             locale={locale}
-            x={left + i * fit.advance}
+            marginLeft={i === 0 ? 0 : fit.overlap}
             baseY={Math.pow(Math.abs(off), 1.6) * 3.2 * fit.scale}
             lift={playable || (picking && isArmed) ? -lift : 0}
             // The lift ripples out from the middle of the fan, 30 ms a card.
@@ -1602,7 +1593,7 @@ const FanCard = memo(
     width,
     deckStyle,
     locale,
-    x,
+    marginLeft,
     baseY,
     lift,
     rippleDelay,
@@ -1624,8 +1615,7 @@ const FanCard = memo(
     width: number;
     deckStyle: DeckStyle;
     locale?: string;
-    /** Where the card stands across the fan: its left edge, from the fan's. */
-    x: number;
+    marginLeft: number;
     /** The fan's arc: where this card sits when it is not lifted. */
     baseY: number;
     /** Lifted (negative) or resting; animated, never jumped. */
@@ -1647,20 +1637,34 @@ const FanCard = memo(
     enter: boolean;
     onPress: (id: string) => void;
   }) {
-    // A new card turns over as it arrives — scaleX 0.2 → 1, a lift settling —
-    // on the view that already carries the tilt. Not reanimated's `entering`:
-    // that shared a view with `layout`, and a re-layout while it ran (the
-    // second pass of a rotation, when the safe-area insets land) started the
-    // transition over it and stranded the card on the flip's first frames,
-    // the whole fan all but invisible for the rest of the deal. A shared value
-    // always runs to 1, whatever the layout does meanwhile — and it never
-    // touches opacity, the way a real card turning over is never see-through:
-    // should a frame ever be lost, the card is caught mid-turn, still there.
-    const arriving = useRef(enter && !reduced);
-    const arrive = useSharedValue(arriving.current ? 0 : 1);
+    // A new card turns over as it arrives — scaleX 0.2 → 1, settling from a
+    // little below — on a view of its own inside the tilt, which drops its
+    // animated style the moment the turn is done.
+    //
+    // Not reanimated's `entering`: that shared a view with `layout`, and a
+    // re-layout while it ran (a rotation's second pass, when the safe-area
+    // insets land) started the transition over it and stranded the card on
+    // the flip's first frames, the whole fan all but invisible for the deal.
+    // And not an animated style left on for the card's life: 4.5.1 drops a
+    // finished animation's values unsynced when the app is paused just after
+    // it (react-native-reanimated#9574), and the next commit anywhere puts
+    // the view back to its first frame — on the Samsung, Home right after the
+    // talon left the two new cards as slivers. Once `arrived`, this view has
+    // no animated style, so there is nothing to put back. Never opacity: a
+    // card caught mid-turn is still a card.
+    const [arrived, setArrived] = useState(!(enter && !reduced));
+    const arrive = useSharedValue(arrived ? 1 : 0);
     useEffect(() => {
-      if (arriving.current) arrive.value = withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) });
+      if (arrived) return;
+      arrive.value = withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) }, (finished) => {
+        if (finished) runOnJS(setArrived)(true);
+      });
+      // Once, at mount: `arrived` only ever turns true, by this callback.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [arrive]);
+    const flip = useAnimatedStyle(() => ({
+      transform: [{ translateY: 10 * (1 - arrive.value) }, { scaleX: 0.2 + 0.8 * arrive.value }],
+    }));
     const glowV = useSharedValue(0);
     // Only a glow that arrived AFTER this card mounted plays: a card dealt
     // while an old bela cue is still current must not light up on arrival.
@@ -1683,27 +1687,10 @@ const FanCard = memo(
         ? withTiming(lift, { duration: 120 })
         : withDelay(rippleDelay, withSpring(lift, { damping: 16, stiffness: 190, mass: 0.6 }));
     }, [liftV, lift, rippleDelay, reduced]);
-    // Across the fan, the card slides on its own value too: closing up over a
-    // played card, re-sorting after the talon, a swap while arranging. It was
-    // reanimated's `layout` transition, and 4.5.1 could drop that
-    // transition's frames under a rotation's re-render and leave a card
-    // standing behind its neighbour, a gap where it belonged. React never
-    // moves this view now; nothing is left for a layout animation to strand.
-    const xV = useSharedValue(x);
-    const placed = useRef(x);
-    useEffect(() => {
-      if (placed.current === x) return;
-      placed.current = x;
-      xV.value = reduced ? x : withTiming(x, { duration: 220 });
-    }, [x, reduced, xV]);
-    const motion = useAnimatedStyle(() => ({
-      transform: [
-        { translateX: xV.value },
-        { translateY: baseY + liftV.value + 10 * (1 - arrive.value) },
-        { rotateZ: `${rotate}deg` },
-        { scaleX: 0.2 + 0.8 * arrive.value },
-      ],
-    }));
+    // Only the lift moves on its own; the arc and the tilt are the card's
+    // place in the fan, a plain style React owns, so no lost animation value
+    // can ever leave a card at another place's angle.
+    const lifted = useAnimatedStyle(() => ({ transform: [{ translateY: liftV.value }] }));
     // Where this card is on screen at the moment of the tap: the flight sets
     // off from here, at this size. One transient rect, read once by the
     // spawner — never a per-card anchor that re-measures every tick.
@@ -1728,30 +1715,37 @@ const FanCard = memo(
       });
     };
     return (
-      // Every card stands at the fan's left edge; its place is the transform.
-      <View style={[styles.fanCard, { zIndex }]}>
-       <Animated.View style={motion}>
-        <Pressable
-          ref={ref}
-          disabled={disabled}
-          onPress={press}
-          // Vertical only: horizontal slop would overlap the neighbouring
-          // card in touch space and make mis-taps MORE likely, not less.
-          hitSlop={{ top: 12, bottom: 8 }}
-        >
-          <PlayingCard
-            card={card}
-            width={width}
-            deckStyle={deckStyle}
-            locale={locale}
-            dimmed={dimmed}
-            highlight={highlight}
-            selected={selected}
-            armed={armed}
-            caption={caption}
-          />
-          <Animated.View pointerEvents="none" style={[styles.cardGlow, glowStyle]} />
-        </Pressable>
+      // The card's place in the row is flex's, as it always was, and it moves
+      // at once: no layout transition. Reanimated 4.5.1's could drop its last
+      // frames under a rotation's re-render and leave a card standing behind
+      // its neighbour, a gap where it belonged.
+      <View style={[styles.fanCard, { marginLeft, zIndex }]}>
+       <Animated.View style={lifted}>
+        <View style={{ transform: [{ translateY: baseY }, { rotateZ: `${rotate}deg` }] }}>
+         <Animated.View style={arrived ? undefined : flip}>
+          <Pressable
+            ref={ref}
+            disabled={disabled}
+            onPress={press}
+            // Vertical only: horizontal slop would overlap the neighbouring
+            // card in touch space and make mis-taps MORE likely, not less.
+            hitSlop={{ top: 12, bottom: 8 }}
+          >
+            <PlayingCard
+              card={card}
+              width={width}
+              deckStyle={deckStyle}
+              locale={locale}
+              dimmed={dimmed}
+              highlight={highlight}
+              selected={selected}
+              armed={armed}
+              caption={caption}
+            />
+            <Animated.View pointerEvents="none" style={[styles.cardGlow, glowStyle]} />
+          </Pressable>
+         </Animated.View>
+        </View>
        </Animated.View>
       </View>
     );
@@ -1763,7 +1757,7 @@ const FanCard = memo(
     a.width === b.width &&
     a.deckStyle === b.deckStyle &&
     a.locale === b.locale &&
-    a.x === b.x &&
+    a.marginLeft === b.marginLeft &&
     a.baseY === b.baseY &&
     a.lift === b.lift &&
     a.rippleDelay === b.rippleDelay &&
@@ -2381,11 +2375,14 @@ const styles = StyleSheet.create({
   // The profile strip, and the leave button in the top corner beside it.
   topRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   topRowGrow: { flex: 1, minWidth: 0 },
-  // The cards' row, as wide as the hand's room and centred in it (Hand sizes
-  // it). Each card stands in it by its own x, not by flex, FAN_PAD below the
-  // top: fanHeight() reserves that room for a lift.
-  fan: { alignSelf: 'center' },
-  fanCard: { position: 'absolute', left: 0, top: FAN_PAD },
+  fan: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    // Shared with fanHeight(), which reserves the row this padding sits in.
+    paddingTop: FAN_PAD,
+  },
+  fanCard: {},
   // Bela: the king and queen of trumps light up gold for a moment.
   cardGlow: {
     position: 'absolute',

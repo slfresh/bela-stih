@@ -39,10 +39,5 @@
     "ios": "expo run:ios",
     "web": "expo start --web"
   },
-  "private": true,
-  "reanimated": {
-    "staticFeatureFlags": {
-      "FORCE_REACT_RENDER_FOR_SETTLED_ANIMATIONS": false
-    }
-  }
+  "private": true
 }
