@@ -396,9 +396,20 @@ export function TableScreen(props: TableScreenProps) {
       connected: true,
     };
 
+  // The table's entrance — the pucks' zoom, the felt's fade — plays once, as
+  // it first appears. A rotation remounts both (the orientations place them
+  // in different rows), and replaying it there was never an entrance; under
+  // the rotation's re-render reanimated 4.5.1 could also drop a zoom's last
+  // frame and leave a puck part-size.
+  const entered = useRef(false);
+  useEffect(() => {
+    entered.current = true;
+  }, []);
+  const entrance = !reduced && !entered.current;
+
   const puck = (s: Seat) => (
     <Animated.View
-      entering={reduced ? undefined : ZoomIn.delay(((s - mySeat + 4) % 4) * 60).duration(220)}
+      entering={entrance ? ZoomIn.delay(((s - mySeat + 4) % 4) * 60).duration(220) : undefined}
     >
     <SeatPuck
       seat={s}
@@ -573,7 +584,7 @@ export function TableScreen(props: TableScreenProps) {
 
   const feltBody = (
     <Animated.View
-      entering={reduced ? undefined : Platform.OS === 'web' ? FadeIn.duration(240) : feltEntering}
+      entering={!entrance ? undefined : Platform.OS === 'web' ? FadeIn.duration(240) : feltEntering}
       style={[
         styles.felt,
         feltShakeStyle,

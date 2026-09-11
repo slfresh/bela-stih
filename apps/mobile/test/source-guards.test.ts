@@ -95,8 +95,13 @@ describe('anchors measure on demand', () => {
     // Reanimated's web build cannot run a custom entering worklet (it warns
     // and skips it): the web gets a preset, the phone the flip and the zoom.
     expect(src('TableScreen.tsx')).toMatch(
-      /entering=\{reduced \? undefined : Platform\.OS === 'web' \? FadeIn\.duration\(240\) : feltEntering\}/,
+      /entering=\{!entrance \? undefined : Platform\.OS === 'web' \? FadeIn\.duration\(240\) : feltEntering\}/,
     );
+    // ...once, as the table first appears: a rotation remounts the pucks and
+    // the felt, and must not replay it (a zoom's dropped last frame once left a
+    // puck part-size there).
+    expect(src('TableScreen.tsx')).toMatch(/const entrance = !reduced && !entered\.current;/);
+    expect(src('TableScreen.tsx')).toMatch(/entering=\{entrance \? ZoomIn\.delay\(/);
     // The fan's cards turn over on a shared value, never a layout animation
     // (see 'a rotation never leaves the fan invisible').
     expect(src('TableScreen.tsx')).not.toMatch(/cardEntering/);
@@ -175,6 +180,17 @@ describe('anchors measure on demand', () => {
     // neighbour (seen on the Samsung once the flip was fixed). The fan slides
     // on its cards' own values instead.
     expect(scan('TableScreen.tsx', t).layouts).toEqual([]);
+    // Reanimated's settled-props sync stays off. With it on (4.3+'s default)
+    // a finished animation's values were dropped unsynced when the app was
+    // paused 1-2 s after it (software-mansion/react-native-reanimated#9574),
+    // and the next commit put every card back to its first frame: on the
+    // Samsung, Home right after the talon left the fan at its six-card places
+    // and the two new cards as slivers. Off, the last values stay applied.
+    const pkg = JSON.parse(readFileSync(join(here, '../package.json'), 'utf8'));
+    expect(pkg.reanimated?.staticFeatureFlags?.FORCE_REACT_RENDER_FOR_SETTLED_ANIMATIONS).toBe(false);
+    // The Android build reads the override from exactly that file.
+    expect(readFileSync(join(here, '../../../node_modules/react-native-reanimated/android/build.gradle.kts'), 'utf8'))
+      .toMatch(/file\("\$\{rootDir\.path\}\/\.\.\/package\.json"\)/);
     // The hold's swell and the last tap's rect do not outlive the view they belonged to.
     expect(t).toMatch(/useEffect\(\(\) => \{\s*hold\.value = 1;\s*\}, \[land, hold\]\);/);
     expect(t).toMatch(/\(\) => \(\) => \{\s*if \(lastTap\.current !== null\) anchors\.delete\(anchorId\.card\(lastTap\.current\)\);/);
@@ -187,6 +203,7 @@ describe('anchors measure on demand', () => {
     // The gold bela chip is gone; its bubble and the king and queen's glow say it once.
     expect(t).not.toMatch(/callChip\('bela'/);
     expect(t).not.toMatch(/callChipGold/);
+    expect(t).not.toMatch(/belaAnnouncedBy/);
     expect(t).not.toMatch(/revealedSeats/);
     expect(src('table/fx.ts')).toMatch(/case 'belaCalled':\s*bubble\(/);
   });
