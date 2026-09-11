@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { StyleSheet } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import Animated, {
@@ -46,9 +46,14 @@ export function TurnRing({
   const c = 2 * Math.PI * r;
   const progress = useSharedValue(deadline === null ? 1 : 0);
   const breath = useSharedValue(1);
+  // Whether the breath was running: a ring that mounts still (a rotation
+  // rebuilds every puck) is already at 1, and easing it to 1 kept writing to
+  // the ring a quick second rotation had already torn down.
+  const breathed = useRef(false);
 
   useEffect(() => {
     if (deadline === null && breathe) {
+      breathed.current = true;
       breath.value = withRepeat(
         withSequence(
           withTiming(0.55, { duration: 900, easing: Easing.inOut(Easing.sin) }),
@@ -57,7 +62,8 @@ export function TurnRing({
         -1,
         false,
       );
-    } else {
+    } else if (breathed.current) {
+      breathed.current = false;
       cancelAnimation(breath);
       breath.value = withTiming(1, { duration: 150 });
     }

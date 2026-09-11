@@ -112,8 +112,14 @@ export const SeatPuck = memo(function SeatPuck({
 
   // The turn ring stays mounted and fades, instead of unmounting on every
   // intermediate view of a drain — which blinked it off and on per event.
+  // Only on a change: a puck mounts with its ring where it belongs (a rotation
+  // rebuilds all of them), and a fade to that same value kept writing to the
+  // puck a quick second rotation had already torn down.
   const ringOn = useSharedValue(active ? 1 : 0);
+  const ringWas = useRef(active);
   useEffect(() => {
+    if (ringWas.current === active) return;
+    ringWas.current = active;
     ringOn.value = withTiming(active ? 1 : 0, { duration: 150 });
   }, [ringOn, active]);
   const ringFade = useAnimatedStyle(() => ({ opacity: ringOn.value }));

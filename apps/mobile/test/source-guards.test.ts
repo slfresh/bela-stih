@@ -95,15 +95,13 @@ describe('anchors measure on demand', () => {
     // Reanimated's web build cannot run a custom entering worklet (it warns
     // and skips it): the web gets a preset, the phone the flip and the zoom.
     expect(src('TableScreen.tsx')).toMatch(
-      /entering=\{!entrance \? undefined : Platform\.OS === 'web' \? FadeIn\.duration\(240\) : feltEntering\}/,
+      /entering=\{reduced \? undefined : Platform\.OS === 'web' \? FadeIn\.duration\(240\) : feltEntering\}/,
     );
-    // ...once, as the table first appears: a rotation remounts the pucks and
-    // the felt, and must not replay it (a zoom's dropped last frame once left a
-    // puck part-size there).
-    expect(src('TableScreen.tsx')).toMatch(/const entrance = !reduced && !entered\.current;/);
-    expect(src('TableScreen.tsx')).toMatch(/entering=\{entrance \? ZoomIn\.delay\(/);
-    // The fan's cards turn over on a shared value, never a layout animation
-    // (see 'a rotation never leaves the fan invisible').
+    // ...on every mount, a rotation's included: playing it once only (tried in
+    // 1.2.6's making) doubled reanimated's dead-view flood on quick rotations.
+    expect(src('TableScreen.tsx')).toMatch(/entering=\{reduced \? undefined : ZoomIn\.delay\(/);
+    // The fan's cards have no entrance of their own (see 'a rotation never
+    // leaves the fan invisible'): the dealt back lands where the card is.
     expect(src('TableScreen.tsx')).not.toMatch(/cardEntering/);
   });
 
@@ -162,24 +160,23 @@ describe('anchors measure on demand', () => {
     }
     expect(elements).toBeGreaterThan(500); // the scan really read the tree
     const t = src('TableScreen.tsx');
-    // The flip is the card's own shared value, run to 1 from its mount, on a
-    // view whose animated style is dropped once the turn is done — so a
-    // finished animation's values that reanimated loses (#9574: the app paused
-    // just after it) leave nothing behind to go back to...
-    expect(t).toMatch(/const \[arrived, setArrived\] = useState\(!\(enter && !reduced\)\);/);
-    expect(t).toMatch(/const arrive = useSharedValue\(arrived \? 1 : 0\);/);
-    expect(t).toMatch(/if \(finished\) runOnJS\(setArrived\)\(true\);/);
-    expect(t).toMatch(/<Animated\.View style=\{arrived \? undefined : flip\}>/);
-    expect(t).toMatch(/\{ scaleX: 0\.2 \+ 0\.8 \* arrive\.value \}/);
-    // ...and never through opacity: a card caught mid-turn is still a card.
-    const flip = t.match(/const flip = useAnimatedStyle\(\(\) => \(\{[\s\S]*?\}\)\);/)?.[0] ?? '';
-    expect(flip).toMatch(/arrive\.value/);
-    expect(flip).not.toMatch(/opacity/);
-    // ...only for a card new to the screen: what was shown outlives the fan's remount.
-    expect(t).toMatch(/const shownCards = useRef<ReadonlySet<string>>\(new Set\(\)\);/);
-    expect(t).toMatch(/shown=\{shownCards\}/);
-    expect(t).toMatch(/enter=\{!shownBefore\.has\(id\)\}/);
-    expect(t).toMatch(/shown\.current = new Set\(cards\.map\(cardId\)\);/);
+    // A card has no entrance animation at all: the dealt back lands on its
+    // spot. Its flip, as `entering`, went invisible on a rotation; as a shared
+    // value, its first frame came back as slivers after a pause (#9574); and
+    // the view that could shed it made every rotation's teardown heavier.
+    const card = t.slice(t.indexOf('const FanCard = memo('), t.indexOf('const feltEntering'));
+    expect(card.length).toBeGreaterThan(1000);
+    expect(card).not.toMatch(/scaleX|useState\(|runOnJS|entering=/);
+    // The lift animates only on a change: a spring to where a card already
+    // rests kept writing to views a quick second rotation had torn down, and
+    // reanimated 4.5.1 re-applies such a dead view's props on every native
+    // event until its registry lets it go — tens of thousands of exceptions on
+    // the UI thread over a few quick rotations. The same for everything a
+    // rotation rebuilds: the pucks' ring fade, the turn ring's breath, the XP bar.
+    expect(card).toMatch(/if \(liftedTo\.current === lift\) return;/);
+    expect(src('table/SeatPuck.tsx')).toMatch(/if \(ringWas\.current === active\) return;/);
+    expect(src('anim/TurnRing.tsx')).toMatch(/\} else if \(breathed\.current\) \{/);
+    expect(t).toMatch(/if \(filledTo\.current === p\.fraction\) return;/);
     // No layout transition anywhere on the table: 4.5.1 could drop one's
     // frames under a rotation's re-render and leave a card standing behind its
     // neighbour (seen on the Samsung once the flip was fixed).
@@ -208,15 +205,15 @@ describe('anchors measure on demand', () => {
     expect(src('table/fx.ts')).toMatch(/case 'belaCalled':\s*bubble\(/);
   });
 
-  it("a card's place is React's; only its lift and its arrival animate", () => {
-    // The place in the row (flex), the arc and the tilt are plain styles React
-    // owns. An animated value that reanimated loses (#9574) goes back to its
-    // first frame, so only what returns to rest by itself may animate: the
-    // lift springs, and the arrival's view drops its style once it is done.
+  it("a card's place is React's; one animated view carries its arc, tilt and lift", () => {
+    // The place in the row is flex's (React's): an animated place came back
+    // at its first frame when reanimated lost the finished value (#9574). The
+    // arc, the tilt and the lift share one animated view, as in 1.2.5: a
+    // separate plain view for the tilt made the table lag a whole orientation
+    // behind over quick rotations.
     const fan = src('TableScreen.tsx');
-    expect(fan).toMatch(/<View style=\{\[styles\.fanCard, \{ marginLeft, zIndex \}\]\}>/);
-    expect(fan).toMatch(/<View style=\{\{ transform: \[\{ translateY: baseY \}, \{ rotateZ: `\$\{rotate\}deg` \}\] \}\}>/);
-    expect(fan).toMatch(/const lifted = useAnimatedStyle\(\(\) => \(\{ transform: \[\{ translateY: liftV\.value \}\] \}\)\);/);
+    expect(fan).toMatch(/<View style=\{\[styles\.fanCard, \{ marginLeft, zIndex \}\]\}>\s*<Animated\.View style=\{motion\}>\s*<Pressable/);
+    expect(fan).toMatch(/transform: \[\{ translateY: baseY \+ liftV\.value \}, \{ rotateZ: `\$\{rotate\}deg` \}\],/);
     expect(fan).not.toMatch(/translateX: xV|useSharedValue\(x\)/);
     expect(fan).toMatch(/fanCard: \{\},/);
     expect(fan).toMatch(/marginLeft=\{i === 0 \? 0 : fit\.overlap\}/);

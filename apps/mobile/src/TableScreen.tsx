@@ -14,7 +14,6 @@ import Animated, {
   Easing,
   FadeIn,
   FadeInDown,
-  runOnJS,
   SlideInDown,
   useAnimatedStyle,
   useSharedValue,
@@ -267,10 +266,8 @@ export function TableScreen(props: TableScreenProps) {
   }, [declaring, view.dealer, view.declareTurn]);
   const hand = useHandOrder(view.hand, view.context.trumpSuit, handSort, onHandSortChange ?? (() => {}));
   // A rotation remounts the fan (the two orientations place it in different
-  // rows), so what it must not lose lives here: the cards already on screen,
-  // which do not turn over again as if just dealt, and the hold's swell, whose
-  // press-out never comes once the pressed view is gone.
-  const shownCards = useRef<ReadonlySet<string>>(new Set());
+  // rows); the hold's swell lives here and must not outlast the pressed view,
+  // whose press-out never comes once it is gone.
   useEffect(() => {
     hold.value = 1;
   }, [land, hold]);
@@ -397,20 +394,9 @@ export function TableScreen(props: TableScreenProps) {
       connected: true,
     };
 
-  // The table's entrance — the pucks' zoom, the felt's fade — plays once, as
-  // it first appears. A rotation remounts both (the orientations place them
-  // in different rows), and replaying it there was never an entrance; under
-  // the rotation's re-render reanimated 4.5.1 could also drop a zoom's last
-  // frame and leave a puck part-size.
-  const entered = useRef(false);
-  useEffect(() => {
-    entered.current = true;
-  }, []);
-  const entrance = !reduced && !entered.current;
-
   const puck = (s: Seat) => (
     <Animated.View
-      entering={entrance ? ZoomIn.delay(((s - mySeat + 4) % 4) * 60).duration(220) : undefined}
+      entering={reduced ? undefined : ZoomIn.delay(((s - mySeat + 4) % 4) * 60).duration(220)}
     >
     <SeatPuck
       seat={s}
@@ -585,7 +571,7 @@ export function TableScreen(props: TableScreenProps) {
 
   const feltBody = (
     <Animated.View
-      entering={!entrance ? undefined : Platform.OS === 'web' ? FadeIn.duration(240) : feltEntering}
+      entering={reduced ? undefined : Platform.OS === 'web' ? FadeIn.duration(240) : feltEntering}
       style={[
         styles.felt,
         feltShakeStyle,
@@ -856,7 +842,6 @@ export function TableScreen(props: TableScreenProps) {
           armCaption={lang.s.ui.play}
           glow={cue?.kind === 'glow' ? cue : null}
           restFloor={short ? FAN_REST_SHORT : 0}
-          shown={shownCards}
         />
         </Animated.View>
       </Pressable>
@@ -1298,9 +1283,14 @@ const ProfileBar = memo(
     // scored with the coins still in the air — and the coins set off from the
     // sheet's total, a moment after the sheet has slid up.
     const coins = useLaggedNumber(profile.coins, lag);
-    // The XP bar fills rather than jumps; a new level swells the badge.
+    // The XP bar fills rather than jumps; a new level swells the badge. Only on
+    // a change: a rotation remounts the strip already full to where it is, and
+    // an animation to that same value kept writing to the torn-down one.
     const fill = useSharedValue(p.fraction);
+    const filledTo = useRef(p.fraction);
     useEffect(() => {
+      if (filledTo.current === p.fraction) return;
+      filledTo.current = p.fraction;
       fill.value = withTiming(p.fraction, { duration: 600, easing: Easing.out(Easing.cubic) });
     }, [fill, p.fraction]);
     const fillStyle = useAnimatedStyle(() => ({ width: `${Math.round(fill.value * 100)}%` }));
@@ -1367,7 +1357,6 @@ function Hand({
   armCaption,
   glow = null,
   restFloor = 0,
-  shown,
 }: {
   cards: Card[];
   options: Action[];
@@ -1401,12 +1390,6 @@ function Hand({
   restFloor?: number;
   /** Cards to glow gold for a moment: my bela's king and queen. */
   glow?: { cardIds: string[]; n: number } | null;
-  /**
-   * The cards on screen as of the last commit, kept by the table so that it
-   * outlives this fan: a card turns over as it arrives, and one that was
-   * already there — the fan remounted by a rotation — does not.
-   */
-  shown: { current: ReadonlySet<string> };
 }) {
   const plays = options.filter(
     (a): a is Extract<Action, { type: 'PLAY_CARD' }> => a.type === 'PLAY_CARD',
@@ -1468,14 +1451,6 @@ function Hand({
     },
     [anchors],
   );
-  // What was on screen before this render, read once per render and brought up
-  // to date after each commit — so a remounted fan reads what the old one last
-  // showed, and only a card that is new to the screen turns over.
-  const shownBefore = shown.current;
-  useEffect(() => {
-    shown.current = new Set(cards.map(cardId));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cardsKey, shown]);
 
   const fit = fitHand(width, cards.length, maxCardW);
   const mid = (cards.length - 1) / 2;
@@ -1571,7 +1546,6 @@ function Hand({
             caption={armCaption}
             disabled={!playable && !arranging && !marking}
             glowN={glow && glow.cardIds.includes(id) ? glow.n : 0}
-            enter={!shownBefore.has(id)}
             onPress={onPressCard}
           />
         );
@@ -1607,7 +1581,6 @@ const FanCard = memo(
     caption,
     disabled,
     glowN,
-    enter,
     onPress,
   }: {
     id: string;
@@ -1633,38 +1606,18 @@ const FanCard = memo(
     disabled: boolean;
     /** Non-zero, and new: glow gold for a moment (my bela's king and queen). */
     glowN: number;
-    /** New to the screen: turn over on arrival. Read once, at mount. */
-    enter: boolean;
     onPress: (id: string) => void;
   }) {
-    // A new card turns over as it arrives — scaleX 0.2 → 1, settling from a
-    // little below — on a view of its own inside the tilt, which drops its
-    // animated style the moment the turn is done.
-    //
-    // Not reanimated's `entering`: that shared a view with `layout`, and a
-    // re-layout while it ran (a rotation's second pass, when the safe-area
-    // insets land) started the transition over it and stranded the card on
-    // the flip's first frames, the whole fan all but invisible for the deal.
-    // And not an animated style left on for the card's life: 4.5.1 drops a
-    // finished animation's values unsynced when the app is paused just after
-    // it (react-native-reanimated#9574), and the next commit anywhere puts
-    // the view back to its first frame — on the Samsung, Home right after the
-    // talon left the two new cards as slivers. Once `arrived`, this view has
-    // no animated style, so there is nothing to put back. Never opacity: a
-    // card caught mid-turn is still a card.
-    const [arrived, setArrived] = useState(!(enter && !reduced));
-    const arrive = useSharedValue(arrived ? 1 : 0);
-    useEffect(() => {
-      if (arrived) return;
-      arrive.value = withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) }, (finished) => {
-        if (finished) runOnJS(setArrived)(true);
-      });
-      // Once, at mount: `arrived` only ever turns true, by this callback.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [arrive]);
-    const flip = useAnimatedStyle(() => ({
-      transform: [{ translateY: 10 * (1 - arrive.value) }, { scaleX: 0.2 + 0.8 * arrive.value }],
-    }));
+    // A card has no entrance of its own: the dealt back flies to the very spot
+    // it takes (table/fx.ts), and the face is simply there when it lands. Its
+    // turning over was reanimated's `entering`, on the view that also carried
+    // `layout`; a rotation remounts the fan, every card turned over again, and
+    // the rotation's second pass (the safe-area insets) started the transition
+    // over the flip and left the whole fan at ~3% opacity for the deal. Kept as
+    // a shared value instead, its first frame was the view's resting style
+    // whenever reanimated lost the finished values (react-native-reanimated
+    // #9574, the app paused just after the talon: two slivers), and the view
+    // that could drop it made a rotation's teardown heavier.
     const glowV = useSharedValue(0);
     // Only a glow that arrived AFTER this card mounted plays: a card dealt
     // while an old bela cue is still current must not light up on arrival.
@@ -1681,16 +1634,27 @@ const FanCard = memo(
     // The lift used to be a 14 px jump on the frame the turn arrived. Now the
     // playable cards spring up from the middle outward; a card that stops
     // being playable settles back the same way.
+    // Only on a change: a card mounts where it rests, and a spring to where it
+    // already is kept writing to a view a quick second rotation had already
+    // torn down (reanimated then re-applies the dead view's props on every
+    // native event until its registry lets it go).
     const liftV = useSharedValue(lift);
+    const liftedTo = useRef(lift);
     useEffect(() => {
+      if (liftedTo.current === lift) return;
+      liftedTo.current = lift;
       liftV.value = reduced
         ? withTiming(lift, { duration: 120 })
         : withDelay(rippleDelay, withSpring(lift, { damping: 16, stiffness: 190, mass: 0.6 }));
     }, [liftV, lift, rippleDelay, reduced]);
-    // Only the lift moves on its own; the arc and the tilt are the card's
-    // place in the fan, a plain style React owns, so no lost animation value
-    // can ever leave a card at another place's angle.
-    const lifted = useAnimatedStyle(() => ({ transform: [{ translateY: liftV.value }] }));
+    // The card's arc, tilt and lift on one view, as 1.2.5 had it. Splitting the
+    // tilt out into a plain view of its own (so that a lost animated value
+    // could not leave a card at another place's angle) cost more than it
+    // saved: over quick rotations the table began to lag a whole orientation
+    // behind, on the Samsung in 10 of 60 flips, and never with the one view.
+    const motion = useAnimatedStyle(() => ({
+      transform: [{ translateY: baseY + liftV.value }, { rotateZ: `${rotate}deg` }],
+    }));
     // Where this card is on screen at the moment of the tap: the flight sets
     // off from here, at this size. One transient rect, read once by the
     // spawner — never a per-card anchor that re-measures every tick.
@@ -1720,32 +1684,28 @@ const FanCard = memo(
       // frames under a rotation's re-render and leave a card standing behind
       // its neighbour, a gap where it belonged.
       <View style={[styles.fanCard, { marginLeft, zIndex }]}>
-       <Animated.View style={lifted}>
-        <View style={{ transform: [{ translateY: baseY }, { rotateZ: `${rotate}deg` }] }}>
-         <Animated.View style={arrived ? undefined : flip}>
-          <Pressable
-            ref={ref}
-            disabled={disabled}
-            onPress={press}
-            // Vertical only: horizontal slop would overlap the neighbouring
-            // card in touch space and make mis-taps MORE likely, not less.
-            hitSlop={{ top: 12, bottom: 8 }}
-          >
-            <PlayingCard
-              card={card}
-              width={width}
-              deckStyle={deckStyle}
-              locale={locale}
-              dimmed={dimmed}
-              highlight={highlight}
-              selected={selected}
-              armed={armed}
-              caption={caption}
-            />
-            <Animated.View pointerEvents="none" style={[styles.cardGlow, glowStyle]} />
-          </Pressable>
-         </Animated.View>
-        </View>
+       <Animated.View style={motion}>
+        <Pressable
+          ref={ref}
+          disabled={disabled}
+          onPress={press}
+          // Vertical only: horizontal slop would overlap the neighbouring
+          // card in touch space and make mis-taps MORE likely, not less.
+          hitSlop={{ top: 12, bottom: 8 }}
+        >
+          <PlayingCard
+            card={card}
+            width={width}
+            deckStyle={deckStyle}
+            locale={locale}
+            dimmed={dimmed}
+            highlight={highlight}
+            selected={selected}
+            armed={armed}
+            caption={caption}
+          />
+          <Animated.View pointerEvents="none" style={[styles.cardGlow, glowStyle]} />
+        </Pressable>
        </Animated.View>
       </View>
     );
