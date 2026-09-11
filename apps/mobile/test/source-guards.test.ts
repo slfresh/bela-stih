@@ -119,19 +119,20 @@ describe('anchors measure on demand', () => {
     const scan = (name: string, s: string) => {
       const sf = ts.createSourceFile(name, s, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
       const paired: string[] = [];
+      const layouts: string[] = [];
       let elements = 0;
       const visit = (n: ts.Node): void => {
         if (ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) {
           elements++;
           const props = n.attributes.properties.filter(ts.isJsxAttribute).map((a) => a.name.getText(sf));
-          if (props.includes('layout') && props.includes('entering')) {
-            paired.push(`${name}:${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1} <${n.tagName.getText(sf)}>`);
-          }
+          const at = `${name}:${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1} <${n.tagName.getText(sf)}>`;
+          if (props.includes('layout')) layouts.push(at);
+          if (props.includes('layout') && props.includes('entering')) paired.push(at);
         }
         ts.forEachChild(n, visit);
       };
       visit(sf);
-      return { paired, elements };
+      return { paired, layouts, elements };
     };
     // The scan itself: it sees 1.2.5's pairing, and one behind a comment or a
     // label with a '>' in it; it does not join two elements' props.
@@ -169,9 +170,11 @@ describe('anchors measure on demand', () => {
     expect(t).toMatch(/shown=\{shownCards\}/);
     expect(t).toMatch(/enter=\{!shownBefore\.has\(id\)\}/);
     expect(t).toMatch(/shown\.current = new Set\(cards\.map\(cardId\)\);/);
-    // The transition follows the app's motion policy, not the system's: with
-    // the phone's animations off it finished on its first step.
-    expect(t).toMatch(/layout=\{reduced \? undefined : LinearTransition\.duration\(220\)\.reduceMotion\(ReduceMotion\.Never\)\}/);
+    // No layout transition anywhere on the table: 4.5.1 could drop one's
+    // frames under a rotation's re-render and leave a card standing behind its
+    // neighbour (seen on the Samsung once the flip was fixed). The fan slides
+    // on its cards' own values instead.
+    expect(scan('TableScreen.tsx', t).layouts).toEqual([]);
     // The hold's swell and the last tap's rect do not outlive the view they belonged to.
     expect(t).toMatch(/useEffect\(\(\) => \{\s*hold\.value = 1;\s*\}, \[land, hold\]\);/);
     expect(t).toMatch(/\(\) => \(\) => \{\s*if \(lastTap\.current !== null\) anchors\.delete\(anchorId\.card\(lastTap\.current\)\);/);
@@ -188,13 +191,27 @@ describe('anchors measure on demand', () => {
     expect(src('table/fx.ts')).toMatch(/case 'belaCalled':\s*bubble\(/);
   });
 
-  it('the fan transition sits on its own view, not the one that carries the tilt', () => {
-    // On the web, LinearTransition writes a transform keyframe of its own;
-    // on the view with the fan's rotate/translate it flattened the whole hand
-    // for a frame on every play.
+  it('the fan places its cards by their own values, where the dealt backs land', () => {
+    // Once reanimated's `layout` transition closed the fan over a played card;
+    // it could strand a card behind its neighbour after a rotation (and on the
+    // web wrote a transform keyframe that flattened the tilt). Each card now
+    // stands at the fan's left edge and slides to its own x on a shared value.
     const fan = src('TableScreen.tsx');
-    expect(fan).toMatch(/style=\{\[styles\.fanCard, \{ marginLeft, zIndex \}\]\}/);
-    expect(fan).not.toMatch(/\[styles\.fanCard, \{ marginLeft, zIndex \}, motion\]/);
+    expect(fan).toMatch(/<View style=\{\[styles\.fanCard, \{ zIndex \}\]\}>/);
+    expect(fan).toMatch(/fanCard: \{ position: 'absolute', left: 0, top: FAN_PAD \}/);
+    expect(fan).toMatch(/const xV = useSharedValue\(x\);/);
+    expect(fan).toMatch(/xV\.value = reduced \? x : withTiming\(x, \{ duration: 220 \}\);/);
+    expect(fan).toMatch(/transform: \[\s*\{ translateX: xV\.value \},/);
+    // The very places the deal's backs fly to (table/fx.ts): the span centred
+    // in the hand's width, one advance apart.
+    expect(fan).toMatch(/const span = cards\.length <= 1 \? fit\.cardW : fit\.cardW \+ \(cards\.length - 1\) \* fit\.advance;/);
+    expect(fan).toMatch(/const left = \(width - span\) \/ 2;/);
+    expect(fan).toMatch(/x=\{left \+ i \* fit\.advance\}/);
+    const fx = src('table/fx.ts');
+    expect(fx).toMatch(/const span = fit\.cardW \+ \(total - 1\) \* fit\.advance;/);
+    expect(fx).toMatch(/x: hand\.x \+ \(hand\.w - span\) \/ 2 \+ pos \* fit\.advance \+ fit\.cardW \/ 2,/);
+    expect(fan).toMatch(/anchors\.setMeta\(metaId\.handWidth, m\.handWidth\);/);
+    expect(fan).toMatch(/width=\{m\.handWidth\}/);
   });
 
   it('the spotlight clears on a seatless beat, and the countdown survives reduce-motion', () => {
@@ -519,7 +536,8 @@ describe('the first frame and the last resort', () => {
     expect(src('table/metrics.ts')).toMatch(/: shortColumn\s*\?[\s\S]*?usableH\s*: Math\.round\(usableH \* 0\.48\)/);
     // A small hand rests clear of my tucked puck.
     expect(t).toMatch(/restFloor=\{short \? FAN_REST_SHORT : 0\}/);
-    expect(t).toMatch(/paddingBottom: Math\.max\(drop, restFloor\)/);
+    expect(t).toMatch(/const floor = Math\.max\(drop, restFloor\);/);
+    expect(t).toMatch(/height: FAN_PAD \+ \(cards\.length > 0 \? fit\.cardH : 0\) \+ floor/);
     // The bela buttons shed in hard mode too, and a shed re-measures the anchors.
     expect(t).toMatch(/const belaOffered = !settled && view\.canAnnounceBela;/);
     expect(t).toMatch(/shed \? 1 : 0,\s*\]\.join\('\|'\);/);
