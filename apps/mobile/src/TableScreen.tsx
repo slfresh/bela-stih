@@ -15,6 +15,7 @@ import Animated, {
   FadeIn,
   FadeInDown,
   LinearTransition,
+  ReduceMotion,
   SlideInDown,
   useAnimatedStyle,
   useSharedValue,
@@ -63,6 +64,7 @@ import {
 import { useTableMetrics } from './table/useTableMetrics';
 import { EMOTE_TOGGLE, FAN_REST_SHORT, LAND_GAP, LAND_TRAY_H, SELF_NESTLE, SELF_PUCK_GAP } from './table/metrics';
 import { useHandOrder, type HandSort } from './table/useHandOrder';
+import { callsOnTable } from './table/calls';
 import type { ConfirmPlay } from './storage';
 import { cosmetics, room, roomStyle, type DeckStyle } from './cosmetics';
 import { PerfProbe } from './dev/PerfProbe';
@@ -265,6 +267,14 @@ export function TableScreen(props: TableScreenProps) {
     if (!declaring) setMarked([]);
   }, [declaring, view.dealer, view.declareTurn]);
   const hand = useHandOrder(view.hand, view.context.trumpSuit, handSort, onHandSortChange ?? (() => {}));
+  // A rotation remounts the fan (the two orientations place it in different
+  // rows), so what it must not lose lives here: the cards already on screen,
+  // which do not turn over again as if just dealt, and the hold's swell, whose
+  // press-out never comes once the pressed view is gone.
+  const shownCards = useRef<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    hold.value = 1;
+  }, [land, hold]);
 
   // Is the table asking me something right now? The prompt rows' own
   // conditions — and a bid, whose buttons wrap to three lines on a phone.
@@ -700,21 +710,19 @@ export function TableScreen(props: TableScreenProps) {
     </View>
   );
 
-  // Running zvanja record (bubbles are transient; this stays).
-  // Once the winner's cards are on the table, their chip is saying the same
-  // thing twice. The losing side's chips stay: they said their number out loud
-  // and that is the only record of it.
-  const revealedSeats = new Set(view.revealedDeclarations.map((d) => d.seat));
-  const spokenCalls = view.announcedDeclarations.filter((d) => !revealedSeats.has(d.seat));
-  // Gone with the deal: the chips were still hanging over the result sheet.
+  // The zvanja as chips, only while the table is still being asked: said
+  // once, at the start of the deal, then the players' to remember. The round's
+  // close hands over to the reveal row, and bela never has a chip (see
+  // table/calls.ts). Gone with the deal too: they once hung over the result sheet.
+  const spokenCalls = callsOnTable(view);
   // A short column writes each call as a tally, the caller over the call,
   // side by side: three calls take one row where they took three lines. The
   // call itself is never cut — the rank at its end is the tie-break.
-  const callChip = (key: string | number, name: string, call: string, gold: boolean) =>
+  const callChip = (key: number, name: string, call: string) =>
     short ? (
       <View
         key={key}
-        style={[styles.callChip, gold && styles.callChipGold, short && styles.callChipShort, gold && short && styles.callChipGoldShort]}
+        style={[styles.callChip, short && styles.callChipShort]}
         accessible
         accessibilityLabel={`${name}: ${call}`}
       >
@@ -724,18 +732,16 @@ export function TableScreen(props: TableScreenProps) {
         <Text style={styles.callChipCall}>{call}</Text>
       </View>
     ) : (
-      <View key={key} style={[styles.callChip, gold && styles.callChipGold, land && styles.callChipLand]}>
+      <View key={key} style={[styles.callChip, land && styles.callChipLand]}>
         <Text style={[styles.callChipText, land && styles.callChipTextLand]}>
           {name}: {call}
         </Text>
       </View>
     );
   const calls =
-    !settled && (spokenCalls.length > 0 || view.belaAnnouncedBy !== null) ? (
+    !settled && spokenCalls.length > 0 ? (
       <View style={[styles.callsRow, land && styles.callsCol, short && styles.callsRowShort]}>
-        {spokenCalls.map((d, i) => callChip(i, meta(d.seat).name, lang.declaration(d), false))}
-        {view.belaAnnouncedBy !== null &&
-          callChip('bela', meta(view.belaAnnouncedBy).name, `${lang.s.bela} (20)`, true)}
+        {spokenCalls.map((d, i) => callChip(i, meta(d.seat).name, lang.declaration(d)))}
       </View>
     ) : null;
 
@@ -840,6 +846,7 @@ export function TableScreen(props: TableScreenProps) {
           armCaption={lang.s.ui.play}
           glow={cue?.kind === 'glow' ? cue : null}
           restFloor={short ? FAN_REST_SHORT : 0}
+          shown={shownCards}
         />
         </Animated.View>
       </Pressable>
@@ -944,7 +951,6 @@ export function TableScreen(props: TableScreenProps) {
     // The text itself, not just its presence: a second line moves things too.
     status ?? '',
     spokenCalls.length,
-    view.belaAnnouncedBy ?? '-',
     declaring ? 1 : 0,
     !settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0 ? 1 : 0,
     arranging ? 1 : 0,
@@ -1351,6 +1357,7 @@ function Hand({
   armCaption,
   glow = null,
   restFloor = 0,
+  shown,
 }: {
   cards: Card[];
   options: Action[];
@@ -1384,6 +1391,12 @@ function Hand({
   restFloor?: number;
   /** Cards to glow gold for a moment: my bela's king and queen. */
   glow?: { cardIds: string[]; n: number } | null;
+  /**
+   * The cards on screen as of the last commit, kept by the table so that it
+   * outlives this fan: a card turns over as it arrives, and one that was
+   * already there — the fan remounted by a rotation — does not.
+   */
+  shown: { current: ReadonlySet<string> };
 }) {
   const plays = options.filter(
     (a): a is Extract<Action, { type: 'PLAY_CARD' }> => a.type === 'PLAY_CARD',
@@ -1436,6 +1449,23 @@ function Hand({
       lastTap.current = null;
     }
   }, [cardsKey, anchors]);
+  // ...and when the fan itself goes: a rotation remounts it, and a rect
+  // measured in the other orientation would send that card's server-driven
+  // play off from where it no longer is.
+  useEffect(
+    () => () => {
+      if (lastTap.current !== null) anchors.delete(anchorId.card(lastTap.current));
+    },
+    [anchors],
+  );
+  // What was on screen before this render, read once per render and brought up
+  // to date after each commit — so a remounted fan reads what the old one last
+  // showed, and only a card that is new to the screen turns over.
+  const shownBefore = shown.current;
+  useEffect(() => {
+    shown.current = new Set(cards.map(cardId));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardsKey, shown]);
 
   const fit = fitHand(width, cards.length, maxCardW);
   const mid = (cards.length - 1) / 2;
@@ -1531,6 +1561,7 @@ function Hand({
             caption={armCaption}
             disabled={!playable && !arranging && !marking}
             glowN={glow && glow.cardIds.includes(id) ? glow.n : 0}
+            enter={!shownBefore.has(id)}
             onPress={onPressCard}
           />
         );
@@ -1566,6 +1597,7 @@ const FanCard = memo(
     caption,
     disabled,
     glowN,
+    enter,
     onPress,
   }: {
     id: string;
@@ -1591,8 +1623,22 @@ const FanCard = memo(
     disabled: boolean;
     /** Non-zero, and new: glow gold for a moment (my bela's king and queen). */
     glowN: number;
+    /** New to the screen: turn over on arrival. Read once, at mount. */
+    enter: boolean;
     onPress: (id: string) => void;
   }) {
+    // A new card turns over as it arrives — scaleX 0.2 → 1, a lift settling —
+    // on the view that already carries the tilt. Not reanimated's `entering`:
+    // that shared a view with `layout`, and a re-layout while it ran (the
+    // second pass of a rotation, when the safe-area insets land) started the
+    // transition over it and stranded the card on the flip's first frames,
+    // the whole fan all but invisible for the rest of the deal. A shared value
+    // always runs to 1, whatever the layout does meanwhile.
+    const arriving = useRef(enter && !reduced);
+    const arrive = useSharedValue(arriving.current ? 0 : 1);
+    useEffect(() => {
+      if (arriving.current) arrive.value = withTiming(1, { duration: 260, easing: Easing.out(Easing.cubic) });
+    }, [arrive]);
     const glowV = useSharedValue(0);
     // Only a glow that arrived AFTER this card mounted plays: a card dealt
     // while an old bela cue is still current must not light up on arrival.
@@ -1616,7 +1662,12 @@ const FanCard = memo(
         : withDelay(rippleDelay, withSpring(lift, { damping: 16, stiffness: 190, mass: 0.6 }));
     }, [liftV, lift, rippleDelay, reduced]);
     const motion = useAnimatedStyle(() => ({
-      transform: [{ translateY: baseY + liftV.value }, { rotateZ: `${rotate}deg` }],
+      opacity: Math.min(1, arrive.value * 1.2),
+      transform: [
+        { translateY: baseY + liftV.value + 10 * (1 - arrive.value) },
+        { rotateZ: `${rotate}deg` },
+        { scaleX: 0.2 + 0.8 * arrive.value },
+      ],
     }));
     // Where this card is on screen at the moment of the tap: the flight sets
     // off from here, at this size. One transient rect, read once by the
@@ -1645,11 +1696,14 @@ const FanCard = memo(
       <Animated.View
         style={[styles.fanCard, { marginLeft, zIndex }]}
         // The fan closes over a played card and re-sorts after the talon
-        // instead of snapping; a new card turns over as it arrives. On its
-        // own view: reanimated's web transition writes a transform keyframe
-        // of its own, which flattened the fan's tilt and lift on every play.
-        layout={reduced ? undefined : LinearTransition.duration(220)}
-        entering={reduced ? undefined : Platform.OS === 'web' ? FadeIn.duration(180) : cardEntering}
+        // instead of snapping. On its own view: reanimated's web transition
+        // writes a transform keyframe of its own, which flattened the fan's
+        // tilt and lift on every play. Never an `entering` beside it (the
+        // arrival is `arrive`, above). The app's own motion policy already
+        // decides whether it runs; left to the system's, a transition with
+        // the phone's animations off finished on its first step and its frame
+        // could be dropped, leaving a card where it had been.
+        layout={reduced ? undefined : LinearTransition.duration(220).reduceMotion(ReduceMotion.Never)}
       >
        <Animated.View style={motion}>
         <Pressable
@@ -1698,6 +1752,7 @@ const FanCard = memo(
     a.caption === b.caption &&
     a.disabled === b.disabled &&
     a.glowN === b.glowN &&
+    // `enter` is read once, at mount: its later flips need no render.
     a.onPress === b.onPress,
 );
 
@@ -1712,21 +1767,6 @@ const feltEntering = () => {
     animations: {
       opacity: withTiming(1, { duration: 240 }),
       transform: [{ scale: withTiming(1, { duration: 320, easing: Easing.out(Easing.cubic) }) }],
-    },
-  };
-};
-
-/** A card arriving in the fan turns over from its back: scaleX 0 → 1, a lift settling. */
-const cardEntering = () => {
-  'worklet';
-  return {
-    initialValues: { opacity: 0, transform: [{ scaleX: 0.2 }, { translateY: 10 }] },
-    animations: {
-      opacity: withTiming(1, { duration: 120 }),
-      transform: [
-        { scaleX: withTiming(1, { duration: 220, easing: Easing.out(Easing.cubic) }) },
-        { translateY: withTiming(0, { duration: 260, easing: Easing.out(Easing.cubic) }) },
-      ],
     },
   };
 };
@@ -2262,11 +2302,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  callChipGold: { borderWidth: 1, borderColor: theme.accent },
   callChipText: { color: theme.text, ...type.rail },
   // The rail is 96dp wide: caption type and tighter padding. Never a line
-  // cap — the chip is the only record of what a side called, and the rank
-  // at the end of it is the tie-break.
+  // cap — the rank at the end of a call is the tie-break.
   callChipTextLand: { ...type.caption },
   callChipLand: { paddingHorizontal: 8, alignSelf: 'stretch' },
   // Portrait's short column: metrics' SHORT_CHROME is these numbers.
@@ -2281,7 +2319,6 @@ const styles = StyleSheet.create({
   // never wraps, the tallies share its width, and a call wraps inside its own.
   callsRowShort: { flexWrap: 'nowrap', gap: 4 },
   callChipShort: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: radius.sm, flexShrink: 1, minWidth: 0 },
-  callChipGoldShort: { paddingVertical: 1 },
   callChipName: { color: ink.mid, ...type.caption },
   callChipCall: { color: theme.text, ...type.caption },
   promptRowShort: { paddingVertical: 4, paddingHorizontal: 10, gap: 0 },

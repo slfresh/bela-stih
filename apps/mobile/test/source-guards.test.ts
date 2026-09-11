@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -96,9 +96,70 @@ describe('anchors measure on demand', () => {
     expect(src('TableScreen.tsx')).toMatch(
       /entering=\{reduced \? undefined : Platform\.OS === 'web' \? FadeIn\.duration\(240\) : feltEntering\}/,
     );
-    expect(src('TableScreen.tsx')).toMatch(
-      /entering=\{reduced \? undefined : Platform\.OS === 'web' \? FadeIn\.duration\(180\) : cardEntering\}/,
-    );
+    // The fan's cards turn over on a shared value, never a layout animation
+    // (see 'a rotation never leaves the fan invisible').
+    expect(src('TableScreen.tsx')).not.toMatch(/cardEntering/);
+  });
+
+  it('a rotation never leaves the fan invisible', () => {
+    // 1.2.5: a card's reanimated `entering` flip shared its view with the
+    // `layout` transition. A rotation remounts the fan, every card flipped
+    // again, and the rotation's second layout pass started the transition
+    // over the flip and left it on its first frames — the whole hand at ~3%
+    // opacity and a fifth of its width for the rest of the deal, on the
+    // Samsung in 8 of 24 quick flips. No animated view may pair the two.
+    const walk = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith('.tsx') ? [join(dir, e.name)] : [],
+      );
+    const files = [...walk(join(here, '../src')), join(here, '../App.tsx')];
+    expect(files.some((f) => f.endsWith('TableScreen.tsx'))).toBe(true);
+    let tags = 0;
+    for (const f of files) {
+      const s = readFileSync(f, 'utf8');
+      for (const m of s.matchAll(/<Animated\.[A-Za-z]+\b/g)) {
+        // The opening tag: up to the first '>' outside braces.
+        let depth = 0;
+        let end = m.index! + m[0].length;
+        for (; end < s.length; end++) {
+          const c = s[end];
+          if (c === '{') depth++;
+          else if (c === '}') depth--;
+          else if (c === '>' && depth === 0) break;
+        }
+        const tag = s.slice(m.index!, end);
+        tags++;
+        expect(/\blayout=/.test(tag) && /\bentering=/.test(tag), `${f}: ${tag.slice(0, 80)}`).toBe(false);
+      }
+    }
+    expect(tags).toBeGreaterThan(10); // the scan really read the tags
+    const t = src('TableScreen.tsx');
+    // The flip is the card's own shared value, run to 1 from its mount...
+    expect(t).toMatch(/const arrive = useSharedValue\(arriving\.current \? 0 : 1\);/);
+    expect(t).toMatch(/if \(arriving\.current\) arrive\.value = withTiming\(1,/);
+    expect(t).toMatch(/\{ scaleX: 0\.2 \+ 0\.8 \* arrive\.value \}/);
+    // ...only for a card new to the screen: what was shown outlives the fan's remount.
+    expect(t).toMatch(/const shownCards = useRef<ReadonlySet<string>>\(new Set\(\)\);/);
+    expect(t).toMatch(/shown=\{shownCards\}/);
+    expect(t).toMatch(/enter=\{!shownBefore\.has\(id\)\}/);
+    expect(t).toMatch(/shown\.current = new Set\(cards\.map\(cardId\)\);/);
+    // The transition follows the app's motion policy, not the system's: with
+    // the phone's animations off it finished on its first step.
+    expect(t).toMatch(/layout=\{reduced \? undefined : LinearTransition\.duration\(220\)\.reduceMotion\(ReduceMotion\.Never\)\}/);
+    // The hold's swell and the last tap's rect do not outlive the view they belonged to.
+    expect(t).toMatch(/useEffect\(\(\) => \{\s*hold\.value = 1;\s*\}, \[land, hold\]\);/);
+    expect(t).toMatch(/\(\) => \(\) => \{\s*if \(lastTap\.current !== null\) anchors\.delete\(anchorId\.card\(lastTap\.current\)\);/);
+  });
+
+  it('the zvanja are said once: chips only while the table is asked, and never for bela', () => {
+    const t = src('TableScreen.tsx');
+    expect(t).toMatch(/const spokenCalls = callsOnTable\(view\);/);
+    expect(t).toMatch(/!settled && spokenCalls\.length > 0 \? \(/);
+    // The gold bela chip is gone; its bubble and the king and queen's glow say it once.
+    expect(t).not.toMatch(/callChip\('bela'/);
+    expect(t).not.toMatch(/callChipGold/);
+    expect(t).not.toMatch(/revealedSeats/);
+    expect(src('table/fx.ts')).toMatch(/case 'belaCalled':\s*bubble\(/);
   });
 
   it('the fan transition sits on its own view, not the one that carries the tilt', () => {
@@ -438,7 +499,7 @@ describe('the first frame and the last resort', () => {
     expect(t).toMatch(/shed \? 1 : 0,\s*\]\.join\('\|'\);/);
     // Every short style hangs on the short column, on the line that uses it.
     for (const name of ['rootShort', 'profileBarSlim', 'leaveSlim', 'teamPillSlim', 'pillValueSlim', 'liveSlim', 'feltFlush',
-      'callsRowShort', 'callChipShort', 'callChipGoldShort', 'promptRowShort', 'promptLineShort', 'handNestle', 'bidShort',
+      'callsRowShort', 'callChipShort', 'promptRowShort', 'promptLineShort', 'handNestle', 'bidShort',
       'promptInline', 'promptInlineText']) {
       const uses = [...t.matchAll(new RegExp(`styles\\.${name}\\b`, 'g'))];
       expect(uses.length, name).toBeGreaterThan(0);
