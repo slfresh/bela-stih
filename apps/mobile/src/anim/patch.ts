@@ -130,12 +130,6 @@ export function applyEventStart(view: PublicView, e: TableEvent, mySeat: Seat): 
       // seconds and then playing on underneath them.
       return suppress({ ...view, revealedDeclarations: e.declarations });
 
-    case 'declared':
-      // The call's chip lands with its bubble, as it is said. Committed at the
-      // END, the last seat's chip stood for the gap alone — the reveal starts
-      // right after and the chips go with the round's close (table/calls.ts).
-      return suppress({ ...view, announcedDeclarations: [...view.announcedDeclarations, ...e.declarations] });
-
     case 'dealStarted':
       // The moment the deal begins, the table is swept clean: last deal's
       // trump, calls and trick vanish while the new backs fly. The cards
@@ -233,8 +227,11 @@ export function applyEventEnd(
       });
 
     case 'declared':
-      // The call itself went up at the start; its points count from here.
-      return suppress({ ...view, dealProgress: syncProgress(view, finalView) });
+      return suppress({
+        ...view,
+        announcedDeclarations: [...view.announcedDeclarations, ...e.declarations],
+        dealProgress: syncProgress(view, finalView),
+      });
 
     case 'belaCalled':
       return suppress({

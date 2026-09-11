@@ -17,13 +17,23 @@ import type { DeclarationSummary, PublicView } from '@belot/engine';
  * the paced view clears `declareTurn` on every intermediate frame. Not the
  * trick either: a trick's sweep empties the slots a beat before its count
  * lands, and in that beat the first trick looked like no trick at all — the
- * chips came back for the length of the sweep. A hand short of eight is
- * never ambiguous: every hand holds eight until the first card is led, and
- * the paced view takes a card out of its hand the moment it sets off.
+ * chips came back for the length of the sweep. Three things are never
+ * ambiguous:
+ *  - the winners' cards on the table (the reveal beat has begun);
+ *  - a hand short of eight: every hand holds eight until the first card is
+ *    led, and the paced view takes a card out the moment it sets off;
+ *  - the dealer's own call: the asking starts at the seat after the dealer
+ *    and goes round (packages/engine/src/state.ts, completeDeal and
+ *    applyDeclare), so the dealer always answers last. Their chip would stand
+ *    for one beat's gap and then go with the reveal — a flash — so the round
+ *    closes on it instead.
  */
 export function callsOnTable(
-  view: Pick<PublicView, 'announcedDeclarations' | 'revealedDeclarations' | 'handCounts'>,
+  view: Pick<PublicView, 'announcedDeclarations' | 'revealedDeclarations' | 'handCounts' | 'dealer'>,
 ): DeclarationSummary[] {
-  const roundOpen = view.revealedDeclarations.length === 0 && view.handCounts.every((n) => n === 8);
+  const roundOpen =
+    view.revealedDeclarations.length === 0 &&
+    view.handCounts.every((n) => n === 8) &&
+    !view.announcedDeclarations.some((d) => d.seat === view.dealer);
   return roundOpen ? view.announcedDeclarations : [];
 }

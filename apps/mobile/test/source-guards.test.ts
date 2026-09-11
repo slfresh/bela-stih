@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -112,27 +113,48 @@ describe('anchors measure on demand', () => {
       readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
         e.isDirectory() ? walk(join(dir, e.name)) : e.name.endsWith('.tsx') ? [join(dir, e.name)] : [],
       );
+    // Read by the TypeScript parser, not by pattern: any JSX element, whatever
+    // its tag (Animated.View, a createAnimatedComponent, anything), with both
+    // props — a comment or a '>' in a label cannot hide one.
+    const scan = (name: string, s: string) => {
+      const sf = ts.createSourceFile(name, s, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+      const paired: string[] = [];
+      let elements = 0;
+      const visit = (n: ts.Node): void => {
+        if (ts.isJsxOpeningElement(n) || ts.isJsxSelfClosingElement(n)) {
+          elements++;
+          const props = n.attributes.properties.filter(ts.isJsxAttribute).map((a) => a.name.getText(sf));
+          if (props.includes('layout') && props.includes('entering')) {
+            paired.push(`${name}:${sf.getLineAndCharacterOfPosition(n.getStart(sf)).line + 1} <${n.tagName.getText(sf)}>`);
+          }
+        }
+        ts.forEachChild(n, visit);
+      };
+      visit(sf);
+      return { paired, elements };
+    };
+    // The scan itself: it sees 1.2.5's pairing, and one behind a comment or a
+    // label with a '>' in it; it does not join two elements' props.
+    const fan125 = `const x = <Animated.View
+        style={[styles.fanCard, { marginLeft, zIndex }]}
+        // a note -> with an arrow in it
+        layout={reduced ? undefined : LinearTransition.duration(220)}
+        entering={reduced ? undefined : Platform.OS === 'web' ? FadeIn.duration(180) : cardEntering}
+      ><Card /></Animated.View>;`;
+    expect(scan('fan125.tsx', fan125).paired).toHaveLength(1);
+    expect(scan('label.tsx', `const x = <Flip accessibilityLabel="a > b" layout={x} entering={(p) => p > 0 ? y : z} />;`).paired)
+      .toHaveLength(1);
+    expect(scan('apart.tsx', `const x = <Animated.View layout={x}>{/* entering= */}<Animated.View entering={y} /></Animated.View>;`).paired)
+      .toEqual([]);
     const files = [...walk(join(here, '../src')), join(here, '../App.tsx')];
     expect(files.some((f) => f.endsWith('TableScreen.tsx'))).toBe(true);
-    let tags = 0;
+    let elements = 0;
     for (const f of files) {
-      const s = readFileSync(f, 'utf8');
-      for (const m of s.matchAll(/<Animated\.[A-Za-z]+\b/g)) {
-        // The opening tag: up to the first '>' outside braces.
-        let depth = 0;
-        let end = m.index! + m[0].length;
-        for (; end < s.length; end++) {
-          const c = s[end];
-          if (c === '{') depth++;
-          else if (c === '}') depth--;
-          else if (c === '>' && depth === 0) break;
-        }
-        const tag = s.slice(m.index!, end);
-        tags++;
-        expect(/\blayout=/.test(tag) && /\bentering=/.test(tag), `${f}: ${tag.slice(0, 80)}`).toBe(false);
-      }
+      const r = scan(f, readFileSync(f, 'utf8'));
+      elements += r.elements;
+      expect(r.paired).toEqual([]);
     }
-    expect(tags).toBeGreaterThan(10); // the scan really read the tags
+    expect(elements).toBeGreaterThan(500); // the scan really read the tree
     const t = src('TableScreen.tsx');
     // The flip is the card's own shared value, run to 1 from its mount...
     expect(t).toMatch(/const arrive = useSharedValue\(arriving\.current \? 0 : 1\);/);
