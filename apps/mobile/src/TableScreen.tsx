@@ -1633,7 +1633,9 @@ const FanCard = memo(
     // second pass of a rotation, when the safe-area insets land) started the
     // transition over it and stranded the card on the flip's first frames,
     // the whole fan all but invisible for the rest of the deal. A shared value
-    // always runs to 1, whatever the layout does meanwhile.
+    // always runs to 1, whatever the layout does meanwhile — and it never
+    // touches opacity, the way a real card turning over is never see-through:
+    // should a frame ever be lost, the card is caught mid-turn, still there.
     const arriving = useRef(enter && !reduced);
     const arrive = useSharedValue(arriving.current ? 0 : 1);
     useEffect(() => {
@@ -1662,7 +1664,6 @@ const FanCard = memo(
         : withDelay(rippleDelay, withSpring(lift, { damping: 16, stiffness: 190, mass: 0.6 }));
     }, [liftV, lift, rippleDelay, reduced]);
     const motion = useAnimatedStyle(() => ({
-      opacity: Math.min(1, arrive.value * 1.2),
       transform: [
         { translateY: baseY + liftV.value + 10 * (1 - arrive.value) },
         { rotateZ: `${rotate}deg` },

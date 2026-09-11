@@ -138,6 +138,10 @@ describe('anchors measure on demand', () => {
     expect(t).toMatch(/const arrive = useSharedValue\(arriving\.current \? 0 : 1\);/);
     expect(t).toMatch(/if \(arriving\.current\) arrive\.value = withTiming\(1,/);
     expect(t).toMatch(/\{ scaleX: 0\.2 \+ 0\.8 \* arrive\.value \}/);
+    // ...and never through opacity: a lost frame must leave a card mid-turn, not see-through.
+    const motion = t.match(/const motion = useAnimatedStyle\(\(\) => \(\{[\s\S]*?\}\)\);/)?.[0] ?? '';
+    expect(motion).toMatch(/arrive\.value/);
+    expect(motion).not.toMatch(/opacity/);
     // ...only for a card new to the screen: what was shown outlives the fan's remount.
     expect(t).toMatch(/const shownCards = useRef<ReadonlySet<string>>\(new Set\(\)\);/);
     expect(t).toMatch(/shown=\{shownCards\}/);
