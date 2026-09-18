@@ -24,7 +24,7 @@ const LITERAL_BASELINE: Record<string, number> = {
   'PlayingCard.tsx': 2,
   'TableScreen.tsx': 9,
   'anim/EffectsOverlay.tsx': 1,
-  'net/OnlineGame.tsx': 1,
+  'net/OnlineGame.tsx': 0,
   'net/SeatMap.tsx': 0,
   'screens/ProfileScreen.tsx': 1,
   'screens/SettingsScreen.tsx': 2,

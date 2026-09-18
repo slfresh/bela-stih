@@ -20,8 +20,9 @@ import { playSfx } from '../audio';
 import { pattern } from '../haptics';
 import { TableScreen, type SeatMeta } from '../TableScreen';
 import { Button } from '../ui/Button';
-import { font, radius, theme } from '../theme';
-import { SeatMap } from './SeatMap';
+import { font, ink, space, theme, type } from '../theme';
+import { Panel } from '../ui/Panel';
+import { SEAT_MAP_ASPECT, SeatMap } from './SeatMap';
 import type { Settings } from '../storage';
 import { SERVER_URL, useNetGame, type NetGame } from './useNetGame';
 
@@ -206,8 +207,21 @@ export function OnlineGame({
 
 /** Everything that happens before four people are sitting down. */
 function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
-  // The seat map is drawn to the column's measured width.
-  const [width, setWidth] = useState(0);
+  // Laid out to the screen's measured box: the table above the invitation on
+  // a phone held upright, beside it on a phone on its side, where stacked they
+  // pushed both buttons under the fold.
+  const [box, setBox] = useState({ w: 0, h: 0 });
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The clipboard answers asynchronously; the game may have started by then.
+  const mounted = useRef(true);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+      if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    },
+    [],
+  );
   const seated = net.seats.filter((s) => s.connected).length;
   const ui = net.lang.s.ui;
 
@@ -220,73 +234,141 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
           ? ui.connectionLost
           : ui.waitingForPlayers(seated);
 
+  // Side by side whenever the screen is wider than tall and short enough that
+  // the stacked lobby (about 610 dp with the bots button) would scroll.
+  const land = box.w > box.h && box.h > 0 && box.h < LAND_MAX_H;
+  // Short portrait phones (320x568 and the like) close the gaps up rather than scroll.
+  const tight = !land && box.h > 0 && box.h < 640;
+  const pad = land || tight ? space.md : space.xxl;
+  const mapW = land
+    ? Math.min(MAP_MAX_W, Math.round((box.w - 2 * pad - space.lg) * 0.5), Math.floor((box.h - 2 * pad) / SEAT_MAP_ASPECT))
+    : Math.min(MAP_MAX_W, box.w - 2 * pad);
+  const columnW = land ? Math.min(MAP_MAX_W, box.w - 2 * pad - space.lg - mapW) : mapW;
+
+  const canStart =
+    net.seat !== null && net.seat === net.hostSeat && net.status === 'waiting' && seated >= 1 && seated < 4;
+
+  const invite = () => {
+    // The link opens the app straight into this table; for anyone without the
+    // app it lands on a page showing the code.
+    const text = ui.inviteText(`https://belastih.com/join/${net.roomId}`);
+    Share.share({ message: text }).catch((err: unknown) => {
+      // A browser with no share sheet (most desktops) refuses at once, and the
+      // button used to do nothing at all there: the invitation goes to the
+      // clipboard instead, and the panel says so. A share the player
+      // cancelled is not a failure, and a phone always has its share sheet.
+      if (Platform.OS !== 'web' || (err as { name?: string } | null)?.name === 'AbortError') return;
+      const clipboard = (globalThis.navigator as { clipboard?: { writeText?: (t: string) => Promise<void> } } | undefined)
+        ?.clipboard;
+      clipboard?.writeText?.(text).then(
+        () => {
+          if (!mounted.current) return;
+          setCopied(true);
+          if (copiedTimer.current) clearTimeout(copiedTimer.current);
+          copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS);
+        },
+        () => {},
+      );
+    });
+  };
+
+  const status = (
+    <View style={styles.status}>
+      {net.status === 'connecting' ? <ActivityIndicator color={theme.accent} size="large" /> : null}
+      <Text style={styles.title}>{message}</Text>
+      {net.error && net.status !== 'waiting' && <Text style={styles.error}>{net.error}</Text>}
+      {net.status === 'error' && <Button label={ui.retry} tone="strong" onPress={net.retry} />}
+    </View>
+  );
+
+  const map =
+    net.seats.length > 0 && mapW > 0 ? (
+      <SeatMap
+        width={mapW}
+        seats={net.seats}
+        mySeat={net.seat}
+        hostSeat={net.hostSeat}
+        canSit={net.status === 'waiting'}
+        lang={net.lang}
+        room={room()}
+        anchors={net.anchors}
+        onSit={net.sit}
+      />
+    ) : null;
+
+  // The code sits with the words that say what to do with it and the button
+  // that sends it — not under the pucks in the middle of the felt, where a
+  // phone narrower than the table's plate hid it behind two of them.
+  const invitation =
+    net.roomId && columnW > 0 ? (
+      <Panel style={[styles.invite, { width: columnW }]}>
+        <View style={styles.codeBlock}>
+          <Text style={styles.codeLabel}>{ui.tableCode}</Text>
+          <Text selectable style={styles.code} numberOfLines={1} adjustsFontSizeToFit>
+            {net.roomId}
+          </Text>
+          <Text style={styles.hint}>{ui.shareCode}</Text>
+        </View>
+        <Button label={ui.invite} tone="strong" onPress={invite} />
+        {/* An alert, so a screen reader says it the moment it appears. */}
+        {copied && (
+          <Text style={styles.copied} role="alert">
+            {ui.inviteCopied}
+          </Text>
+        )}
+        {canStart && <Button label={ui.startWithBots} onPress={net.startWithBots} />}
+      </Panel>
+    ) : null;
+
+  const back = <Button label={ui.back} tone="plain" onPress={onExit} />;
+
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: room().page }]}>
-      <ScrollView contentContainerStyle={styles.centre} onLayout={(e) => setWidth(e.nativeEvent.layout.width)}>
-        {net.status === 'connecting' ? <ActivityIndicator color={theme.accent} size="large" /> : null}
-        <Text style={styles.title}>{message}</Text>
-        {net.error && net.status !== 'waiting' && <Text style={styles.error}>{net.error}</Text>}
-        {net.status === 'error' && <Button label={ui.retry} tone="strong" onPress={net.retry} />}
-
-        {net.seats.length > 0 && width > 0 && (
-          <SeatMap
-            width={Math.min(420, width - 48)}
-            seats={net.seats}
-            mySeat={net.seat}
-            hostSeat={net.hostSeat}
-            canSit={net.status === 'waiting'}
-            roomId={net.roomId}
-            lang={net.lang}
-            room={room()}
-            anchors={net.anchors}
-            onSit={net.sit}
-          />
+      <ScrollView
+        contentContainerStyle={[styles.centre, { padding: pad, gap: tight ? space.md : space.lg + 2 }, land && styles.row]}
+        onLayout={(e) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
+      >
+        {land ? (
+          <>
+            {map}
+            <View style={[styles.column, { width: columnW }]}>
+              {status}
+              {invitation}
+              {back}
+            </View>
+          </>
+        ) : (
+          <>
+            {status}
+            {map}
+            {invitation}
+            {back}
+          </>
         )}
-
-        {net.roomId && (
-          <View style={styles.panel}>
-            <Text style={styles.hint}>{ui.shareCode}</Text>
-            {net.seat !== null &&
-              net.seat === net.hostSeat &&
-              net.status === 'waiting' &&
-              seated >= 1 &&
-              seated < 4 && (
-                <Button label={ui.startWithBots} tone="strong" onPress={net.startWithBots} />
-              )}
-            <Button
-              label={ui.invite}
-              tone="strong"
-              onPress={() => {
-                // The link opens the app straight into this table; for anyone
-                // without the app it lands on a page showing the code.
-                void Share.share({
-                  message: ui.inviteText(`https://belastih.com/join/${net.roomId}`),
-                }).catch(() => {});
-              }}
-            />
-          </View>
-        )}
-
-        <Button label={ui.back} tone="plain" onPress={onExit} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+/** How long "copied" stays under the invite button. */
+const COPIED_MS = 4000;
+/** Neither the seat map nor the invitation beside it grows past this. */
+const MAP_MAX_W = 420;
+/** Taller than this and a screen on its side has room to stack (a big tablet). */
+const LAND_MAX_H = 700;
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.feltDeep },
-  centre: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', gap: 18, padding: 24 },
+  centre: { flexGrow: 1, alignItems: 'center', justifyContent: 'center' },
+  row: { flexDirection: 'row', gap: space.lg },
+  column: { alignItems: 'center', gap: space.md },
+  status: { alignItems: 'center', gap: space.sm + 2 },
   title: { color: theme.text, fontSize: 20, fontFamily: font.bold, textAlign: 'center' },
   error: { color: theme.dangerInk, fontSize: 13, textAlign: 'center' },
-  panel: {
-    alignSelf: 'stretch',
-    backgroundColor: 'rgba(0,0,0,0.22)',
-    borderRadius: radius.panel,
-    borderWidth: 1,
-    borderColor: theme.line,
-    padding: 14,
-    gap: 6,
-    alignItems: 'center',
-  },
-  hint: { color: theme.textDim, fontSize: 12, textAlign: 'center' },
+  invite: { gap: space.sm + 2 },
+  codeBlock: { alignItems: 'center', gap: 2 },
+  codeLabel: { color: ink.mid, ...type.caption },
+  code: { color: theme.accent, ...type.h1, letterSpacing: 2, textAlign: 'center' },
+  hint: { color: ink.mid, ...type.sub, textAlign: 'center', marginTop: space.xs },
+  copied: { color: theme.okInk, ...type.sub, textAlign: 'center' },
 });

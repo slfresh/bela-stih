@@ -35,9 +35,10 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo run:android",
+    "android": "node ../../scripts/patch-reanimated.mjs && expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "postinstall": "node ../../scripts/patch-reanimated.mjs"
   },
   "private": true
 }

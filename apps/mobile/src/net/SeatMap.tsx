@@ -8,17 +8,24 @@ import { FeltArt } from '../table/FeltArt';
 import { seatPosition, type Position } from '../table/geometry';
 import { SeatPuck } from '../table/SeatPuck';
 import { isPartner, seatTone } from '../table/teamColour';
-import { font, ink, radius, space, stroke, surface, theme, type } from '../theme';
+import { ink, space, stroke, surface, type } from '../theme';
 import { Chair, Crown } from '../ui/icons';
 import { PressScale } from '../ui/PressScale';
 import type { SeatInfo } from './useNetGame';
 
+/** Height over width of the felt; the lobby sizes its columns by it. */
+export const SEAT_MAP_ASPECT = 0.62;
+
 /**
  * The lobby as the table it is about to be: four pucks round a real felt,
- * seen from the viewer's chair, the room's code on a plate in the middle. A
- * free seat is a ghost puck with a chair — tap it to sit there (and choose
- * your partner); the host wears a crown; a bot shows the robot beside its
- * name, as it will at the table.
+ * seen from the viewer's chair. A free seat is a ghost puck with a chair — tap
+ * it to sit there (and choose your partner); the host wears a crown; a bot
+ * shows the robot beside its name, as it will at the table.
+ *
+ * The room's code is NOT on this felt. It sat on a plate in the middle, which
+ * is wider than the gap the side seats leave on any phone under about 380 dp:
+ * two pucks, a name and the crown were drawn over it. It lives in the lobby's
+ * invitation panel now, with the button that sends it.
  */
 export const SeatMap = memo(function SeatMap({
   width,
@@ -26,7 +33,6 @@ export const SeatMap = memo(function SeatMap({
   mySeat,
   hostSeat,
   canSit,
-  roomId,
   lang,
   room,
   anchors,
@@ -38,13 +44,12 @@ export const SeatMap = memo(function SeatMap({
   hostSeat: Seat | null;
   /** Before the game starts a free seat can be taken. */
   canSit: boolean;
-  roomId: string | null;
   lang: Lang;
   room: RoomStyle;
   anchors: AnchorMap;
   onSit: (seat: Seat) => void;
 }) {
-  const height = Math.round(width * 0.62);
+  const height = Math.round(width * SEAT_MAP_ASPECT);
   const puck = Math.round(Math.min(58, width * 0.15));
   const me = mySeat ?? 0;
   const at = (pos: Position) => {
@@ -63,15 +68,6 @@ export const SeatMap = memo(function SeatMap({
     <AnchorHost map={anchors}>
       <View style={{ width, height }}>
         <FeltArt width={width} height={height} room={room} grain={false} />
-        {/* the code, on a plate in the rim's wood */}
-        <View style={styles.centre} pointerEvents="none">
-          <View style={[styles.plate, { backgroundColor: room.rim, borderTopColor: room.rimLight, borderBottomColor: room.rimDark }]}>
-            <Text style={styles.plateLabel}>{lang.s.ui.tableCode}</Text>
-            <Text selectable style={styles.plateCode}>
-              {roomId ?? '····'}
-            </Text>
-          </View>
-        </View>
         {([0, 1, 2, 3] as Seat[]).map((seat) => {
           const info = seats[seat];
           const pos = seatPosition(seat, me);
@@ -127,26 +123,6 @@ export const SeatMap = memo(function SeatMap({
 });
 
 const styles = StyleSheet.create({
-  centre: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  plate: {
-    alignItems: 'center',
-    borderRadius: radius.sm,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    paddingHorizontal: space.lg,
-    paddingVertical: space.sm,
-    gap: 2,
-  },
-  plateLabel: { color: ink.mid, ...type.caption },
-  plateCode: { color: theme.accent, ...type.h1, fontFamily: font.bold, letterSpacing: 2 },
   seat: { position: 'absolute', alignItems: 'center', gap: 2 },
   ghost: {
     alignItems: 'center',

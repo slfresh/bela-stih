@@ -304,6 +304,24 @@ describe('anchors measure on demand', () => {
     expect(map).toMatch(/anchored=\{false\}/);
   });
 
+  it('the invitation carries the code, and the felt carries only the seats', () => {
+    // The code sat on a plate in the middle of the seat map, wider than the
+    // gap the side seats leave on any phone under ~380 dp: two pucks, a name
+    // and the host's crown were drawn over it. On its side the phone pushed
+    // both buttons under the fold, and a browser with no share sheet did
+    // nothing at all when "Pozovi prijatelje" was pressed.
+    const map = src('net/SeatMap.tsx');
+    expect(map).not.toMatch(/styles\.plate|roomId|lang\.s\.ui\.tableCode/);
+    const online = src('net/OnlineGame.tsx');
+    const waiting = online.slice(online.indexOf('function Waiting'));
+    expect(waiting).toMatch(/<Panel[\s\S]*\{net\.roomId\}[\s\S]*label=\{ui\.invite\}/);
+    expect(waiting).toMatch(/clipboard\?\.writeText\?\.\(text\)/);
+    // Only the web falls back, and a cancelled share sheet is not a failure.
+    expect(waiting).toMatch(/if \(Platform\.OS !== 'web' \|\| \(err as \{ name\?: string \} \| null\)\?\.name === 'AbortError'\) return;/);
+    expect(waiting).toMatch(/ui\.inviteCopied/);
+    expect(waiting).toMatch(/land && styles\.row/);
+  });
+
   it('the rail\'s trump buttons say the suit alone and read the full call aloud', () => {
     const t = src('TableScreen.tsx');
     expect(t).toMatch(/\(compact \|\| short\) && a\.type === 'BID_CALL'\s*\? lang\.suitName\(a\.suit\)/);

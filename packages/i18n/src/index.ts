@@ -171,6 +171,8 @@ export interface UiStrings {
   soundBlocked: string;
   invite: string;
   inviteText: (url: string) => string;
+  /** A browser with no share sheet: the invitation went to the clipboard instead. */
+  inviteCopied: string;
 }
 
 interface Strings {
@@ -540,6 +542,7 @@ const hr: Strings = {
     soundBlocked: 'Zvuk je isključen — dodirni za uključivanje',
     invite: 'Pozovi prijatelje',
     inviteText: (url) => `Zaigraj belu sa mnom! Pridruži se mom stolu: ${url}`,
+    inviteCopied: 'Pozivnica je kopirana — zalijepi je prijateljima.',
   },
 };
 
@@ -771,6 +774,7 @@ const srCyrl: Strings = {
     soundBlocked: 'Звук је искључен — додирни за укључивање',
     invite: 'Позови пријатеље',
     inviteText: (url) => `Заиграј белу са мном! Придружи се мом столу: ${url}`,
+    inviteCopied: 'Позивница је копирана — налепи је пријатељима.',
   },
 };
 
@@ -998,6 +1002,7 @@ const en: Strings = {
     soundBlocked: 'Sound is off — tap to turn it on',
     invite: 'Invite friends',
     inviteText: (url) => `Come play Bela with me! Join my table: ${url}`,
+    inviteCopied: 'Invite copied — paste it to your friends.',
   },
 };
 

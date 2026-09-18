@@ -25,6 +25,11 @@ SDK_DIR="${ANDROID_SDK_DIR:-C:/Users/slfresh/AppData/Local/Android/Sdk}"
 
 echo "== building Android against $EXPO_PUBLIC_SERVER_URL"
 
+# The reanimated event guard: without it a new hand or a rematch could freeze
+# the main thread for seconds and Android offered to close the app (see the
+# script). It patches node_modules, so it is checked here, every build.
+node scripts/patch-reanimated.mjs
+
 (cd apps/mobile && npx expo prebuild --platform android --no-install)
 # prebuild recreates android/ and deletes local.properties every time.
 echo "sdk.dir=$SDK_DIR" > apps/mobile/android/local.properties
