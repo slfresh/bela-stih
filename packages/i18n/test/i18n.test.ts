@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RANKS, SUITS, type Action, type DeclarationSummary, type Seat } from '@belot/shared-types';
 import { LOCALE_IDS, Lang, SUIT_PIP, isRedSuit } from '@belot/i18n';
+import { GIFT_IDS } from '@belot/progression';
 
 /**
  * The vocabulary is the product's stated wedge, so it gets tested like code.
@@ -269,7 +270,7 @@ describe('register and typography', () => {
     word('[Сс]ами'),
   ];
   const QUESTS = ['playDeals', 'winDeals', 'winMatch', 'callZvanja', 'callBela'];
-  const IDS = ['djed', 'classic', 'green', 'smile', 'bravo', 'hvala'];
+  const IDS = ['djed', 'classic', 'green', 'smile', 'bravo', 'hvala', ...GIFT_IDS];
 
   function strings(l: Lang): string[] {
     const out: string[] = [];
@@ -284,7 +285,7 @@ describe('register and typography', () => {
           // Each function gets the arguments its key implies; the rest a
           // string and some numbers, so no branch is left unrendered.
           if (key === 'questLabel') QUESTS.forEach((q) => push(f(q)));
-          else if (key === 'cosmeticName' || key === 'emotePhrase') IDS.forEach((id) => push(f(id)));
+          else if (key === 'cosmeticName' || key === 'emotePhrase' || key === 'giftName') IDS.forEach((id) => push(f(id)));
           else {
             push(f('Ana', 'Ana', 'Ana'));
             push(f(1, 1, 1));
@@ -362,6 +363,26 @@ describe('the words the player asked for', () => {
       }
       // The safe answer and the irreversible one are different words.
       expect(ui.leaveConfirmYes).not.toBe(ui.leaveConfirmNo);
+    }
+  });
+});
+
+describe('table gifts', () => {
+  it('every gift has a name of its own in every locale', () => {
+    for (const locale of LOCALE_IDS) {
+      const ui = new Lang(locale).s.ui;
+      const names = GIFT_IDS.map((id) => ui.giftName(id));
+      GIFT_IDS.forEach((id, i) => expect(names[i], `${locale} ${id}`).not.toBe(id));
+      expect(new Set(names).size, locale).toBe(GIFT_IDS.length);
+    }
+  });
+
+  it("never inflects a player's name, so any nickname reads right", () => {
+    for (const locale of LOCALE_IDS) {
+      const ui = new Lang(locale).s.ui;
+      expect(ui.giftPuckLabel('Ana', null)).toBe('Ana');
+      expect(ui.giftPuckLabel('Ana', 'X')).toContain('Ana,');
+      expect(ui.giftReceived('X', 'Ana')).toContain('(Ana)');
     }
   });
 });

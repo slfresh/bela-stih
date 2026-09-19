@@ -173,6 +173,27 @@ export interface UiStrings {
   inviteText: (url: string) => string;
   /** A browser with no share sheet: the invitation went to the clipboard instead. */
   inviteCopied: string;
+
+  // --- table gifts ---
+  /** A gift's name, by its catalogue id (kava, caj, …). */
+  giftName: (id: string) => string;
+  /** The picker's title and its send button before a gift is chosen. */
+  giftSend: string;
+  /** Opened from your own puck: a gift for everyone else. */
+  giftTreatTable: string;
+  giftToEveryone: (n: number) => string;
+  /** The send button once a gift is chosen: its total price. */
+  giftSendFor: (price: number) => string;
+  giftWait: string;
+  giftNoCoins: string;
+  /** Under the grid: a gift is decoration, never value. */
+  giftForFun: string;
+  /** A screen reader's hint on a tappable puck. */
+  giftHint: string;
+  giftPuckLabel: (name: string, gift: string | null) => string;
+  giftCellLabel: (gift: string, price: number) => string;
+  /** Announced when a gift lands on you. */
+  giftReceived: (gift: string, from: string) => string;
 }
 
 interface Strings {
@@ -321,6 +342,24 @@ const HR_EMOTES: Record<string, string> = {
   brze: 'Brže!',
   ajme: 'Ajme!',
   hvala: 'Hvala!',
+};
+
+const HR_GIFTS: Record<string, string> = {
+  kava: 'Kava',
+  caj: 'Čaj',
+  limunada: 'Limunada',
+  rakija: 'Rakija',
+  pivo: 'Pivo',
+  gemist: 'Gemišt',
+  burek: 'Burek',
+  kolac: 'Kolač',
+  sladoled: 'Sladoled',
+  maramice: 'Maramice',
+  ruza: 'Ruža',
+  djetelina: 'Djetelina',
+  potkova: 'Potkova',
+  pehar: 'Pehar',
+  kruna: 'Kruna',
 };
 
 const HR_COSMETICS: Record<string, string> = {
@@ -543,6 +582,18 @@ const hr: Strings = {
     invite: 'Pozovi prijatelje',
     inviteText: (url) => `Zaigraj belu sa mnom! Pridruži se mom stolu: ${url}`,
     inviteCopied: 'Pozivnica je kopirana — zalijepi je prijateljima.',
+    giftName: (id) => HR_GIFTS[id] ?? id,
+    giftSend: 'Pošalji dar',
+    giftTreatTable: 'Počasti cijeli stol',
+    giftToEveryone: (n) => `Svima za stolom (${n})`,
+    giftSendFor: (price) => `Pošalji · ${price}`,
+    giftWait: 'Malo pričekaj pa pošalji novi dar.',
+    giftNoCoins: 'Nemaš dovoljno novčića.',
+    giftForFun: 'Dar je samo za veselje: primatelj ne dobiva novčiće.',
+    giftHint: 'Dodirni za dar',
+    giftPuckLabel: (name, gift) => (gift ? `${name}, dar: ${gift}` : name),
+    giftCellLabel: (gift, price) => `${gift}, ${price} novčića`,
+    giftReceived: (gift, from) => `Novi dar: ${gift} (${from})`,
   },
 };
 
@@ -551,6 +602,24 @@ const SR_EMOTES: Record<string, string> = {
   brze: 'Брже!',
   ajme: 'Ајме!',
   hvala: 'Хвала!',
+};
+
+const SR_GIFTS: Record<string, string> = {
+  kava: 'Кафа',
+  caj: 'Чај',
+  limunada: 'Лимунада',
+  rakija: 'Ракија',
+  pivo: 'Пиво',
+  gemist: 'Шприцер',
+  burek: 'Бурек',
+  kolac: 'Колач',
+  sladoled: 'Сладолед',
+  maramice: 'Марамице',
+  ruza: 'Ружа',
+  djetelina: 'Детелина',
+  potkova: 'Потковица',
+  pehar: 'Пехар',
+  kruna: 'Круна',
 };
 
 const SR_COSMETICS: Record<string, string> = {
@@ -775,6 +844,18 @@ const srCyrl: Strings = {
     invite: 'Позови пријатеље',
     inviteText: (url) => `Заиграј белу са мном! Придружи се мом столу: ${url}`,
     inviteCopied: 'Позивница је копирана — налепи је пријатељима.',
+    giftName: (id) => SR_GIFTS[id] ?? id,
+    giftSend: 'Пошаљи поклон',
+    giftTreatTable: 'Почасти цео сто',
+    giftToEveryone: (n) => `Свима за столом (${n})`,
+    giftSendFor: (price) => `Пошаљи · ${price}`,
+    giftWait: 'Сачекај мало па пошаљи нови поклон.',
+    giftNoCoins: 'Немаш довољно новчића.',
+    giftForFun: 'Поклон је само за забаву: прималац не добија новчиће.',
+    giftHint: 'Додирни за поклон',
+    giftPuckLabel: (name, gift) => (gift ? `${name}, поклон: ${gift}` : name),
+    giftCellLabel: (gift, price) => `${gift}, ${price} новчића`,
+    giftReceived: (gift, from) => `Нови поклон: ${gift} (${from})`,
   },
 };
 
@@ -783,6 +864,24 @@ const EN_EMOTES: Record<string, string> = {
   brze: 'Faster!',
   ajme: 'Oops!',
   hvala: 'Thanks!',
+};
+
+const EN_GIFTS: Record<string, string> = {
+  kava: 'Coffee',
+  caj: 'Tea',
+  limunada: 'Lemonade',
+  rakija: 'Rakija',
+  pivo: 'Beer',
+  gemist: 'Spritzer',
+  burek: 'Burek',
+  kolac: 'Cake',
+  sladoled: 'Ice cream',
+  maramice: 'Tissues',
+  ruza: 'Rose',
+  djetelina: 'Four-leaf clover',
+  potkova: 'Horseshoe',
+  pehar: 'Trophy',
+  kruna: 'Crown',
 };
 
 const EN_COSMETICS: Record<string, string> = {
@@ -1003,6 +1102,18 @@ const en: Strings = {
     invite: 'Invite friends',
     inviteText: (url) => `Come play Bela with me! Join my table: ${url}`,
     inviteCopied: 'Invite copied — paste it to your friends.',
+    giftName: (id) => EN_GIFTS[id] ?? id,
+    giftSend: 'Send a gift',
+    giftTreatTable: 'Treat the whole table',
+    giftToEveryone: (n) => `Everyone at the table (${n})`,
+    giftSendFor: (price) => `Send · ${price}`,
+    giftWait: 'Wait a moment before the next gift.',
+    giftNoCoins: 'Not enough coins.',
+    giftForFun: 'Gifts are just for fun: the receiver gets no coins.',
+    giftHint: 'Tap to send a gift',
+    giftPuckLabel: (name, gift) => (gift ? `${name}, gift: ${gift}` : name),
+    giftCellLabel: (gift, price) => `${gift}, ${price} coins`,
+    giftReceived: (gift, from) => `New gift: ${gift} (${from})`,
   },
 };
 
