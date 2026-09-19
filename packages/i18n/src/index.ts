@@ -1109,7 +1109,7 @@ const en: Strings = {
     giftName: (id) => EN_GIFTS[id] ?? id,
     giftSend: 'Send a gift',
     giftTreatTable: 'Treat the whole table',
-    giftToEveryone: (n) => `Everyone at the table (${n})`,
+    giftToEveryone: (n) => `Everyone (${n})`,
     giftSendFor: (price) => `Send · ${price}`,
     giftWait: 'Wait a moment before the next gift.',
     giftNoCoins: 'Not enough coins.',

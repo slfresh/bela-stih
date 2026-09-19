@@ -24,7 +24,6 @@ export function GiftPicker({
   lang,
   target,
   nameOf,
-  giftOf,
   profile,
   readyAt,
   land,
@@ -37,7 +36,6 @@ export function GiftPicker({
   /** A seat, or 'table' when opened from my own puck. */
   target: Seat | 'table';
   nameOf: (s: Seat) => string;
-  giftOf: (s: Seat) => GiftId | null;
   profile: PlayerProfile;
   /** My cooldown: no gift before this instant. */
   readyAt: number;
@@ -71,8 +69,8 @@ export function GiftPicker({
   const canSend = !!chosen && chosenBlock === null && !cooling;
   const note = cooling ? ui.giftWait : chosen && chosenBlock === 'coins' ? ui.giftNoCoins : ui.giftForFun;
 
-  const title = target === 'table' ? ui.giftTreatTable : nameOf(target);
-  const current = target === 'table' ? null : giftOf(target);
+  // Who it is for is the first chip; the title says what the sheet does.
+  const title = target === 'table' ? ui.giftTreatTable : ui.giftSend;
 
   const chips =
     target === 'table' ? null : (
@@ -126,9 +124,14 @@ export function GiftPicker({
             </View>
             <View style={styles.caption}>
               {locked ? (
+                // The lock and the level's number: "Nivo 10" wrapped in a
+                // 49 dp cell, and "Level 10" never fitted at all. The label
+                // above says the whole thing.
                 <>
                   <Lock size={10} colour={ink.mid} />
-                  <Text style={styles.captionText}>{ui.needsLevel(g.requiredLevel)}</Text>
+                  <Text style={[styles.captionText, num]} numberOfLines={1}>
+                    {g.requiredLevel}
+                  </Text>
                 </>
               ) : (
                 <>
@@ -164,7 +167,6 @@ export function GiftPicker({
           <Text style={styles.title} numberOfLines={1}>
             {title}
           </Text>
-          {current && <GiftArt id={current} size={22} disc />}
           {land && chips}
           <View style={styles.wallet}>
             <Coin size={12} />

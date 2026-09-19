@@ -1203,7 +1203,6 @@ export function TableScreen(props: TableScreenProps) {
               lang={lang}
               target={giftTarget}
               nameOf={(s) => meta(s).name}
-              giftOf={(s) => gifts?.[s] ?? null}
               profile={profile}
               readyAt={giftReadyAt}
               land={land}
