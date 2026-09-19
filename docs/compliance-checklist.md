@@ -27,6 +27,13 @@ keep it that way.
   nobody — no function adds coins, XP or items to a receiver (pinned in
   `progression.test.ts` and `apps/mobile/test/gift-catalogue.test.ts`). The server only relays `{from, to, id}` with a
   7 s gap per connection, stores nothing, and forwards no text.
+- Play's User Generated Content policy (1.3.1): at an online table any other
+  player can be HIDDEN (device-local, for that table: name, emotes and
+  gifts) or REPORTED (the player's own e-mail with the nickname, table code,
+  time and version - nothing sent to the game server). The rules of conduct
+  are stated and linked (belastih.com/#pravila) under the nickname field,
+  the only place user content is created. Reported nicknames are acted on
+  through the server's name filter (apps/server/src/names.ts).
 
 ## One-time paperwork (do once, ~30 minutes total)
 
@@ -40,6 +47,20 @@ keep it that way.
       GmbH (processor, Germany). Transfers outside EU: none. Retention: match
       duration in memory; container logs ≤ a few days by rotation. Security:
       TLS, firewall (22/80/443 only), no persistence, no database.*
+      *Second activity (1.3.1): handling player reports received by e-mail.
+      Data: reported nickname, table code, time, app version, the reporter's
+      e-mail address and message. Basis: Art. 6(1)(f). Recipient: the e-mail
+      provider of the reports address. Retention: at most 90 days after the
+      report is handled.*
+
+## Handling a report
+
+1. Reply within 7 days (the rules page promises it).
+2. If the nickname breaks the rules, add its offending word (not the whole
+   name, and in both scripts where it matters) to `BLOCKED_NAME_PARTS` in
+   `apps/server/src/names.ts`, run the tests, and deploy the SERVER only
+   (between games). The seat then shows "Igrač N".
+3. Delete the e-mail at most 90 days after handling it.
 
 ## Play Console answers (at listing time)
 
@@ -53,7 +74,10 @@ keep it that way.
 - **UGC questionnaire**: answer truthfully — users choose a display name shown
   to 3 other players per match and can send emotes from a fixed 10-item list
   and gifts from a fixed 15-item list; no free-text chat; content is
-  ephemeral; players can leave a table at any time.
+  ephemeral; players can leave a table at any time. In-app (1.3.1): hide a
+  player for the table, report a player by e-mail; the rules of conduct are
+  accepted at the nickname field; objectionable nicknames are blocked
+  server-side.
 - **IARC content rating**: answer **"users interact" = yes** (nicknames +
   emotes + gifts with strangers). Answer **no** to every gambling question —
   nothing is wagered, coins cannot be bought or cashed out. Expected rating:
@@ -119,3 +143,6 @@ the new certificate before promoting 1.3.0. If the rating would cost the
    phase, which re-opens the data-safety and deletion questions by design).
 5. No free-text channels between players (nicknames stay the only free text,
    sanitized server-side).
+6. Hiding is device-local and a report is the player's own e-mail: neither
+   ever reaches the game server. A server-side report endpoint would re-open
+   the Data safety form and the privacy page.

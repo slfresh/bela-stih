@@ -87,6 +87,24 @@ before promoting.
 
 ### Release notes
 
+1.3.1 -
+- hr: *Novo: dodirni igrača za stolom → Prijavi da ga sakriješ do kraja stola
+  ili prijaviš neprimjeren nadimak. Popravci: nakon partije uvijek imaš put
+  natrag, traka iskustva više ne ide unatrag, oblačići se vide i kad su
+  animacije na telefonu isključene, a online stol jasnije javlja odbijen potez
+  i za koga igra bot.*
+- sr: *Ново: додирни играча за столом → Пријави да га сакријеш до краја стола
+  или пријавиш неприкладан надимак. Поправке: после партије увек имаш пут
+  назад, трака искуства више не иде уназад, облачићи се виде и кад су
+  анимације на телефону искључене, а онлајн сто јасније јавља одбијен потез и
+  за кога игра бот.*
+- en: *New: tap a player at the table → Report to hide them for the rest of
+  the table or report an offensive nickname. Fixes: a way home after every
+  match, the XP bar never runs backwards, speech bubbles show even with the
+  phone's animations off, and the online table says clearly when a move is
+  refused and who a bot is playing for.*
+
+
 Internal testing goes out without notes. For closed testing and production:
 
 1.3.0 —
