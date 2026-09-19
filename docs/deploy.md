@@ -38,7 +38,14 @@ record to already resolve. Deploys drop running matches; ship between games.
 SERVER_URL=wss://bela.yourdomain.com npm run smoke
 # and the emote relay:
 cd apps/server && SERVER_URL=wss://bela.yourdomain.com npx tsx src/emote-smoke.ts
+# and the gift relay (rate limit, the table gift, a seat keeping its gift
+# through a dropped connection and losing it when its player leaves):
+SERVER_URL=wss://bela.yourdomain.com npx tsx src/gift-smoke.ts
 ```
+
+A server that knows gifts must be live BEFORE any app build that sends them:
+an older server drops the message silently, and the sender, who pays only on
+the server's echo, loses nothing — but sees nothing either.
 
 Then install the app on a phone, turn **Wi-Fi off** (mobile data only), and
 play an online match — that is the test that catches everything USB and LAN

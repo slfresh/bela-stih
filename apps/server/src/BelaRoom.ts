@@ -7,9 +7,12 @@ import { Table } from '@belot/table';
 import {
   EMOTE_GAP_MS,
   EMOTE_IDS,
+  GIFT_GAP_MS,
+  GIFT_IDS,
   MSG,
   type ClientMessage,
   type EmoteMessage,
+  type GiftMessage,
   type RoomMessage,
   type SeatInfo,
 } from './protocol';
@@ -182,6 +185,14 @@ export class BelaRoom extends Room {
   private lastEmoteAt = new Map<string, number>();
   private lastSitAt = new Map<string, number>();
   private lastVoteAt = new Map<string, number>();
+  private lastGiftAt = new Map<string, number>();
+  /**
+   * Each seat's latest gift, by seat rather than by occupant: a seat played by
+   * a bot from the start can be given one too. Cleared when the person in the
+   * seat changes (a join, a release); kept while a dropped player is held, and
+   * across a rematch, because it is still the same person at the table.
+   */
+  private gifts: (string | null)[] = [null, null, null, null];
 
   override onCreate(options: { private?: boolean; hard?: boolean } = {}): void {
     this.occupants = SEATS.map(() => ({ sessionId: null, name: '', avatar: '', connected: false, origin: '' }));
@@ -286,6 +297,7 @@ export class BelaRoom extends Room {
       connected: true,
     };
     this.table.setSeatHuman(seat, true);
+    this.gifts[seat] = null;
     if (this.hostId === null) this.hostId = client.sessionId;
 
     // The series belongs to the people who sat down together, so a NEW face
@@ -352,6 +364,8 @@ export class BelaRoom extends Room {
   private release(seat: Seat): void {
     const wasHost = this.occupants[seat]!.sessionId === this.hostId;
     this.occupants[seat] = { sessionId: null, name: '', avatar: '', connected: false, origin: '' };
+    // The person has gone for good; their gift goes with them.
+    this.gifts[seat] = null;
     // A seat nobody is sitting in cannot be waited on for a rematch vote.
     this.rematchVotes.delete(seat);
     if (this.started) this.table.setSeatHuman(seat, false);
@@ -466,6 +480,10 @@ export class BelaRoom extends Room {
       this.lastSitAt.set(client.sessionId, now);
       this.occupants[target!] = this.occupants[seat]!;
       this.occupants[seat] = { sessionId: null, name: '', avatar: '', connected: false, origin: '' };
+      // Gifts only exist once the table has started, but should that ever
+      // change, a gift follows the person, not the chair.
+      this.gifts[target!] = this.gifts[seat]!;
+      this.gifts[seat] = null;
       this.publish();
       return;
     }
@@ -517,6 +535,39 @@ export class BelaRoom extends Room {
       this.lastEmoteAt.set(client.sessionId, now);
       const msg: EmoteMessage = { seat, id };
       this.broadcast(MSG.emote, msg);
+      return;
+    }
+
+    if (packet.type === 'gift') {
+      // Only at a table that is playing: the lobby draws no pucks to land on,
+      // and its seats still change hands.
+      if (!this.started) return;
+      const m = packet.message as { id?: unknown; to?: unknown } | undefined;
+      const id = m?.id;
+      if (typeof id !== 'string' || !GIFT_IDS.includes(id)) return;
+      // One other seat, or everyone else. Anything else — the sender's own
+      // seat, 7, '1', 'everyone' — is dropped and does not count as a send.
+      let to: Seat[];
+      if (m?.to === 'table') {
+        to = SEATS.filter((s) => s !== seat);
+      } else if (Number.isInteger(m?.to) && (m!.to as number) >= 0 && (m!.to as number) <= 3 && m!.to !== seat) {
+        to = [m!.to as Seat];
+      } else {
+        return;
+      }
+      const now = Date.now();
+      if (now - (this.lastGiftAt.get(client.sessionId) ?? 0) < GIFT_GAP_MS) return;
+      this.lastGiftAt.set(client.sessionId, now);
+      // No coins are checked here, and none can be: there are no accounts, and
+      // the sender's device pays on seeing this echo. A forged free gift gains
+      // its forger nothing and costs nobody anything — the receiver is given
+      // nothing but a picture beside their name.
+      for (const t of to) this.gifts[t] = id;
+      const msg: GiftMessage = { from: seat, to, id };
+      // Broadcast only: no publish(), so a gift never re-sends views or wakes a
+      // director. The badge rides along in SeatInfo on the next publish, which
+      // is what a reconnecting player reads.
+      this.broadcast(MSG.gift, msg);
     }
   }
 
@@ -599,6 +650,7 @@ export class BelaRoom extends Room {
       avatar: o.avatar,
       connected: o.connected,
       bot: !this.table.humanSeats.has(i as Seat),
+      ...(this.gifts[i] ? { gift: this.gifts[i]! } : {}),
     }));
   }
 

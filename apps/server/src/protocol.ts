@@ -24,6 +24,13 @@ export type ClientMessage =
   | { type: 'next' }
   /** A quick emote; relayed, rate-limited, never stored. */
   | { type: 'emote'; id: string }
+  /**
+   * A table gift from the fixed catalogue, to one other seat or to everyone
+   * else at the table. Relayed and rate-limited; the room remembers each
+   * seat's latest gift so a reconnect sees it. Coins never reach the server:
+   * the sender's device pays, and the receiver gains nothing.
+   */
+  | { type: 'gift'; id: string; to: Seat | 'table' }
   /** After MATCH_OVER: this seat wants another match with the same people. */
   | { type: 'rematch' }
   /** Withdraw that ask. */
@@ -44,6 +51,29 @@ export const EMOTE_IDS: readonly string[] = [
 /** Minimum gap between one seat's emotes. */
 export const EMOTE_GAP_MS = 2500;
 
+/**
+ * The fixed gift vocabulary. Keep in step with `GIFT_IDS` in
+ * `@belot/progression`, which owns prices and levels (a mobile test fails if
+ * the two drift). The server needs only the ids: it never sees a wallet.
+ */
+export const GIFT_IDS: readonly string[] = [
+  'kava', 'caj', 'limunada', 'rakija', 'pivo', 'gemist', 'burek', 'kolac',
+  'sladoled', 'maramice', 'ruza', 'djetelina', 'potkova', 'pehar', 'kruna',
+];
+
+/**
+ * Minimum gap between one connection's gifts. The client waits a second
+ * longer, so network jitter never drops a gift somebody has already paid for.
+ */
+export const GIFT_GAP_MS = 7000;
+
+/** Server -> everyone: a gift was given. A table gift is ONE message. */
+export interface GiftMessage {
+  from: Seat;
+  to: Seat[];
+  id: string;
+}
+
 /** Server -> everyone: someone emoted. */
 export interface EmoteMessage {
   seat: Seat;
@@ -58,6 +88,8 @@ export interface SeatInfo {
   connected: boolean;
   /** True while a bot is standing in for a dropped player. */
   bot: boolean;
+  /** The latest gift given to this seat, while its player stays; absent when none. */
+  gift?: string;
 }
 
 /** Server -> one client: everything that seat is entitled to see. */
@@ -93,4 +125,5 @@ export const MSG = {
   room: 'room',
   error: 'error',
   emote: 'emote',
+  gift: 'gift',
 } as const;
