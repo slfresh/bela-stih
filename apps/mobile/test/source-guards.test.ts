@@ -1097,3 +1097,16 @@ describe('online, a player can be hidden or reported', () => {
     expect(picker).not.toMatch(/exiting=|layout=/);
   });
 });
+
+describe('the rules of conduct', () => {
+  it('are stated, and linked, where the only free text is made', () => {
+    const t = src('screens/SettingsScreen.tsx');
+    const field = t.indexOf('placeholder={ui.nicknamePlaceholder}');
+    const rules = t.indexOf('{ui.nicknameRules} ↗');
+    expect(field).toBeGreaterThan(-1);
+    expect(rules).toBeGreaterThan(field);
+    // In the same panel as the field, before the next one opens.
+    expect(rules).toBeLessThan(t.indexOf('<Panel>', field));
+    expect(t.slice(field, rules)).toMatch(/Linking\.openURL\('https:\/\/belastih\.com\/#pravila'\)/);
+  });
+});

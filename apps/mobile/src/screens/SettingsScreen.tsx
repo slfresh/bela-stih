@@ -66,6 +66,16 @@ export function SettingsScreen({
           autoCorrect={false}
           style={styles.input}
         />
+        {/* Play's user-content policy: the rules, accepted where the name is made. */}
+        <PressScale
+          onPress={() => {
+            void Linking.openURL('https://belastih.com/#pravila').catch(() => {});
+          }}
+          hitSlop={6}
+          accessibilityRole="link"
+        >
+          <Text style={styles.hint}>{ui.nicknameRules} ↗</Text>
+        </PressScale>
       </Panel>
       <Panel>
         {toggleRow(ui.sound, settings.sound, (sound) => onSettingsChange({ ...settings, sound }))}
