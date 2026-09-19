@@ -16,6 +16,7 @@ import {
 import { AnchorMap, Anchor, AnchorHost } from './anim/AnchorRegistry';
 import { EffectsOverlay } from './anim/EffectsOverlay';
 import { anchorId, FxBus } from './anim/FxBus';
+import { useMotionPolicy } from './anim/useMotionPolicy';
 import { Avatar } from './avatars';
 import { Button } from './ui/Button';
 import { Check, Coin, Crown, Gear, Robot } from './ui/icons';
@@ -75,8 +76,12 @@ export function HomeScreen({
   const today = isoDay(new Date());
   const claimable = canClaimDaily(profile, today);
   const level = levelProgress(profile.xp);
-  // The wallet changes when the last coin of a claim lands on it.
-  const coins = useLaggedNumber(profile.coins, coinsLandedMs(BONUS_COINS));
+  // The wallet changes when the last coin of THIS claim lands on it: a quest
+  // sends fewer coins than the bonus.
+  const [flying, setFlying] = useState<number>(BONUS_COINS);
+  const coins = useLaggedNumber(profile.coins, coinsLandedMs(flying));
+  // Reduce-motion (the setting, or the phone's own switch under 'system'): no arc.
+  const motion = useMotionPolicy(settings.motion);
 
   // Every pressable clicks and gives for itself now (PressScale / Button).
   const go = (l: Launch) => onLaunch(l);
@@ -94,12 +99,13 @@ export function HomeScreen({
     void anchors.refresh().then(() => {
       const from = anchors.centre(fromKey);
       const to = anchors.centre(anchorId.wallet);
+      setFlying(count);
       apply();
-      if (from && to) {
-        fxBus.emit({ kind: 'coins', from, to, count });
-        // One ding per coin as it lands; the timers die with the screen.
-        dingTimers.current.push(...coinDingTimers(count, 0));
-      }
+      // No arc under reduce-motion — the wallet still waits and the coins
+      // still ding, as at the table. One ding per coin as it lands; the
+      // timers die with the screen.
+      if (from && to && motion !== 'reduced') fxBus.emit({ kind: 'coins', from, to, count });
+      dingTimers.current.push(...coinDingTimers(count, 0));
     });
   };
   const dingTimers = useRef<ReturnType<typeof setTimeout>[]>([]);

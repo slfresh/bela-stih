@@ -646,6 +646,38 @@ describe('table gifts', () => {
     expect(badge).not.toMatch(/entering=|layout=/);
   });
 
+  it('the lobby wallet waits for the coins this claim sent', () => {
+    const home = src('HomeScreen.tsx');
+    expect(home).toMatch(/const \[flying, setFlying\] = useState(<number>)?\(BONUS_COINS\);/);
+    expect(home).toMatch(/useLaggedNumber\(profile\.coins, coinsLandedMs\(flying\)\)/);
+    expect(home).not.toMatch(/coinsLandedMs\((BONUS|QUEST)_COINS\)/);
+    const claim = home.slice(home.indexOf('const claim = '), home.indexOf('const dingTimers'));
+    expect(claim).toMatch(/setFlying\(count\);\s*apply\(\);/);
+  });
+
+  it('no coin flies in the lobby under reduce-motion', () => {
+    const home = src('HomeScreen.tsx');
+    expect(home).toMatch(/const motion = useMotionPolicy\(settings\.motion\);/);
+    const claim = home.slice(home.indexOf('const claim = '), home.indexOf('const dingTimers'));
+    expect(claim).toMatch(/if \(from && to && motion !== 'reduced'\) fxBus\.emit\(\{ kind: 'coins', from, to, count \}\);/);
+    expect((home.match(/fxBus\.emit\(/g) ?? []).length).toBe(1);
+  });
+
+  it('every decorative emit reads the motion policy', () => {
+    const walk = (d: string): string[] =>
+      readdirSync(join(here, '../src', d), { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? walk(join(d, e.name)) : /\.tsx?$/.test(e.name) ? [join(d, e.name)] : [],
+      );
+    let emitters = 0;
+    for (const f of walk('.')) {
+      const t = src(f);
+      if (!/emit\(\{ kind: '(coins|confetti|burst)'/.test(t)) continue;
+      emitters++;
+      expect(t, f).toMatch(/motion (===|!==) 'reduced'|reducedRef\.current/);
+    }
+    expect(emitters).toBeGreaterThanOrEqual(3);
+  });
+
   it('the profile puts every number under its own label', () => {
     const p = src('screens/ProfileScreen.tsx');
     const head = p.slice(p.indexOf('styles.headlines}'), p.indexOf('<Panel>'));
