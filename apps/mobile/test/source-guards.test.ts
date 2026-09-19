@@ -1012,3 +1012,17 @@ describe('the zvanja reveal', () => {
     expect(table).toMatch(/setRevealPhase\('leaving'\);[\s\S]{0,300}setTimeout\(\(\) => setRevealPhase\('gone'\), REVEAL_EXIT_MS\)/);
   });
 });
+
+describe("reanimated obeys the app's motion policy", () => {
+  it("never the phone's switch behind its back: one config, at the root, first", () => {
+    const app = readFileSync(join(here, '../App.tsx'), 'utf8');
+    expect(app).toMatch(/import Animated, \{[^}]*\bReducedMotionConfig\b[^}]*\} from 'react-native-reanimated'/);
+    expect(app).toMatch(/<SafeAreaProvider>\s*<ReducedMotionConfig mode=\{ReduceMotion\.Never\} \/>/);
+    // A second config deeper down would hand the switch back when it unmounts.
+    const walk = (d: string): string[] =>
+      readdirSync(d, { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? walk(join(d, e.name)) : /\.tsx?$/.test(e.name) ? [join(d, e.name)] : [],
+      );
+    for (const f of walk(join(here, '../src'))) expect(readFileSync(f, 'utf8'), f).not.toMatch(/ReducedMotionConfig/);
+  });
+});

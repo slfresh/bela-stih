@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Linking, Platform } from 'react-native';
+import { BackHandler, Linking, LogBox, Platform } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, ReduceMotion, ReducedMotionConfig } from 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Lang } from '@belot/i18n';
 import type { PlayerProfile } from '@belot/progression';
@@ -33,6 +33,10 @@ const FONTS = {
   'Rubik-700': require('./assets/fonts/Rubik-700.ttf'),
   'Rubik-900': require('./assets/fonts/Rubik-900.ttf'),
 };
+
+// ReducedMotionConfig warns on every dev mount; the override is deliberate
+// (see the render below). Dev only: the web LogBox is a stub.
+LogBox.ignoreLogs(['Reduced motion setting is overwritten']);
 import { setCardLocale, setCosmetics, setDeckStyle } from './src/cosmetics';
 import { ErrorBoundary } from './src/ui/ErrorBoundary';
 import { useMotionPolicy } from './src/anim/useMotionPolicy';
@@ -214,8 +218,16 @@ export default function App() {
   // the web never gates first paint on them (see theme.ts's fallback stack).
   if (Platform.OS !== 'web' && !fontsLoaded && !fontsError) return null;
 
+  // Reanimated would also obey the phone's reduce-motion switch, read once at
+  // start-up, and jump every animation to its end - and a bubble's end is
+  // invisible: bids, emotes and the stiglja word never showed with Android's
+  // "Remove animations" on (or the web's prefers-reduced-motion). The app's
+  // own policy (Animacije, useMotionPolicy) already decides what moves. First
+  // child, so its effect runs before any screen's; outside `guarded`, so an
+  // error reset never unmounts it and hands the switch back.
   return (
     <SafeAreaProvider>
+      <ReducedMotionConfig mode={ReduceMotion.Never} />
       <StatusBar style="light" />
       {/* On the web the app lives in a centred column; phones get the viewport. */}
       {Platform.OS === 'web' ? (

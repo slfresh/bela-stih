@@ -59,3 +59,19 @@ describe('the reanimated event guard', () => {
     expect(patch).toBeLessThan(build.indexOf('./gradlew'));
   });
 });
+
+describe('the reduce-motion override means what App.tsx relies on', () => {
+  // App mounts <ReducedMotionConfig mode={ReduceMotion.Never} />: that must
+  // switch reanimated's own reduction off, and 'System' must be the only
+  // default that reads the phone. An upgrade that changes either is a decision.
+  const root = dirname(createRequire(join(here, '../package.json')).resolve('react-native-reanimated/package.json'));
+  it('Never turns reanimated reduction off', () => {
+    const cfg = readFileSync(join(root, 'src/component/ReducedMotionConfig.tsx'), 'utf8');
+    expect(cfg).toMatch(/case ReduceMotion\.Never:\s*ReducedMotionManager\.setEnabled\(false\);/);
+  });
+  it('an animation without its own setting follows that manager', () => {
+    const util = readFileSync(join(root, 'src/animation/util.ts'), 'utf8');
+    expect(util).toMatch(/ReduceMotion\.System/);
+    expect(util).toMatch(/ReducedMotionManager|isReduceMotionOnUI/);
+  });
+});
