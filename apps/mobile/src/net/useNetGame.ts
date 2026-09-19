@@ -19,6 +19,7 @@ import { emptyTally, landingSound, mergeAward, processEvents } from '../feedback
 import { loadProfile, saveProfile, type Settings } from '../storage';
 import { applyGiftEcho, GIFT_COOLDOWN_MS, GIFT_ECHO_WAIT_MS, isGiftMessage, reachOf, recipientsOf } from '../gifts';
 import { useGifts } from '../table/useGifts';
+import { notePeople, standInsOf } from './standIns';
 
 /**
  * A table driven by the server, presented through the same animation director
@@ -144,6 +145,9 @@ export function useNetGame(settings: Settings) {
   const [idle, setIdle] = useState(true);
   const [seats, setSeats] = useState<SeatInfo[]>([]);
   const seatsRef = useRef<SeatInfo[]>([]);
+  // The seats a person has played since the start: a bot in one of those is
+  // standing in for someone (see standIns.ts).
+  const hadPersonRef = useRef<ReadonlySet<Seat>>(new Set());
   const [hard, setHard] = useState(false);
   const [hostSeat, setHostSeat] = useState<Seat | null>(null);
   const [series, setSeries] = useState<[number, number]>([0, 0]);
@@ -291,6 +295,7 @@ export function useNetGame(settings: Settings) {
     setView(null);
     setIdle(true);
     setSeats([]);
+    hadPersonRef.current = new Set();
     setSeries([0, 0]);
     setMatchNumber(0);
     setRematchVotes([]);
@@ -372,13 +377,16 @@ export function useNetGame(settings: Settings) {
           const was = before[i]!;
           const now = msg.seats[i]!;
           if (i === mySeatRef.current) continue;
-          if (!was.bot && now.bot) playSfx('seatLeave');
+          // A person leaving; starting with bots turns empty seats into bots
+          // too, and nobody left there.
+          if (!was.bot && now.bot && was.connected) playSfx('seatLeave');
           else if (was.bot && !now.bot) {
             playSfx('seatJoin');
             pattern('seatJoin');
           }
         }
       }
+      hadPersonRef.current = notePeople(hadPersonRef.current, msg.status, msg.seats);
       seatsRef.current = msg.seats;
       setSeats(msg.seats);
       giftsRef.current.resync(msg.seats.map((x) => x.gift ?? null));
@@ -690,6 +698,8 @@ export function useNetGame(settings: Settings) {
     sendEmote,
     sendGift,
     giftReach,
+    // The seats a bot stands in for: a person's once, never a bot's from the start.
+    standIns: standInsOf(seats, hadPersonRef.current, seat),
     gifts: gifts.gifts,
     giftLanded: gifts.giftLanded,
     giftFrom: gifts.giftFrom,

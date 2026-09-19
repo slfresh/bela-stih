@@ -157,7 +157,8 @@ export function OnlineGame({
     };
   }
 
-  const away = net.seats.filter((s) => s.bot && s.seat !== net.seat);
+  // Only people a bot stands in for: a table started with bots names nobody.
+  const away = net.standIns;
 
   return (
     <TableScreen

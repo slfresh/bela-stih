@@ -732,6 +732,19 @@ describe('table gifts', () => {
     expect(o.slice(o.indexOf('const leaveAndExit'), o.indexOf('const leaveAndExit') + 200)).toMatch(/net\.leave\(\)/);
   });
 
+  it('online, the bot line names only people a bot stands in for', () => {
+    const o = src('net/OnlineGame.tsx');
+    expect(o).toMatch(/const away = net\.standIns;/);
+    expect(o).not.toMatch(/s\.bot && s\.seat !== net\.seat/);
+    const n = src('net/useNetGame.ts');
+    const room = n.slice(n.indexOf("room.onMessage('room'"), n.indexOf("room.onMessage('error'"));
+    expect(room).toMatch(/hadPersonRef\.current = notePeople\(hadPersonRef\.current, msg\.status, msg\.seats\);/);
+    expect(room).toMatch(/if \(!was\.bot && now\.bot && was\.connected\) playSfx\('seatLeave'\);/);
+    const leave = n.slice(n.indexOf('const leave = useCallback'), n.indexOf('giftsRef.current.reset();'));
+    expect(leave).toMatch(/hadPersonRef\.current = new Set\(\);/);
+    expect(n).toMatch(/standIns: standInsOf\(seats, hadPersonRef\.current, seat\)/);
+  });
+
   it('online, the result sheet stays up until the next deal takes it down', () => {
     const n = src('net/useNetGame.ts');
     const next = n.slice(n.indexOf('const next = useCallback'), n.indexOf('const sendEmote'));
