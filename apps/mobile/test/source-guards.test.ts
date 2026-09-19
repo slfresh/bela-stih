@@ -646,6 +646,29 @@ describe('table gifts', () => {
     expect(badge).not.toMatch(/entering=|layout=/);
   });
 
+  it('the profile puts every number under its own label', () => {
+    const p = src('screens/ProfileScreen.tsx');
+    const head = p.slice(p.indexOf('styles.headlines}'), p.indexOf('<Panel>'));
+    const pairs = [...head.matchAll(/styles\.headlineValue\}>\{([^}]+)\}<\/Text>\s*<Text style=\{styles\.headlineLabel\}[^>]*>\s*\{([^}]+)\}/g)].map((m) => [m[1], m[2]]);
+    // Wins were shown under "Partije" (matches played).
+    expect(pairs).toEqual([['profile.matchesWon', 'ui.wins'], ['winRate', 'ui.statWinRate']]);
+    const FIELD: Record<string, RegExp> = {
+      statMatches: /^`\$\{profile\.matchesWon\}\/\$\{profile\.matchesPlayed\}`$/,
+      statWinRate: /^winRate$/,
+      statDeals: /^`\$\{profile\.dealsWon\}\/\$\{profile\.dealsPlayed\}`$/,
+      statZvanja: /^String\(profile\.zvanjaCalled\)$/,
+      statBela: /^String\(profile\.belaCalled\)$/,
+      statValat: /^String\(profile\.valats\)$/,
+      statBestDeal: /^String\(profile\.bestDealScore\)$/,
+    };
+    const rows = [...p.matchAll(/\[ui\.(stat\w+), ([^\]]+)\],/g)].map((m) => [m[1]!, m[2]!] as const);
+    expect(rows.length).toBe(7);
+    for (const [k, v] of rows) {
+      expect(FIELD[k], k).toBeDefined();
+      expect(v, k).toMatch(FIELD[k]!);
+    }
+  });
+
   it("the winner's pill swells once, not again on every rotation after the match", () => {
     const t = src('TableScreen.tsx');
     const header = t.slice(t.indexOf('const TableHeader = memo('), t.indexOf('const swellUs'));

@@ -59,7 +59,7 @@ export function ProfileScreen({
         <View style={styles.headline}>
           <Text style={styles.headlineValue}>{profile.matchesWon}</Text>
           <Text style={styles.headlineLabel} numberOfLines={1}>
-            {ui.statMatches}
+            {ui.wins}
           </Text>
         </View>
         <View style={styles.headline}>
