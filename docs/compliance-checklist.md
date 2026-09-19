@@ -20,6 +20,13 @@ keep it that way.
   per-connection logging, no database.
 - Coin economy invariants (earned-only, non-redeemable, no stakes) — keep
   these four facts true and gambling law stays entirely out of scope.
+- Table gifts (1.3.0) keep them true: a gift is a pick from a fixed 15-item
+  catalogue (`GIFTS` in `packages/progression`, duplicated as the server's
+  `GIFT_IDS` and cross-checked by a test), bought with earned coins at a
+  fixed price, nothing random. It spends the SENDER's coins and credits
+  nobody — no function adds coins, XP or items to a receiver (pinned in
+  `progression.test.ts` and `apps/mobile/test/gift-catalogue.test.ts`). The server only relays `{from, to, id}` with a
+  7 s gap per connection, stores nothing, and forwards no text.
 
 ## One-time paperwork (do once, ~30 minutes total)
 
@@ -44,13 +51,34 @@ keep it that way.
 - **Privacy policy URL**: `https://belastih.com`.
 - **Account deletion policy**: N/A — the app has no accounts.
 - **UGC questionnaire**: answer truthfully — users choose a display name shown
-  to 3 other players per match and can send emotes from a fixed 10-item list;
-  no free-text chat; content is ephemeral; players can leave a table at any
-  time.
+  to 3 other players per match and can send emotes from a fixed 10-item list
+  and gifts from a fixed 15-item list; no free-text chat; content is
+  ephemeral; players can leave a table at any time.
 - **IARC content rating**: answer **"users interact" = yes** (nicknames +
-  emotes with strangers). Answer **no** to every gambling question — nothing
-  is wagered, coins cannot be bought or cashed out. Expected rating: low
-  (PEGI 3/7 tier with an "interaction" notice).
+  emotes + gifts with strangers). Answer **no** to every gambling question —
+  nothing is wagered, coins cannot be bought or cashed out. Expected rating:
+  low (PEGI 3/7 tier with an "interaction" notice). From 1.3.0 see the
+  re-answer below: three gifts are drinks.
+
+## 1.3.0 IARC re-answer (prepared — do it BEFORE 1.3.0 reaches any track)
+
+Gifts add three drinks (rakija, pivo, gemišt — pictures and names only,
+nothing is consumed or rewarded for drinking). Console → App content →
+Content rating → start a new questionnaire and answer:
+
+- **Alcohol, tobacco or drugs — references or depictions: YES**, alcohol,
+  shown as a gift icon; no use by characters, no encouragement.
+- **Gambling / simulated gambling: NO** to every question — no wagering,
+  coins are never bought or cashed out, gifts cost a fixed price.
+- **Loot boxes / random items for purchase: NO** — every gift is picked, never
+  drawn.
+- **Users interact: YES** (nicknames, emotes and gifts between strangers).
+- **Shares location / digital purchases: NO** (no IAP of any kind).
+
+Expect an alcohol-reference descriptor and possibly a higher age tier. Read
+the new certificate before promoting 1.3.0. If the rating would cost the
+13+ audience declaration, the drinks come out with one line: filter
+`alcohol: true` out of `GIFTS` in `packages/progression`.
 - **Target audience**: declare **13+** (avoids the Designed-for-Families
   obligations while staying honest about stranger interaction).
 - **EU DSA trader declaration**: declare **non-trader** (individual, free app,
@@ -84,7 +112,8 @@ keep it that way.
 ## Standing invariants — do not break these without re-auditing
 
 1. Coins can never be bought (no IAP for currency).
-2. Coins can never be redeemed or transferred.
+2. Coins can never be redeemed or transferred — a gift spends the sender's
+   coins and credits no one.
 3. Nothing of value is staked on a match outcome.
 4. No accounts / no server-side storage of player data (until the sign-in
    phase, which re-opens the data-safety and deletion questions by design).

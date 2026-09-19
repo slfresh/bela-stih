@@ -76,9 +76,29 @@ never be bought or cashed out.
 Work through Console → App content, with the answers from
 [compliance-checklist.md](compliance-checklist.md): Data safety (ephemeral →
 "No data collected" badge), no account-deletion (no accounts), UGC
-questionnaire (nicknames + fixed emotes, ephemeral, leave-table), IARC
-("users interact" = yes, all gambling = no), target audience **13+**,
-**non-trader** DSA declaration, no ads.
+questionnaire (nicknames + fixed emotes + fixed gifts, ephemeral,
+leave-table), IARC ("users interact" = yes, all gambling = no), target
+audience **13+**, **non-trader** DSA declaration, no ads.
+
+**Before 1.3.0 goes to any track:** re-answer the UGC and IARC
+questionnaires as prepared in the compliance checklist ("1.3.0 IARC
+re-answer" — the drinks are alcohol references). Read the new certificate
+before promoting.
+
+### Release notes
+
+Internal testing goes out without notes. For closed testing and production:
+
+1.3.0 —
+- hr: *Novo: darovi za stolom! Dodirni igrača i pošalji mu kavu, kolač ili
+  ružu — ili počasti cijeli stol. Dar je samo za veselje: plaća se
+  novčićima, a primatelj ne dobiva ništa.*
+- sr (the app's Serbian is Cyrillic): *Ново: поклони за столом! Додирни
+  играча и пошаљи му кафу, колач или ружу — или почасти цео сто. Поклон је
+  само за забаву: плаћа се новчићима, а прималац не добија ништа.*
+- en: *New: table gifts! Tap a player to send them a coffee, a cake or a rose
+  — or treat the whole table. Gifts are just for fun: they cost your coins
+  and give the receiver nothing.*
 
 ## 4. Upload the build
 
