@@ -7,6 +7,7 @@ import type { RoomStyle } from '../cosmetics';
 import { FeltArt } from '../table/FeltArt';
 import { seatPosition, type Position } from '../table/geometry';
 import { SeatPuck } from '../table/SeatPuck';
+import { seatName } from './seatName';
 import { isPartner, seatTone } from '../table/teamColour';
 import { ink, space, stroke, surface, type } from '../theme';
 import { Chair, Crown } from '../ui/icons';
@@ -88,7 +89,7 @@ export const SeatMap = memo(function SeatMap({
                 <View>
                   <SeatPuck
                     seat={seat}
-                    name={seat === mySeat ? lang.s.seat[0] : info.name}
+                    name={seat === mySeat ? lang.s.seat[0] : seatName(lang, info)}
                     avatar={info.avatar || null}
                     cards={0}
                     isDealer={false}

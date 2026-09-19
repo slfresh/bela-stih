@@ -732,6 +732,15 @@ describe('table gifts', () => {
     expect(o.slice(o.indexOf('const leaveAndExit'), o.indexOf('const leaveAndExit') + 200)).toMatch(/net\.leave\(\)/);
   });
 
+  it("online, every seat name the room sends is shown through seatName", () => {
+    for (const f of ['net/OnlineGame.tsx', 'net/SeatMap.tsx']) {
+      const t = src(f);
+      // No raw room name reaches the screen: s.name / info.name only via seatName().
+      expect(t, f).not.toMatch(/: s\.name\b|=> s\.name\)|: info\.name\b/);
+      expect(t, f).toMatch(/seatName\((net\.)?lang, (s|info)\)/);
+    }
+  });
+
   it("online, a refused move is said in the player's words, as an error, over the bot line", () => {
     const n = src('net/useNetGame.ts');
     const h = n.slice(n.indexOf("room.onMessage('error'"), n.indexOf("room.onMessage('gift'"));

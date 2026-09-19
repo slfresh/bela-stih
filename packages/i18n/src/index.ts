@@ -141,6 +141,8 @@ export interface UiStrings {
   botPlaysFor: (names: string) => string;
   /** The server refused a move (usually a stale tap): said plainly, never in the server's own words. */
   moveRefused: string;
+  /** A seat nobody named, counted from 1 as the server counts it ("Igrač 3"). */
+  playerN: (n: number) => string;
   startWithBots: string;
   sitHere: string;
   /** The lobby's error state: try the connection again. */
@@ -566,6 +568,7 @@ const hr: Strings = {
     leaveConfirmNo: 'Ostani',
     botPlaysFor: (names) => `${names} — igra bot`,
     moveRefused: 'Taj potez nije dopušten.',
+    playerN: (n) => `Igrač ${n}`,
     startWithBots: 'Počni s botovima',
     sitHere: 'sjedni ovdje',
     retry: 'Pokušaj ponovno',
@@ -835,6 +838,7 @@ const srCyrl: Strings = {
     leaveConfirmNo: 'Остани',
     botPlaysFor: (names) => `${names} — игра бот`,
     moveRefused: 'Тај потез није дозвољен.',
+    playerN: (n) => `Играч ${n}`,
     startWithBots: 'Почни са ботовима',
     sitHere: 'седни овде',
     retry: 'Покушај поново',
@@ -1100,6 +1104,7 @@ const en: Strings = {
     leaveConfirmNo: 'Stay',
     botPlaysFor: (names) => `${names} — a bot plays for them`,
     moveRefused: "That move isn't allowed.",
+    playerN: (n) => `Player ${n}`,
     startWithBots: 'Start with bots',
     sitHere: 'sit here',
     retry: 'Try again',

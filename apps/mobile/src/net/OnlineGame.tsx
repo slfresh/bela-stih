@@ -23,6 +23,7 @@ import { Button } from '../ui/Button';
 import { font, ink, space, theme, type } from '../theme';
 import { Panel } from '../ui/Panel';
 import { SEAT_MAP_ASPECT, SeatMap } from './SeatMap';
+import { seatName } from './seatName';
 import type { Settings } from '../storage';
 import { SERVER_URL, useNetGame, type NetGame } from './useNetGame';
 
@@ -150,7 +151,7 @@ export function OnlineGame({
   const seatMeta: (SeatMeta | null)[] = [null, null, null, null];
   for (const s of net.seats) {
     seatMeta[s.seat] = {
-      name: s.seat === net.seat ? net.lang.s.seat[0] : s.name,
+      name: s.seat === net.seat ? net.lang.s.seat[0] : seatName(net.lang, s),
       avatar: s.avatar || null,
       bot: s.bot,
       connected: s.connected,
@@ -192,7 +193,7 @@ export function OnlineGame({
       // and the table's next move clears it.
       status={
         net.error ??
-        (away.length > 0 ? net.lang.s.ui.botPlaysFor(away.map((s) => s.name).join(', ')) : null)
+        (away.length > 0 ? net.lang.s.ui.botPlaysFor(away.map((s) => seatName(net.lang, s)).join(', ')) : null)
       }
       statusIsError={net.error !== null}
       anchors={net.anchors}
