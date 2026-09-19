@@ -176,7 +176,7 @@ describe('anchors measure on demand', () => {
     expect(card).toMatch(/if \(liftedTo\.current === lift\) return;/);
     expect(src('table/SeatPuck.tsx')).toMatch(/if \(ringWas\.current === active\) return;/);
     expect(src('anim/TurnRing.tsx')).toMatch(/\} else if \(breathed\.current\) \{/);
-    expect(t).toMatch(/if \(filledTo\.current === p\.fraction\) return;/);
+    expect(t).toMatch(/const steps = xpFillSteps\(filledTo\.current, \{ level: p\.level, fraction: p\.fraction, isMax: p\.isMax \}, reduced\);\s*if \(steps\.length === 0\) return;/);
     // No layout transition anywhere on the table: 4.5.1 could drop one's
     // frames under a rotation's re-render and leave a card standing behind its
     // neighbour (seen on the Samsung once the flip was fixed).
@@ -270,6 +270,15 @@ describe('anchors measure on demand', () => {
     expect(t).toMatch(/const xp = useLaggedNumber\(profile\.xp, lag, 1\);/);
     expect(t).toMatch(/levelProgress\(xp\)/);
     expect(t).not.toMatch(/levelProgress\(profile\.xp\)/);
+    // The bar goes through xpFillSteps (never straight to the new share) and
+    // follows the motion policy at both of its places.
+    const bar = t.slice(t.indexOf('const ProfileBar = memo('), t.indexOf('/** The hand as a fan.'));
+    expect(bar.length).toBeGreaterThan(1000);
+    expect(bar).not.toMatch(/withTiming\(p\.fraction/);
+    expect(bar).toMatch(/level\.current = p\.level;\s*if \(reduced\) return;/);
+    expect(bar).toMatch(/a\.reduced === b\.reduced/);
+    expect(t.match(/<ProfileBar /g)?.length).toBe(2);
+    expect(t.match(/<ProfileBar [^>]*reduced=\{reduced\}/g)?.length).toBe(2);
   });
 
   it('the felt is drawn by FeltArt under a transparent, pinned frame', () => {

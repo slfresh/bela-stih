@@ -43,6 +43,7 @@ import { Anchor, AnchorHost, useAnchors, type AnchorMap } from './anim/AnchorReg
 import { EffectsOverlay } from './anim/EffectsOverlay';
 import { REVEAL_MS } from './anim/director';
 import { RevealRow } from './table/RevealRow';
+import { xpFillSteps, type XpFillStep, type XpShown } from './table/xpFill';
 import { REVEAL_EXIT_MS, type RevealPhase } from './table/revealTiming';
 import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS, coinsLandedMs, MATCH_CASCADE_HOLD_MS } from './anim/lifetimes';
 import { isMatchAward } from './feedback';
@@ -1125,7 +1126,7 @@ export function TableScreen(props: TableScreenProps) {
             // moves into the two rails and the middle keeps its full height.
             <>
               <View style={[styles.rail, { width: m.railW }]}>
-                <ProfileBar profile={profile} vertical holdMs={awardHold} onLongPress={toggleProbe} />
+                <ProfileBar profile={profile} vertical holdMs={awardHold} reduced={reduced} onLongPress={toggleProbe} />
                 <TableHeader
                   lang={lang}
                   mySeat={mySeat}
@@ -1184,7 +1185,7 @@ export function TableScreen(props: TableScreenProps) {
               {/* wallet / level strip, and leaving in the top corner */}
               <View style={styles.topRow}>
                 <View style={styles.topRowGrow}>
-                  <ProfileBar profile={profile} slim={short} holdMs={awardHold} onLongPress={toggleProbe} />
+                  <ProfileBar profile={profile} slim={short} holdMs={awardHold} reduced={reduced} onLongPress={toggleProbe} />
                 </View>
                 {leaveButton}
               </View>
@@ -1420,6 +1421,7 @@ const ProfileBar = memo(
     vertical = false,
     slim = false,
     holdMs = 0,
+    reduced = false,
     onLongPress,
   }: {
     profile: PlayerProfile;
@@ -1428,6 +1430,8 @@ const ProfileBar = memo(
     slim?: boolean;
     /** Extra wait before the wallet and the level move: a match's fanfare plays first. */
     holdMs?: number;
+    /** The motion policy: the bar snaps and the badge stays still instead. */
+    reduced?: boolean;
     /** Dev builds: toggles the frame/render probe. */
     onLongPress?: () => void;
   }) {
@@ -1443,25 +1447,32 @@ const ProfileBar = memo(
     const coins = useLaggedNumber(profile.coins, lag, 300, 0);
     // The XP bar fills rather than jumps; a new level swells the badge. Only on
     // a change: a rotation remounts the strip already full to where it is, and
-    // an animation to that same value kept writing to the torn-down one.
+    // an animation to that same value kept writing to the torn-down one. A
+    // level crossed fills to the end and on from empty (xpFillSteps): going
+    // straight to the new level's share ran the bar backwards.
     const fill = useSharedValue(p.fraction);
-    const filledTo = useRef(p.fraction);
+    const filledTo = useRef<XpShown>({ level: p.level, fraction: p.fraction });
     useEffect(() => {
-      if (filledTo.current === p.fraction) return;
-      filledTo.current = p.fraction;
-      fill.value = withTiming(p.fraction, { duration: 600, easing: Easing.out(Easing.cubic) });
-    }, [fill, p.fraction]);
+      const steps = xpFillSteps(filledTo.current, { level: p.level, fraction: p.fraction, isMax: p.isMax }, reduced);
+      if (steps.length === 0) return;
+      filledTo.current = { level: p.level, fraction: p.fraction };
+      const timed = (st: XpFillStep) =>
+        withTiming(st.to, { duration: st.ms, easing: st.ease === 'in' ? Easing.in(Easing.quad) : Easing.out(Easing.cubic) });
+      const only = steps[0]!;
+      fill.value = steps.length > 1 ? withSequence(...steps.map(timed)) : only.ms === 0 ? only.to : timed(only);
+    }, [fill, p.level, p.fraction, p.isMax, reduced]);
     const fillStyle = useAnimatedStyle(() => ({ width: `${Math.round(fill.value * 100)}%` }));
     const badge = useSharedValue(1);
     const level = useRef(p.level);
     useEffect(() => {
       if (level.current === p.level) return;
       level.current = p.level;
+      if (reduced) return;
       badge.value = withSequence(
         withTiming(1.35, { duration: 220, easing: Easing.out(Easing.quad) }),
         withTiming(1, { duration: 320, easing: Easing.inOut(Easing.quad) }),
       );
-    }, [badge, p.level]);
+    }, [badge, p.level, reduced]);
     const badgeStyle = useAnimatedStyle(() => ({ transform: [{ scale: badge.value }] }));
     return (
       <Pressable
@@ -1491,6 +1502,7 @@ const ProfileBar = memo(
     a.profile.coins === b.profile.coins &&
     a.vertical === b.vertical &&
     a.slim === b.slim &&
+    a.reduced === b.reduced &&
     a.onLongPress === b.onLongPress,
 );
 
