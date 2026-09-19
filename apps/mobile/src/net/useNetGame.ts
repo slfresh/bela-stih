@@ -6,7 +6,7 @@ import type { Action, DealScoreResult, PublicView, Seat, TeamId } from '@belot/e
 import { teamOf } from '@belot/engine';
 import type { TableEvent } from '@belot/table';
 import { Lang } from '@belot/i18n';
-import type { Award, PlayerProfile } from '@belot/progression';
+import { canAffordGift, type Award, type GiftId, type PlayerProfile } from '@belot/progression';
 import { AnchorMap } from '../anim/AnchorRegistry';
 import { Director, timingsFor, type MotionPolicy } from '../anim/director';
 import { FxBus } from '../anim/FxBus';
@@ -17,6 +17,8 @@ import { cueFor, type TableCue } from '../table/cues';
 import { playSfx } from '../audio';
 import { emptyTally, landingSound, mergeAward, processEvents } from '../feedback';
 import { loadProfile, saveProfile, type Settings } from '../storage';
+import { applyGiftEcho, GIFT_COOLDOWN_MS, isGiftMessage } from '../gifts';
+import { useGifts } from '../table/useGifts';
 
 /**
  * A table driven by the server, presented through the same animation director
@@ -95,6 +97,8 @@ export interface SeatInfo {
   avatar: string;
   connected: boolean;
   bot: boolean;
+  /** The seat's latest table gift, as the room remembers it. */
+  gift?: string;
 }
 
 interface RoomMessage {
@@ -187,6 +191,19 @@ export function useNetGame(settings: Settings) {
   useEffect(() => {
     directorRef.current?.setTimings(timingsFor(motion));
   }, [motion]);
+
+  // The table's gifts. The socket handlers are registered once, in attach(),
+  // so they reach the hook through a ref, as they reach the spawner.
+  const gifts = useGifts({
+    anchors,
+    fxBus,
+    reduced: () => motionRef.current === 'reduced',
+    mySeat: () => mySeatRef.current,
+  });
+  const giftsRef = useRef(gifts);
+  giftsRef.current = gifts;
+  // A spend is read from the profile ref; this makes the wallet redraw for it.
+  const [, setSpent] = useState(0);
   // The socket callbacks are created once; a ref keeps their locale current.
   const langRef = useRef(lang);
   langRef.current = lang;
@@ -257,6 +274,7 @@ export function useNetGame(settings: Settings) {
     setLastDealResult(null);
     setWinnerTeam(null);
     setTurnDeadline(null);
+    giftsRef.current.reset();
   }, []);
 
   // Sockets and directors never outlive the screen; background fast-forwards.
@@ -336,6 +354,7 @@ export function useNetGame(settings: Settings) {
       }
       seatsRef.current = msg.seats;
       setSeats(msg.seats);
+      giftsRef.current.resync(msg.seats.map((x) => x.gift ?? null));
       setHard(msg.hard === true);
       setHostSeat(msg.hostSeat ?? null);
       setSeries(msg.series ?? [0, 0]);
@@ -369,6 +388,21 @@ export function useNetGame(settings: Settings) {
       playSfx('denied');
       pattern('error');
       setError(msg.reason);
+    });
+
+    room.onMessage('gift', (msg: unknown) => {
+      // A gift this client does not know (a newer app's) is ignored, not charged.
+      if (!isGiftMessage(msg)) return;
+      // The sender pays now, on the server's echo — never on the send, so a
+      // gift the server dropped (its rate limit, an old server, no network)
+      // costs nothing. Anyone else's profile is left exactly as it was.
+      const next = applyGiftEcho(profileRef.current, msg, mySeatRef.current);
+      if (next !== profileRef.current) {
+        profileRef.current = next;
+        saveProfile(next);
+        setSpent((n) => n + 1);
+      }
+      giftsRef.current.fly(msg.from, msg.to, msg.id);
     });
 
     room.onMessage('emote', (msg: { seat: Seat; id: string }) => {
@@ -521,6 +555,24 @@ export function useNetGame(settings: Settings) {
     roomRef.current?.send('emote', { id });
   }, []);
 
+  /**
+   * A table gift: only asked for here. The server relays it to everybody,
+   * sender included, and the sender pays on that echo (see the 'gift'
+   * handler) — nothing here touches the profile.
+   */
+  const sendGift = useCallback((id: GiftId, to: Seat | 'table') => {
+    const room = roomRef.current;
+    const g = giftsRef.current;
+    if (!room || mySeatRef.current === null || Date.now() < g.giftReadyAt) return false;
+    if (!canAffordGift(profileRef.current, id, to === 'table' ? 3 : 1)) {
+      playSfx('denied');
+      return false;
+    }
+    g.arm(GIFT_COOLDOWN_MS);
+    room.send('gift', { id, to });
+    return true;
+  }, []);
+
   /** Host only: start the game now, bots filling the empty seats. */
   const startWithBots = useCallback(() => {
     roomRef.current?.send('start', {});
@@ -583,6 +635,11 @@ export function useNetGame(settings: Settings) {
     submit,
     next,
     sendEmote,
+    sendGift,
+    gifts: gifts.gifts,
+    giftLanded: gifts.giftLanded,
+    giftFrom: gifts.giftFrom,
+    giftReadyAt: gifts.giftReadyAt,
     leave,
   };
 }

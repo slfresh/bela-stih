@@ -678,6 +678,17 @@ describe('table gifts', () => {
     expect(branch.slice(0, branch.indexOf('this.broadcast(MSG.gift'))).not.toMatch(/this\.publish\(\)/);
   });
 
+  it('online, the sender pays on the echo and nowhere else', () => {
+    const n = src('net/useNetGame.ts');
+    const send = n.slice(n.indexOf('const sendGift'), n.indexOf('/** Host only: start the game now'));
+    expect(send).toMatch(/room\.send\('gift', \{ id, to \}\)/);
+    expect(send).not.toMatch(/profileRef\.current =|saveProfile|spendOnGift/);
+    expect((n.match(/applyGiftEcho\(/g) ?? []).length).toBe(1);
+    const handler = n.slice(n.indexOf("room.onMessage('gift'"), n.indexOf("room.onMessage('emote'"));
+    expect(handler).toMatch(/applyGiftEcho\(profileRef\.current, msg, mySeatRef\.current\)/);
+    expect(handler).toMatch(/if \(!isGiftMessage\(msg\)\) return;/);
+  });
+
   it('offline, a gift is paid through the match profile the awards are saved through', () => {
     const g = src('useGame.ts');
     expect(g).toMatch(/const next = spendOnGift\(profileRef\.current, id, targets\.length\);/);

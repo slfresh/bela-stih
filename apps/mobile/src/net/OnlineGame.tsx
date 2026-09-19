@@ -201,6 +201,11 @@ export function OnlineGame({
       onFinish={leaveAndExit}
       finishLabel={net.lang.s.ui.leaveTable}
       onEmote={net.sendEmote}
+      gifts={net.gifts}
+      giftLanded={net.giftLanded}
+      giftFrom={net.giftFrom}
+      giftReadyAt={net.giftReadyAt}
+      onGift={net.sendGift}
     />
   );
 }
