@@ -99,11 +99,32 @@ print(f"   {artifact}: expo-audio builds no MediaSession per player, and no medi
 PY
 }
 
+# Player reports go to an address the player chooses (apps/mobile/src/report.ts).
+# Until it is set, only a test build (ALLOW_UNSET_REPORT_ADDRESS=1) may carry the
+# placeholder - and nothing built that way may be uploaded.
+check_report() {
+  local artifact="$1" entry="$2"
+  if python - "$artifact" "$entry" <<'PY'
+import sys, zipfile
+sys.exit(0 if b'REPORT-ADDRESS-NOT-SET' in zipfile.ZipFile(sys.argv[1]).read(sys.argv[2]) else 1)
+PY
+  then
+    if [ "${ALLOW_UNSET_REPORT_ADDRESS:-}" = 1 ]; then
+      echo "   $artifact: TEST BUILD - the report address is still the placeholder; never upload this"
+    else
+      echo "!! $artifact carries the placeholder report address (apps/mobile/src/report.ts) - not shippable (ALLOW_UNSET_REPORT_ADDRESS=1 for a test build)"
+      exit 1
+    fi
+  fi
+}
+
 echo "== reading the bundles back"
 check "$AAB" base/assets/index.android.bundle
 check_audio "$AAB"
+check_report "$AAB" base/assets/index.android.bundle
 if [ "$WHAT" != "aab" ]; then
   check "$APK" assets/index.android.bundle
+  check_report "$APK" assets/index.android.bundle
   check_audio "$APK"
 fi
 

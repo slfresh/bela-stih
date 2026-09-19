@@ -35,4 +35,12 @@ if ! grep -q "$EXPO_PUBLIC_SERVER_URL" "$BUNDLE"; then
   exit 1
 fi
 
+# Player reports go to an address the player chooses (apps/mobile/src/report.ts).
+# This writes straight into deploy/site, so there is no test-build override:
+# test web exports go to a scratch directory instead.
+if grep -q 'REPORT-ADDRESS-NOT-SET' "$BUNDLE"; then
+  echo "!! $BUNDLE still carries the placeholder report address (apps/mobile/src/report.ts) — not shippable"
+  exit 1
+fi
+
 echo "== ok: $(basename "$BUNDLE") points at $EXPO_PUBLIC_SERVER_URL"

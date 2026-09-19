@@ -23,6 +23,11 @@ if [ -f "$IDX" ]; then
     echo "!! $SERVED points at ws://localhost:2567 -- rebuild with scripts/build-web.sh"
     exit 1
   fi
+  # Nor one whose "report a player" goes to the placeholder address.
+  if [ -n "$SERVED" ] && grep -q 'REPORT-ADDRESS-NOT-SET' "deploy/site/igra/_expo/static/js/web/$SERVED"; then
+    echo "!! $SERVED carries the placeholder report address (apps/mobile/src/report.ts) -- set it and rebuild"
+    exit 1
+  fi
 fi
 
 echo "== packing"
