@@ -175,7 +175,7 @@ function Sprite({ fx, origin, box }: { fx: FxWithId; origin: XY; box: { w: numbe
         <GiftFlight
           from={local(fx.from)}
           to={local(fx.to)}
-          id={fx.id}
+          id={fx.gift}
           duration={fx.duration}
           size={fx.size}
           landSize={fx.landSize}

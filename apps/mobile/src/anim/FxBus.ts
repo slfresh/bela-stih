@@ -102,8 +102,9 @@ export type Fx =
   /**
    * A table gift in flight, from the giver's puck to the badge spot on the
    * receiver's: it lands exactly there at `landSize`, as the badge appears.
+   * `gift`, never `id`: every sprite's `id` is the bus's own number.
    */
-  | { kind: 'gift'; id: string; from: XY; to: XY; duration: number; size: number; landSize: number }
+  | { kind: 'gift'; gift: string; from: XY; to: XY; duration: number; size: number; landSize: number }
   | { kind: 'coins'; from: XY; to: XY; count: number }
   | { kind: 'confetti' };
 

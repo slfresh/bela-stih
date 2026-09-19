@@ -121,7 +121,7 @@ export function spawnGift(
   if (!a || !b) return false;
   opts.bus.emit({
     kind: 'gift',
-    id,
+    gift: id,
     from: { x: a.x + a.w / 2, y: a.y + a.h / 2 },
     to: { x: b.x, y: b.y },
     duration: GIFT_FLY_MS,

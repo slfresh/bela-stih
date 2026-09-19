@@ -544,7 +544,7 @@ describe('a table gift', () => {
   it('lands before a second is up, and overlaps the badge only briefly', () => {
     const fx: Fx = {
       kind: 'gift',
-      id: 'kava',
+      gift: 'kava',
       from: { x: 0, y: 0 },
       to: { x: 200, y: 100 },
       duration: GIFT_FLY_MS,
@@ -554,5 +554,16 @@ describe('a table gift', () => {
     expect(motionOf(fx)).toBe(GIFT_FLY_MS);
     expect(lifetimeOf(fx) - motionOf(fx)).toBeLessThanOrEqual(60);
     expect(lifetimeOf(fx)).toBeLessThanOrEqual(1000);
+  });
+
+  it("the bus's own id never replaces the gift it carries", () => {
+    // Every sprite gets `id: number` from the bus; a gift carried as `id`
+    // was overwritten by it and flew as nothing at all.
+    const bus = new FxBus();
+    const seen: Fx[] = [];
+    bus.subscribe((f) => seen.push(f));
+    bus.emit({ kind: 'gift', gift: 'kava', from: { x: 0, y: 0 }, to: { x: 1, y: 1 }, duration: GIFT_FLY_MS, size: GIFT_FLIGHT_SIZE, landSize: 20 });
+    const g = seen[0]!;
+    expect(g.kind === 'gift' && g.gift).toBe('kava');
   });
 });
