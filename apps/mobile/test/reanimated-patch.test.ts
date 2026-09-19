@@ -48,9 +48,9 @@ describe('the reanimated event guard', () => {
 
   it('runs after every install and before every Android build', () => {
     const pkg = JSON.parse(readFileSync(join(here, '../package.json'), 'utf8'));
-    expect(pkg.scripts.postinstall).toBe('node ../../scripts/patch-reanimated.mjs');
+    expect(pkg.scripts.postinstall).toBe('node ../../scripts/patch-reanimated.mjs && node ../../scripts/patch-expo-audio.mjs');
     // A plain \`npm install\` on an installed tree skips postinstall; a dev build patches first.
-    expect(pkg.scripts.android).toMatch(/^node \.\.\/\.\.\/scripts\/patch-reanimated\.mjs && expo run:android$/);
+    expect(pkg.scripts.android).toMatch(/^node \.\.\/\.\.\/scripts\/patch-reanimated\.mjs && node \.\.\/\.\.\/scripts\/patch-expo-audio\.mjs && expo run:android$/);
     const build = readFileSync(join(here, '../../../scripts/build-android.sh'), 'utf8');
     const patch = build.indexOf('node scripts/patch-reanimated.mjs');
     expect(patch).toBeGreaterThan(-1);

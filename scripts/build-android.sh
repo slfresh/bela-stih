@@ -29,6 +29,11 @@ echo "== building Android against $EXPO_PUBLIC_SERVER_URL"
 # the main thread for seconds and Android offered to close the app (see the
 # script). It patches node_modules, so it is checked here, every build.
 node scripts/patch-reanimated.mjs
+# No MediaSession per sound effect: 55 of them, and Samsung's Galaxy Watch
+# companion leaking controllers on each, restarted Android mid-game (see the
+# script). It also
+# refuses to run unless expo-audio is built from these patched sources.
+node scripts/patch-expo-audio.mjs
 
 (cd apps/mobile && npx expo prebuild --platform android --no-install)
 # prebuild recreates android/ and deletes local.properties every time.
@@ -65,10 +70,41 @@ print(f"   {artifact}: carries {wanted}, no development default{note}")
 PY
 }
 
+# expo-audio must come from the patched sources, not its prebuilt AAR: the id
+# of the per-player "basic" MediaSession must be gone from the dex. And its
+# lock-screen playback service must not be declared (app.json turns it off):
+# nothing here starts it, but a media button could, and it cannot run in the
+# foreground without the permissions app.json blocks. The AAB's manifest holds
+# names in UTF-8, the APK's binary XML in UTF-16, so both are looked for.
+check_audio() {
+  local artifact="$1"
+  python - "$artifact" <<'PY'
+import sys, zipfile
+artifact = sys.argv[1]
+with zipfile.ZipFile(artifact) as z:
+    dex = [z.read(n) for n in z.namelist() if n.endswith('.dex')]
+if not any(b'Lexpo/modules/audio/AudioPlayer;' in d for d in dex):
+    sys.exit(f"!! {artifact} has no expo-audio AudioPlayer - not shippable")
+if any(b'ExpoAudioBasicMediaSession_' in d for d in dex):
+    sys.exit(f"!! {artifact} still builds a MediaSession per sound player (prebuilt expo-audio AAR or unpatched source; see scripts/patch-expo-audio.mjs) - not shippable")
+with zipfile.ZipFile(artifact) as z:
+    # The app's own manifest only: an APK keeps it at the root, an AAB under base/manifest/.
+    manifests = [z.read(n) for n in z.namelist() if n in ('AndroidManifest.xml', 'base/manifest/AndroidManifest.xml')]
+if not manifests:
+    sys.exit(f"!! {artifact} has no AndroidManifest.xml - not shippable")
+service = 'AudioControlsService'
+if any(service.encode() in m or service.encode('utf-16-le') in m for m in manifests):
+    sys.exit(f"!! {artifact} still declares expo-audio's media playback service (app.json: enableBackgroundPlayback false) - not shippable")
+print(f"   {artifact}: expo-audio builds no MediaSession per player, and no media service is declared")
+PY
+}
+
 echo "== reading the bundles back"
 check "$AAB" base/assets/index.android.bundle
+check_audio "$AAB"
 if [ "$WHAT" != "aab" ]; then
   check "$APK" assets/index.android.bundle
+  check_audio "$APK"
 fi
 
 echo "== ok: the release points at $EXPO_PUBLIC_SERVER_URL"
