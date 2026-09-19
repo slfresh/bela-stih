@@ -13,6 +13,7 @@ import type { Card, Suit } from '@belot/engine';
 import { cosmetics } from '../cosmetics';
 import { CardBackFace, CardFace, SuitPip } from '../deck';
 import { EmoteFace } from '../emoteArt';
+import { GiftArt } from '../giftArt';
 import { garb } from '../deck/palette';
 import { counters } from '../dev/counters';
 import { font, radius, signal, stroke, surface, theme } from '../theme';
@@ -38,6 +39,7 @@ import {
   FADE_STAMP_MS,
   FADE_SWEEP_MS,
   FLIGHT_FLIP_AT,
+  GIFT_ARC_MAX,
   PULSE_MS,
   STAMP_MS,
   SWEEP_FLIP_AT,
@@ -168,6 +170,17 @@ function Sprite({ fx, origin, box }: { fx: FxWithId; origin: XY; box: { w: numbe
       return <Coins from={local(fx.from)} to={local(fx.to)} count={fx.count} />;
     case 'confetti':
       return <Confetti seed={fx.id} width={box.w} height={box.h} />;
+    case 'gift':
+      return (
+        <GiftFlight
+          from={local(fx.from)}
+          to={local(fx.to)}
+          id={fx.id}
+          duration={fx.duration}
+          size={fx.size}
+          landSize={fx.landSize}
+        />
+      );
   }
 }
 
@@ -490,6 +503,51 @@ function Badge({
   return (
     <Animated.View style={[styles.sprite, styles.badge, tone === 'points' && styles.badgePoints, style]}>
       <Text style={[styles.badgeText, tone === 'points' && styles.badgePointsText]}>{text}</Text>
+    </Animated.View>
+  );
+}
+
+// --- a table gift ------------------------------------------------------------------
+
+/**
+ * A gift on its way: an arc from the giver's puck (a lob, higher the further
+ * it goes, capped), a small swell at the top, landing at the badge's own size
+ * on the badge's own spot — the puck's badge takes over from there.
+ */
+function GiftFlight({
+  from,
+  to,
+  id,
+  duration,
+  size,
+  landSize,
+}: {
+  from: XY;
+  to: XY;
+  id: string;
+  duration: number;
+  size: number;
+  landSize: number;
+}) {
+  const p = useSharedValue(0);
+  useEffect(() => {
+    p.value = withTiming(1, { duration, easing: Easing.inOut(Easing.cubic) });
+  }, [p, duration]);
+  const lift = Math.min(GIFT_ARC_MAX, Math.hypot(to.x - from.x, to.y - from.y) * 0.3);
+  const shrink = landSize / size - 1;
+  const style = useAnimatedStyle(() => {
+    const arc = Math.sin(Math.PI * p.value);
+    return {
+      transform: [
+        { translateX: from.x + (to.x - from.x) * p.value - size / 2 },
+        { translateY: from.y + (to.y - from.y) * p.value - size / 2 - arc * lift },
+        { scale: (1 + 0.2 * arc) * (1 + shrink * p.value) },
+      ],
+    };
+  });
+  return (
+    <Animated.View style={[styles.sprite, { width: size, height: size }, style]}>
+      <GiftArt id={id} size={size} disc />
     </Animated.View>
   );
 }

@@ -72,6 +72,25 @@ export const FELT_HAND_GAP = 12;
 export const SELF_PUCK_GAP = 8;
 /** Room a puck gives its name beside the disc: a puck's box is its disc plus this. SeatPuck reads it. */
 export const PUCK_NAME_ROOM = 32;
+
+/**
+ * Where a puck wears its latest table gift, relative to the puck's ring box
+ * (a square of side size + 10, centred in a box size + PUCK_NAME_ROOM wide):
+ * a disc centred on the ring's LEFT edge, 3 dp below its middle.
+ *
+ * One rule for every puck — side, top and my own, portrait and landscape —
+ * because it never leaves the puck's own layout box: its reach past the ring
+ * is d/2 ≤ 11 dp, exactly the margin PUCK_NAME_ROOM leaves on each side. So it
+ * cannot touch the felt, a trick slot, a rail, the plaque or the fan. The four
+ * corners are already taken (dealer D top-left, partner diamond bottom-left, count
+ * bottom-right, tricks pile top-right) and emote bubbles hang above the
+ * centre; metrics.test.ts checks the clearances for every puck size.
+ */
+export function giftBadgeBox(size: number): { d: number; left: number; top: number } {
+  const ring = size + 10;
+  const d = Math.max(14, Math.min(22, Math.round(size * 0.42)));
+  return { d, left: -d / 2, top: ring / 2 + 3 - d / 2 };
+}
 /** Landscape's gap between each rail and the centre column (styles.rootLand). */
 export const LAND_GAP = 6;
 

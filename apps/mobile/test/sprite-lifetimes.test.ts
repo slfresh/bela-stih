@@ -14,6 +14,8 @@ import {
   FALLBACK_CARD_W,
   FLIGHT_MAX_MS,
   FLIGHT_MIN_MS,
+  GIFT_FLIGHT_SIZE,
+  GIFT_FLY_MS,
   PULSE_MS,
   lifetimeOf,
   motionOf,
@@ -508,6 +510,18 @@ describe('the dealer badge hop', () => {
     anchors.delete('puck:0');
     expect(badgeOf(3 as Seat, anchors).to).toEqual(corner({ x: 0, y: 40 }));
   });
+
+  it("never flies from where the lobby drew another player", () => {
+    // Anchors outlive their views: online, the seat map left `puck:s` for
+    // every seat in the same map the table uses.
+    const anchors = fakeAnchors();
+    anchors.set('puck:3', { x: 900, y: 900, w: 58, h: 58 });
+    anchors.set('puck:1', { x: 800, y: 800, w: 58, h: 58 });
+    const b = badgeOf(3 as Seat, anchors);
+    expect(b.from).toEqual(corner({ x: 360, y: 190 }));
+    const c = badgeOf(0 as Seat, anchors);
+    expect(c.to).toEqual(corner({ x: 120, y: 90 }));
+  });
 });
 
 describe('confetti', () => {
@@ -523,5 +537,22 @@ describe('confetti', () => {
         for (let i = 1; i < n; i++) expect(xs[i]! - xs[i - 1]!).toBeLessThanOrEqual(2 / n);
       }
     }
+  });
+});
+
+describe('a table gift', () => {
+  it('lands before a second is up, and overlaps the badge only briefly', () => {
+    const fx: Fx = {
+      kind: 'gift',
+      id: 'kava',
+      from: { x: 0, y: 0 },
+      to: { x: 200, y: 100 },
+      duration: GIFT_FLY_MS,
+      size: GIFT_FLIGHT_SIZE,
+      landSize: 20,
+    };
+    expect(motionOf(fx)).toBe(GIFT_FLY_MS);
+    expect(lifetimeOf(fx) - motionOf(fx)).toBeLessThanOrEqual(60);
+    expect(lifetimeOf(fx)).toBeLessThanOrEqual(1000);
   });
 });

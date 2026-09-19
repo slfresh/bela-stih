@@ -159,6 +159,19 @@ export const LAST_TRICK_CHIP_MS = 600;
  */
 export const MATCH_CASCADE_HOLD_MS = 1200;
 
+// --- table gifts -------------------------------------------------------------------
+
+/**
+ * A gift's flight from the giver's puck to the receiver's. Gifts are not table
+ * events — they come between beats, from a tap or a relay — so no beat bounds
+ * them; this is simply long enough to be followed across the felt.
+ */
+export const GIFT_FLY_MS = 700;
+/** The gift's size in the air; it shrinks (or grows) to the badge it becomes. */
+export const GIFT_FLIGHT_SIZE = 36;
+/** The highest a gift arcs, however far it flies. */
+export const GIFT_ARC_MAX = 70;
+
 // --- sizes -----------------------------------------------------------------------
 
 /** Card width to draw with when no slot has been measured yet. */
@@ -201,6 +214,8 @@ export function motionOf(fx: Fx): number {
       return CONFETTI_MS;
     case 'burst':
       return BURST_MS;
+    case 'gift':
+      return fx.duration;
   }
 }
 
@@ -233,6 +248,10 @@ export function lifetimeOf(fx: Fx): number {
       return CONFETTI_MS;
     case 'burst':
       return BURST_MS + 100;
+    case 'gift':
+      // It lands on the badge, the same size, as the badge appears: a short
+      // overlap hides the hand-over and shows nothing twice.
+      return motionOf(fx) + 60;
   }
 }
 

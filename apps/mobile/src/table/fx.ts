@@ -14,12 +14,15 @@ import {
   FADE_FLIGHT_MS,
   FALLBACK_CARD_W,
   flightDuration,
+  GIFT_FLIGHT_SIZE,
+  GIFT_FLY_MS,
   LAST_TRICK_CHIP_MS,
 } from '../anim/lifetimes';
 import { hasEmoteFace } from '../emoteIds';
 import { emoteText, isGlyphEmote } from '../emotes';
 import { declarationWeight } from './cues';
 import { cardWidthForHeight, fitHand, MAX_CARD_W } from './geometry';
+import { giftBadgeBox } from './metrics';
 
 /**
  * Maps table events to sprites. Shared by the offline and online screens, so a
@@ -75,6 +78,59 @@ export function spawnEmote(
   });
 }
 
+/**
+ * A seat's puck, measured. My own puck is `puck(mySeat)` (my seat anchor is
+ * the hand, the fallback before my puck has reported); every other puck
+ * registers as `seat(s)`. Never `puck ?? seat` for the others: anchors are not
+ * forgotten on unmount, and online the lobby's seat map registered `puck(s)`
+ * for every seat — a lookup that tried it first found where the lobby drew
+ * that player, not where the table does.
+ */
+export function puckRect(anchors: AnchorMap, seat: Seat, mySeat: Seat | null) {
+  if (seat === mySeat) return anchors.rect(anchorId.puck(seat)) ?? anchors.rect(anchorId.seat(seat));
+  return anchors.rect(anchorId.seat(seat));
+}
+
+/** Where a seat's puck wears its gift, in window space, and the badge's size. */
+export function giftBadgeAt(
+  anchors: AnchorMap,
+  seat: Seat,
+  mySeat: Seat | null,
+): { x: number; y: number; d: number } | null {
+  // My hand is no place for a badge: only my measured puck will do.
+  const r = seat === mySeat ? anchors.rect(anchorId.puck(seat)) : puckRect(anchors, seat, mySeat);
+  if (!r) return null;
+  const b = giftBadgeBox(r.w - 10);
+  return { x: r.x + b.left + b.d / 2, y: r.y + b.top + b.d / 2, d: b.d };
+}
+
+/**
+ * A gift flying from one puck to another's badge spot. False when either
+ * puck is not measured: the caller then just shows the badge — decoration
+ * never gates the state.
+ */
+export function spawnGift(
+  opts: { anchors: AnchorMap; bus: FxBus },
+  from: Seat,
+  to: Seat,
+  id: string,
+  mySeat: Seat | null,
+): boolean {
+  const a = puckRect(opts.anchors, from, mySeat);
+  const b = giftBadgeAt(opts.anchors, to, mySeat);
+  if (!a || !b) return false;
+  opts.bus.emit({
+    kind: 'gift',
+    id,
+    from: { x: a.x + a.w / 2, y: a.y + a.h / 2 },
+    to: { x: b.x, y: b.y },
+    duration: GIFT_FLY_MS,
+    size: GIFT_FLIGHT_SIZE,
+    landSize: b.d,
+  });
+  return true;
+}
+
 export function makeFxSpawner(opts: FxSpawnerOptions) {
   const { anchors, bus, lang, view } = opts;
   const mySeatOf = opts.mySeat;
@@ -86,11 +142,12 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
   const slotW = (seat: Seat): number => anchors.rect(anchorId.slot(seat))?.w ?? FALLBACK_CARD_W;
   /**
    * Where a seat's puck draws its dealer badge: 2 px outside its ring's
-   * top-left corner. My own seat anchor is the hand, so my puck is asked
-   * first — the hop once set off from the fan's corner.
+   * top-left corner. My own seat anchor is the hand, so my puck is asked for
+   * by its own id — the hop once set off from the fan's corner — and the
+   * others by theirs (see puckRect: online, `puck(s)` is the lobby's).
    */
   const dealerBadgeAt = (seat: Seat): XY | null => {
-    const r = anchors.rect(anchorId.puck(seat)) ?? anchors.rect(anchorId.seat(seat));
+    const r = puckRect(anchors, seat, mySeatOf());
     if (!r) return null;
     return { x: r.x - 2 + DEALER_BADGE / 2, y: r.y - 2 + DEALER_BADGE / 2 };
   };

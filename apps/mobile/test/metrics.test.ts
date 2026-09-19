@@ -8,6 +8,7 @@ import {
   FELT_FLOOR_SOFT,
   FELT_HAND_GAP,
   FELT_MARGIN,
+  giftBadgeBox,
   BIDDING_ACTIONS,
   EMOTE_TOGGLE,
   LAND_GAP,
@@ -455,5 +456,66 @@ describe('the landscape rails', () => {
   it('has no tight-rail mode left: nothing floats beside the rail', () => {
     expect(computeTableMetrics(800, 360)).not.toHaveProperty('tightRail');
     expect(computeTableMetrics(1024, 768)).not.toHaveProperty('tightRail');
+  });
+});
+
+describe('the gift badge', () => {
+  /** Every puck size the layout can produce, from the 240-tall floor to a tablet, either way up. */
+  const sizes = (() => {
+    const others = new Set<number>();
+    const mine = new Set<number>();
+    for (let w = 240; w <= 1400; w += 20) {
+      for (let h = 240; h <= 1400; h += 20) {
+        const m = computeTableMetrics(w, h);
+        others.add(m.puck);
+        mine.add(m.selfPuck);
+      }
+    }
+    return { others: [...others].sort((a, b) => a - b), mine: [...mine].sort((a, b) => a - b) };
+  })();
+  const all = [...new Set([...sizes.others, ...sizes.mine])];
+  // SeatPuck's own furniture, in its ring box's coordinates.
+  const D = { cx: -2 + 9, cy: -2 + 9, r: 9 }; // the dealer's 18 dp disc at (-2, -2)
+  const DIAMOND_H = 11; // the partner's glyph at bottom -2, left -2
+
+  it('never reaches past the margin the puck box keeps beside its ring', () => {
+    for (const size of all) {
+      const b = giftBadgeBox(size);
+      expect(b.d / 2, `puck ${size}`).toBeLessThanOrEqual(PUCK_NAME_ROOM / 2 - 5);
+      expect(b.left, `puck ${size}`).toBe(-b.d / 2);
+    }
+  });
+
+  it("clears the dealer's D on every puck, mine included", () => {
+    for (const size of all) {
+      const b = giftBadgeBox(size);
+      const cx = b.left + b.d / 2;
+      const cy = b.top + b.d / 2;
+      expect(Math.hypot(cx - D.cx, cy - D.cy), `puck ${size}`).toBeGreaterThanOrEqual(D.r + b.d / 2);
+    }
+  });
+
+  it("clears the partner's ◆ on every puck that can carry one (not mine)", () => {
+    for (const size of sizes.others) {
+      const b = giftBadgeBox(size);
+      const ring = size + 10;
+      expect(b.top + b.d, `puck ${size}`).toBeLessThanOrEqual(ring - DIAMOND_H);
+    }
+  });
+
+  it('stays above the name and clear of an emote bubble\'s tail', () => {
+    for (const size of all) {
+      const b = giftBadgeBox(size);
+      const ring = size + 10;
+      expect(b.top + b.d, `puck ${size}`).toBeLessThanOrEqual(ring);
+      // The bubble's tail points down at the puck's centre, 7 dp either side.
+      expect(b.left + b.d - ring / 2, `puck ${size}`).toBeLessThan(-7);
+    }
+  });
+
+  it('can fail: a badge in the top-left corner would sit on the D', () => {
+    const size = 54;
+    const d = giftBadgeBox(size).d;
+    expect(Math.hypot(d / 2 - D.cx, d / 2 - D.cy)).toBeLessThan(D.r + d / 2);
   });
 });

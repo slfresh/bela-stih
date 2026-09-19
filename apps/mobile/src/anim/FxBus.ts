@@ -99,6 +99,11 @@ export type Fx =
   | { kind: 'badge'; from: XY; to: XY; duration: number; text?: string; tone?: 'dealer' | 'points' }
   /** A radial burst of confetti from a point, then the pieces fall. */
   | { kind: 'burst'; at: XY; count: number }
+  /**
+   * A table gift in flight, from the giver's puck to the badge spot on the
+   * receiver's: it lands exactly there at `landSize`, as the badge appears.
+   */
+  | { kind: 'gift'; id: string; from: XY; to: XY; duration: number; size: number; landSize: number }
   | { kind: 'coins'; from: XY; to: XY; count: number }
   | { kind: 'confetti' };
 
