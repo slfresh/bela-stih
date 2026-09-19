@@ -646,6 +646,18 @@ describe('table gifts', () => {
     expect(badge).not.toMatch(/entering=|layout=/);
   });
 
+  it('back on a finished match leaves the way its sheet does (online: through leave())', () => {
+    const t = src('TableScreen.tsx');
+    const guard = t.slice(t.indexOf('setBackGuard(() => {'), t.indexOf('return () => setBackGuard(null);'));
+    expect(guard).toMatch(/if \(matchOverRef\.current\) \{\s*onFinishRef\.current\(\);\s*return true;\s*\}/);
+    expect(guard).not.toMatch(/matchOverRef\.current\) return false/);
+    expect(t).toMatch(/const onFinishRef = useRef\(onFinish\);\s*onFinishRef\.current = onFinish;/);
+    // Online that exit is leaveAndExit, which calls net.leave() first.
+    const o = src('net/OnlineGame.tsx');
+    expect(o).toMatch(/onFinish=\{leaveAndExit\}/);
+    expect(o.slice(o.indexOf('const leaveAndExit'), o.indexOf('const leaveAndExit') + 200)).toMatch(/net\.leave\(\)/);
+  });
+
   it('offline, a finished match has a way home beside the new one (web and iOS have no back button)', () => {
     const o = src('OfflineGame.tsx');
     // "Natrag" always leaves; a new match is its own strong button.

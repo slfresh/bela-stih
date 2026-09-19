@@ -421,6 +421,8 @@ export function TableScreen(props: TableScreenProps) {
   );
   const matchOverRef = useRef(matchOver);
   matchOverRef.current = matchOver;
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
   useEffect(() => {
     setBackGuard(() => {
       if (giftTargetRef.current !== null) {
@@ -431,7 +433,13 @@ export function TableScreen(props: TableScreenProps) {
         setLeaving(false); // back answers the question safely
         return true;
       }
-      if (matchOverRef.current) return false;
+      // A finished match: back leaves exactly as the sheet's "Natrag" does —
+      // online through leave(), which settles a gift still waiting for its
+      // echo before the home screen reads the profile back.
+      if (matchOverRef.current) {
+        onFinishRef.current();
+        return true;
+      }
       setLeaving(true);
       return true;
     });
