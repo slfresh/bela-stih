@@ -19,7 +19,8 @@ import { garb } from '../deck/palette';
 import { font, radius, signal, stroke, theme } from '../theme';
 import { Robot } from '../ui/icons';
 import { useCountUp } from '../anim/useCountUp';
-import { PUCK_NAME_ROOM } from './metrics';
+import { GiftArt } from '../giftArt';
+import { giftBadgeBox, PUCK_NAME_ROOM } from './metrics';
 
 /**
  * One seat at the table, the social-poker way: a person, not a text label.
@@ -60,6 +61,8 @@ export const SeatPuck = memo(function SeatPuck({
   nameInk,
   yourTurn = false,
   showName = true,
+  gift = null,
+  giftN = 0,
 }: {
   seat: Seat;
   name: string;
@@ -105,6 +108,13 @@ export const SeatPuck = memo(function SeatPuck({
   yourTurn?: boolean;
   /** The name under the disc; the viewer's own puck under the fan goes without. */
   showName?: boolean;
+  /** The latest table gift given to this seat, by id; worn beside the ring (giftBadgeBox). */
+  gift?: string | null;
+  /**
+   * Counts gifts that have LANDED here, so each one bounces once as it
+   * arrives. A primitive, like every prop, so the memo still compares it.
+   */
+  giftN?: number;
 }) {
   const initial = (name.trim()[0] ?? '?').toUpperCase();
   // The chip ticks up as the deal lands (0 → 6 → 8) rather than jumping.
@@ -146,6 +156,22 @@ export const SeatPuck = memo(function SeatPuck({
   }, [gesture, nod, flare, reduced]);
   const nodStyle = useAnimatedStyle(() => ({ transform: [{ translateY: nod.value }] }));
   const flareStyle = useAnimatedStyle(() => ({ transform: [{ scale: flare.value }] }));
+
+  // A gift landing: one bounce, and only for a gift that arrived AFTER this
+  // puck mounted — a rotation rebuilds every puck with its badge already on,
+  // and must not replay the landing (nor write to a puck it tore down).
+  const giftPop = useSharedValue(1);
+  const seenGift = useRef(giftN);
+  useEffect(() => {
+    if (giftN === seenGift.current) return;
+    seenGift.current = giftN;
+    if (reduced) return;
+    giftPop.value = withSequence(
+      withTiming(1.35, { duration: 140, easing: Easing.out(Easing.quad) }),
+      withTiming(1, { duration: 200, easing: Easing.inOut(Easing.quad) }),
+    );
+  }, [giftN, giftPop, reduced]);
+  const giftStyle = useAnimatedStyle(() => ({ transform: [{ scale: giftPop.value }] }));
   // The name sits under the disc and needs room for a couple of words; a
   // smaller puck must give that room back, or a shrunk seat still costs 86px
   // of the table's width. 54 + 32 is exactly the old fixed width.
@@ -258,6 +284,18 @@ export const SeatPuck = memo(function SeatPuck({
             <Text style={styles.pileText}>{tricks}</Text>
           </View>
         )}
+        {/* The latest gift, worn on the ring's left edge. The puck's own
+            label names it; the picture itself is decoration. */}
+        {gift ? (
+          <Animated.View
+            pointerEvents="none"
+            importantForAccessibility="no-hide-descendants"
+            accessibilityElementsHidden
+            style={[styles.gift, badgeBox(size), giftStyle]}
+          >
+            <GiftArt id={gift} size={giftBadgeBox(size).d} disc />
+          </Animated.View>
+        ) : null}
       </View>
 
       {showName && (
@@ -271,6 +309,12 @@ export const SeatPuck = memo(function SeatPuck({
     </Animated.View>
   );
 });
+
+/** The gift badge's place and size in the ring box, for a puck of `size`. */
+function badgeBox(size: number) {
+  const b = giftBadgeBox(size);
+  return { left: b.left, top: b.top, width: b.d, height: b.d };
+}
 
 const thinkPulse: CSSAnimationProperties = {
   animationName: { from: { transform: [{ scale: 1 }] }, to: { transform: [{ scale: 1.06 }] } },
@@ -354,5 +398,6 @@ const styles = StyleSheet.create({
   },
   pileCardBack: { left: 2, top: 0 },
   pileText: { position: 'absolute', right: 0, top: 3, color: theme.text, fontSize: 11, fontFamily: font.bold },
+  gift: { position: 'absolute' },
 
 });
