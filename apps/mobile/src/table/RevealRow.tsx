@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
@@ -16,7 +16,7 @@ import { PlayingCard } from '../PlayingCard';
 import { garb } from '../deck/palette';
 import { font, radius, theme } from '../theme';
 import type { Position } from './geometry';
-import { REVEAL_EXIT_MS, type RevealPhase } from './revealTiming';
+import { REVEAL_BAR_FADE_MS, REVEAL_OUT_MS, revealExitDelay, type RevealPhase } from './revealTiming';
 
 /**
  * The winning side's zvanja, laid out for everyone to read.
@@ -57,6 +57,18 @@ export function RevealRow({
     });
   }, [drain]);
   const bar = useAnimatedStyle(() => ({ width: `${drain.value * 100}%` }));
+  const count = declarations.reduce((n, d) => n + d.cards.length, 0);
+  // The bar leaves with the cards: it fades instead of dropping out of the
+  // layout, which popped it and jumped the bottom-anchored row. Mounted mid
+  // exit (a rotation remounts the felt), it starts hidden and never animates
+  // to where it already is.
+  const bornLeaving = useRef(phase !== 'showing').current;
+  const fade = useSharedValue(bornLeaving ? 0 : 1);
+  useEffect(() => {
+    if (phase !== 'leaving' || bornLeaving) return;
+    fade.value = reduced ? 0 : withTiming(0, { duration: REVEAL_BAR_FADE_MS, easing: Easing.out(Easing.quad) });
+  }, [fade, phase, reduced, bornLeaving]);
+  const trackFade = useAnimatedStyle(() => ({ opacity: fade.value }));
 
   let index = 0;
   return (
@@ -73,6 +85,7 @@ export function RevealRow({
                 deckStyle={deckStyle}
                 from={sideOf(d)}
                 index={index++}
+                count={count}
                 phase={phase}
                 reduced={reduced}
               />
@@ -80,11 +93,9 @@ export function RevealRow({
           </View>
         </View>
       ))}
-      {phase === 'showing' && (
-        <View style={styles.track}>
-          <Animated.View style={[styles.fill, bar]} />
-        </View>
-      )}
+      <Animated.View style={[styles.track, trackFade]}>
+        <Animated.View style={[styles.fill, bar]} />
+      </Animated.View>
     </Pressable>
   );
 }
@@ -106,6 +117,7 @@ function RevealCard({
   deckStyle,
   from,
   index,
+  count,
   phase,
   reduced,
 }: {
@@ -114,11 +126,16 @@ function RevealCard({
   deckStyle: DeckStyle;
   from: Position;
   index: number;
+  /** How many cards the row shows: the exit stagger is sized to it. */
+  count: number;
   phase: RevealPhase;
   reduced: boolean;
 }) {
   // 0 = at the announcer, 1 = in the row. In, hold, and back out the same way.
   const p = useSharedValue(reduced ? 1 : 0);
+  // Mounted mid-exit, a card stays where it starts (hidden): animating it to
+  // the 0 it already has would write to a torn-down view.
+  const bornLeaving = useRef(phase !== 'showing').current;
   useEffect(() => {
     if (reduced) {
       p.value = phase === 'leaving' ? 0.999 : 1; // the fade below still reads it
@@ -129,13 +146,13 @@ function RevealCard({
         index * STAGGER_MS,
         withTiming(1, { duration: IN_MS, easing: Easing.out(Easing.cubic) }),
       );
-    } else if (phase === 'leaving') {
+    } else if (phase === 'leaving' && !bornLeaving) {
       p.value = withDelay(
-        index * STAGGER_MS * 0.5,
-        withTiming(0, { duration: REVEAL_EXIT_MS - 40, easing: Easing.in(Easing.cubic) }),
+        revealExitDelay(index, count),
+        withTiming(0, { duration: REVEAL_OUT_MS, easing: Easing.in(Easing.cubic) }),
       );
     }
-  }, [p, phase, index, reduced]);
+  }, [p, phase, index, count, reduced, bornLeaving]);
 
   const style = useAnimatedStyle(() => ({
     opacity: reduced ? (phase === 'leaving' ? 0 : 1) : Math.min(1, p.value * 1.6),

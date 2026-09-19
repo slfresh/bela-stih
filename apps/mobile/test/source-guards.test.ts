@@ -994,3 +994,21 @@ describe('a screen reader can name every control', () => {
     expect(settings).toMatch(/accessibilityRole="link"\s+accessibilityLabel=\{ui\.privacyPolicy\}/);
   });
 });
+
+describe('the zvanja reveal', () => {
+  it('leaves inside its window: a sized stagger, a bar that fades, gone counted from the exit', () => {
+    const row = src('table/RevealRow.tsx');
+    expect(row).toMatch(/withDelay\(\s*revealExitDelay\(index, count\),\s*withTiming\(0, \{ duration: REVEAL_OUT_MS/);
+    expect(row).toMatch(/count=\{count\}/);
+    // The bar is never dropped out of the layout; it fades.
+    expect(row).not.toMatch(/phase === 'showing' &&/);
+    expect(row).toMatch(/<Animated\.View style=\{\[styles\.track, trackFade\]\}>/);
+    // Mounted mid-exit, nothing animates to the value it starts at.
+    expect(row).toMatch(/phase === 'leaving' && !bornLeaving/);
+    expect(row).toMatch(/if \(phase !== 'leaving' \|\| bornLeaving\) return;/);
+    expect(row).not.toMatch(/\b(entering|exiting|layout)=\{/);
+    const table = src('TableScreen.tsx');
+    expect(table).not.toMatch(/inMs \+ REVEAL_EXIT_MS/);
+    expect(table).toMatch(/setRevealPhase\('leaving'\);[\s\S]{0,300}setTimeout\(\(\) => setRevealPhase\('gone'\), REVEAL_EXIT_MS\)/);
+  });
+});

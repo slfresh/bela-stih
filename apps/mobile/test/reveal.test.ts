@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { REVEAL_MS, timingsFor } from '../src/anim/director';
-import { REVEAL_EXIT_MS, revealExitAt, revealPhase } from '../src/table/revealTiming';
+import {
+  REVEAL_BAR_FADE_MS,
+  REVEAL_EXIT_MS,
+  REVEAL_EXIT_SLACK_MS,
+  REVEAL_OUT_MS,
+  revealExitAt,
+  revealExitDelay,
+  revealPhase,
+} from '../src/table/revealTiming';
 
 /**
  * The reveal comes DOWN at REVEAL_MS — and inside it: the exit starts early
@@ -29,5 +37,22 @@ describe('the reveal timeline', () => {
     expect(timingsFor('full').declarationsRevealed.dur).toBe(REVEAL_MS);
     expect(timingsFor('reduced').declarationsRevealed.dur).toBe(REVEAL_MS);
     expect(REVEAL_EXIT_MS).toBeLessThan(REVEAL_MS);
+  });
+});
+
+describe('the reveal leaves inside its window', () => {
+  it('every card is home, and the bar faded, before the row unmounts, however many are shown', () => {
+    const lands = REVEAL_EXIT_MS - REVEAL_EXIT_SLACK_MS;
+    const late: string[] = [];
+    for (let n = 1; n <= 32; n++) {
+      for (let i = 0; i < n; i++) {
+        const d = revealExitDelay(i, n);
+        if (d < 0 || d + REVEAL_OUT_MS > lands) late.push(`card ${i} of ${n}: ${d + REVEAL_OUT_MS} ms`);
+      }
+    }
+    expect(late).toEqual([]);
+    // A carre keeps its 20 ms stagger.
+    expect(revealExitDelay(3, 4)).toBe(60);
+    expect(REVEAL_BAR_FADE_MS).toBeLessThanOrEqual(lands);
   });
 });

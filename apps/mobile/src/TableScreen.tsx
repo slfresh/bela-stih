@@ -596,8 +596,10 @@ export function TableScreen(props: TableScreenProps) {
         setTimeout(() => {
           setRevealPhase('leaving');
           playSfx('revealDown');
+          // Counted from the exit that started, not the one that was due: a
+          // late timer on a busy JS thread must not shorten the window.
+          revealTimers.current.push(setTimeout(() => setRevealPhase('gone'), REVEAL_EXIT_MS));
         }, inMs),
-        setTimeout(() => setRevealPhase('gone'), inMs + REVEAL_EXIT_MS),
       ];
     },
     [],
