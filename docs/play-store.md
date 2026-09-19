@@ -92,13 +92,20 @@ Internal testing goes out without notes. For closed testing and production:
 1.3.0 —
 - hr: *Novo: darovi za stolom! Dodirni igrača i pošalji mu kavu, kolač ili
   ružu — ili počasti cijeli stol. Dar je samo za veselje: plaća se
-  novčićima, a primatelj ne dobiva ništa.*
+  novčićima, a primatelj ne dobiva ništa. Igra je glađa, zvukovi više ne
+  zaustavljaju tvoju glazbu, a ispravljeno je ponovno pokretanje telefona
+  koje se na nekim Samsung uređajima događalo nakon duže igre.*
 - sr (the app's Serbian is Cyrillic): *Ново: поклони за столом! Додирни
   играча и пошаљи му кафу, колач или ружу — или почасти цео сто. Поклон је
-  само за забаву: плаћа се новчићима, а прималац не добија ништа.*
+  само за забаву: плаћа се новчићима, а прималац не добија ништа. Игра је
+  глађа, звукови више не заустављају твоју музику, а исправљено је поновно
+  покретање телефона које се на неким Samsung уређајима дешавало после дуже
+  игре.*
 - en: *New: table gifts! Tap a player to send them a coffee, a cake or a rose
   — or treat the whole table. Gifts are just for fun: they cost your coins
-  and give the receiver nothing.*
+  and give the receiver nothing. Smoother play, sound effects no longer
+  pause your music, and a phone restart some Samsung devices hit after a
+  long game is fixed.*
 
 ## 4. Upload the build
 

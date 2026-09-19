@@ -99,4 +99,14 @@ describe('the files the app plays', () => {
     expect(audio).not.toMatch(/turn: require\('\.\.\/assets\/sfx\/pop\.wav'\)/);
     expect(audio).not.toMatch(/tick: require\('\.\.\/assets\/sfx\/tap\.wav'\)/);
   });
+
+  it("play over the player's music, never pausing it", () => {
+    // expo-audio requests audio focus (pausing other apps) on every play unless
+    // the mode mixes; the mode is set once, before any sound.
+    const audio = readFileSync(join(here, '../src/audio.ts'), 'utf8');
+    const modes = [...audio.matchAll(/setAudioModeAsync\(\{([^}]*)\}\)/g)].map((m) => m[1]!);
+    expect(modes.length).toBe(1);
+    expect(modes[0]).toMatch(/interruptionMode: 'mixWithOthers'/);
+    expect(modes[0]).toMatch(/playsInSilentMode: true/);
+  });
 });

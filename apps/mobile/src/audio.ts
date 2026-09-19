@@ -88,12 +88,17 @@ export function setMasterVolume(v: number): void {
   master = Math.max(0, Math.min(1, v));
 }
 
-/** Let the game be heard even when the phone is on silent — it is a game, not a notification. */
+/**
+ * Let the game be heard even when the phone is on silent — it is a game, not a
+ * notification — and over the player's own music, never instead of it: with
+ * 'mixWithOthers' a sound effect takes no audio focus, so Spotify and the
+ * like keep playing (every card used to pause them for a moment).
+ */
 async function configureOnce(): Promise<void> {
   if (configured) return;
   configured = true;
   try {
-    await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false });
+    await setAudioModeAsync({ playsInSilentMode: true, shouldPlayInBackground: false, interruptionMode: 'mixWithOthers' });
   } catch {
     // Audio mode is a nicety; never let it stop playback from being attempted.
   }
