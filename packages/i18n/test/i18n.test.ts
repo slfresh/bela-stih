@@ -155,6 +155,17 @@ describe('the Cyrillic locale is actually Cyrillic', () => {
     }
   });
 
+  it('translates every plain ui string', () => {
+    // The walk above sees only the top level: a Latin ui string slipped by.
+    let n = 0;
+    for (const [key, value] of Object.entries(cyr.s.ui)) {
+      if (typeof value !== 'string') continue;
+      n++;
+      assertNoLatin(`ui.${key}`, value);
+    }
+    expect(n).toBeGreaterThan(50);
+  });
+
   it('translates the spoken rank names', () => {
     // Short faces keep Roman numerals (VII, VIII, IX, X) by design; the spoken
     // names are what must actually be in Cyrillic.

@@ -418,11 +418,12 @@ export function useNetGame(settings: Settings) {
       if (d && finalView) d.enqueue({ events: msg.events, finalView });
     });
 
-    room.onMessage('error', (msg: { reason: string }) => {
-      // The server refused a move — usually a stale tap. Not fatal.
+    room.onMessage('error', () => {
+      // The server refused a move — usually a stale tap. Not fatal, and its
+      // wording is the server's own English: the player is told in theirs.
       playSfx('denied');
       pattern('error');
-      setError(msg.reason);
+      setError(langRef.current.s.ui.moveRefused);
     });
 
     room.onMessage('gift', (msg: unknown) => {

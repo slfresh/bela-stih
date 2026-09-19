@@ -732,6 +732,19 @@ describe('table gifts', () => {
     expect(o.slice(o.indexOf('const leaveAndExit'), o.indexOf('const leaveAndExit') + 200)).toMatch(/net\.leave\(\)/);
   });
 
+  it("online, a refused move is said in the player's words, as an error, over the bot line", () => {
+    const n = src('net/useNetGame.ts');
+    const h = n.slice(n.indexOf("room.onMessage('error'"), n.indexOf("room.onMessage('gift'"));
+    expect(h).toMatch(/setError\(langRef\.current\.s\.ui\.moveRefused\)/);
+    expect(h).not.toMatch(/msg\.reason|setError\(msg/);
+    const o = src('net/OnlineGame.tsx');
+    expect(o).toMatch(/net\.error \?\?\s*\(away\.length > 0 \?/);
+    expect(o).toMatch(/statusIsError=\{net\.error !== null\}/);
+    const t = src('TableScreen.tsx');
+    expect((t.match(/<Text style=\{\[styles\.status, statusIsError && styles\.statusError\]\} role=\{statusIsError \? 'alert' : undefined\}>/g) ?? []).length).toBe(2);
+    expect(t).toMatch(/statusError: \{ color: theme\.dangerInk \}/);
+  });
+
   it('online, the bot line names only people a bot stands in for', () => {
     const o = src('net/OnlineGame.tsx');
     expect(o).toMatch(/const away = net\.standIns;/);

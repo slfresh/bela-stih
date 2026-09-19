@@ -139,6 +139,8 @@ export interface UiStrings {
   leaveConfirmYes: string;
   leaveConfirmNo: string;
   botPlaysFor: (names: string) => string;
+  /** The server refused a move (usually a stale tap): said plainly, never in the server's own words. */
+  moveRefused: string;
   startWithBots: string;
   sitHere: string;
   /** The lobby's error state: try the connection again. */
@@ -563,6 +565,7 @@ const hr: Strings = {
     leaveConfirmYes: 'Napusti',
     leaveConfirmNo: 'Ostani',
     botPlaysFor: (names) => `${names} — igra bot`,
+    moveRefused: 'Taj potez nije dopušten.',
     startWithBots: 'Počni s botovima',
     sitHere: 'sjedni ovdje',
     retry: 'Pokušaj ponovno',
@@ -831,6 +834,7 @@ const srCyrl: Strings = {
     leaveConfirmYes: 'Напусти',
     leaveConfirmNo: 'Остани',
     botPlaysFor: (names) => `${names} — игра бот`,
+    moveRefused: 'Тај потез није дозвољен.',
     startWithBots: 'Почни са ботовима',
     sitHere: 'седни овде',
     retry: 'Покушај поново',
@@ -1095,6 +1099,7 @@ const en: Strings = {
     leaveConfirmYes: 'Leave',
     leaveConfirmNo: 'Stay',
     botPlaysFor: (names) => `${names} — a bot plays for them`,
+    moveRefused: "That move isn't allowed.",
     startWithBots: 'Start with bots',
     sitHere: 'sit here',
     retry: 'Try again',

@@ -128,6 +128,8 @@ export interface TableScreenProps {
   /** Per-seat presence; falls back to relative labels for missing entries. */
   seatMeta?: (SeatMeta | null)[];
   status?: string | null;
+  /** The status line is an error (a refused move): danger ink, read out at once. */
+  statusIsError?: boolean;
   /** The seat whose move is being animated right now — presentation only, never `toAct`. */
   spotlightSeat?: Seat | null;
   /** The motion policy: no loops, no springs, fades only. */
@@ -185,7 +187,7 @@ export const GIFT_SHIELD_MS = 400;
 export function TableScreen(props: TableScreenProps) {
   const {
     mySeat, lang, view, options, myTurn, settled, matchOver, lastDealResult,
-    matchScores, winnerTeam, profile, banner, seatMeta, status, anchors, fxBus, spotlightSeat = null,
+    matchScores, winnerTeam, profile, banner, seatMeta, status, statusIsError = false, anchors, fxBus, spotlightSeat = null,
     reducedMotion = false,
     cue = null,
     dealerHop = false,
@@ -1141,7 +1143,7 @@ export function TableScreen(props: TableScreenProps) {
               </View>
 
               <View style={styles.centre}>
-                {status ? <Text style={styles.status}>{status}</Text> : null}
+                {status ? <Text style={[styles.status, statusIsError && styles.statusError]} role={statusIsError ? 'alert' : undefined}>{status}</Text> : null}
                 {felt}
                 {prompts}
                 {/* My puck beside my fan, on the faces' side: between my cards
@@ -1189,7 +1191,7 @@ export function TableScreen(props: TableScreenProps) {
                 </View>
                 {leaveButton}
               </View>
-              {status && !shed ? <Text style={styles.status}>{status}</Text> : null}
+              {status && !shed ? <Text style={[styles.status, statusIsError && styles.statusError]} role={statusIsError ? 'alert' : undefined}>{status}</Text> : null}
 
               {/* score strip: match score, plus this deal's running count */}
               <TableHeader
@@ -2297,6 +2299,7 @@ const styles = StyleSheet.create({
   coins: { color: theme.accent, fontFamily: font.bold, fontSize: 14 },
 
   status: { color: theme.accent, fontSize: 12, textAlign: 'center' },
+  statusError: { color: theme.dangerInk },
 
   scoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   scoreCol: { flexDirection: 'column', gap: 4, alignItems: 'center', alignSelf: 'stretch' },

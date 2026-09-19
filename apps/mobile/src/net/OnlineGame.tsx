@@ -188,11 +188,13 @@ export function OnlineGame({
       profile={net.profile}
       banner={net.banner}
       seatMeta={seatMeta}
+      // A refused move outranks the bot line: it is about the tap just made,
+      // and the table's next move clears it.
       status={
-        away.length > 0
-          ? net.lang.s.ui.botPlaysFor(away.map((s) => s.name).join(', '))
-          : net.error
+        net.error ??
+        (away.length > 0 ? net.lang.s.ui.botPlaysFor(away.map((s) => s.name).join(', ')) : null)
       }
+      statusIsError={net.error !== null}
       anchors={net.anchors}
       fxBus={net.fxBus}
       turnDeadline={net.turnDeadline}
