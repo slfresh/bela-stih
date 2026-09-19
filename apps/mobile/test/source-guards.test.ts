@@ -732,6 +732,20 @@ describe('table gifts', () => {
     expect(o.slice(o.indexOf('const leaveAndExit'), o.indexOf('const leaveAndExit') + 200)).toMatch(/net\.leave\(\)/);
   });
 
+  it('online, the result sheet stays up until the next deal takes it down', () => {
+    const n = src('net/useNetGame.ts');
+    const next = n.slice(n.indexOf('const next = useCallback'), n.indexOf('const sendEmote'));
+    expect(next).toMatch(/roomRef\.current\?\.send\('next', \{\}\)/);
+    expect(next).not.toMatch(/setLastDealResult|setBanner/);
+    // Wiped only by a new match and by leaving; replaced by the next dealScored.
+    expect((n.match(/setLastDealResult\(null\)/g) ?? []).length).toBe(2);
+    const onEvent = n.slice(n.indexOf('const onEvent = useCallback'), n.indexOf('const onEventRef'));
+    const clear = onEvent.indexOf("if (e.kind === 'dealStarted') setBanner(null);");
+    expect(clear).toBeGreaterThan(-1);
+    // In director order, flushed beats included: before the !flushed branch.
+    expect(clear).toBeLessThan(onEvent.indexOf('if (!flushed)'));
+  });
+
   it('offline, a finished match has a way home beside the new one (web and iOS have no back button)', () => {
     const o = src('OfflineGame.tsx');
     // "Natrag" always leaves; a new match is its own strong button.

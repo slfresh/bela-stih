@@ -239,6 +239,10 @@ export function useNetGame(settings: Settings) {
         const a = r.award;
         setBanner((prev) => (e.kind === 'matchOver' ? mergeAward(prev, a) : a));
       }
+      // The last deal's award leaves as the next deal begins, in the order the
+      // table plays (a flushed batch included). The result itself stays: the
+      // next dealScored replaces it before the sheet can come up again.
+      if (e.kind === 'dealStarted') setBanner(null);
       if (!flushed) {
         fx.start(e, speed);
         // A seatless beat (the reveal, the deal, scoring) is nobody's move.
@@ -583,9 +587,9 @@ export function useNetGame(settings: Settings) {
     room.send('action', { action: a });
   }, []);
 
+  // Only asks: the sheet stays up, result and all, until the next deal
+  // actually starts. Clearing it here blanked the sheet for a round trip.
   const next = useCallback(() => {
-    setBanner(null);
-    setLastDealResult(null);
     roomRef.current?.send('next', {});
   }, []);
 
