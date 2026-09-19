@@ -1026,3 +1026,16 @@ describe("reanimated obeys the app's motion policy", () => {
     for (const f of walk(join(here, '../src'))) expect(readFileSync(f, 'utf8'), f).not.toMatch(/ReducedMotionConfig/);
   });
 });
+
+describe('offline timers die with the match', () => {
+  it("every delayed beat in useGame goes through later(), which clears them all on unmount", () => {
+    const g = src('useGame.ts');
+    // later() owns the only raw timer; the bot gloat, the first deal and the
+    // bots' gifts all go through it, so none can fire on the home screen.
+    expect((g.match(/setTimeout\(/g) ?? []).length).toBe(1);
+    expect(g).toMatch(/const later = useCallback\(\(ms: number, fn: \(\) => void\) => \{\s*const h = setTimeout\(/);
+    expect(g).toMatch(/live\.forEach\(clearTimeout\);\s*live\.clear\(\);/);
+    expect(g).toMatch(/later\(800, \(\) => \{\s*spawnEmote/);
+    expect(g).toMatch(/later\(350, \(\) => enqueue\(/);
+  });
+});
