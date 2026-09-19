@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest';
+import * as progression from '@belot/progression';
 import {
   COSMETICS,
   DAILY_BONUS,
+  GIFTS,
+  GIFT_IDS,
+  canAffordGift,
+  giftBlock,
+  giftById,
+  spendOnGift,
   MAX_LEVEL,
   STARTING_COINS,
   applyDealOutcome,
@@ -159,7 +166,7 @@ describe('coins are rewards, never a wager', () => {
     expect(p.coins).toBeGreaterThanOrEqual(STARTING_COINS);
   });
 
-  it('only ever loses coins by buying a cosmetic', () => {
+  it('only ever loses coins by buying a cosmetic or a table gift, never through play', () => {
     let p: PlayerProfile = { ...emptyProfile(), xp: xpToReachLevel(20) };
     const before = p.coins;
     const item = COSMETICS.find((c) => c.price > 0 && c.price <= before)!;
@@ -399,5 +406,71 @@ describe('previewDaily', () => {
     // A missed day restarts at day 1 — the banner must not promise 150.
     expect(previewDaily(started, '2026-03-04')).toEqual({ coins: 100, streakDays: 1 });
     expect(claimDaily(started, '2026-03-04').coins).toBe(100);
+  });
+});
+
+describe('table gifts', () => {
+  const rich = (): PlayerProfile => ({ ...emptyProfile(), xp: xpToReachLevel(20), coins: 5000 });
+
+  it('is a fixed catalogue in picker order, priced in fives', () => {
+    expect(GIFTS.map((g) => g.id)).toEqual([...GIFT_IDS]);
+    expect(new Set(GIFT_IDS).size).toBe(GIFT_IDS.length);
+    for (const g of GIFTS) {
+      expect(g.price % 5, g.id).toBe(0);
+      expect(g.price, g.id).toBeGreaterThanOrEqual(20);
+      expect(g.price, g.id).toBeLessThanOrEqual(150);
+      expect(g.requiredLevel, g.id).toBeGreaterThanOrEqual(1);
+    }
+    expect(GIFTS.filter((g) => g.alcohol).map((g) => g.id).sort()).toEqual(['gemist', 'pivo', 'rakija']);
+  });
+
+  it('charges the sender price times recipients, and counts them', () => {
+    const p = rich();
+    const kava = giftById('kava')!;
+    const one = spendOnGift(p, 'kava', 1);
+    expect(one.coins).toBe(p.coins - kava.price);
+    expect(one.giftsSent).toBe(1);
+    const table = spendOnGift(one, 'kruna', 3);
+    expect(table.coins).toBe(one.coins - 3 * giftById('kruna')!.price);
+    expect(table.giftsSent).toBe(4);
+  });
+
+  it('touches nothing but the wallet and the count', () => {
+    const p = rich();
+    const q = spendOnGift(p, 'burek', 2);
+    const { coins: _c, giftsSent: _g, ...rest } = q;
+    const { coins: _c0, giftsSent: _g0, ...before } = p;
+    expect(rest).toEqual(before);
+  });
+
+  it('hands back the very same profile when blocked', () => {
+    const poor = { ...emptyProfile(), coins: 10 };
+    expect(spendOnGift(poor, 'kava', 1)).toBe(poor);
+    expect(giftBlock(poor, 'kava', 1)).toBe('coins');
+    const fresh = emptyProfile();
+    expect(spendOnGift(fresh, 'kruna', 1)).toBe(fresh);
+    expect(giftBlock(fresh, 'kruna', 1)).toBe('level');
+    const r = rich();
+    expect(spendOnGift(r, 'kava', 0)).toBe(r);
+    expect(canAffordGift(r, 'kava', 1)).toBe(true);
+  });
+
+  it('never credits anyone: the only gift function that returns a profile never raises its coins', () => {
+    for (const id of GIFT_IDS) {
+      for (const n of [1, 2, 3]) {
+        const p = rich();
+        expect(spendOnGift(p, id, n).coins).toBeLessThan(p.coins);
+      }
+    }
+    // A receiver-side function would have to be one of these; there is none.
+    expect(Object.keys(progression).filter((k) => /gift/i.test(k)).sort()).toEqual(
+      ['GIFTS', 'GIFT_IDS', 'canAffordGift', 'giftBlock', 'giftById', 'giftCost', 'isGiftId', 'spendOnGift'].sort(),
+    );
+  });
+
+  it('an old saved profile without the count still spends correctly', () => {
+    const old: Partial<PlayerProfile> = { ...rich() };
+    delete old.giftsSent;
+    expect(spendOnGift(old as PlayerProfile, 'kava', 1).giftsSent).toBe(1);
   });
 });

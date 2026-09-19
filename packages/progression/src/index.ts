@@ -9,7 +9,9 @@
  * COMPLIANCE, deliberately: coins are **earned rewards, never a wager**. Nothing
  * here charges an entry fee or stakes a pot, because a stake-and-pot mechanic is
  * what drags the IARC questionnaire toward a "Simulated Gambling" descriptor and
- * an automatic PEGI 18. Coins are non-redeemable and buy cosmetics only.
+ * an automatic PEGI 18. Coins are non-redeemable and buy cosmetics and table
+ * gifts only. A gift gives its receiver NOTHING — no coins, no XP, no item — so
+ * coins never move from one player to another.
  */
 
 // ---------------------------------------------------------------------------
@@ -45,6 +47,9 @@ export interface PlayerProfile {
   selectedCardBack: string;
   selectedFelt: string;
   selectedAvatar: string;
+
+  /** Recipients of every table gift this player has paid for (a table gift to three counts three). */
+  giftsSent: number;
 }
 
 export const STARTING_COINS = 1000;
@@ -71,6 +76,7 @@ export function emptyProfile(): PlayerProfile {
     selectedCardBack: 'classic',
     selectedFelt: 'green',
     selectedAvatar: 'djed',
+    giftsSent: 0,
   };
 }
 
@@ -382,7 +388,7 @@ export function claimQuest(
 }
 
 // ---------------------------------------------------------------------------
-// Cosmetics — the only coin sink, and the only thing levels gate
+// Cosmetics — one of the two coin sinks (gifts, below, are the other); levels gate both
 // ---------------------------------------------------------------------------
 
 export interface Cosmetic {
@@ -453,4 +459,106 @@ export function buy(profile: PlayerProfile, c: Cosmetic): PlayerProfile {
 export function selectCosmetic(profile: PlayerProfile, c: Cosmetic): PlayerProfile {
   if (!isOwned(profile, c)) return profile;
   return { ...profile, [COSMETIC_KEYS[c.kind].selected]: c.id };
+}
+
+// ---------------------------------------------------------------------------
+// Table gifts — the everyday coin sink
+// ---------------------------------------------------------------------------
+
+/**
+ * The fixed gift catalogue, in the order the picker shows it. A fixed list and
+ * fixed prices: nothing is random, nothing is a box. The game server keeps its
+ * own copy of these ids (apps/server/src/protocol.ts GIFT_IDS) — a mobile test
+ * fails if the two drift.
+ */
+export const GIFT_IDS = [
+  'kava',
+  'caj',
+  'limunada',
+  'rakija',
+  'pivo',
+  'gemist',
+  'burek',
+  'kolac',
+  'sladoled',
+  'maramice',
+  'ruza',
+  'djetelina',
+  'potkova',
+  'pehar',
+  'kruna',
+] as const;
+export type GiftId = (typeof GIFT_IDS)[number];
+
+export interface Gift {
+  id: GiftId;
+  /** Coins per recipient. Always a multiple of 5, so "N novčića" never needs another plural. */
+  price: number;
+  requiredLevel: number;
+  /**
+   * The kafana drinks. The content-rating questionnaire declares them; if a
+   * store ever objects, this is the one flag to filter on.
+   */
+  alcohol?: true;
+}
+
+export const GIFTS: readonly Gift[] = [
+  { id: 'kava', price: 20, requiredLevel: 1 },
+  { id: 'caj', price: 20, requiredLevel: 1 },
+  { id: 'limunada', price: 25, requiredLevel: 1 },
+  { id: 'rakija', price: 40, requiredLevel: 3, alcohol: true },
+  { id: 'pivo', price: 30, requiredLevel: 2, alcohol: true },
+  { id: 'gemist', price: 35, requiredLevel: 2, alcohol: true },
+  { id: 'burek', price: 30, requiredLevel: 1 },
+  { id: 'kolac', price: 35, requiredLevel: 1 },
+  { id: 'sladoled', price: 30, requiredLevel: 1 },
+  { id: 'maramice', price: 20, requiredLevel: 1 },
+  { id: 'ruza', price: 50, requiredLevel: 2 },
+  { id: 'djetelina', price: 60, requiredLevel: 4 },
+  { id: 'potkova', price: 80, requiredLevel: 6 },
+  { id: 'pehar', price: 120, requiredLevel: 8 },
+  { id: 'kruna', price: 150, requiredLevel: 10 },
+];
+
+export function isGiftId(v: unknown): v is GiftId {
+  return typeof v === 'string' && (GIFT_IDS as readonly string[]).includes(v);
+}
+
+export function giftById(id: string): Gift | undefined {
+  return GIFTS.find((g) => g.id === id);
+}
+
+/** What sending `g` to `recipients` players costs the sender. */
+export function giftCost(g: Gift, recipients: number): number {
+  return g.price * Math.max(0, Math.floor(recipients));
+}
+
+/** Why a gift cannot be sent right now, or null when it can. */
+export type GiftBlock = 'level' | 'coins' | null;
+
+export function giftBlock(profile: PlayerProfile, id: GiftId, recipients: number): GiftBlock {
+  const g = giftById(id);
+  if (!g) return 'level';
+  if (levelFromXp(profile.xp) < g.requiredLevel) return 'level';
+  if (recipients < 1 || profile.coins < giftCost(g, recipients)) return 'coins';
+  return null;
+}
+
+export function canAffordGift(profile: PlayerProfile, id: GiftId, recipients: number): boolean {
+  return giftBlock(profile, id, recipients) === null;
+}
+
+/**
+ * The sender pays; that is ALL a gift does to any profile. It hands back the
+ * very same object when the gift is blocked, so a caller can tell. There is
+ * deliberately no function that credits a receiver with anything.
+ */
+export function spendOnGift(profile: PlayerProfile, id: GiftId, recipients: number): PlayerProfile {
+  if (!canAffordGift(profile, id, recipients)) return profile;
+  const g = giftById(id)!;
+  return {
+    ...profile,
+    coins: profile.coins - giftCost(g, recipients),
+    giftsSent: (profile.giftsSent ?? 0) + recipients,
+  };
 }
