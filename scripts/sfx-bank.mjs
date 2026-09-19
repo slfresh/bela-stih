@@ -75,6 +75,7 @@ export const MIX = {
   press: { trim: -5, gain: 0.4, poly: 2, varied: true },
   hold: { trim: -4, gain: 0.6, poly: 1, varied: false },
   pop: { trim: -3, gain: 0.6, poly: 2, varied: true },
+  gift: { trim: -3, gain: 0.7, poly: 2, varied: true },
   purchase: { trim: 0, gain: 0.9, poly: 1, varied: false },
   denied: { trim: -2, gain: 0.7, poly: 1, varied: false },
   seatJoin: { trim: -2, gain: 0.7, poly: 1, varied: false },
@@ -182,6 +183,12 @@ const METAL = [
   { ratio: 1.5, amp: 0.6, decay: 11 },
   { ratio: 2.3, amp: 0.35, decay: 16 },
   { ratio: 3.7, amp: 0.15, decay: 24 },
+];
+/** Glass: thin, inharmonic and quick to die — a clink, not a ring. */
+const GLASS = [
+  { ratio: 1, amp: 1, decay: 13 },
+  { ratio: 2.32, amp: 0.5, decay: 20 },
+  { ratio: 4.25, amp: 0.22, decay: 30 },
 ];
 
 /** Filtered noise — the basis of every paper/card sound. */
@@ -573,6 +580,13 @@ export const SFX = {
     mix(
       glide(760, 420, 0.09, { gain: 0.4, power: 4, harmonic: 0.25 }),
       noise(0.03, { power: 6, gain: 0.2, smooth: 0.3 }),
+    ),
+
+  // a table gift landing: two glasses touching, the second a fourth higher
+  gift: () =>
+    mix(
+      partials(1760, GLASS, 0.22, { gain: 0.26, attack: 0.001 }),
+      concat(silence(0.07), partials(2349, GLASS, 0.2, { gain: 0.2, attack: 0.001 })),
     ),
 
   // bought: a coin and a little confirming chord

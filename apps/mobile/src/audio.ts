@@ -54,6 +54,7 @@ const SOURCES: Record<Sfx, number> = {
   press: require('../assets/sfx/press.wav'),
   hold: require('../assets/sfx/hold.wav'),
   pop: require('../assets/sfx/pop.wav'),
+  gift: require('../assets/sfx/gift.wav'),
   purchase: require('../assets/sfx/purchase.wav'),
   denied: require('../assets/sfx/denied.wav'),
   seatJoin: require('../assets/sfx/seatJoin.wav'),

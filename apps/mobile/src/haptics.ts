@@ -94,6 +94,8 @@ export const PATTERNS = {
   matchLost: [notify(0, N.Error)],
   levelUp: [impact(0, I.Light), impact(100, I.Medium), impact(200, I.Heavy)],
   coinLand: [impact(0, I.Soft)],
+  // a table gift landing on your puck: a light touch and a softer echo
+  giftLand: [impact(0, I.Light), impact(110, I.Soft)],
   // the room
   seatJoin: [impact(0, I.Light)],
   disconnect: [notify(0, N.Warning)],

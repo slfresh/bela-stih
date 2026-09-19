@@ -169,6 +169,11 @@
     "poly": 2,
     "varied": true
   },
+  "gift": {
+    "gain": 0.7,
+    "poly": 2,
+    "varied": true
+  },
   "purchase": {
     "gain": 0.9,
     "poly": 1,
