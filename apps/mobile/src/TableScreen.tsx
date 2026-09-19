@@ -156,6 +156,8 @@ export interface TableScreenProps {
   askedRematch?: boolean;
   waitingFor?: number;
   onRematch?: () => void;
+  /** The rematch button's words: "Igraj opet" unless given (offline says "Nova partija"). */
+  rematchLabel?: string;
   onForceRematch?: () => void;
   /**
    * "Prava bela": no card assist — every card is tappable, and an illegal one
@@ -187,7 +189,7 @@ export function TableScreen(props: TableScreenProps) {
     cue = null,
     dealerHop = false,
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
-    hardMode = false, series, askedRematch, waitingFor, onRematch, onForceRematch,
+    hardMode = false, series, askedRematch, waitingFor, onRematch, onForceRematch, rematchLabel,
     handSort = 'auto', onHandSortChange, confirmPlay = 'ambiguous',
     gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift, giftReach,
   } = props;
@@ -1095,6 +1097,7 @@ export function TableScreen(props: TableScreenProps) {
         askedRematch={askedRematch}
         waitingFor={waitingFor}
         onRematch={onRematch}
+        rematchLabel={rematchLabel}
         onForceRematch={onForceRematch}
         onNext={onNext}
         onFinish={requestLeave}
@@ -2000,6 +2003,7 @@ function DealResult({
   askedRematch = false,
   waitingFor = 0,
   onRematch,
+  rematchLabel,
   onForceRematch,
   onNext,
   onFinish,
@@ -2025,6 +2029,7 @@ function DealResult({
   /** How many players have yet to accept. */
   waitingFor?: number;
   onRematch?: () => void;
+  rematchLabel?: string;
   onForceRematch?: () => void;
   onNext: () => void;
   onFinish: () => void;
@@ -2142,7 +2147,9 @@ function DealResult({
       )}
 
       {matchOver ? (
-        <View style={styles.sheetFoot}>
+        // Online stacks the series line over its buttons; offline has no
+        // series, and its two answers sit side by side like a deal's.
+        <View style={series ? styles.sheetFoot : styles.resultButtons}>
           {series && (
             <Text style={styles.seriesLine}>
               {lang.s.ui.seriesScore}  {series[0]} : {series[1]}
@@ -2155,7 +2162,7 @@ function DealResult({
                   {waitingFor > 0 ? lang.s.ui.waitingForRematch(waitingFor) : lang.s.ui.rematchAsked}
                 </Text>
               ) : (
-                <Button label={lang.s.ui.playAgain} tone="strong" onPress={onRematch} />
+                <Button label={rematchLabel ?? lang.s.ui.playAgain} tone="strong" onPress={onRematch} />
               )}
               {/* The host never has to wait on somebody who has wandered off. */}
               {onForceRematch && askedRematch && waitingFor > 0 && (

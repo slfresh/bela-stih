@@ -162,8 +162,12 @@ function OfflineMatch({
       turnDeadline={null}
       onAction={g.submit}
       onNext={g.nextDeal}
-      onFinish={matchOver ? onRematch : onExit}
-      finishLabel={matchOver ? g.lang.s.newMatch : g.lang.s.ui.back}
+      // A finished match offers a new one AND a way home: web and iOS have no
+      // back button, and "Natrag" must never mean "play again".
+      onRematch={onRematch}
+      rematchLabel={g.lang.s.newMatch}
+      onFinish={onExit}
+      finishLabel={g.lang.s.ui.back}
       onEmote={g.emote}
       gifts={g.gifts}
       giftLanded={g.giftLanded}

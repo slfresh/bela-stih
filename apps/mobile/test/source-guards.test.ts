@@ -646,6 +646,24 @@ describe('table gifts', () => {
     expect(badge).not.toMatch(/entering=|layout=/);
   });
 
+  it('offline, a finished match has a way home beside the new one (web and iOS have no back button)', () => {
+    const o = src('OfflineGame.tsx');
+    // "Natrag" always leaves; a new match is its own strong button.
+    expect(o).toMatch(/onFinish=\{onExit\}/);
+    expect(o).toMatch(/finishLabel=\{g\.lang\.s\.ui\.back\}/);
+    expect(o).not.toMatch(/onFinish=\{matchOver/);
+    expect(o).toMatch(/onRematch=\{onRematch\}/);
+    expect(o).toMatch(/rematchLabel=\{g\.lang\.s\.newMatch\}/);
+    const t = src('TableScreen.tsx');
+    expect(t).toMatch(/rematchLabel=\{rematchLabel\}/);
+    const at = t.indexOf('<View style={series ? styles.sheetFoot : styles.resultButtons}>');
+    expect(at).toBeGreaterThan(-1);
+    const foot = t.slice(at, t.indexOf('<Button label={lang.s.nextDeal}', at));
+    expect(foot).toMatch(/<Button label=\{rematchLabel \?\? lang\.s\.ui\.playAgain\} tone="strong" onPress=\{onRematch\} \/>/);
+    // The way out sits outside the rematch block: never gated on onRematch.
+    expect(foot).toMatch(/<\/>\s*\)\}\s*<Button label=\{finishLabel\} tone="plain" onPress=\{onFinish\} \/>\s*<\/View>/);
+  });
+
   it('the table passes each seat its gift, and draws the picker over the sprites', () => {
     const t = src('TableScreen.tsx');
     expect(t).toMatch(/gift=\{gifts\?\.\[s\] \?\? null\}\s*giftN=\{giftLanded\?\.\[s\] \?\? 0\}/);
