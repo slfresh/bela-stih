@@ -381,11 +381,15 @@ export function TableScreen(props: TableScreenProps) {
   const [giftTarget, setGiftTarget] = useState<Seat | 'table' | null>(null);
   const giftTargetRef = useRef(giftTarget);
   giftTargetRef.current = giftTarget;
-  const giftable = !!onGift && !settled && !arranging && !leaving;
-  // A picker the table shuts by itself shuts under a finger that may be
-  // coming down on it — and under the picker lie the fan and the question's
+  // Online, a room that marks nobody as able to see gifts — not even me,
+  // who joined saying I can — is an older server: no gifts at all there.
+  const giftable = !!onGift && (giftReach?.[mySeat] ?? true) && !settled && !arranging && !leaving;
+  // Whatever shuts the picker — the table (my turn, the sheet) or a tap on
+  // send, close or beside it — shuts it under a finger that may be coming
+  // down again, and under the picker lie the fan and the question's
   // buttons. For a moment after, a touch lands on nothing (the shield below),
-  // so a tap meant for a gift never plays a card or answers for me.
+  // so a tap meant for a gift never plays a card or answers for me. Only
+  // Android back, which is no touch, closes it without.
   const [giftShield, setGiftShield] = useState(false);
   const shutGifts = useCallback(() => {
     if (giftTargetRef.current === null) return;
@@ -1238,15 +1242,15 @@ export function TableScreen(props: TableScreenProps) {
               land={land}
               reduced={reduced}
               ground={baize.page}
-              onClose={() => setGiftTarget(null)}
+              onClose={shutGifts}
               onSend={(id, to) => {
-                setGiftTarget(null);
+                shutGifts();
                 onGift(id, to);
               }}
             />
           )}
           {giftShield && (
-            // See giftShield: the touches of the moment after the table shut the picker.
+            // See giftShield: the touches of the moment after the picker shut.
             <View
               style={StyleSheet.absoluteFill}
               onStartShouldSetResponder={() => true}

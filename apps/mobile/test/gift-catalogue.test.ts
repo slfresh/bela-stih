@@ -53,6 +53,11 @@ describe('a relayed gift', () => {
       }
     }
     expect(applyGiftEcho(rich(), { from: 0, to: [1], id: 'kava' }, null).coins).toBe(5000);
+    // Never more seats than the sender was shown: a table gift priced for two
+    // whose echo names three is paid for two.
+    const kava = 20;
+    expect(applyGiftEcho(rich(), { from: 0, to: [1, 2, 3], id: 'kava' }, 0, 2).coins).toBe(5000 - 2 * kava);
+    expect(applyGiftEcho(rich(), { from: 0, to: [1], id: 'kava' }, 0, 2).coins).toBe(5000 - kava);
   });
 
   it('never goes to the giver', () => {

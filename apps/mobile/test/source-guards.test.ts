@@ -653,7 +653,7 @@ describe('table gifts', () => {
     expect(t.indexOf('<GiftPicker')).toBeGreaterThan(t.indexOf('<EffectsOverlay'));
     // A gift never stands in the way of a decision or a question: the table
     // shuts the picker when my turn comes or the sheet goes up...
-    expect(t).toMatch(/const giftable = !!onGift && !settled && !arranging && !leaving;/);
+    expect(t).toMatch(/const giftable = !!onGift && \(giftReach\?\.\[mySeat\] \?\? true\) && !settled && !arranging && !leaving;/);
     expect(t).toMatch(/if \(myTurn && !myTurnWas\.current\) shutGifts\(\);/);
     expect(t).toMatch(/if \(!giftable\) shutGifts\(\);/);
     // ...and a shut it did by itself raises the shield, which swallows the
@@ -664,8 +664,11 @@ describe('table gifts', () => {
     const shield = t.slice(t.indexOf('{giftShield && ('));
     expect(t.indexOf('{giftShield && (')).toBeGreaterThan(t.indexOf('<GiftPicker'));
     expect(shield.slice(0, 400)).toMatch(/style=\{StyleSheet\.absoluteFill\}\s*onStartShouldSetResponder=\{\(\) => true\}/);
-    // Only the picker's own close and send skip the shield: the player's hand is on them.
-    expect((t.match(/setGiftTarget\(null\)/g) ?? []).length).toBe(4);
+    // Every touch that shuts it raises the shield too (a double tap on send);
+    // only shutGifts itself and Android back set the target directly.
+    expect((t.match(/setGiftTarget\(null\)/g) ?? []).length).toBe(2);
+    expect(t).toMatch(/onClose=\{shutGifts\}/);
+    expect(t).toMatch(/onSend=\{\(id, to\) => \{\s*shutGifts\(\);\s*onGift\(id, to\);/);
     // Back closes the picker before it asks about leaving.
     const guard = t.slice(t.indexOf('setBackGuard(() => {'));
     expect(guard.indexOf('giftTargetRef.current !== null')).toBeLessThan(guard.indexOf('leavingRef.current'));
@@ -697,21 +700,33 @@ describe('table gifts', () => {
     expect(send).not.toMatch(/profileRef\.current =|saveProfile|spendOnGift/);
     expect((n.match(/applyGiftEcho\(/g) ?? []).length).toBe(1);
     const handler = n.slice(n.indexOf("room.onMessage('gift'"), n.indexOf("room.onMessage('emote'"));
-    expect(handler).toMatch(/applyGiftEcho\(profileRef\.current, msg, mySeatRef\.current\)/);
     expect(handler).toMatch(/if \(!isGiftMessage\(msg\)\) return;/);
-    // My echo settles the send and restarts the wait from its arrival; after
-    // leave() nothing is drawn — the charge comes first, the table check after.
-    expect(handler).toMatch(/unpaidRef\.current = null;\s*[\s\S]*giftsRef\.current\.arm\(GIFT_COOLDOWN_MS\);/);
-    expect(handler.indexOf('if (roomRef.current !== room) return;')).toBeGreaterThan(handler.indexOf('saveProfile(next)'));
-    expect(handler.indexOf('if (roomRef.current !== room) return;')).toBeLessThan(handler.indexOf('giftsRef.current.fly('));
+    // A room I have left neither bills nor draws — checked before anything
+    // else (a stale view on the old socket can set my seat again).
+    const gate = handler.indexOf('if (roomRef.current !== room) return;');
+    expect(gate).toBeGreaterThan(0);
+    expect(gate).toBeLessThan(handler.indexOf('applyGiftEcho('));
+    // Only the echo of my own pending send, on the room that carried it,
+    // pays — capped at the count I was shown — and restarts the wait.
+    expect(handler).toMatch(/if \(unpaid && unpaid\.room === room && unpaid\.id === msg\.id && msg\.from === mySeatRef\.current\) \{\s*unpaidRef\.current = null;/);
+    expect(handler).toMatch(/applyGiftEcho\(profileRef\.current, msg, mySeatRef\.current, unpaid\.n\)/);
+    expect(handler).toMatch(/giftsRef\.current\.arm\(GIFT_COOLDOWN_MS\);/);
+    // A dropped socket forgets its unanswered send (lost sends cost nothing).
+    const onLeave = n.slice(n.indexOf('room.onLeave((code) => {'));
+    expect(onLeave.slice(0, 600)).toMatch(/if \(unpaidRef\.current\?\.room === room\) unpaidRef\.current = null;/);
     // One gift in the air at a time, paid for as many as can see it.
     expect(send).toMatch(/recipientsOf\(to, me, reachOf\(seatsRef\.current\)\)\.length/);
     expect(send).toMatch(/unpaid && now - unpaid\.at < GIFT_ECHO_WAIT_MS/);
-    expect(send).toMatch(/unpaidRef\.current = \{ id, n, at: now \};/);
-    // leave() pays for a send still unanswered, while it still knows my seat.
+    expect(send).toMatch(/unpaidRef\.current = \{ id, n, at: now, room \};/);
+    // The picker waits while the send is waited for.
+    expect(send).toMatch(/g\.arm\(GIFT_ECHO_WAIT_MS\);/);
+    // leave() pays for a send still unanswered on the socket it is leaving,
+    // while it still knows my seat.
     const leave = n.slice(n.indexOf('const leave = useCallback'), n.indexOf('giftsRef.current.reset();'));
     expect((n.match(/spendOnGift\(/g) ?? []).length).toBe(1);
     expect(leave).toMatch(/spendOnGift\(profileRef\.current, unpaid\.id, unpaid\.n\)/);
+    expect(leave).toMatch(/unpaid && unpaid\.room === roomRef\.current && mySeatRef\.current !== null/);
+    expect(leave.indexOf('unpaid.room === roomRef.current')).toBeLessThan(leave.indexOf('roomRef.current = null'));
     expect(leave.indexOf('spendOnGift(')).toBeLessThan(leave.indexOf('mySeatRef.current = null'));
   });
 

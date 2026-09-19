@@ -208,9 +208,11 @@ export function useNetGame(settings: Settings) {
   const giftReach = useMemo(() => reachOf(seats), [seats]);
   // A spend is read from the profile ref; this makes the wallet redraw for it.
   const [, setSpent] = useState(0);
-  // The gift sent and not yet echoed — at most one: no second goes out while
-  // it is waited for (GIFT_ECHO_WAIT_MS), so two can never ride on one wallet.
-  const unpaidRef = useRef<{ id: GiftId; n: number; at: number } | null>(null);
+  // The gift sent and not yet echoed, with the room whose socket carried it
+  // and the seat count it was priced for — at most one: no second goes out
+  // while it is waited for (GIFT_ECHO_WAIT_MS), so two can never ride on one
+  // wallet. Only its own echo, on that room, pays for it.
+  const unpaidRef = useRef<{ id: GiftId; n: number; at: number; room: Room } | null>(null);
   // The socket callbacks are created once; a ref keeps their locale current.
   const langRef = useRef(lang);
   langRef.current = lang;
@@ -254,12 +256,14 @@ export function useNetGame(settings: Settings) {
 
   /** Leave and forget the room, without treating it as an error. */
   const leave = useCallback(() => {
-    // A gift still waiting for its echo went out: the server reads it before
-    // this leave, on the same socket, and its echo would come back to nobody.
-    // Paid here, before the home screen reads the profile back.
+    // A gift still waiting for its echo on THIS room's socket went out: the
+    // server reads it before this leave, on the same socket, and its echo
+    // would come back to nobody. Paid here, before the home screen reads the
+    // profile back. (One sent on a socket that has since dropped is not: that
+    // send may never have arrived, and a lost send costs nothing.)
     const unpaid = unpaidRef.current;
     unpaidRef.current = null;
-    if (unpaid && mySeatRef.current !== null && Date.now() - unpaid.at < GIFT_ECHO_WAIT_MS) {
+    if (unpaid && unpaid.room === roomRef.current && mySeatRef.current !== null && Date.now() - unpaid.at < GIFT_ECHO_WAIT_MS) {
       const next = spendOnGift(profileRef.current, unpaid.id, unpaid.n);
       if (next !== profileRef.current) {
         profileRef.current = next;
@@ -412,24 +416,28 @@ export function useNetGame(settings: Settings) {
     room.onMessage('gift', (msg: unknown) => {
       // A gift this client does not know (a newer app's) is ignored, not charged.
       if (!isGiftMessage(msg)) return;
-      // The sender pays now, on the server's echo — never on the send, so a
-      // gift the server dropped (its rate limit, an old server, no network)
-      // costs nothing. Anyone else's profile is left exactly as it was.
-      const next = applyGiftEcho(profileRef.current, msg, mySeatRef.current);
-      if (next !== profileRef.current) {
-        profileRef.current = next;
-        saveProfile(next);
-        setSpent((n) => n + 1);
-      }
-      if (mySeatRef.current !== null && msg.from === mySeatRef.current) {
+      // A room I have left draws nothing and bills nothing: leave() settled
+      // what was owed, and a view still queued on the old socket may have set
+      // my seat again, so nothing past this line may trust it.
+      if (roomRef.current !== room) return;
+      // The sender pays now, on the server's echo of their own pending send —
+      // never on the send, so a gift the server dropped (its rate limit, an
+      // old server, no network) costs nothing, and never for more seats than
+      // they were shown. Anyone else's profile is left exactly as it was.
+      const unpaid = unpaidRef.current;
+      if (unpaid && unpaid.room === room && unpaid.id === msg.id && msg.from === mySeatRef.current) {
         unpaidRef.current = null;
+        const next = applyGiftEcho(profileRef.current, msg, mySeatRef.current, unpaid.n);
+        if (next !== profileRef.current) {
+          profileRef.current = next;
+          saveProfile(next);
+          setSpent((n) => n + 1);
+        }
         // The wait runs again from the echo: the server times its gap from
         // each gift's arrival, so a first send that arrived late can never
         // make the next one early and have it dropped.
         giftsRef.current.arm(GIFT_COOLDOWN_MS);
       }
-      // After leave() there is no table to draw on (leave settled the bill).
-      if (roomRef.current !== room) return;
       giftsRef.current.fly(msg.from, msg.to, msg.id);
     });
 
@@ -445,6 +453,9 @@ export function useNetGame(settings: Settings) {
     room.onLeave((code) => {
       if (roomRef.current !== room) return; // we left on purpose
       roomRef.current = null;
+      // A gift sent on this socket can never be echoed now: a send lost with
+      // its connection costs nothing, and does not hold up the next one.
+      if (unpaidRef.current?.room === room) unpaidRef.current = null;
       directorRef.current?.fastForward();
       setStatus('disconnected');
       pattern('disconnect');
@@ -603,8 +614,10 @@ export function useNetGame(settings: Settings) {
       playSfx('denied');
       return false;
     }
-    g.arm(GIFT_COOLDOWN_MS);
-    unpaidRef.current = { id, n, at: now };
+    // The picker waits as long as the send is waited for; the echo shortens
+    // that to GIFT_COOLDOWN_MS from its own arrival.
+    g.arm(GIFT_ECHO_WAIT_MS);
+    unpaidRef.current = { id, n, at: now, room };
     room.send('gift', { id, to });
     return true;
   }, []);

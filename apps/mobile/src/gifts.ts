@@ -69,10 +69,12 @@ export function isGiftMessage(m: unknown): m is GiftMessage {
 /**
  * The sender pays when the server's echo comes back, and only then: a send
  * the server dropped (rate limit, an old server, no network) costs nothing.
+ * Never for more seats than `cap`, the count the sender was shown and
+ * agreed to — the echo can name more if a seat changed hands meanwhile.
  * Anyone else's gift leaves this profile exactly as it was — the receiver
  * gains nothing, which is what keeps coins from moving between players.
  */
-export function applyGiftEcho(profile: PlayerProfile, msg: GiftMessage, mySeat: Seat | null): PlayerProfile {
+export function applyGiftEcho(profile: PlayerProfile, msg: GiftMessage, mySeat: Seat | null, cap = Infinity): PlayerProfile {
   if (mySeat === null || msg.from !== mySeat) return profile;
-  return spendOnGift(profile, msg.id, msg.to.length);
+  return spendOnGift(profile, msg.id, Math.min(msg.to.length, cap));
 }
