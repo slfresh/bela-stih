@@ -646,6 +646,16 @@ describe('table gifts', () => {
     expect(badge).not.toMatch(/entering=|layout=/);
   });
 
+  it("the winner's pill swells once, not again on every rotation after the match", () => {
+    const t = src('TableScreen.tsx');
+    const header = t.slice(t.indexOf('const TableHeader = memo('), t.indexOf('const swellUs'));
+    expect(header.length).toBeGreaterThan(500);
+    expect(header).toMatch(/const seenWinner = useRef\(winner\);/);
+    expect(header).toMatch(
+      /if \(winner === seenWinner\.current\) return;\s*seenWinner\.current = winner;\s*if \(winner === null \|\| reduced\) return;\s*swell\.value = withSequence\(/,
+    );
+  });
+
   it('back on a finished match leaves the way its sheet does (online: through leave())', () => {
     const t = src('TableScreen.tsx');
     const guard = t.slice(t.indexOf('setBackGuard(() => {'), t.indexOf('return () => setBackGuard(null);'));

@@ -1331,7 +1331,13 @@ const TableHeader = memo(function TableHeader({
   const usRun = useCountUp(progress?.running[us] ?? 0, 350, { reduced });
   const themRun = useCountUp(progress?.running[them] ?? 0, 350, { reduced });
   const swell = useSharedValue(1);
+  // Only a win that arrives AFTER this header mounted swells: a rotation
+  // rebuilds the header (the rail and the portrait strip are different
+  // trees) with the winner already current, and must not replay it.
+  const seenWinner = useRef(winner);
   useEffect(() => {
+    if (winner === seenWinner.current) return;
+    seenWinner.current = winner;
     if (winner === null || reduced) return;
     swell.value = withSequence(
       withTiming(1.18, { duration: 220, easing: Easing.out(Easing.quad) }),
