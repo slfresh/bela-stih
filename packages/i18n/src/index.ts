@@ -192,7 +192,16 @@ export interface UiStrings {
   giftHint: string;
   /** Closing a sheet (the gift picker). */
   close: string;
-  giftPuckLabel: (name: string, gift: string | null) => string;
+  /** Online, the chosen player's app is too old to draw gifts. */
+  giftNotSeen: string;
+  /** Online, nobody else at the table has an app that draws gifts. */
+  giftNobodySees: string;
+  /**
+   * A puck as a screen reader hears it: everything the puck shows, since the
+   * gift button over it hides its parts. "Name: value" pairs, so no count or
+   * name is ever inflected.
+   */
+  giftPuckLabel: (p: { name: string; dealer: boolean; cards: number; tricks: number; gift: string | null }) => string;
   giftCellLabel: (gift: string, price: number) => string;
   /** Announced when a gift lands on you. */
   giftReceived: (gift: string, from: string) => string;
@@ -594,7 +603,12 @@ const hr: Strings = {
     giftForFun: 'Dar je samo za veselje: primatelj ne dobiva novčiće.',
     giftHint: 'Dodirni za dar',
     close: 'Zatvori',
-    giftPuckLabel: (name, gift) => (gift ? `${name}, dar: ${gift}` : name),
+    giftNotSeen: 'Ovaj igrač ima stariju verziju igre i ne vidi darove.',
+    giftNobodySees: 'Nitko drugi za stolom još ne vidi darove: imaju stariju verziju igre.',
+    giftPuckLabel: (p) =>
+      [p.name, p.dealer && 'dijeli', `karte: ${p.cards}`, p.tricks > 0 && `štihovi: ${p.tricks}`, p.gift && `dar: ${p.gift}`]
+        .filter(Boolean)
+        .join(', '),
     giftCellLabel: (gift, price) => `${gift}, ${price} novčića`,
     giftReceived: (gift, from) => `Novi dar: ${gift} (${from})`,
   },
@@ -857,7 +871,12 @@ const srCyrl: Strings = {
     giftForFun: 'Поклон је само за забаву: прималац не добија новчиће.',
     giftHint: 'Додирни за поклон',
     close: 'Затвори',
-    giftPuckLabel: (name, gift) => (gift ? `${name}, поклон: ${gift}` : name),
+    giftNotSeen: 'Овај играч има старију верзију игре и не види поклоне.',
+    giftNobodySees: 'Нико други за столом још не види поклоне: имају старију верзију игре.',
+    giftPuckLabel: (p) =>
+      [p.name, p.dealer && 'дели', `карте: ${p.cards}`, p.tricks > 0 && `штихови: ${p.tricks}`, p.gift && `поклон: ${p.gift}`]
+        .filter(Boolean)
+        .join(', '),
     giftCellLabel: (gift, price) => `${gift}, ${price} новчића`,
     giftReceived: (gift, from) => `Нови поклон: ${gift} (${from})`,
   },
@@ -1108,7 +1127,7 @@ const en: Strings = {
     inviteCopied: 'Invite copied — paste it to your friends.',
     giftName: (id) => EN_GIFTS[id] ?? id,
     giftSend: 'Send a gift',
-    giftTreatTable: 'Treat the whole table',
+    giftTreatTable: 'Treat the table',
     giftToEveryone: (n) => `Everyone (${n})`,
     giftSendFor: (price) => `Send · ${price}`,
     giftWait: 'Wait a moment before the next gift.',
@@ -1116,7 +1135,12 @@ const en: Strings = {
     giftForFun: 'Gifts are just for fun: the receiver gets no coins.',
     giftHint: 'Tap to send a gift',
     close: 'Close',
-    giftPuckLabel: (name, gift) => (gift ? `${name}, gift: ${gift}` : name),
+    giftNotSeen: "This player has an older version of the game and can't see gifts.",
+    giftNobodySees: 'Nobody else here can see gifts yet: they have an older version of the game.',
+    giftPuckLabel: (p) =>
+      [p.name, p.dealer && 'deals', `cards: ${p.cards}`, p.tricks > 0 && `tricks: ${p.tricks}`, p.gift && `gift: ${p.gift}`]
+        .filter(Boolean)
+        .join(', '),
     giftCellLabel: (gift, price) => `${gift}, ${price} coins`,
     giftReceived: (gift, from) => `New gift: ${gift} (${from})`,
   },

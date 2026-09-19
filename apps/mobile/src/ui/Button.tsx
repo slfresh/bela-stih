@@ -41,8 +41,10 @@ export function Button({
   /** Shown but not pressable (dimmed): a send with nothing chosen yet. */
   disabled?: boolean;
 }) {
+  // Disabled, a button drops its tone and greys its label: the root cannot
+  // be dimmed, as PressScale's animated opacity overrides its own.
   const toneStyle =
-    tone === 'strong' ? styles.strong : tone === 'bela' ? styles.bela : styles.plain;
+    disabled ? styles.plain : tone === 'strong' ? styles.strong : tone === 'bela' ? styles.bela : styles.plain;
   return (
     <PressScale
       onPress={onPress}
@@ -52,11 +54,11 @@ export function Button({
       accessibilityRole="button"
       accessibilityState={disabled ? { disabled: true } : undefined}
       disabled={disabled}
-      style={[styles.btn, toneStyle, compact && styles.compact, icon !== undefined && styles.withIcon, disabled && styles.disabled, style]}
+      style={[styles.btn, toneStyle, compact && styles.compact, icon !== undefined && styles.withIcon, style]}
     >
       {icon}
       <Text
-        style={[styles.text, tone === 'bela' && styles.textBela, compact && styles.textCompact]}
+        style={[styles.text, tone === 'bela' && !disabled && styles.textBela, compact && styles.textCompact, disabled && styles.disabled]}
         numberOfLines={compact ? 2 : undefined}
       >
         {label}

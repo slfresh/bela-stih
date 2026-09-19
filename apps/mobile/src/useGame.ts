@@ -15,7 +15,7 @@ import { BOT_EMOTES } from './emotes';
 import { playSfx } from './audio';
 import { emptyTally, landingSound, mergeAward, processEvents } from './feedback';
 import { loadProfile, saveProfile, type Settings } from './storage';
-import { BOT_GIFTS_START, botGiftStep, botThanks } from './botGifts';
+import { BOT_GIFTS_START, botGiftStep, botThanks, type BotGiftState } from './botGifts';
 import { GIFT_COOLDOWN_MS, recipientsOf } from './gifts';
 import { GIFT_FLY_MS } from './anim/lifetimes';
 import { useGifts, type GiftSeats } from './table/useGifts';
@@ -61,6 +61,8 @@ export function useGame(
   level: BotLevel = 'medium',
   /** Kept by the screen above the match, so the table's gifts survive a rematch. */
   giftStore?: { current: GiftSeats },
+  /** Kept there too: the bots' gift manners (never two deals running) span a rematch. */
+  botGiftStore?: { current: BotGiftState },
 ) {
   const tableRef = useRef<Table | null>(null);
   if (tableRef.current === null) {
@@ -134,7 +136,8 @@ export function useGame(
     mySeat: () => HUMAN,
     store: giftStore,
   });
-  const botGifts = useRef(BOT_GIFTS_START);
+  const ownBotGifts = useRef(BOT_GIFTS_START);
+  const botGifts = botGiftStore ?? ownBotGifts;
   const { view, idle, enqueue, getView } = useDirector(
     HUMAN,
     useMemo(() => preDealView(table.view(HUMAN)), [table]),

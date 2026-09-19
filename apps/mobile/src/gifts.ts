@@ -15,6 +15,21 @@ import { isGiftId, spendOnGift, type GiftId, type PlayerProfile } from '@belot/p
  */
 export const GIFT_COOLDOWN_MS = 8000;
 
+/**
+ * How long a sent gift is waited for. The server's heartbeat closes a
+ * stalled connection within about nine seconds, so no echo of a live send
+ * comes later than this; a send still unanswered by then was lost with its
+ * connection. Until then no second gift goes out, so two can never ride on
+ * one wallet.
+ */
+export const GIFT_ECHO_WAIT_MS = 15000;
+
+/**
+ * Who at the table can be given a gift, seat by seat: everyone offline;
+ * online, the seats the room says can see one (an older app cannot).
+ */
+export type GiftReach = readonly boolean[];
+
 /** A gift as the server relays it: always a list of recipients, even for one. */
 export interface GiftMessage {
   from: Seat;
@@ -24,10 +39,19 @@ export interface GiftMessage {
 
 const isSeat = (v: unknown): v is Seat => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 3;
 
-/** One other seat, or everyone else at the table; never the giver. */
-export function recipientsOf(to: Seat | 'table', from: Seat): Seat[] {
-  if (to === 'table') return ([0, 1, 2, 3] as Seat[]).filter((s) => s !== from);
-  return to === from ? [] : [to];
+/**
+ * One other seat, or everyone else at the table; never the giver, and never
+ * a seat outside `reach` (none is, when it is not given).
+ */
+export function recipientsOf(to: Seat | 'table', from: Seat, reach?: GiftReach): Seat[] {
+  const can = (s: Seat) => reach?.[s] ?? true;
+  if (to === 'table') return ([0, 1, 2, 3] as Seat[]).filter((s) => s !== from && can(s));
+  return to === from || !can(to) ? [] : [to];
+}
+
+/** The room's word on who can see a gift (SeatInfo.seesGifts), as a GiftReach. */
+export function reachOf(seats: readonly { seat: Seat; seesGifts?: boolean }[]): boolean[] {
+  return ([0, 1, 2, 3] as Seat[]).map((s) => seats.some((x) => x.seat === s && x.seesGifts === true));
 }
 
 /**

@@ -205,6 +205,7 @@ export function OnlineGame({
       giftLanded={net.giftLanded}
       giftFrom={net.giftFrom}
       giftReadyAt={net.giftReadyAt}
+      giftReach={net.giftReach}
       onGift={net.sendGift}
     />
   );

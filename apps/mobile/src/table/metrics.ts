@@ -121,7 +121,12 @@ export function giftPickerLayout(w: number, h: number, land: boolean, count = 15
   const panelH = land
     ? 2 * P.PAD + P.HEADER + P.GAP + gridH + P.GAP + P.SEND
     : 2 * P.PAD + P.HEADER + P.GAP + P.CHIPS + P.GAP + gridH + P.GAP + P.NOTE + P.GAP + P.SEND;
-  return { cols, rows, cell, panelW, panelH, gridH, scroll: panelH > h - 24 };
+  const room = h - 24;
+  const scroll = panelH > room;
+  // Scrolling, the grid gets what the window leaves it (a row at the least),
+  // so the panel — header, close and send — fits.
+  const gridMax = scroll ? Math.max(cell + P.CAPTION, gridH - (panelH - room)) : gridH;
+  return { cols, rows, cell, panelW, panelH, gridH, gridMax, scroll };
 }
 /** Landscape's gap between each rail and the centre column (styles.rootLand). */
 export const LAND_GAP = 6;

@@ -67,6 +67,14 @@ export const GIFT_IDS: readonly string[] = [
  */
 export const GIFT_GAP_MS = 7000;
 
+/**
+ * Client -> server join options, beyond name and avatar: an app that draws
+ * table gifts says so. Older apps send nothing, and are never sent a gift.
+ */
+export interface JoinGifts {
+  gifts?: boolean;
+}
+
 /** Server -> everyone: a gift was given. A table gift is ONE message. */
 export interface GiftMessage {
   from: Seat;
@@ -90,6 +98,13 @@ export interface SeatInfo {
   bot: boolean;
   /** The latest gift given to this seat, while its player stays; absent when none. */
   gift?: string;
+  /**
+   * This seat can be given a gift: its player's app draws them (it joined
+   * with `gifts: true`), or no person sits there. Absent for an older app,
+   * which never sees one — the room drops such a seat from every gift, so
+   * nobody pays for a present its receiver cannot see.
+   */
+  seesGifts?: true;
 }
 
 /** Server -> one client: everything that seat is entitled to see. */

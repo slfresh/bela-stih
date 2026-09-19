@@ -380,9 +380,34 @@ describe('table gifts', () => {
   it("never inflects a player's name, so any nickname reads right", () => {
     for (const locale of LOCALE_IDS) {
       const ui = new Lang(locale).s.ui;
-      expect(ui.giftPuckLabel('Ana', null)).toBe('Ana');
-      expect(ui.giftPuckLabel('Ana', 'X')).toContain('Ana,');
+      const bare = { name: 'Ana', dealer: false, cards: 8, tricks: 0, gift: null };
+      expect(ui.giftPuckLabel(bare).startsWith('Ana, ')).toBe(true);
+      expect(ui.giftPuckLabel({ ...bare, gift: 'X' })).toContain(': X');
       expect(ui.giftReceived('X', 'Ana')).toContain('(Ana)');
+    }
+  });
+
+  it('a puck still tells a screen reader who deals, the cards and the tricks', () => {
+    for (const locale of LOCALE_IDS) {
+      const ui = new Lang(locale).s.ui;
+      const bare = { name: 'Ana', dealer: false, cards: 7, tricks: 0, gift: null };
+      const full = ui.giftPuckLabel({ ...bare, dealer: true, tricks: 3, gift: 'X' });
+      // Every fact the puck draws is in the words, each once.
+      for (const bit of [': 7', ': 3', ': X']) expect(full, `${locale}: ${full}`).toContain(bit);
+      expect(full.split(', ').length, locale).toBe(5);
+      expect(ui.giftPuckLabel(bare).split(', ').length, locale).toBe(2);
+      if (locale === 'sr-Cyrl') expect(full.replace(/Ana|X/g, ''), full).not.toMatch(/[A-Za-z]/);
+    }
+  });
+
+  it('says why a gift cannot go to a player on an older app', () => {
+    for (const locale of LOCALE_IDS) {
+      const ui = new Lang(locale).s.ui;
+      for (const v of [ui.giftNotSeen, ui.giftNobodySees]) {
+        expect(v.trim().length, locale).toBeGreaterThan(0);
+        if (locale === 'sr-Cyrl') expect(v, v).not.toMatch(/[A-Za-z]/);
+      }
+      expect(ui.giftNotSeen).not.toBe(ui.giftNobodySees);
     }
   });
 });

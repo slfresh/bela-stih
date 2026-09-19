@@ -11,6 +11,7 @@ import { TableScreen } from './TableScreen';
 import { HUMAN, useGame } from './useGame';
 import type { Settings } from './storage';
 import { NO_GIFTS, type GiftSeats } from './table/useGifts';
+import { BOT_GIFTS_START, type BotGiftState } from './botGifts';
 
 /**
  * A local game against the bots. A rematch remounts the inner match component,
@@ -29,6 +30,9 @@ export function OfflineGame({
   // The table's gifts belong to the table, not to one match: a rematch keeps
   // everybody's badge on, and only leaving the table takes them off.
   const giftStore = useRef<GiftSeats>(NO_GIFTS);
+  // So do the bots' manners: a coffee in the last deal and another in the
+  // rematch's first would be two deals running.
+  const botGiftStore = useRef<BotGiftState>(BOT_GIFTS_START);
   return (
     <OfflineMatch
       key={matchId}
@@ -37,6 +41,7 @@ export function OfflineGame({
       onExit={onExit}
       onRematch={() => setMatchId((n) => n + 1)}
       giftStore={giftStore}
+      botGiftStore={botGiftStore}
     />
   );
 }
@@ -47,19 +52,21 @@ function OfflineMatch({
   onExit,
   onRematch,
   giftStore,
+  botGiftStore,
 }: {
   settings: Settings;
   onSettingsChange?: (s: Settings) => void;
   onExit: () => void;
   onRematch: () => void;
   giftStore: { current: GiftSeats };
+  botGiftStore: { current: BotGiftState };
 }) {
   // Not on the web: the Wake Lock API needs a gesture and a secure context,
   // and deactivating a lock that never activated rejects with
   // ERR_KEEP_AWAKE_TAG_INVALID on every exit. The platform never changes at
   // runtime, so the hook order is stable.
   if (Platform.OS !== 'web') useKeepAwake(); // eslint-disable-line react-hooks/rules-of-hooks
-  const g = useGame(settings, 'medium', giftStore);
+  const g = useGame(settings, 'medium', giftStore, botGiftStore);
 
   const settled = g.view.phase === 'DEAL_OVER' || g.view.phase === 'MATCH_OVER';
   const matchOver = g.view.phase === 'MATCH_OVER';

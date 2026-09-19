@@ -23,6 +23,8 @@ import { GIFT_PICKER, giftPickerLayout } from './metrics';
 export function GiftPicker({
   lang,
   target,
+  mySeat,
+  reach,
   nameOf,
   profile,
   readyAt,
@@ -35,6 +37,9 @@ export function GiftPicker({
   lang: Lang;
   /** A seat, or 'table' when opened from my own puck. */
   target: Seat | 'table';
+  mySeat: Seat;
+  /** Who can be given a gift (online, an older app cannot); everyone when absent. */
+  reach?: readonly boolean[];
   nameOf: (s: Seat) => string;
   profile: PlayerProfile;
   /** My cooldown: no gift before this instant. */
@@ -52,7 +57,13 @@ export function GiftPicker({
   const [everyone, setEveryone] = useState(target === 'table');
   const [chosen, setChosen] = useState<GiftId | null>(null);
   const to: Seat | 'table' = everyone || target === 'table' ? 'table' : target;
-  const recipients = to === 'table' ? 3 : 1;
+  const can = (s: Seat) => reach?.[s] ?? true;
+  const others = ([0, 1, 2, 3] as Seat[]).filter((s) => s !== mySeat && can(s)).length;
+  const recipients = to === 'table' ? others : can(to) ? 1 : 0;
+  // Nobody it could reach: an older app, or a table of them. Prices still
+  // show, for one.
+  const nobody = recipients === 0;
+  const priced = Math.max(1, recipients);
 
   // The cooldown ends by itself: one re-render at its end.
   const [now, setNow] = useState(() => Date.now());
@@ -63,11 +74,19 @@ export function GiftPicker({
     return () => clearTimeout(t);
   }, [cooling, readyAt, now]);
 
-  const chosenBlock = chosen ? giftBlock(profile, chosen, recipients) : null;
+  const chosenBlock = chosen ? giftBlock(profile, chosen, priced) : null;
   const chosenGift = chosen ? GIFTS.find((g) => g.id === chosen) : undefined;
-  const total = chosenGift ? giftCost(chosenGift, recipients) : 0;
-  const canSend = !!chosen && chosenBlock === null && !cooling;
-  const note = cooling ? ui.giftWait : chosen && chosenBlock === 'coins' ? ui.giftNoCoins : ui.giftForFun;
+  const total = chosenGift ? giftCost(chosenGift, priced) : 0;
+  const canSend = !!chosen && chosenBlock === null && !cooling && !nobody;
+  const note = nobody
+    ? to === 'table'
+      ? ui.giftNobodySees
+      : ui.giftNotSeen
+    : cooling
+      ? ui.giftWait
+      : chosen && chosenBlock === 'coins'
+        ? ui.giftNoCoins
+        : ui.giftForFun;
 
   // Who it is for is the first chip; the title says what the sheet does.
   const title = target === 'table' ? ui.giftTreatTable : ui.giftSend;
@@ -75,7 +94,7 @@ export function GiftPicker({
   const chips =
     target === 'table' ? null : (
       <View style={styles.chips}>
-        {[false, true].map((all) => {
+        {(others > 0 ? [false, true] : [false]).map((all) => {
           const on = everyone === all;
           return (
             <PressScale
@@ -83,10 +102,12 @@ export function GiftPicker({
               onPress={() => setEveryone(all)}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
-              style={[styles.chip, on && styles.chipOn]}
+              hitSlop={{ top: 7, bottom: 7 }}
+              // A long name gives way (ellipsized), never the other chip.
+              style={[styles.chip, !all && styles.chipName, on && styles.chipOn]}
             >
               <Text style={[styles.chipText, on && styles.chipTextOn]} numberOfLines={1}>
-                {all ? ui.giftToEveryone(3) : nameOf(target)}
+                {all ? ui.giftToEveryone(others) : nameOf(target)}
               </Text>
             </PressScale>
           );
@@ -97,12 +118,12 @@ export function GiftPicker({
   const grid = (
     <View style={[styles.grid, { width: L.cols * L.cell + (L.cols - 1) * GIFT_PICKER.GAP }]}>
       {GIFTS.map((g) => {
-        const block = giftBlock(profile, g.id, recipients);
+        const block = giftBlock(profile, g.id, priced);
         const locked = block === 'level';
-        const disabled = locked || cooling;
+        const disabled = locked || cooling || nobody;
         const selected = chosen === g.id;
         const name = ui.giftName(g.id);
-        const price = giftCost(g, recipients);
+        const price = giftCost(g, priced);
         const label = locked
           ? `${name}, ${ui.needsLevel(g.requiredLevel)}`
           : block === 'coins'
@@ -119,7 +140,7 @@ export function GiftPicker({
             scaleTo={0.94}
             style={[styles.cell, { width: L.cell, height: L.cell + GIFT_PICKER.CAPTION }, selected && styles.cellOn]}
           >
-            <View style={(locked || block === 'coins') && styles.dim}>
+            <View style={(disabled || block === 'coins') && styles.dim}>
               <GiftArt id={g.id} size={L.cell - 12} disc />
             </View>
             <View style={styles.caption}>
@@ -172,12 +193,12 @@ export function GiftPicker({
             <Coin size={12} />
             <Text style={[styles.walletText, num]}>{profile.coins}</Text>
           </View>
-          <PressScale onPress={onClose} accessibilityRole="button" accessibilityLabel={ui.close} style={styles.close}>
+          <PressScale onPress={onClose} accessibilityRole="button" accessibilityLabel={ui.close} hitSlop={8} style={styles.close}>
             <Close size={16} />
           </PressScale>
         </View>
         {!land && chips}
-        {L.scroll ? <ScrollView style={{ maxHeight: L.gridH }}>{grid}</ScrollView> : grid}
+        {L.scroll ? <ScrollView style={{ maxHeight: L.gridMax }}>{grid}</ScrollView> : grid}
         {land ? (
           <View style={styles.footRow}>
             <Text style={[styles.note, styles.noteLand]} numberOfLines={2}>
@@ -224,7 +245,16 @@ const styles = StyleSheet.create({
   wallet: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 4 },
   walletText: { color: theme.accent, ...type.sub, fontFamily: font.bold },
   close: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
-  chips: { flexDirection: 'row', gap: P.GAP, height: P.CHIPS, alignItems: 'center' },
+  chips: {
+    flexDirection: 'row',
+    gap: P.GAP,
+    height: P.CHIPS,
+    alignItems: 'center',
+    justifyContent: 'center',
+    alignSelf: 'stretch',
+    flexShrink: 1,
+    minWidth: 0,
+  },
   chip: {
     paddingHorizontal: 12,
     height: 30,
@@ -235,6 +265,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     maxWidth: 170,
   },
+  chipName: { flexShrink: 1, minWidth: 0 },
   chipOn: { borderColor: theme.accent },
   chipText: { color: ink.mid, ...type.sub },
   chipTextOn: { color: ink.hi, fontFamily: font.medium },

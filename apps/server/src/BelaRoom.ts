@@ -13,6 +13,7 @@ import {
   type ClientMessage,
   type EmoteMessage,
   type GiftMessage,
+  type JoinGifts,
   type RoomMessage,
   type SeatInfo,
 } from './protocol';
@@ -140,7 +141,12 @@ interface Occupant {
    * Server-side only — it is never published, stored or logged.
    */
   origin: string;
+  /** This player's app draws table gifts (it joined with `gifts: true`). */
+  gifts: boolean;
 }
+
+/** A chair nobody sits in. */
+const vacant = (): Occupant => ({ sessionId: null, name: '', avatar: '', connected: false, origin: '', gifts: false });
 
 /** Refused because a seat at THIS table is already held from the same place. */
 export const SAME_ORIGIN_CODE = 4300;
@@ -195,7 +201,7 @@ export class BelaRoom extends Room {
   private gifts: (string | null)[] = [null, null, null, null];
 
   override onCreate(options: { private?: boolean; hard?: boolean } = {}): void {
-    this.occupants = SEATS.map(() => ({ sessionId: null, name: '', avatar: '', connected: false, origin: '' }));
+    this.occupants = SEATS.map(vacant);
     // "Prava bela" is the host's choice, and only on private tables — quick
     // play must stay predictable for strangers.
     this.hard = options.private === true && options.hard === true;
@@ -282,7 +288,7 @@ export class BelaRoom extends Room {
     return { origin };
   }
 
-  override onJoin(client: Client, options: { name?: string; avatar?: string } = {}): void {
+  override onJoin(client: Client, options: { name?: string; avatar?: string } & JoinGifts = {}): void {
     const seat = this.freeSeat();
     if (seat === null) {
       client.leave(4000, 'table full');
@@ -295,6 +301,7 @@ export class BelaRoom extends Room {
       // Echoed verbatim to other clients, so keep it to a short safe token.
       avatar: typeof options.avatar === 'string' ? options.avatar.replace(/[^a-z]/g, '').slice(0, 20) : '',
       connected: true,
+      gifts: options.gifts === true,
     };
     this.table.setSeatHuman(seat, true);
     this.gifts[seat] = null;
@@ -363,7 +370,7 @@ export class BelaRoom extends Room {
 
   private release(seat: Seat): void {
     const wasHost = this.occupants[seat]!.sessionId === this.hostId;
-    this.occupants[seat] = { sessionId: null, name: '', avatar: '', connected: false, origin: '' };
+    this.occupants[seat] = vacant();
     // The person has gone for good; their gift goes with them.
     this.gifts[seat] = null;
     // A seat nobody is sitting in cannot be waited on for a rematch vote.
@@ -479,7 +486,7 @@ export class BelaRoom extends Room {
       if (this.occupants[target!]!.sessionId !== null) return;
       this.lastSitAt.set(client.sessionId, now);
       this.occupants[target!] = this.occupants[seat]!;
-      this.occupants[seat] = { sessionId: null, name: '', avatar: '', connected: false, origin: '' };
+      this.occupants[seat] = vacant();
       // Gifts only exist once the table has started, but should that ever
       // change, a gift follows the person, not the chair.
       this.gifts[target!] = this.gifts[seat]!;
@@ -555,6 +562,11 @@ export class BelaRoom extends Room {
       } else {
         return;
       }
+      // Nobody is sent a gift their app cannot draw (an older app): the
+      // sender's device pays for exactly the seats in the echo. With nobody
+      // left it is dropped, and does not count as a send.
+      to = to.filter((t) => this.seesGifts(t));
+      if (to.length === 0) return;
       const now = Date.now();
       if (now - (this.lastGiftAt.get(client.sessionId) ?? 0) < GIFT_GAP_MS) return;
       this.lastGiftAt.set(client.sessionId, now);
@@ -643,6 +655,12 @@ export class BelaRoom extends Room {
 
   // --- publishing ----------------------------------------------------------
 
+  /** A seat a gift can reach: a person whose app draws gifts, or no person at all. */
+  private seesGifts(seat: Seat): boolean {
+    const o = this.occupants[seat]!;
+    return o.sessionId === null || o.gifts;
+  }
+
   private seatInfo(): SeatInfo[] {
     return this.occupants.map((o, i) => ({
       seat: i as Seat,
@@ -651,6 +669,7 @@ export class BelaRoom extends Room {
       connected: o.connected,
       bot: !this.table.humanSeats.has(i as Seat),
       ...(this.gifts[i] ? { gift: this.gifts[i]! } : {}),
+      ...(this.seesGifts(i as Seat) ? { seesGifts: true as const } : {}),
     }));
   }
 

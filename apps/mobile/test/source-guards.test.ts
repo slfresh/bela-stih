@@ -651,9 +651,21 @@ describe('table gifts', () => {
     expect(t).toMatch(/gift=\{gifts\?\.\[s\] \?\? null\}\s*giftN=\{giftLanded\?\.\[s\] \?\? 0\}/);
     expect(t).toMatch(/gift=\{gifts\?\.\[mySeat\] \?\? null\}\s*giftN=\{giftLanded\?\.\[mySeat\] \?\? 0\}/);
     expect(t.indexOf('<GiftPicker')).toBeGreaterThan(t.indexOf('<EffectsOverlay'));
-    // A gift never stands in the way of a decision or a question.
+    // A gift never stands in the way of a decision or a question: the table
+    // shuts the picker when my turn comes or the sheet goes up...
     expect(t).toMatch(/const giftable = !!onGift && !settled && !arranging && !leaving;/);
-    expect(t).toMatch(/if \(myTurn && !myTurnWas\.current\) setGiftTarget\(null\);/);
+    expect(t).toMatch(/if \(myTurn && !myTurnWas\.current\) shutGifts\(\);/);
+    expect(t).toMatch(/if \(!giftable\) shutGifts\(\);/);
+    // ...and a shut it did by itself raises the shield, which swallows the
+    // touches of the next moment and always comes down again.
+    const shut = t.slice(t.indexOf('const shutGifts = useCallback'), t.indexOf('const myTurnWas'));
+    expect(shut).toMatch(/setGiftTarget\(null\);\s*setGiftShield\(true\);/);
+    expect(shut).toMatch(/setTimeout\(\(\) => setGiftShield\(false\), GIFT_SHIELD_MS\);\s*return \(\) => clearTimeout\(t\);/);
+    const shield = t.slice(t.indexOf('{giftShield && ('));
+    expect(t.indexOf('{giftShield && (')).toBeGreaterThan(t.indexOf('<GiftPicker'));
+    expect(shield.slice(0, 400)).toMatch(/style=\{StyleSheet\.absoluteFill\}\s*onStartShouldSetResponder=\{\(\) => true\}/);
+    // Only the picker's own close and send skip the shield: the player's hand is on them.
+    expect((t.match(/setGiftTarget\(null\)/g) ?? []).length).toBe(4);
     // Back closes the picker before it asks about leaving.
     const guard = t.slice(t.indexOf('setBackGuard(() => {'));
     expect(guard.indexOf('giftTargetRef.current !== null')).toBeLessThan(guard.indexOf('leavingRef.current'));
@@ -678,7 +690,7 @@ describe('table gifts', () => {
     expect(branch.slice(0, branch.indexOf('this.broadcast(MSG.gift'))).not.toMatch(/this\.publish\(\)/);
   });
 
-  it('online, the sender pays on the echo and nowhere else', () => {
+  it('online, the sender pays on the echo — or on leaving before it — and nowhere else', () => {
     const n = src('net/useNetGame.ts');
     const send = n.slice(n.indexOf('const sendGift'), n.indexOf('/** Host only: start the game now'));
     expect(send).toMatch(/room\.send\('gift', \{ id, to \}\)/);
@@ -687,6 +699,43 @@ describe('table gifts', () => {
     const handler = n.slice(n.indexOf("room.onMessage('gift'"), n.indexOf("room.onMessage('emote'"));
     expect(handler).toMatch(/applyGiftEcho\(profileRef\.current, msg, mySeatRef\.current\)/);
     expect(handler).toMatch(/if \(!isGiftMessage\(msg\)\) return;/);
+    // My echo settles the send and restarts the wait from its arrival; after
+    // leave() nothing is drawn — the charge comes first, the table check after.
+    expect(handler).toMatch(/unpaidRef\.current = null;\s*[\s\S]*giftsRef\.current\.arm\(GIFT_COOLDOWN_MS\);/);
+    expect(handler.indexOf('if (roomRef.current !== room) return;')).toBeGreaterThan(handler.indexOf('saveProfile(next)'));
+    expect(handler.indexOf('if (roomRef.current !== room) return;')).toBeLessThan(handler.indexOf('giftsRef.current.fly('));
+    // One gift in the air at a time, paid for as many as can see it.
+    expect(send).toMatch(/recipientsOf\(to, me, reachOf\(seatsRef\.current\)\)\.length/);
+    expect(send).toMatch(/unpaid && now - unpaid\.at < GIFT_ECHO_WAIT_MS/);
+    expect(send).toMatch(/unpaidRef\.current = \{ id, n, at: now \};/);
+    // leave() pays for a send still unanswered, while it still knows my seat.
+    const leave = n.slice(n.indexOf('const leave = useCallback'), n.indexOf('giftsRef.current.reset();'));
+    expect((n.match(/spendOnGift\(/g) ?? []).length).toBe(1);
+    expect(leave).toMatch(/spendOnGift\(profileRef\.current, unpaid\.id, unpaid\.n\)/);
+    expect(leave.indexOf('spendOnGift(')).toBeLessThan(leave.indexOf('mySeatRef.current = null'));
+  });
+
+  it('online, every join tells the room this app draws gifts', () => {
+    const n = src('net/useNetGame.ts');
+    const joins = n.match(/c\.(joinOrCreate|create|joinById)\(.*\{[^}]*\}\)/g) ?? [];
+    expect(joins.length).toBe(4);
+    for (const j of joins) expect(j, j).toMatch(/gifts: true/);
+  });
+
+  it('a disabled button looks disabled: its tone drops and its label greys (the root cannot dim)', () => {
+    const b = src('ui/Button.tsx');
+    expect(b).toMatch(/disabled \? styles\.plain :/);
+    expect(b).toMatch(/disabled && styles\.disabled\]\}/);
+    expect(b).not.toMatch(/withIcon, disabled && styles\.disabled/);
+  });
+
+  it("offline, the bots' gift manners outlive a rematch, like the badges", () => {
+    const o = src('OfflineGame.tsx');
+    expect(o).toMatch(/const botGiftStore = useRef<BotGiftState>\(BOT_GIFTS_START\);/);
+    // Above the keyed match, so a remount keeps it.
+    expect(o.indexOf('const botGiftStore')).toBeLessThan(o.indexOf('key={matchId}'));
+    expect(o).toMatch(/useGame\(settings, 'medium', giftStore, botGiftStore\)/);
+    expect(src('useGame.ts')).toMatch(/const botGifts = botGiftStore \?\? ownBotGifts;/);
   });
 
   it('offline, a gift is paid through the match profile the awards are saved through', () => {

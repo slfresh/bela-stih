@@ -10,6 +10,7 @@ import {
   FELT_MARGIN,
   giftBadgeBox,
   giftPickerLayout,
+  GIFT_PICKER,
   BIDDING_ACTIONS,
   EMOTE_TOGGLE,
   LAND_GAP,
@@ -545,5 +546,19 @@ describe('the gift picker', () => {
 
   it('scrolls only below any real phone', () => {
     expect(giftPickerLayout(426, 240, true).scroll).toBe(true);
+  });
+
+  it('when it scrolls, the grid gives up what the window lacks, so close and send stay on screen', () => {
+    for (const [w, h, land] of [[426, 240, true], [360, 390, false], [320, 380, false], [568, 250, true]] as const) {
+      const L = giftPickerLayout(w, h, land);
+      expect(L.scroll, `${w}x${h}`).toBe(true);
+      expect(L.gridMax, `${w}x${h}`).toBeLessThan(L.gridH);
+      // The panel as drawn: its full height less what the scroll view hides.
+      expect(L.panelH - (L.gridH - L.gridMax), `${w}x${h}`).toBeLessThanOrEqual(h - 24);
+      // Never less than a row, even where that cannot fit.
+      expect(L.gridMax).toBeGreaterThanOrEqual(L.cell + GIFT_PICKER.CAPTION);
+    }
+    const still = giftPickerLayout(360, 800, false);
+    expect(still.gridMax).toBe(still.gridH);
   });
 });

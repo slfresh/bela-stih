@@ -172,7 +172,12 @@ export interface TableScreenProps {
   giftReadyAt?: number;
   /** When set, the pucks open the gift picker, and a gift is sent through here. */
   onGift?: (id: GiftId, to: Seat | 'table') => unknown;
+  /** Online: who can be given a gift, seat by seat (an older app cannot). Offline: everyone. */
+  giftReach?: readonly boolean[];
 }
+
+/** How long touches are swallowed after the table shuts the gift picker by itself. */
+export const GIFT_SHIELD_MS = 400;
 
 export function TableScreen(props: TableScreenProps) {
   const {
@@ -184,7 +189,7 @@ export function TableScreen(props: TableScreenProps) {
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
     hardMode = false, series, askedRematch, waitingFor, onRematch, onForceRematch,
     handSort = 'auto', onHandSortChange, confirmPlay = 'ambiguous',
-    gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift,
+    gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift, giftReach,
   } = props;
 
   // Every dimension the table draws is derived from the real window, so eight
@@ -377,14 +382,29 @@ export function TableScreen(props: TableScreenProps) {
   const giftTargetRef = useRef(giftTarget);
   giftTargetRef.current = giftTarget;
   const giftable = !!onGift && !settled && !arranging && !leaving;
+  // A picker the table shuts by itself shuts under a finger that may be
+  // coming down on it — and under the picker lie the fan and the question's
+  // buttons. For a moment after, a touch lands on nothing (the shield below),
+  // so a tap meant for a gift never plays a card or answers for me.
+  const [giftShield, setGiftShield] = useState(false);
+  const shutGifts = useCallback(() => {
+    if (giftTargetRef.current === null) return;
+    setGiftTarget(null);
+    setGiftShield(true);
+  }, []);
   useEffect(() => {
-    if (!giftable) setGiftTarget(null);
-  }, [giftable]);
+    if (!giftShield) return;
+    const t = setTimeout(() => setGiftShield(false), GIFT_SHIELD_MS);
+    return () => clearTimeout(t);
+  }, [giftShield]);
+  useEffect(() => {
+    if (!giftable) shutGifts();
+  }, [giftable, shutGifts]);
   const myTurnWas = useRef(myTurn);
   useEffect(() => {
-    if (myTurn && !myTurnWas.current) setGiftTarget(null);
+    if (myTurn && !myTurnWas.current) shutGifts();
     myTurnWas.current = myTurn;
-  }, [myTurn]);
+  }, [myTurn, shutGifts]);
   const openGifts = useCallback(
     (target: Seat | 'table') => {
       if (!giftable) return;
@@ -458,8 +478,16 @@ export function TableScreen(props: TableScreenProps) {
         disabled={!giftable}
         onPress={() => openGifts(s === mySeat ? 'table' : s)}
         accessibilityRole="button"
-        accessibilityLabel={lang.s.ui.giftPuckLabel(meta(s).name, id ? lang.s.ui.giftName(id) : null)}
-        accessibilityHint={s === mySeat ? lang.s.ui.giftTreatTable : lang.s.ui.giftHint}
+        // The button hides the puck's own parts from a screen reader, so it
+        // says them all: who deals, the cards, the tricks, the gift.
+        accessibilityLabel={lang.s.ui.giftPuckLabel({
+          name: meta(s).name,
+          dealer: view.dealer === s && !dealerHop,
+          cards: view.handCounts[s] ?? 0,
+          tricks: view.dealProgress?.tricksWon[teamOf(s)] ?? 0,
+          gift: id ? lang.s.ui.giftName(id) : null,
+        })}
+        accessibilityHint={giftable ? (s === mySeat ? lang.s.ui.giftTreatTable : lang.s.ui.giftHint) : undefined}
         scaleTo={0.95}
       >
         {child}
@@ -1202,6 +1230,8 @@ export function TableScreen(props: TableScreenProps) {
             <GiftPicker
               lang={lang}
               target={giftTarget}
+              mySeat={mySeat}
+              reach={giftReach}
               nameOf={(s) => meta(s).name}
               profile={profile}
               readyAt={giftReadyAt}
@@ -1213,6 +1243,15 @@ export function TableScreen(props: TableScreenProps) {
                 setGiftTarget(null);
                 onGift(id, to);
               }}
+            />
+          )}
+          {giftShield && (
+            // See giftShield: the touches of the moment after the table shut the picker.
+            <View
+              style={StyleSheet.absoluteFill}
+              onStartShouldSetResponder={() => true}
+              importantForAccessibility="no-hide-descendants"
+              accessibilityElementsHidden
             />
           )}
 

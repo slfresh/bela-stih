@@ -8,7 +8,7 @@ import {
   GIFT_IDS as SERVER_GIFT_IDS,
 } from '../../server/src/protocol';
 import { EMOTE_IDS } from '../src/emotes';
-import { applyGiftEcho, GIFT_COOLDOWN_MS, isGiftMessage, recipientsOf } from '../src/gifts';
+import { applyGiftEcho, GIFT_COOLDOWN_MS, GIFT_ECHO_WAIT_MS, isGiftMessage, reachOf, recipientsOf } from '../src/gifts';
 
 /**
  * The server keeps its own copies of the gift and emote vocabularies (it never
@@ -59,6 +59,28 @@ describe('a relayed gift', () => {
     expect(recipientsOf('table', 2)).toEqual([0, 1, 3]);
     expect(recipientsOf(1, 1)).toEqual([]);
     expect(recipientsOf(3, 1)).toEqual([3]);
+  });
+
+  it('never goes to a seat that cannot see it (an older app), and says so by being empty', () => {
+    const reach = [true, false, true, true];
+    expect(recipientsOf('table', 0, reach)).toEqual([2, 3]);
+    expect(recipientsOf(1, 0, reach)).toEqual([]);
+    expect(recipientsOf(2, 0, reach)).toEqual([2]);
+    expect(recipientsOf('table', 0, [true, false, false, false])).toEqual([]);
+  });
+
+  it("reads who can see a gift from the room's seats, and nobody from a room that never says", () => {
+    const seat = (s: Seat, seesGifts?: true) => ({ seat: s, ...(seesGifts ? { seesGifts } : {}) });
+    expect(reachOf([seat(0, true), seat(1), seat(2, true), seat(3, true)])).toEqual([true, false, true, true]);
+    // An old server sends no flag at all: nothing is offered that it would drop.
+    expect(reachOf([seat(0), seat(1), seat(2), seat(3)])).toEqual([false, false, false, false]);
+    expect(reachOf([])).toEqual([false, false, false, false]);
+  });
+
+  it('waits for an echo longer than a stalled connection can live', () => {
+    // colyseus ws-transport: a ping every 3 s, closed after 2 unanswered (~9 s).
+    expect(GIFT_ECHO_WAIT_MS).toBeGreaterThan(3 * 3000);
+    expect(GIFT_ECHO_WAIT_MS).toBeGreaterThan(GIFT_COOLDOWN_MS);
   });
 
   it('is understood only when well formed and from the catalogue', () => {

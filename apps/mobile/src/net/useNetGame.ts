@@ -6,7 +6,7 @@ import type { Action, DealScoreResult, PublicView, Seat, TeamId } from '@belot/e
 import { teamOf } from '@belot/engine';
 import type { TableEvent } from '@belot/table';
 import { Lang } from '@belot/i18n';
-import { canAffordGift, type Award, type GiftId, type PlayerProfile } from '@belot/progression';
+import { canAffordGift, spendOnGift, type Award, type GiftId, type PlayerProfile } from '@belot/progression';
 import { AnchorMap } from '../anim/AnchorRegistry';
 import { Director, timingsFor, type MotionPolicy } from '../anim/director';
 import { FxBus } from '../anim/FxBus';
@@ -17,7 +17,7 @@ import { cueFor, type TableCue } from '../table/cues';
 import { playSfx } from '../audio';
 import { emptyTally, landingSound, mergeAward, processEvents } from '../feedback';
 import { loadProfile, saveProfile, type Settings } from '../storage';
-import { applyGiftEcho, GIFT_COOLDOWN_MS, isGiftMessage } from '../gifts';
+import { applyGiftEcho, GIFT_COOLDOWN_MS, GIFT_ECHO_WAIT_MS, isGiftMessage, reachOf, recipientsOf } from '../gifts';
 import { useGifts } from '../table/useGifts';
 
 /**
@@ -99,6 +99,8 @@ export interface SeatInfo {
   bot: boolean;
   /** The seat's latest table gift, as the room remembers it. */
   gift?: string;
+  /** This seat can be given a gift (absent: an older app, which never sees one). */
+  seesGifts?: true;
 }
 
 interface RoomMessage {
@@ -202,8 +204,13 @@ export function useNetGame(settings: Settings) {
   });
   const giftsRef = useRef(gifts);
   giftsRef.current = gifts;
+  // Who can be given a gift, from the room's seats.
+  const giftReach = useMemo(() => reachOf(seats), [seats]);
   // A spend is read from the profile ref; this makes the wallet redraw for it.
   const [, setSpent] = useState(0);
+  // The gift sent and not yet echoed — at most one: no second goes out while
+  // it is waited for (GIFT_ECHO_WAIT_MS), so two can never ride on one wallet.
+  const unpaidRef = useRef<{ id: GiftId; n: number; at: number } | null>(null);
   // The socket callbacks are created once; a ref keeps their locale current.
   const langRef = useRef(lang);
   langRef.current = lang;
@@ -247,6 +254,18 @@ export function useNetGame(settings: Settings) {
 
   /** Leave and forget the room, without treating it as an error. */
   const leave = useCallback(() => {
+    // A gift still waiting for its echo went out: the server reads it before
+    // this leave, on the same socket, and its echo would come back to nobody.
+    // Paid here, before the home screen reads the profile back.
+    const unpaid = unpaidRef.current;
+    unpaidRef.current = null;
+    if (unpaid && mySeatRef.current !== null && Date.now() - unpaid.at < GIFT_ECHO_WAIT_MS) {
+      const next = spendOnGift(profileRef.current, unpaid.id, unpaid.n);
+      if (next !== profileRef.current) {
+        profileRef.current = next;
+        saveProfile(next);
+      }
+    }
     const room = roomRef.current;
     roomRef.current = null;
     // Dropping the token both stops any reconnect in flight and marks this as
@@ -402,6 +421,15 @@ export function useNetGame(settings: Settings) {
         saveProfile(next);
         setSpent((n) => n + 1);
       }
+      if (mySeatRef.current !== null && msg.from === mySeatRef.current) {
+        unpaidRef.current = null;
+        // The wait runs again from the echo: the server times its gap from
+        // each gift's arrival, so a first send that arrived late can never
+        // make the next one early and have it dropped.
+        giftsRef.current.arm(GIFT_COOLDOWN_MS);
+      }
+      // After leave() there is no table to draw on (leave settled the bill).
+      if (roomRef.current !== room) return;
       giftsRef.current.fly(msg.from, msg.to, msg.id);
     });
 
@@ -502,7 +530,8 @@ export function useNetGame(settings: Settings) {
     reconnectRef.current = () => void reconnect();
   }, [reconnect]);
 
-  // The only things we ever tell the server about the player.
+  // The only things we ever tell the server about the player (and, with
+  // `gifts: true`, that this app draws table gifts).
   const name = settings.nickname.trim().slice(0, 20);
   const avatar = profileRef.current.selectedAvatar;
 
@@ -510,7 +539,7 @@ export function useNetGame(settings: Settings) {
     () =>
       connect(async (c) => {
         try {
-          return await c.joinOrCreate(ROOM_NAME, { name, avatar });
+          return await c.joinOrCreate(ROOM_NAME, { name, avatar, gifts: true });
         } catch (err) {
           // The open table already has somebody playing from this connection.
           // With no accounts the server cannot tell a second player here from
@@ -518,7 +547,7 @@ export function useNetGame(settings: Settings) {
           // player's hand by elimination — so it seats us apart rather than
           // turning us away. A fresh public table, and strangers join us there.
           if ((err as { code?: number } | null)?.code !== SAME_ORIGIN_CODE) throw err;
-          return await c.create(ROOM_NAME, { name, avatar });
+          return await c.create(ROOM_NAME, { name, avatar, gifts: true });
         }
       }),
     [connect, name, avatar],
@@ -527,12 +556,12 @@ export function useNetGame(settings: Settings) {
     () =>
       connect((c) =>
         // The host's difficulty setting travels with the table it creates.
-        c.create(ROOM_NAME, { name, avatar, private: true, hard: settings.hardMode }),
+        c.create(ROOM_NAME, { name, avatar, gifts: true, private: true, hard: settings.hardMode }),
       ),
     [connect, name, avatar, settings.hardMode],
   );
   const joinById = useCallback(
-    (id: string) => connect((c) => c.joinById(id.trim(), { name, avatar })),
+    (id: string) => connect((c) => c.joinById(id.trim(), { name, avatar, gifts: true })),
     [connect, name, avatar],
   );
 
@@ -562,13 +591,20 @@ export function useNetGame(settings: Settings) {
    */
   const sendGift = useCallback((id: GiftId, to: Seat | 'table') => {
     const room = roomRef.current;
+    const me = mySeatRef.current;
     const g = giftsRef.current;
-    if (!room || mySeatRef.current === null || Date.now() < g.giftReadyAt) return false;
-    if (!canAffordGift(profileRef.current, id, to === 'table' ? 3 : 1)) {
+    const now = Date.now();
+    if (!room || me === null || now < g.giftReadyAt) return false;
+    const unpaid = unpaidRef.current;
+    // Paid for only as many as can see it — the same count the server's echo
+    // will carry, since it drops the seats of older apps too.
+    const n = recipientsOf(to, me, reachOf(seatsRef.current)).length;
+    if ((unpaid && now - unpaid.at < GIFT_ECHO_WAIT_MS) || n === 0 || !canAffordGift(profileRef.current, id, n)) {
       playSfx('denied');
       return false;
     }
     g.arm(GIFT_COOLDOWN_MS);
+    unpaidRef.current = { id, n, at: now };
     room.send('gift', { id, to });
     return true;
   }, []);
@@ -636,6 +672,7 @@ export function useNetGame(settings: Settings) {
     next,
     sendEmote,
     sendGift,
+    giftReach,
     gifts: gifts.gifts,
     giftLanded: gifts.giftLanded,
     giftFrom: gifts.giftFrom,
