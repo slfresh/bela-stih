@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { room } from '../cosmetics';
 import {
   ActivityIndicator,
+  Linking,
   Platform,
   ScrollView,
   Share,
@@ -24,6 +25,8 @@ import { font, ink, space, theme, type } from '../theme';
 import { Panel } from '../ui/Panel';
 import { SEAT_MAP_ASPECT, SeatMap } from './SeatMap';
 import { seatName } from './seatName';
+import { reportMailto, reportStamp } from '../report';
+import { APP_VERSION } from '../screens/common';
 import type { Settings } from '../storage';
 import { SERVER_URL, useNetGame, type NetGame } from './useNetGame';
 
@@ -211,6 +214,19 @@ export function OnlineGame({
       giftReadyAt={net.giftReadyAt}
       giftReach={net.giftReach}
       onGift={net.sendGift}
+      hidden={net.hidden}
+      onHide={net.hide}
+      onReport={(s) => {
+        // The player's own mail app: the nickname as the room has it, the
+        // table, the time and the version; nothing about the reporter.
+        const url = reportMailto(net.lang.s.ui, {
+          name: net.realName(s),
+          code: net.roomId ?? '',
+          at: reportStamp(new Date()),
+          version: APP_VERSION,
+        });
+        void Linking.openURL(url).catch(() => {});
+      }}
     />
   );
 }

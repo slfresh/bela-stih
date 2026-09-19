@@ -149,6 +149,22 @@ export interface UiStrings {
   moveRefused: string;
   /** A seat nobody named, counted from 1 as the server counts it ("Igrač 3"). */
   playerN: (n: number) => string;
+  /** The gift picker's pill that opens the player view (hide / report). */
+  reportOpen: string;
+  reportOpenLabel: string;
+  /** The player view's title. */
+  playerTitle: (name: string) => string;
+  hidePlayer: string;
+  showPlayer: string;
+  hidePlayerNote: string;
+  reportPlayer: string;
+  reportPlayerNote: string;
+  /** Shown under the report button: the address, in case no mail app opens. */
+  reportFallback: (email: string) => string;
+  reportSubject: string;
+  reportBody: (p: { name: string; code: string; at: string; version: string }) => string;
+  /** A screen reader's hint on another player's puck, online. */
+  playerHint: string;
   startWithBots: string;
   sitHere: string;
   /** The lobby's error state: try the connection again. */
@@ -587,6 +603,19 @@ const hr: Strings = {
     botPlaysFor: (names) => `${names} — igra bot`,
     moveRefused: 'Taj potez nije dopušten.',
     playerN: (n) => `Igrač ${n}`,
+    reportOpen: 'Prijavi',
+    reportOpenLabel: 'Sakrij ili prijavi igrača',
+    playerTitle: (name) => `Igrač: ${name}`,
+    hidePlayer: 'Sakrij ovog igrača',
+    showPlayer: 'Ponovno prikaži igrača',
+    hidePlayerNote: 'Do kraja ovog stola ne vidiš ime, emotikone ni darove ovog igrača.',
+    reportPlayer: 'Prijavi igrača',
+    reportPlayerNote: 'Otvara e-poruku razvijatelju s nadimkom i kodom stola. Šalješ je ti; poslužitelj ništa ne sprema.',
+    reportFallback: (email) => `Ako se pošta ne otvori, piši na ${email}`,
+    reportSubject: 'Bela Štih: prijava igrača',
+    reportBody: (p) =>
+      `Prijavljujem igrača s nadimkom: „${p.name}”\nKod stola: ${p.code}\nVrijeme: ${p.at}\nVerzija igre: ${p.version}\n\nŠto je bilo neprimjereno (nije obavezno):\n`,
+    playerHint: 'Dodirni za dar ili prijavu',
     startWithBots: 'Počni s botovima',
     sitHere: 'sjedni ovdje',
     retry: 'Pokušaj ponovno',
@@ -869,6 +898,19 @@ const srCyrl: Strings = {
     botPlaysFor: (names) => `${names} — игра бот`,
     moveRefused: 'Тај потез није дозвољен.',
     playerN: (n) => `Играч ${n}`,
+    reportOpen: 'Пријави',
+    reportOpenLabel: 'Сакриј или пријави играча',
+    playerTitle: (name) => `Играч: ${name}`,
+    hidePlayer: 'Сакриј овог играча',
+    showPlayer: 'Поново прикажи играча',
+    hidePlayerNote: 'До краја овог стола не видиш име, емотиконе ни поклоне овог играча.',
+    reportPlayer: 'Пријави играча',
+    reportPlayerNote: 'Отвара имејл програмеру са надимком и кодом стола. Шаљеш га ти; сервер ништа не чува.',
+    reportFallback: (email) => `Ако се пошта не отвори, пиши на ${email}`,
+    reportSubject: 'Бела Штих: пријава играча',
+    reportBody: (p) =>
+      `Пријављујем играча са надимком: „${p.name}”\nКод стола: ${p.code}\nВреме: ${p.at}\nВерзија игре: ${p.version}\n\nШта је било неприкладно (није обавезно):\n`,
+    playerHint: 'Додирни за поклон или пријаву',
     startWithBots: 'Почни са ботовима',
     sitHere: 'седни овде',
     retry: 'Покушај поново',
@@ -1147,6 +1189,19 @@ const en: Strings = {
     botPlaysFor: (names) => `${names} — a bot plays for them`,
     moveRefused: "That move isn't allowed.",
     playerN: (n) => `Player ${n}`,
+    reportOpen: 'Report',
+    reportOpenLabel: 'Hide or report this player',
+    playerTitle: (name) => `Player: ${name}`,
+    hidePlayer: 'Hide this player',
+    showPlayer: 'Show this player again',
+    hidePlayerNote: "For the rest of this table you won't see this player's name, emotes or gifts.",
+    reportPlayer: 'Report this player',
+    reportPlayerNote: 'Opens an email to the developer with the nickname and table code. You send it; the server keeps nothing.',
+    reportFallback: (email) => `If no mail app opens, write to ${email}`,
+    reportSubject: 'Bela Štih: player report',
+    reportBody: (p) =>
+      `Reporting the player with the nickname: "${p.name}"\nTable code: ${p.code}\nTime: ${p.at}\nApp version: ${p.version}\n\nWhat was wrong (optional):\n`,
+    playerHint: 'Tap to send a gift or report',
     startWithBots: 'Start with bots',
     sitHere: 'sit here',
     retry: 'Try again',

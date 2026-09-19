@@ -8,6 +8,7 @@ import { GIFT_FLY_MS } from '../anim/lifetimes';
 import { playSfx } from '../audio';
 import { pattern } from '../haptics';
 import { spawnGift } from './fx';
+import { mutedSeats, type MutedGift } from '../gifts';
 
 /**
  * What each seat wears: its latest gift, and how many gifts have LANDED on it
@@ -48,6 +49,12 @@ export function useGifts(opts: {
   const gen = useRef([0, 0, 0, 0]);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   const alive = useRef(true);
+  // Online, players hidden on this device: their gifts neither fly nor land,
+  // and the badges they gave are taken back (see mute()).
+  const mutedGivers = useRef(new Set<Seat>());
+  const muted = useRef<MutedGift[]>([null, null, null, null]);
+  const seatsRef = useRef(seats);
+  seatsRef.current = seats;
 
   useEffect(() => {
     alive.current = true;
@@ -65,6 +72,11 @@ export function useGifts(opts: {
     pending.current[t] = Math.max(0, pending.current[t]! - 1);
     // A newer gift for this seat has set off since: it has the last word.
     if (!alive.current || gen.current[t] !== g) return;
+    // Its giver was hidden while it flew: it lands on nobody's screen.
+    if (mutedGivers.current.has(giver)) {
+      muted.current[t] = { id, from: giver };
+      return;
+    }
     setSeats((prev) => {
       const ids = [...prev.ids];
       const landed = [...prev.landed];
@@ -84,16 +96,24 @@ export function useGifts(opts: {
   const fly = useCallback(
     (from: Seat, to: readonly Seat[], id: GiftId) => {
       if (to.length === 0) return;
+      // A hidden player's gift: not drawn, not heard. Remembered per seat so
+      // the room's record of it stays off the puck.
+      if (mutedGivers.current.has(from)) {
+        for (const t of to) muted.current[t] = { id, from };
+        return;
+      }
       const { anchors, fxBus, reduced, mySeat } = optsRef.current;
       const me = mySeat();
       const marks = to.map((t) => {
+        // A visible gift supersedes a hidden one on this seat.
+        muted.current[t] = null;
         pending.current[t] = pending.current[t]! + 1;
         gen.current[t] = gen.current[t]! + 1;
         return { t, g: gen.current[t]! };
       });
       const arrive = () => {
         marks.forEach(({ t, g }) => land(t, id, g, from));
-        if (!alive.current) return;
+        if (!alive.current || mutedGivers.current.has(from)) return;
         playSfx('gift');
         if (me !== null && to.includes(me)) pattern('giftLand');
       };
@@ -120,19 +140,51 @@ export function useGifts(opts: {
 
   /** The server's record of every seat's gift (online, on each room message). */
   const resync = useCallback((server: readonly (string | null | undefined)[]) => {
+    const m = mutedSeats(server, muted.current);
+    muted.current = m.muted;
     setSeats((prev) => {
       let changed = false;
       const ids = [...prev.ids];
+      const from = [...prev.from];
       for (let t = 0; t < 4; t++) {
-        if (pending.current[t]! > 0) continue;
+        if (pending.current[t]! > 0 || m.keep[t]) continue;
         const v = server[t];
         const next = typeof v === 'string' && isGiftId(v) ? v : null;
         if (ids[t] !== next) {
           ids[t] = next;
+          // A badge this client did not see land: its giver is unknown here.
+          from[t] = null;
           changed = true;
         }
       }
-      return changed ? { ids, landed: prev.landed, from: prev.from } : prev;
+      return changed ? { ids, landed: prev.landed, from } : prev;
+    });
+  }, []);
+
+  /**
+   * Online: hide (or show again) one player's gifts on this device. Hiding
+   * takes back the badges they gave; showing lets the room's next record put
+   * them back. Nothing is sent anywhere, and no payment is touched.
+   */
+  const mute = useCallback((giver: Seat, on: boolean) => {
+    if (!on) {
+      mutedGivers.current.delete(giver);
+      muted.current = muted.current.map((x) => (x && x.from === giver ? null : x));
+      return;
+    }
+    mutedGivers.current.add(giver);
+    const cur = seatsRef.current;
+    const take = ([0, 1, 2, 3] as Seat[]).filter((t) => cur.from[t] === giver && cur.ids[t] !== null);
+    if (take.length === 0) return;
+    for (const t of take) muted.current[t] = { id: cur.ids[t]!, from: giver };
+    setSeats((prev) => {
+      const ids = [...prev.ids];
+      const from = [...prev.from];
+      for (const t of take) {
+        ids[t] = null;
+        from[t] = null;
+      }
+      return { ids, landed: prev.landed, from };
     });
   }, []);
 
@@ -147,6 +199,8 @@ export function useGifts(opts: {
       gen.current[t] = gen.current[t]! + 1;
       pending.current[t] = 0;
     }
+    mutedGivers.current.clear();
+    muted.current = [null, null, null, null];
     setSeats(NO_GIFTS);
     setReadyAt(0);
   }, []);
@@ -160,6 +214,7 @@ export function useGifts(opts: {
     resync,
     arm,
     reset,
+    mute,
   };
 }
 

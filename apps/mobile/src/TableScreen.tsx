@@ -179,6 +179,12 @@ export interface TableScreenProps {
   onGift?: (id: GiftId, to: Seat | 'table') => unknown;
   /** Online: who can be given a gift, seat by seat (an older app cannot). Offline: everyone. */
   giftReach?: readonly boolean[];
+  /** Online: players hidden on this device (their seat, never their name). */
+  hidden?: readonly Seat[];
+  /** Online: hide or show a player again (local only). */
+  onHide?: (s: Seat, hide: boolean) => void;
+  /** Online: report a player (the player's own e-mail). */
+  onReport?: (s: Seat) => void;
 }
 
 /** How long touches are swallowed after the table shuts the gift picker by itself. */
@@ -194,7 +200,7 @@ export function TableScreen(props: TableScreenProps) {
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
     hardMode = false, series, askedRematch, waitingFor, onRematch, onForceRematch, rematchLabel,
     handSort = 'auto', onHandSortChange, confirmPlay = 'ambiguous',
-    gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift, giftReach,
+    gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift, giftReach, hidden, onHide, onReport,
   } = props;
 
   // Every dimension the table draws is derived from the real window, so eight
@@ -504,7 +510,9 @@ export function TableScreen(props: TableScreenProps) {
           tricks: view.dealProgress?.tricksWon[teamOf(s)] ?? 0,
           gift: id ? lang.s.ui.giftName(id) : null,
         })}
-        accessibilityHint={giftable ? (s === mySeat ? lang.s.ui.giftTreatTable : lang.s.ui.giftHint) : undefined}
+        accessibilityHint={
+          giftable ? (s === mySeat ? lang.s.ui.giftTreatTable : onReport ? lang.s.ui.playerHint : lang.s.ui.giftHint) : undefined
+        }
         scaleTo={0.95}
       >
         {child}
@@ -1254,6 +1262,21 @@ export function TableScreen(props: TableScreenProps) {
               target={giftTarget}
               mySeat={mySeat}
               reach={giftReach}
+              // Online, another player's puck also hides or reports them.
+              moderate={
+                onHide && onReport && giftTarget !== 'table'
+                  ? {
+                      hidden: hidden?.includes(giftTarget) ?? false,
+                      onHide: () => {
+                        const who = giftTarget;
+                        const was = hidden?.includes(who) ?? false;
+                        shutGifts();
+                        onHide(who, !was);
+                      },
+                      onReport: () => onReport(giftTarget),
+                    }
+                  : undefined
+              }
               nameOf={(s) => meta(s).name}
               profile={profile}
               readyAt={giftReadyAt}

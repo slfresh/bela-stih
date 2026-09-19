@@ -7,7 +7,8 @@ import { GIFTS, giftBlock, giftCost, type GiftId, type PlayerProfile } from '@be
 import { GiftArt } from '../giftArt';
 import { font, ink, num, radius, stroke, surface, theme, type } from '../theme';
 import { Button } from '../ui/Button';
-import { Close, Coin, Lock } from '../ui/icons';
+import { Close, Coin, Flag, Lock } from '../ui/icons';
+import { REPORT_EMAIL } from '../report';
 import { PressScale } from '../ui/PressScale';
 import { GIFT_PICKER, giftPickerLayout } from './metrics';
 
@@ -33,6 +34,7 @@ export function GiftPicker({
   ground,
   onSend,
   onClose,
+  moderate,
 }: {
   lang: Lang;
   /** A seat, or 'table' when opened from my own puck. */
@@ -50,12 +52,16 @@ export function GiftPicker({
   ground: string;
   onSend: (id: GiftId, to: Seat | 'table') => void;
   onClose: () => void;
+  /** Online, another player's puck: hide them on this device, or report them. */
+  moderate?: { hidden: boolean; onHide: () => void; onReport: () => void };
 }) {
   const ui = lang.s.ui;
   const { width, height } = useWindowDimensions();
   const L = giftPickerLayout(width, height, land, GIFTS.length);
   const [everyone, setEveryone] = useState(target === 'table');
   const [chosen, setChosen] = useState<GiftId | null>(null);
+  // The player view: hide or report instead of a gift.
+  const [moderating, setModerating] = useState(false);
   const to: Seat | 'table' = everyone || target === 'table' ? 'table' : target;
   const can = (s: Seat) => reach?.[s] ?? true;
   const others = ([0, 1, 2, 3] as Seat[]).filter((s) => s !== mySeat && can(s)).length;
@@ -89,7 +95,8 @@ export function GiftPicker({
         : ui.giftForFun;
 
   // Who it is for is the first chip; the title says what the sheet does.
-  const title = target === 'table' ? ui.giftTreatTable : ui.giftSend;
+  const title =
+    moderating && target !== 'table' ? ui.playerTitle(nameOf(target)) : target === 'table' ? ui.giftTreatTable : ui.giftSend;
 
   const chips =
     target === 'table' ? null : (
@@ -188,7 +195,21 @@ export function GiftPicker({
           <Text style={styles.title} numberOfLines={1}>
             {title}
           </Text>
-          {land && chips}
+          {land && !moderating && chips}
+          {moderate && !moderating && (
+            <PressScale
+              onPress={() => setModerating(true)}
+              accessibilityRole="button"
+              accessibilityLabel={ui.reportOpenLabel}
+              hitSlop={{ top: 7, bottom: 7 }}
+              style={[styles.chip, styles.reportPill]}
+            >
+              <Flag size={12} colour={ink.mid} />
+              <Text style={styles.chipText} numberOfLines={1}>
+                {ui.reportOpen}
+              </Text>
+            </PressScale>
+          )}
           <View style={styles.wallet}>
             <Coin size={12} />
             <Text style={[styles.walletText, num]}>{profile.coins}</Text>
@@ -197,21 +218,35 @@ export function GiftPicker({
             <Close size={16} />
           </PressScale>
         </View>
-        {!land && chips}
-        {L.scroll ? <ScrollView style={{ maxHeight: L.gridMax }}>{grid}</ScrollView> : grid}
-        {land ? (
-          <View style={styles.footRow}>
-            <Text style={[styles.note, styles.noteLand]} numberOfLines={2}>
-              {note}
+        {moderating && moderate ? (
+          <View style={styles.player}>
+            <Button label={moderate.hidden ? ui.showPlayer : ui.hidePlayer} tone="strong" onPress={moderate.onHide} style={styles.send} />
+            <Text style={styles.note}>{ui.hidePlayerNote}</Text>
+            <Button label={ui.reportPlayer} tone="plain" onPress={moderate.onReport} style={styles.send} />
+            <Text style={styles.note}>{ui.reportPlayerNote}</Text>
+            <Text style={styles.note} selectable>
+              {ui.reportFallback(REPORT_EMAIL)}
             </Text>
-            {send}
           </View>
         ) : (
           <>
-            <Text style={styles.note} numberOfLines={2}>
-              {note}
-            </Text>
-            {send}
+            {!land && chips}
+            {L.scroll ? <ScrollView style={{ maxHeight: L.gridMax }}>{grid}</ScrollView> : grid}
+            {land ? (
+              <View style={styles.footRow}>
+                <Text style={[styles.note, styles.noteLand]} numberOfLines={2}>
+                  {note}
+                </Text>
+                {send}
+              </View>
+            ) : (
+              <>
+                <Text style={styles.note} numberOfLines={2}>
+                  {note}
+                </Text>
+                {send}
+              </>
+            )}
           </>
         )}
       </View>
@@ -266,6 +301,8 @@ const styles = StyleSheet.create({
     maxWidth: 170,
   },
   chipName: { flexShrink: 1, minWidth: 0 },
+  reportPill: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  player: { alignSelf: 'stretch', gap: P.GAP },
   chipOn: { borderColor: theme.accent },
   chipText: { color: ink.mid, ...type.sub },
   chipTextOn: { color: ink.hi, fontFamily: font.medium },

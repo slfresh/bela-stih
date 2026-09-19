@@ -148,6 +148,11 @@ export function useNetGame(settings: Settings) {
   // The seats a person has played since the start: a bot in one of those is
   // standing in for someone (see standIns.ts).
   const hadPersonRef = useRef<ReadonlySet<Seat>>(new Set());
+  // Players hidden on this device, for this table (the room): their name,
+  // emotes and gifts stay off my screen. Nothing about it is sent anywhere.
+  const [hidden, setHidden] = useState<readonly Seat[]>([]);
+  const hiddenRef = useRef<readonly Seat[]>([]);
+  const hiddenRoomRef = useRef<string | null>(null);
   const [hard, setHard] = useState(false);
   const [hostSeat, setHostSeat] = useState<Seat | null>(null);
   const [series, setSeries] = useState<[number, number]>([0, 0]);
@@ -210,6 +215,11 @@ export function useNetGame(settings: Settings) {
   giftsRef.current = gifts;
   // Who can be given a gift, from the room's seats.
   const giftReach = useMemo(() => reachOf(seats), [seats]);
+  // What the screens show: a hidden player by their seat, never their name.
+  const shownSeats = useMemo(
+    () => (hidden.length === 0 ? seats : seats.map((x) => (hidden.includes(x.seat) ? { ...x, name: lang.seat(x.seat, seat) } : x))),
+    [seats, hidden, lang, seat],
+  );
   // A spend is read from the profile ref; this makes the wallet redraw for it.
   const [, setSpent] = useState(0);
   // The gift sent and not yet echoed, with the room whose socket carried it
@@ -296,6 +306,9 @@ export function useNetGame(settings: Settings) {
     setIdle(true);
     setSeats([]);
     hadPersonRef.current = new Set();
+    hiddenRef.current = [];
+    hiddenRoomRef.current = null;
+    setHidden([]);
     setSeries([0, 0]);
     setMatchNumber(0);
     setRematchVotes([]);
@@ -332,6 +345,13 @@ export function useNetGame(settings: Settings) {
     roomRef.current = room;
     reconnectTokenRef.current = room.reconnectionToken;
     setRoomId(room.roomId);
+    // A reconnect to the same table keeps the players I hid; a new table
+    // starts with nobody hidden.
+    if (hiddenRoomRef.current !== room.roomId) {
+      hiddenRoomRef.current = room.roomId;
+      hiddenRef.current = [];
+      setHidden([]);
+    }
 
     room.onMessage('view', (msg: { seat: Seat; view: PublicView }) => {
       mySeatRef.current = msg.seat;
@@ -455,6 +475,7 @@ export function useNetGame(settings: Settings) {
     });
 
     room.onMessage('emote', (msg: { seat: Seat; id: string }) => {
+      if (hiddenRef.current.includes(msg.seat)) return; // a player I hid
       spawnEmote(
         { anchors, bus: fxBus, lang: langRef.current, reduced: () => motionRef.current === 'reduced' },
         msg.seat,
@@ -635,6 +656,22 @@ export function useNetGame(settings: Settings) {
     return true;
   }, []);
 
+  /**
+   * Hide a player at this table on this device, or show them again: their
+   * name gives way to the seat's ("Desni"), their emotes and gifts stop, and
+   * the badges they gave come off. Local only; gifts I pay for are untouched.
+   */
+  const hide = useCallback((s: Seat, on: boolean) => {
+    if (s === mySeatRef.current) return;
+    const cur = hiddenRef.current;
+    const next = on ? (cur.includes(s) ? cur : [...cur, s]) : cur.filter((x) => x !== s);
+    hiddenRef.current = next;
+    setHidden(next);
+    giftsRef.current.mute(s, on);
+  }, []);
+  /** A player's name as the room has it: a report names the real nickname. */
+  const realName = useCallback((s: Seat) => seatsRef.current.find((x) => x.seat === s)?.name ?? '', []);
+
   /** Host only: start the game now, bots filling the empty seats. */
   const startWithBots = useCallback(() => {
     roomRef.current?.send('start', {});
@@ -664,7 +701,8 @@ export function useNetGame(settings: Settings) {
     seat,
     view,
     idle,
-    seats,
+    // A hidden player shows by their seat's name everywhere these are read.
+    seats: shownSeats,
     hard,
     hostSeat,
     series,
@@ -700,7 +738,10 @@ export function useNetGame(settings: Settings) {
     sendGift,
     giftReach,
     // The seats a bot stands in for: a person's once, never a bot's from the start.
-    standIns: standInsOf(seats, hadPersonRef.current, seat),
+    standIns: standInsOf(shownSeats, hadPersonRef.current, seat),
+    hidden,
+    hide,
+    realName,
     gifts: gifts.gifts,
     giftLanded: gifts.giftLanded,
     giftFrom: gifts.giftFrom,

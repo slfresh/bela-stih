@@ -124,6 +124,16 @@ export function Close({ size = 16, colour = ink.hi }: IconProps) {
   );
 }
 
+/** Report: a flag on its pole. */
+export function Flag({ size = 16, colour = ink.hi }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M6 21V4" stroke={colour} strokeWidth={2.4} strokeLinecap="round" />
+      <Path d="M6 4h11l-2.5 4L17 12H6z" fill={colour} />
+    </Svg>
+  );
+}
+
 /** Not yet: a level to reach first. */
 export function Lock({ size = 16, colour = ink.hi }: IconProps) {
   return (

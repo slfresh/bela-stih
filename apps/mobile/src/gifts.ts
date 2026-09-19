@@ -49,6 +49,22 @@ export function recipientsOf(to: Seat | 'table', from: Seat, reach?: GiftReach):
   return to === from || !can(to) ? [] : [to];
 }
 
+/**
+ * A gift a hidden player gave a seat, kept so the room's record of it (which
+ * still says that seat wears it) is not put back on the puck.
+ */
+export type MutedGift = { id: GiftId; from: Seat } | null;
+
+/**
+ * Which seats `resync` must leave alone: the room still records a hidden
+ * giver's gift there. A seat whose record has moved on (a newer gift, or
+ * none) is released.
+ */
+export function mutedSeats(server: readonly (string | null | undefined)[], muted: readonly MutedGift[]) {
+  const next = muted.map((m, t) => (m && server[t] === m.id ? m : null));
+  return { keep: next.map((m) => m !== null), muted: next };
+}
+
 /** The room's word on who can see a gift (SeatInfo.seesGifts), as a GiftReach. */
 export function reachOf(seats: readonly { seat: Seat; seesGifts?: boolean }[]): boolean[] {
   return ([0, 1, 2, 3] as Seat[]).map((s) => seats.some((x) => x.seat === s && x.seesGifts === true));

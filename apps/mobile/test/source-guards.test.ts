@@ -764,7 +764,8 @@ describe('table gifts', () => {
     expect(room).toMatch(/if \(!was\.bot && now\.bot && was\.connected\) playSfx\('seatLeave'\);/);
     const leave = n.slice(n.indexOf('const leave = useCallback'), n.indexOf('giftsRef.current.reset();'));
     expect(leave).toMatch(/hadPersonRef\.current = new Set\(\);/);
-    expect(n).toMatch(/standIns: standInsOf\(seats, hadPersonRef\.current, seat\)/);
+    // From the masked list: a hidden player's real name never reaches the bot line.
+    expect(n).toMatch(/standIns: standInsOf\(shownSeats, hadPersonRef\.current, seat\)/);
   });
 
   it('online, the result sheet stays up until the next deal takes it down', () => {
@@ -1037,5 +1038,62 @@ describe('offline timers die with the match', () => {
     expect(g).toMatch(/live\.forEach\(clearTimeout\);\s*live\.clear\(\);/);
     expect(g).toMatch(/later\(800, \(\) => \{\s*spawnEmote/);
     expect(g).toMatch(/later\(350, \(\) => enqueue\(/);
+  });
+});
+
+describe('online, a player can be hidden or reported', () => {
+  it('hiding is local: the payment path never asks who is hidden', () => {
+    const n = src('net/useNetGame.ts');
+    const gift = n.slice(n.indexOf("room.onMessage('gift'"), n.indexOf("room.onMessage('emote'"));
+    expect(gift).not.toMatch(/hidden/);
+    expect(gift.indexOf('applyGiftEcho(')).toBeLessThan(gift.indexOf('giftsRef.current.fly('));
+    // Their emotes stop at the door.
+    const emote = n.slice(n.indexOf("room.onMessage('emote'"));
+    expect(emote.slice(0, 200)).toMatch(/if \(hiddenRef\.current\.includes\(msg\.seat\)\) return;/);
+  });
+
+  it('holds for one table: kept over a reconnect, dropped for a new room and on leaving', () => {
+    const n = src('net/useNetGame.ts');
+    const attach = n.slice(n.indexOf('const attach = useCallback'), n.indexOf("room.onMessage('view'"));
+    expect(attach).toMatch(/if \(hiddenRoomRef\.current !== room\.roomId\) \{\s*hiddenRoomRef\.current = room\.roomId;\s*hiddenRef\.current = \[\];\s*setHidden\(\[\]\);/);
+    const leave = n.slice(n.indexOf('const leave = useCallback'), n.indexOf('giftsRef.current.reset();'));
+    expect(leave).toMatch(/hiddenRef\.current = \[\];\s*hiddenRoomRef\.current = null;\s*setHidden\(\[\]\);/);
+  });
+
+  it('a hidden player is shown by their seat, but reported by the name the room has', () => {
+    const n = src('net/useNetGame.ts');
+    expect(n).toMatch(/hidden\.includes\(x\.seat\) \? \{ \.\.\.x, name: lang\.seat\(x\.seat, seat\) \}/);
+    expect(n).toMatch(/seats: shownSeats,/);
+    expect(n).toMatch(/const realName = useCallback\(\(s: Seat\) => seatsRef\.current\.find/);
+    const o = src('net/OnlineGame.tsx');
+    expect(o).toMatch(/name: net\.realName\(s\)/);
+  });
+
+  it("a hidden giver's gifts neither fly, land, sound nor come back with the room's record", () => {
+    const g = src('table/useGifts.ts');
+    const fly = g.slice(g.indexOf('const fly = useCallback'), g.indexOf('const resync = useCallback'));
+    // Before any flight bookkeeping.
+    const early = fly.indexOf('if (mutedGivers.current.has(from)) {');
+    expect(early).toBeGreaterThan(-1);
+    expect(early).toBeLessThan(fly.indexOf('pending.current[t] = pending.current[t]! + 1'));
+    expect(fly).toMatch(/if \(!alive\.current \|\| mutedGivers\.current\.has\(from\)\) return;/);
+    const land = g.slice(g.indexOf('const land = useCallback'), g.indexOf('const fly = useCallback'));
+    expect(land).toMatch(/if \(mutedGivers\.current\.has\(giver\)\) \{\s*muted\.current\[t\] = \{ id, from: giver \};\s*return;/);
+    const resync = g.slice(g.indexOf('const resync = useCallback'), g.indexOf('const mute = useCallback'));
+    expect(resync).toMatch(/if \(pending\.current\[t\]! > 0 \|\| m\.keep\[t\]\) continue;/);
+    const reset = g.slice(g.indexOf('const reset = useCallback'));
+    expect(reset).toMatch(/mutedGivers\.current\.clear\(\);/);
+  });
+
+  it('offline there is nobody to report: only the online table passes the hooks', () => {
+    expect(src('OfflineGame.tsx')).not.toMatch(/onHide|onReport/);
+    const o = src('net/OnlineGame.tsx');
+    expect(o).toMatch(/onHide=\{net\.hide\}/);
+    expect(o).toMatch(/onReport=\{\(s\) => \{/);
+    const t = src('TableScreen.tsx');
+    expect(t).toMatch(/onHide && onReport && giftTarget !== 'table'/);
+    const picker = src('table/GiftPicker.tsx');
+    expect(picker).toMatch(/\{moderate && !moderating && \(/);
+    expect(picker).not.toMatch(/exiting=|layout=/);
   });
 });
