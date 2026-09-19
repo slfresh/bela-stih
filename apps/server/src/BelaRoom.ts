@@ -17,6 +17,7 @@ import {
   type RoomMessage,
   type SeatInfo,
 } from './protocol';
+import { cleanName } from './names';
 
 /**
  * An authoritative Bela table.
@@ -116,20 +117,6 @@ const TURN_MS = 30_000;
 /** Shortest gap between two accepted seat changes from one connection. */
 const SIT_GAP_MS = 250;
 const RECONNECT_SECONDS = 60;
-
-/**
- * The nickname is the one piece of free text shown to strangers, so strip
- * anything invisible or layout-breaking: control characters, zero-width and
- * bidi marks, runs of whitespace. What remains is what the player typed.
- */
-function cleanName(raw: unknown): string {
-  if (typeof raw !== 'string') return '';
-  return raw
-    .replace(/[\p{Cc}\p{Cf}]/gu, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 20);
-}
 
 interface Occupant {
   sessionId: string | null;
