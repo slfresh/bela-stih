@@ -122,7 +122,7 @@ export function ShopScreen({
   };
 
   return (
-    <ScreenShell title={ui.shop} onBack={onBack}>
+    <ScreenShell title={ui.shop} onBack={onBack} backLabel={ui.back}>
       <View style={styles.walletRow}>
         <View style={styles.walletCoins}>
           <Text style={styles.wallet}>{profile.coins}</Text>

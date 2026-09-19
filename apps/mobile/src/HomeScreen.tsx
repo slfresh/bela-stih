@@ -145,7 +145,7 @@ export function HomeScreen({
                 </View>
               </PressScale>
 
-              <PressScale onPress={onOpenShop} hitSlop={6}>
+              <PressScale onPress={onOpenShop} hitSlop={6} accessibilityLabel={ui.walletLabel(coins)}>
                 <Anchor id={anchorId.wallet}>
                   <View style={styles.coinChip}>
                     <Text style={styles.coinText}>{coins}</Text>
@@ -153,7 +153,7 @@ export function HomeScreen({
                   </View>
                 </Anchor>
               </PressScale>
-              <PressScale onPress={onOpenSettings} hitSlop={6} style={styles.gear}>
+              <PressScale onPress={onOpenSettings} hitSlop={6} accessibilityLabel={ui.settings} style={styles.gear}>
                 <Gear size={22} />
               </PressScale>
             </View>

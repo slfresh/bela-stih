@@ -39,7 +39,7 @@ export function ProfileScreen({
   ];
 
   return (
-    <ScreenShell title={ui.profile} onBack={onBack}>
+    <ScreenShell title={ui.profile} onBack={onBack} backLabel={ui.back}>
       <View style={styles.identity}>
         <Avatar id={profile.selectedAvatar} size={88} />
         <Text style={styles.name}>{settings.nickname.trim() || '—'}</Text>

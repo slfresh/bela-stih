@@ -39,6 +39,7 @@ export function SettingsScreen({
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
       <Switch
+        accessibilityLabel={label}
         value={value}
         onValueChange={(v) => {
           // The sound gate is applied by App's effect a commit later; set it
@@ -54,7 +55,7 @@ export function SettingsScreen({
   );
 
   return (
-    <ScreenShell title={ui.settings} onBack={onBack}>
+    <ScreenShell title={ui.settings} onBack={onBack} backLabel={ui.back}>
       <Panel label={ui.nicknameLabel}>
         <TextInput
           value={settings.nickname}
@@ -85,6 +86,7 @@ export function SettingsScreen({
               // Its own click already plays at the new level.
               onPressIn={() => setMasterVolume(o.v)}
               onPress={() => onSettingsChange({ ...settings, volume: o.v })}
+              accessibilityState={{ selected: settings.volume === o.v }}
               style={[styles.localeChip, settings.volume === o.v && styles.localeChipOn]}
             >
               <Text style={[styles.localeText, settings.volume === o.v && styles.localeTextOn]}>
@@ -111,6 +113,7 @@ export function SettingsScreen({
                 setDeckStyle(d.id);
                 onSettingsChange({ ...settings, deckStyle: d.id });
               }}
+              accessibilityState={{ selected: settings.deckStyle === d.id }}
               style={[styles.localeChip, settings.deckStyle === d.id && styles.localeChipOn]}
             >
               <Text
@@ -143,6 +146,7 @@ export function SettingsScreen({
               onPress={() => {
                 onSettingsChange({ ...settings, handSort: o.id });
               }}
+              accessibilityState={{ selected: settings.handSort === o.id }}
               style={[styles.localeChip, settings.handSort === o.id && styles.localeChipOn]}
             >
               <Text style={[styles.localeText, settings.handSort === o.id && styles.localeTextOn]}>
@@ -168,6 +172,7 @@ export function SettingsScreen({
               onPress={() => {
                 onSettingsChange({ ...settings, confirmPlay: o.id });
               }}
+              accessibilityState={{ selected: settings.confirmPlay === o.id }}
               style={[styles.localeChip, settings.confirmPlay === o.id && styles.localeChipOn]}
             >
               <Text style={[styles.localeText, settings.confirmPlay === o.id && styles.localeTextOn]}>
@@ -192,6 +197,7 @@ export function SettingsScreen({
               onPress={() => {
                 onSettingsChange({ ...settings, motion: o.id });
               }}
+              accessibilityState={{ selected: settings.motion === o.id }}
               style={[styles.localeChip, settings.motion === o.id && styles.localeChipOn]}
             >
               <Text style={[styles.localeText, settings.motion === o.id && styles.localeTextOn]}>
@@ -215,6 +221,7 @@ export function SettingsScreen({
               onPress={() => {
                 onSettingsChange({ ...settings, hardMode: d.hard });
               }}
+              accessibilityState={{ selected: settings.hardMode === d.hard }}
               style={[styles.localeChip, settings.hardMode === d.hard && styles.localeChipOn]}
             >
               <Text
@@ -236,6 +243,7 @@ export function SettingsScreen({
               onPress={() => {
                 onSettingsChange({ ...settings, locale: l.id });
               }}
+              accessibilityState={{ selected: settings.locale === l.id }}
               style={[styles.localeChip, settings.locale === l.id && styles.localeChipOn]}
             >
               <Text
@@ -271,6 +279,8 @@ export function SettingsScreen({
             void Linking.openURL('https://belastih.com').catch(() => {});
           }}
           hitSlop={6}
+          accessibilityRole="link"
+          accessibilityLabel={ui.privacyPolicy}
         >
           <Text style={styles.link}>{ui.privacyPolicy} ↗</Text>
         </PressScale>

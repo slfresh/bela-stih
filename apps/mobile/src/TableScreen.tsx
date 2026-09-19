@@ -1040,6 +1040,8 @@ export function TableScreen(props: TableScreenProps) {
       hitSlop={8}
       // Resting while a question has the box's room: no click, no tray.
       disabled={!trayShown}
+      accessibilityLabel={lang.s.ui.emoteToggle}
+      accessibilityState={{ expanded: trayOpenShown }}
       style={[styles.emoteToggle, trayOpenShown && styles.emoteToggleOn]}
     >
       {trayShown ? (

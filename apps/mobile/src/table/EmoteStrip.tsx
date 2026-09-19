@@ -71,7 +71,7 @@ export function EmoteStrip({
               style={styles.chip}
               hitSlop={4}
               sound={null}
-              accessibilityLabel={e.id}
+              accessibilityLabel={lang.s.ui.emoteName(e.id)}
             >
               {hasEmoteFace(e.id) ? <EmoteFace id={e.id} size={26} /> : <Text style={styles.glyph}>{emoteText(lang, e.id)}</Text>}
             </PressScale>

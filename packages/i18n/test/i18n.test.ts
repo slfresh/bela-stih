@@ -296,7 +296,7 @@ describe('register and typography', () => {
           // Each function gets the arguments its key implies; the rest a
           // string and some numbers, so no branch is left unrendered.
           if (key === 'questLabel') QUESTS.forEach((q) => push(f(q)));
-          else if (key === 'cosmeticName' || key === 'emotePhrase' || key === 'giftName') IDS.forEach((id) => push(f(id)));
+          else if (key === 'cosmeticName' || key === 'emotePhrase' || key === 'emoteName' || key === 'giftName') IDS.forEach((id) => push(f(id)));
           else {
             push(f('Ana', 'Ana', 'Ana'));
             push(f(1, 1, 1));
@@ -421,4 +421,23 @@ describe('table gifts', () => {
       expect(ui.giftNotSeen).not.toBe(ui.giftNobodySees);
     }
   });
+});
+
+describe('screen reader labels', () => {
+  const FACES = ['smile', 'laugh', 'wow', 'cry', 'clap', 'think'];
+  for (const locale of LOCALE_IDS) {
+    it(`names every emote face in ${locale}, each differently`, () => {
+      const ui = new Lang(locale).s.ui;
+      const names = FACES.map((id) => ui.emoteName(id));
+      FACES.forEach((id, i) => expect(names[i], `${locale} ${id}`).not.toBe(id));
+      expect(new Set(names).size).toBe(FACES.length);
+      // A phrase is named by its own words.
+      expect(ui.emoteName('hvala')).toBe(ui.emotePhrase('hvala'));
+      expect(ui.emoteToggle.trim().length).toBeGreaterThan(0);
+      expect(ui.walletLabel(250)).toContain('250');
+      if (locale === 'sr-Cyrl') {
+        for (const v of [...names, ui.emoteToggle, ui.walletLabel(250).replace(/\d/g, '')]) expect(v, v).not.toMatch(/[A-Za-z]/);
+      }
+    });
+  }
 });

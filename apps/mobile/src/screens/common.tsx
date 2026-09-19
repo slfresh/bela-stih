@@ -18,16 +18,19 @@ export const APP_VERSION = '1.3.0';
 export function ScreenShell({
   title,
   onBack,
+  backLabel,
   children,
 }: {
   title: string;
   onBack: () => void;
+  /** The chevron is only a picture: a screen reader needs its word. */
+  backLabel: string;
   children: ReactNode;
 }) {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: room().page }]}>
       <View style={styles.header}>
-        <PressScale onPress={onBack} hitSlop={12} style={styles.backButton}>
+        <PressScale onPress={onBack} hitSlop={12} accessibilityLabel={backLabel} style={styles.backButton}>
           <Chevron size={28} />
         </PressScale>
         <Text style={styles.title}>{title}</Text>

@@ -914,3 +914,83 @@ describe('table gifts', () => {
     expect(g).not.toMatch(/setTimeout\(\(\) => \{\s*spawnEmote/);
   });
 });
+
+describe('a screen reader can name every control', () => {
+  /** PressScale / Pressable elements with neither an accessibilityLabel nor any <Text> inside. */
+  const unnamed = (file: string, text: string): string[] => {
+    const sf = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+    const out: string[] = [];
+    const tag = (n: ts.JsxOpeningLikeElement) => n.tagName.getText(sf);
+    const hasText = (n: ts.Node): boolean => {
+      let found = false;
+      const visit = (c: ts.Node) => {
+        if (found) return;
+        if ((ts.isJsxOpeningElement(c) || ts.isJsxSelfClosingElement(c)) && tag(c) === 'Text') found = true;
+        else ts.forEachChild(c, visit);
+      };
+      ts.forEachChild(n, visit);
+      return found;
+    };
+    const visit = (n: ts.Node) => {
+      const open = ts.isJsxElement(n) ? n.openingElement : ts.isJsxSelfClosingElement(n) ? n : null;
+      if (open && (tag(open) === 'PressScale' || tag(open) === 'Pressable')) {
+        const labelled = open.attributes.properties.some((a) => ts.isJsxAttribute(a) && a.name.getText(sf) === 'accessibilityLabel');
+        if (!labelled && !(ts.isJsxElement(n) && hasText(n))) out.push(`${file}:${sf.getLineAndCharacterOfPosition(open.getStart()).line + 1}`);
+      }
+      ts.forEachChild(n, visit);
+    };
+    visit(sf);
+    return out;
+  };
+
+  it('the scan itself tells a named control from a mute one', () => {
+    expect(unnamed('a.tsx', 'const x = <PressScale onPress={f}><Gear /></PressScale>;')).toHaveLength(1);
+    expect(unnamed('b.tsx', 'const x = <PressScale onPress={f}><Text>Hi</Text></PressScale>;')).toHaveLength(0);
+    expect(unnamed('c.tsx', 'const x = <PressScale onPress={f} accessibilityLabel={l}><Gear /></PressScale>;')).toHaveLength(0);
+  });
+
+  it('no pressable is only a picture', () => {
+    const walk = (d: string): string[] =>
+      readdirSync(join(here, '../src', d), { withFileTypes: true }).flatMap((e) =>
+        e.isDirectory() ? walk(join(d, e.name)) : /\.tsx$/.test(e.name) ? [join(d, e.name)] : [],
+      );
+    const found: string[] = [];
+    for (const f of walk('.')) {
+      if (/PressScale\.tsx$/.test(f)) continue;
+      let t = src(f);
+      // The hand's cards are a separate follow-up: their faces are drawn text.
+      if (/TableScreen\.tsx$/.test(f)) {
+        const a = t.indexOf('const FanCard = memo(');
+        const b = t.indexOf('const feltEntering');
+        t = t.slice(0, a) + ' '.repeat(b - a) + t.slice(b);
+      }
+      found.push(...unnamed(f, t));
+    }
+    expect(found).toEqual([]);
+  });
+
+  it('the icon-only controls, the chips and the switches say what they are', () => {
+    const home = src('HomeScreen.tsx');
+    expect(home).toMatch(/onPress=\{onOpenShop\}[^>]*accessibilityLabel=\{ui\.walletLabel\(coins\)\}/);
+    expect(home).toMatch(/onPress=\{onOpenSettings\}[^>]*accessibilityLabel=\{ui\.settings\}/);
+    expect(src('screens/common.tsx')).toMatch(/onPress=\{onBack\}[^>]*accessibilityLabel=\{backLabel\}/);
+    for (const f of ['screens/SettingsScreen.tsx', 'screens/ShopScreen.tsx', 'screens/ProfileScreen.tsx']) {
+      expect(src(f), f).toMatch(/<ScreenShell [^>]*backLabel=\{ui\.back\}/);
+    }
+    const strip = src('table/EmoteStrip.tsx');
+    expect(strip).not.toMatch(/accessibilityLabel=\{e\.id\}/);
+    expect(strip).toMatch(/accessibilityLabel=\{lang\.s\.ui\.emoteName\(e\.id\)\}/);
+    const t = src('TableScreen.tsx');
+    const toggle = t.slice(t.indexOf('const emoteToggle ='), t.indexOf('const leaveButton ='));
+    expect(toggle).toMatch(/accessibilityLabel=\{lang\.s\.ui\.emoteToggle\}/);
+    expect(toggle).toMatch(/accessibilityState=\{\{ expanded: trayOpenShown \}\}/);
+    const settings = src('screens/SettingsScreen.tsx');
+    expect(settings).toMatch(/<Switch\s+accessibilityLabel=\{label\}/);
+    // Every chip says whether it is the chosen one, by the same test that lights it.
+    const chips = [...settings.matchAll(/accessibilityState=\{\{ selected: ([^}]+) \}\}\s+style=\{\[styles\.localeChip, ([^\]]+?) && styles\.localeChipOn\]\}/g)];
+    expect(chips.length).toBe(7);
+    for (const m of chips) expect(m[1]!.trim()).toBe(m[2]!.trim());
+    expect((settings.match(/styles\.localeChip, /g) ?? []).length).toBe(7);
+    expect(settings).toMatch(/accessibilityRole="link"\s+accessibilityLabel=\{ui\.privacyPolicy\}/);
+  });
+});

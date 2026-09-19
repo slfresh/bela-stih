@@ -125,6 +125,12 @@ export interface UiStrings {
 
   /** Localized text for the phrase emotes (bravo/brze/ajme/hvala). */
   emotePhrase: (id: string) => string;
+  /** A screen reader's name for an emote: a face by what it shows, a phrase by its words. */
+  emoteName: (id: string) => string;
+  /** The emote bar's toggle (faces <-> phrases), for a screen reader. */
+  emoteToggle: string;
+  /** The home screen's coin chip, which opens the shop, for a screen reader. */
+  walletLabel: (coins: number) => string;
 
   /* Online table flow. */
   connecting: string;
@@ -352,6 +358,15 @@ const ROMAN: Pick<Record<Rank, string>, '7' | '8' | '9' | '10'> = {
   '10': 'X',
 };
 
+const HR_EMOTE_NAMES: Record<string, string> = {
+  smile: 'Osmijeh',
+  laugh: 'Smijeh',
+  wow: 'Iznenađenje',
+  cry: 'Tuga',
+  clap: 'Pljesak',
+  think: 'Razmišljam',
+};
+
 const HR_EMOTES: Record<string, string> = {
   bravo: 'Bravo!',
   brze: 'Brže!',
@@ -555,6 +570,9 @@ const hr: Strings = {
     privacyPolicy: 'Pravila privatnosti',
 
     emotePhrase: (id) => HR_EMOTES[id] ?? id,
+    emoteName: (id) => HR_EMOTE_NAMES[id] ?? HR_EMOTES[id] ?? id,
+    emoteToggle: 'Poruke',
+    walletLabel: (coins) => `Trgovina, novčići: ${coins}`,
 
     connecting: 'Spajanje…',
     cannotConnect: (server) => `Ne mogu se spojiti na ${server}`,
@@ -618,6 +636,15 @@ const hr: Strings = {
     giftCellLabel: (gift, price) => `${gift}, ${price} novčića`,
     giftReceived: (gift, from) => `Novi dar: ${gift} (${from})`,
   },
+};
+
+const SR_EMOTE_NAMES: Record<string, string> = {
+  smile: 'Осмех',
+  laugh: 'Смех',
+  wow: 'Изненађење',
+  cry: 'Туга',
+  clap: 'Аплауз',
+  think: 'Размишљам',
 };
 
 const SR_EMOTES: Record<string, string> = {
@@ -825,6 +852,9 @@ const srCyrl: Strings = {
     privacyPolicy: 'Правила приватности',
 
     emotePhrase: (id) => SR_EMOTES[id] ?? id,
+    emoteName: (id) => SR_EMOTE_NAMES[id] ?? SR_EMOTES[id] ?? id,
+    emoteToggle: 'Поруке',
+    walletLabel: (coins) => `Продавница, новчићи: ${coins}`,
 
     connecting: 'Повезивање…',
     cannotConnect: (server) => `Не могу да се повежем на ${server}`,
@@ -888,6 +918,15 @@ const srCyrl: Strings = {
     giftCellLabel: (gift, price) => `${gift}, ${price} новчића`,
     giftReceived: (gift, from) => `Нови поклон: ${gift} (${from})`,
   },
+};
+
+const EN_EMOTE_NAMES: Record<string, string> = {
+  smile: 'Smile',
+  laugh: 'Laughing',
+  wow: 'Surprised',
+  cry: 'Sad',
+  clap: 'Applause',
+  think: 'Thinking',
 };
 
 const EN_EMOTES: Record<string, string> = {
@@ -1091,6 +1130,9 @@ const en: Strings = {
     privacyPolicy: 'Privacy policy',
 
     emotePhrase: (id) => EN_EMOTES[id] ?? id,
+    emoteName: (id) => EN_EMOTE_NAMES[id] ?? EN_EMOTES[id] ?? id,
+    emoteToggle: 'Messages',
+    walletLabel: (coins) => `Shop, coins: ${coins}`,
 
     connecting: 'Connecting…',
     cannotConnect: (server) => `Cannot reach ${server}`,

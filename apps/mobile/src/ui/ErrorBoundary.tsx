@@ -59,6 +59,7 @@ export class ErrorBoundary extends Component<
             this.props.onReset();
           }}
           style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
+          accessibilityRole="button"
         >
           <Text style={styles.btnText}>{this.props.action}</Text>
         </Pressable>
