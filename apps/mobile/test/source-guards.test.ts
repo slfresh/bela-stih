@@ -632,3 +632,57 @@ describe('the first frame and the last resort', () => {
     expect(src('table/useTableMetrics.ts')).toMatch(/computeTableMetrics\(usableW, usableH\)/);
   });
 });
+
+describe('table gifts', () => {
+  it('the puck wears a gift through primitive props, and bounces only for a new landing', () => {
+    const p = src('table/SeatPuck.tsx');
+    expect(p).toMatch(/gift\?: string \| null;/);
+    expect(p).toMatch(/giftN\?: number;/);
+    expect(p).toMatch(/const seenGift = useRef\(giftN\);/);
+    expect(p).toMatch(/if \(giftN === seenGift\.current\) return;/);
+    expect(p).toMatch(/giftBadgeBox\(size\)/);
+    const badge = p.slice(p.indexOf('{gift ? ('), p.indexOf(') : null}', p.indexOf('{gift ? (')));
+    expect(badge).toMatch(/pointerEvents="none"/);
+    expect(badge).not.toMatch(/entering=|layout=/);
+  });
+
+  it('the table passes each seat its gift, and draws the picker over the sprites', () => {
+    const t = src('TableScreen.tsx');
+    expect(t).toMatch(/gift=\{gifts\?\.\[s\] \?\? null\}\s*giftN=\{giftLanded\?\.\[s\] \?\? 0\}/);
+    expect(t).toMatch(/gift=\{gifts\?\.\[mySeat\] \?\? null\}\s*giftN=\{giftLanded\?\.\[mySeat\] \?\? 0\}/);
+    expect(t.indexOf('<GiftPicker')).toBeGreaterThan(t.indexOf('<EffectsOverlay'));
+    // A gift never stands in the way of a decision or a question.
+    expect(t).toMatch(/const giftable = !!onGift && !settled && !arranging && !leaving;/);
+    expect(t).toMatch(/if \(myTurn && !myTurnWas\.current\) setGiftTarget\(null\);/);
+    // Back closes the picker before it asks about leaving.
+    const guard = t.slice(t.indexOf('setBackGuard(() => {'));
+    expect(guard.indexOf('giftTargetRef.current !== null')).toBeLessThan(guard.indexOf('leavingRef.current'));
+    // A spend leaves the wallet at once.
+    expect(t).toMatch(/useLaggedNumber\(profile\.coins, lag, 300, 0\)/);
+    expect(src('table/GiftPicker.tsx')).not.toMatch(/exiting=|layout=/);
+    // The lobby's seat map shows no badges.
+    expect(src('net/SeatMap.tsx')).not.toMatch(/gift=/);
+  });
+
+  it('the server takes gifts only at a table that plays, and on its own clock', () => {
+    const room = readFileSync(join(here, '../../server/src/BelaRoom.ts'), 'utf8');
+    const branch = room.slice(room.indexOf("if (packet.type === 'gift')"));
+    // The first statement after its comment is the start gate.
+    const firstStatement = branch
+      .split('\n')
+      .slice(1)
+      .map((l) => l.trim())
+      .find((l) => l !== '' && !l.startsWith('//'));
+    expect(firstStatement).toBe('if (!this.started) return;');
+    expect(branch).toMatch(/< GIFT_GAP_MS\) return;/);
+    expect(branch.slice(0, branch.indexOf('this.broadcast(MSG.gift'))).not.toMatch(/this\.publish\(\)/);
+  });
+
+  it('offline, a gift is paid through the match profile the awards are saved through', () => {
+    const g = src('useGame.ts');
+    expect(g).toMatch(/const next = spendOnGift\(profileRef\.current, id, targets\.length\);/);
+    expect(g).toMatch(/profileRef\.current = next;\s*saveProfile\(next\);/);
+    // Every delayed beat dies with the match.
+    expect(g).not.toMatch(/setTimeout\(\(\) => \{\s*spawnEmote/);
+  });
+});

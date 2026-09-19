@@ -20,6 +20,7 @@ export function Button({
   style,
   icon,
   accessibilityLabel,
+  disabled = false,
 }: {
   label: string;
   onPress: () => void;
@@ -37,6 +38,8 @@ export function Button({
   style?: StyleProp<ViewStyle>;
   /** Drawn before the label: the suit pip on a trump-call button. */
   icon?: ReactNode;
+  /** Shown but not pressable (dimmed): a send with nothing chosen yet. */
+  disabled?: boolean;
 }) {
   const toneStyle =
     tone === 'strong' ? styles.strong : tone === 'bela' ? styles.bela : styles.plain;
@@ -46,7 +49,10 @@ export function Button({
       sound={sound}
       pressSound={sound === null ? null : 'press'}
       accessibilityLabel={accessibilityLabel ?? label}
-      style={[styles.btn, toneStyle, compact && styles.compact, icon !== undefined && styles.withIcon, style]}
+      accessibilityRole="button"
+      accessibilityState={disabled ? { disabled: true } : undefined}
+      disabled={disabled}
+      style={[styles.btn, toneStyle, compact && styles.compact, icon !== undefined && styles.withIcon, disabled && styles.disabled, style]}
     >
       {icon}
       <Text
@@ -73,6 +79,7 @@ const styles = StyleSheet.create({
   strong: { backgroundColor: theme.wood, borderColor: theme.accent },
   bela: { backgroundColor: theme.accent, borderColor: theme.accent },
   compact: { paddingHorizontal: 8, paddingVertical: 7 },
+  disabled: { opacity: 0.45 },
   withIcon: { flexDirection: 'row', gap: 6 },
   text: { color: theme.text, fontSize: 14, fontFamily: font.medium },
   // Cream on gold is 1.9:1; the deck's ink on gold is 6.7:1.

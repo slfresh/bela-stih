@@ -190,6 +190,8 @@ export interface UiStrings {
   giftForFun: string;
   /** A screen reader's hint on a tappable puck. */
   giftHint: string;
+  /** Closing a sheet (the gift picker). */
+  close: string;
   giftPuckLabel: (name: string, gift: string | null) => string;
   giftCellLabel: (gift: string, price: number) => string;
   /** Announced when a gift lands on you. */
@@ -591,6 +593,7 @@ const hr: Strings = {
     giftNoCoins: 'Nemaš dovoljno novčića.',
     giftForFun: 'Dar je samo za veselje: primatelj ne dobiva novčiće.',
     giftHint: 'Dodirni za dar',
+    close: 'Zatvori',
     giftPuckLabel: (name, gift) => (gift ? `${name}, dar: ${gift}` : name),
     giftCellLabel: (gift, price) => `${gift}, ${price} novčića`,
     giftReceived: (gift, from) => `Novi dar: ${gift} (${from})`,
@@ -853,6 +856,7 @@ const srCyrl: Strings = {
     giftNoCoins: 'Немаш довољно новчића.',
     giftForFun: 'Поклон је само за забаву: прималац не добија новчиће.',
     giftHint: 'Додирни за поклон',
+    close: 'Затвори',
     giftPuckLabel: (name, gift) => (gift ? `${name}, поклон: ${gift}` : name),
     giftCellLabel: (gift, price) => `${gift}, ${price} новчића`,
     giftReceived: (gift, from) => `Нови поклон: ${gift} (${from})`,
@@ -1111,6 +1115,7 @@ const en: Strings = {
     giftNoCoins: 'Not enough coins.',
     giftForFun: 'Gifts are just for fun: the receiver gets no coins.',
     giftHint: 'Tap to send a gift',
+    close: 'Close',
     giftPuckLabel: (name, gift) => (gift ? `${name}, gift: ${gift}` : name),
     giftCellLabel: (gift, price) => `${gift}, ${price} coins`,
     giftReceived: (gift, from) => `New gift: ${gift} (${from})`,

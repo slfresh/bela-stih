@@ -16,9 +16,11 @@ import { spawnGift } from './fx';
 export interface GiftSeats {
   ids: readonly (GiftId | null)[];
   landed: readonly number[];
+  /** Who gave each seat its gift, when this client saw it land. */
+  from: readonly (Seat | null)[];
 }
 
-export const NO_GIFTS: GiftSeats = { ids: [null, null, null, null], landed: [0, 0, 0, 0] };
+export const NO_GIFTS: GiftSeats = { ids: [null, null, null, null], landed: [0, 0, 0, 0], from: [null, null, null, null] };
 
 /**
  * The table's gifts, for the offline and the online game alike.
@@ -59,16 +61,22 @@ export function useGifts(opts: {
     if (opts.store) opts.store.current = seats;
   }, [seats, opts.store]);
 
-  const land = useCallback((t: Seat, id: GiftId, g: number, flew: boolean) => {
+  const land = useCallback((t: Seat, id: GiftId, g: number, giver: Seat) => {
     pending.current[t] = Math.max(0, pending.current[t]! - 1);
     // A newer gift for this seat has set off since: it has the last word.
     if (!alive.current || gen.current[t] !== g) return;
     setSeats((prev) => {
       const ids = [...prev.ids];
       const landed = [...prev.landed];
+      const from = [...prev.from];
       ids[t] = id;
-      if (flew) landed[t] = landed[t]! + 1;
-      return { ids, landed };
+      from[t] = giver;
+      // Every landing counts, flown or not: a screen reader hears either, and
+      // the puck's bounce starts and ends at rest, so it is safe even for a
+      // gift that landed while the app was in the background (under
+      // reduce-motion the puck skips it itself).
+      landed[t] = landed[t]! + 1;
+      return { ids, landed, from };
     });
   }, []);
 
@@ -83,26 +91,26 @@ export function useGifts(opts: {
         gen.current[t] = gen.current[t]! + 1;
         return { t, g: gen.current[t]! };
       });
-      const arrive = (flew: readonly boolean[]) => {
-        marks.forEach(({ t, g }, i) => land(t, id, g, flew[i] ?? false));
+      const arrive = () => {
+        marks.forEach(({ t, g }) => land(t, id, g, from));
         if (!alive.current) return;
         playSfx('gift');
         if (me !== null && to.includes(me)) pattern('giftLand');
       };
       if (reduced() || AppState.currentState !== 'active') {
-        arrive(marks.map(() => false));
+        arrive();
         return;
       }
       void anchors.refresh().then(() => {
         if (!alive.current) return;
         const flew = marks.map(({ t }) => spawnGift({ anchors, bus: fxBus }, from, t, id, me));
         if (!flew.some(Boolean)) {
-          arrive(flew);
+          arrive();
           return;
         }
         const h = setTimeout(() => {
           timers.current.delete(h);
-          arrive(flew);
+          arrive();
         }, GIFT_FLY_MS);
         timers.current.add(h);
       });
@@ -124,7 +132,7 @@ export function useGifts(opts: {
           changed = true;
         }
       }
-      return changed ? { ids, landed: prev.landed } : prev;
+      return changed ? { ids, landed: prev.landed, from: prev.from } : prev;
     });
   }, []);
 
@@ -143,7 +151,16 @@ export function useGifts(opts: {
     setReadyAt(0);
   }, []);
 
-  return { gifts: seats.ids, giftLanded: seats.landed, giftReadyAt: readyAt, fly, resync, arm, reset };
+  return {
+    gifts: seats.ids,
+    giftLanded: seats.landed,
+    giftFrom: seats.from,
+    giftReadyAt: readyAt,
+    fly,
+    resync,
+    arm,
+    reset,
+  };
 }
 
 export type Gifts = ReturnType<typeof useGifts>;

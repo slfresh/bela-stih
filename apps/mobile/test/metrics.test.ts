@@ -9,6 +9,7 @@ import {
   FELT_HAND_GAP,
   FELT_MARGIN,
   giftBadgeBox,
+  giftPickerLayout,
   BIDDING_ACTIONS,
   EMOTE_TOGGLE,
   LAND_GAP,
@@ -517,5 +518,32 @@ describe('the gift badge', () => {
     const size = 54;
     const d = giftBadgeBox(size).d;
     expect(Math.hypot(d / 2 - D.cx, d / 2 - D.cy)).toBeLessThan(D.r + d / 2);
+  });
+});
+
+describe('the gift picker', () => {
+  const PHONES_UP = [[320, 568], [320, 533], [360, 640], [360, 723], [360, 800], [390, 844], [412, 915], [480, 1000], [768, 1024]] as const;
+  const PHONES_SIDE = [[568, 320], [640, 336], [667, 375], [723, 336], [752, 331], [780, 360], [800, 390], [915, 412], [1024, 600], [1024, 768], [1280, 800]] as const;
+
+  it('fits every phone, either way up, with cells a finger can hit and no scrolling', () => {
+    for (const [w, h] of PHONES_UP) {
+      const L = giftPickerLayout(w, h, false);
+      expect(L.panelW, `${w}x${h}`).toBeLessThanOrEqual(w - 24);
+      expect(L.panelH, `${w}x${h}`).toBeLessThanOrEqual(h - 24);
+      expect(L.cell, `${w}x${h}`).toBeGreaterThanOrEqual(48);
+      expect(L.scroll, `${w}x${h}`).toBe(false);
+      expect(L.cols * L.rows).toBeGreaterThanOrEqual(15);
+    }
+    for (const [w, h] of PHONES_SIDE) {
+      const L = giftPickerLayout(w, h, true);
+      expect(L.panelW, `${w}x${h}`).toBeLessThanOrEqual(w - 24);
+      expect(L.panelH, `${w}x${h}`).toBeLessThanOrEqual(h - 24);
+      expect(L.cell, `${w}x${h}`).toBeGreaterThanOrEqual(48);
+      expect(L.scroll, `${w}x${h}`).toBe(false);
+    }
+  });
+
+  it('scrolls only below any real phone', () => {
+    expect(giftPickerLayout(426, 240, true).scroll).toBe(true);
   });
 });

@@ -3,7 +3,7 @@ import { HARD_CONFIG_OVERRIDES, type Action, type PublicView, type Seat } from '
 import { Table } from '@belot/table';
 import type { BotLevel } from '@belot/bots';
 import { Lang } from '@belot/i18n';
-import type { Award, PlayerProfile } from '@belot/progression';
+import { spendOnGift, type Award, type GiftId, type PlayerProfile } from '@belot/progression';
 import { AnchorMap } from './anim/AnchorRegistry';
 import { FxBus } from './anim/FxBus';
 import { useDirector } from './anim/useDirector';
@@ -15,6 +15,10 @@ import { BOT_EMOTES } from './emotes';
 import { playSfx } from './audio';
 import { emptyTally, landingSound, mergeAward, processEvents } from './feedback';
 import { loadProfile, saveProfile, type Settings } from './storage';
+import { BOT_GIFTS_START, botGiftStep, botThanks } from './botGifts';
+import { GIFT_COOLDOWN_MS, recipientsOf } from './gifts';
+import { GIFT_FLY_MS } from './anim/lifetimes';
+import { useGifts, type GiftSeats } from './table/useGifts';
 
 /** Offline, the person always sits south. */
 export const HUMAN: Seat = 0;
@@ -52,7 +56,12 @@ function preDealView(v: PublicView): PublicView {
  * A new match is a new mount (the screen keys on match id), so table, director
  * and effects always start together.
  */
-export function useGame(settings: Settings, level: BotLevel = 'medium') {
+export function useGame(
+  settings: Settings,
+  level: BotLevel = 'medium',
+  /** Kept by the screen above the match, so the table's gifts survive a rematch. */
+  giftStore?: { current: GiftSeats },
+) {
   const tableRef = useRef<Table | null>(null);
   if (tableRef.current === null) {
     tableRef.current = new Table({
@@ -79,6 +88,23 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
   const anchors = useMemo(() => new AnchorMap(), []);
   const fxBus = useMemo(() => new FxBus(), []);
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
+  // Every delayed beat this match schedules — a bot's gloat, its thanks, its
+  // gift — dies with it: leaving mid-way once played a pop on the home screen.
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const live = timers.current;
+    return () => {
+      live.forEach(clearTimeout);
+      live.clear();
+    };
+  }, []);
+  const later = useCallback((ms: number, fn: () => void) => {
+    const h = setTimeout(() => {
+      timers.current.delete(h);
+      fn();
+    }, ms);
+    timers.current.add(h);
+  }, []);
   // The spawner is built before the director exists; it reads the view
   // through a ref the director fills in just below.
   const getViewRef = useRef<() => PublicView | null>(() => null);
@@ -100,6 +126,15 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
   // next beat when it changes (the system switch resolves a tick in).
   const motion = useMotionPolicy(settings.motion);
   motionRef.current = motion;
+
+  const gifts = useGifts({
+    anchors,
+    fxBus,
+    reduced: () => motionRef.current === 'reduced',
+    mySeat: () => HUMAN,
+    store: giftStore,
+  });
+  const botGifts = useRef(BOT_GIFTS_START);
   const { view, idle, enqueue, getView } = useDirector(
     HUMAN,
     useMemo(() => preDealView(table.view(HUMAN)), [table]),
@@ -137,10 +172,18 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
       if (!flushed && e.kind === 'trickWon' && e.seat !== HUMAN && Math.random() < 0.22) {
         const id = BOT_EMOTES[Math.floor(Math.random() * BOT_EMOTES.length)]!;
         const seat = e.seat;
-        setTimeout(() => {
+        later(800, () => {
           spawnEmote({ anchors, bus: fxBus, lang, reduced: () => motionRef.current === 'reduced' }, seat, id);
           playSfx('pop');
-        }, 800);
+        });
+      }
+      // …and now and then buys a coffee, or sends tissues (see botGifts.ts).
+      // Only for beats that actually play: a flushed batch is history.
+      if (!flushed) {
+        const step = botGiftStep(e, botGifts.current, HUMAN, Math.random);
+        botGifts.current = step.state;
+        const g = step.gift;
+        if (g) later(g.delayMs, () => gifts.fly(g.from, [HUMAN], g.id));
       }
     },
     // Anchors re-measure as each batch starts (the measurement lands a frame
@@ -173,8 +216,9 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
   const primed = useRef(false);
   if (!primed.current) {
     primed.current = true;
-    // Deferred a tick so the first layout pass registers the anchors first.
-    setTimeout(() => enqueue({ events: table.drainEvents(), finalView: table.view(HUMAN) }), 350);
+    // Deferred a tick so the first layout pass registers the anchors first
+    // (and cancelled with the match, like every other delayed beat here).
+    later(350, () => enqueue({ events: table.drainEvents(), finalView: table.view(HUMAN) }));
   }
 
   const drain = useCallback(
@@ -205,6 +249,35 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     drain();
   }, [idle, table, drain]);
 
+  /**
+   * A table gift from me: paid here and now (offline there is no echo to wait
+   * for), through the same profile the deal's awards are saved through, so
+   * the next deal's save can never undo it. A bot it reaches may thank me.
+   */
+  const gift = useCallback(
+    (id: GiftId, to: Seat | 'table') => {
+      if (Date.now() < gifts.giftReadyAt) return false;
+      const targets = recipientsOf(to, HUMAN);
+      const next = spendOnGift(profileRef.current, id, targets.length);
+      if (targets.length === 0 || next === profileRef.current) {
+        playSfx('denied');
+        return false;
+      }
+      profileRef.current = next;
+      saveProfile(next);
+      gifts.arm(GIFT_COOLDOWN_MS);
+      gifts.fly(HUMAN, targets, id);
+      for (const t of botThanks(targets, HUMAN, Math.random)) {
+        later(GIFT_FLY_MS + t.delayMs, () => {
+          spawnEmote({ anchors, bus: fxBus, lang, reduced: () => motionRef.current === 'reduced' }, t.seat, t.id);
+          playSfx('pop');
+        });
+      }
+      return true;
+    },
+    [gifts, anchors, fxBus, lang, later],
+  );
+
   // Offline there is no server round-trip: the bubble is the whole emote.
   const emote = useCallback(
     (id: string) => {
@@ -231,5 +304,10 @@ export function useGame(settings: Settings, level: BotLevel = 'medium') {
     submit,
     nextDeal,
     emote,
+    gifts: gifts.gifts,
+    giftLanded: gifts.giftLanded,
+    giftFrom: gifts.giftFrom,
+    giftReadyAt: gifts.giftReadyAt,
+    gift,
   };
 }

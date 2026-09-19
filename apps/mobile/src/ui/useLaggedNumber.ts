@@ -7,8 +7,11 @@ import { useEffect, useRef, useState } from 'react';
  * For the wallet, which used to jump the moment a deal was scored while the
  * coins were still in the air on their way to it — the total had changed
  * before anything had arrived.
+ *
+ * `downLagMs` is the wait when the number FALLS: a gift paid for should
+ * leave the wallet at once, while an award still waits for its coins.
  */
-export function useLaggedNumber(value: number, lagMs: number, countMs = 300): number {
+export function useLaggedNumber(value: number, lagMs: number, countMs = 300, downLagMs = lagMs): number {
   const [shown, setShown] = useState(value);
   const shownRef = useRef(value);
   shownRef.current = shown;
@@ -28,12 +31,12 @@ export function useLaggedNumber(value: number, lagMs: number, countMs = 300): nu
           ticker = null;
         }
       }, 33);
-    }, lagMs);
+    }, value < shownRef.current ? downLagMs : lagMs);
     return () => {
       clearTimeout(wait);
       if (ticker) clearInterval(ticker);
     };
-  }, [value, lagMs, countMs]);
+  }, [value, lagMs, countMs, downLagMs]);
 
   return shown;
 }

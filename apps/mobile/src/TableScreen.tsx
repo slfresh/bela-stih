@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import {
+  AccessibilityInfo,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -37,7 +38,7 @@ import type {
 } from '@belot/engine';
 import { cardId, teamOf } from '@belot/engine';
 import type { Lang } from '@belot/i18n';
-import { levelProgress, type Award, type PlayerProfile } from '@belot/progression';
+import { levelProgress, type Award, type GiftId, type PlayerProfile } from '@belot/progression';
 import { Anchor, AnchorHost, useAnchors, type AnchorMap } from './anim/AnchorRegistry';
 import { EffectsOverlay } from './anim/EffectsOverlay';
 import { REVEAL_MS } from './anim/director';
@@ -67,6 +68,7 @@ import type { ConfirmPlay } from './storage';
 import { cosmetics, room, roomStyle, type DeckStyle } from './cosmetics';
 import { PerfProbe } from './dev/PerfProbe';
 import { EmoteStrip } from './table/EmoteStrip';
+import { GiftPicker } from './table/GiftPicker';
 import { useTurnCues } from './table/useTurnCues';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { setBackGuard } from './ui/backGuard';
@@ -160,6 +162,16 @@ export interface TableScreenProps {
    * is a renons the engine punishes. The claim/bela buttons stay unassisted too.
    */
   hardMode?: boolean;
+  /** Each seat's latest table gift (useGifts). */
+  gifts?: readonly (GiftId | null)[];
+  /** Gifts that have landed on each seat, so each landing bounces once. */
+  giftLanded?: readonly number[];
+  /** Who gave each seat its gift, for the announcement when one lands on me. */
+  giftFrom?: readonly (Seat | null)[];
+  /** My gift cooldown: no gift before this instant. */
+  giftReadyAt?: number;
+  /** When set, the pucks open the gift picker, and a gift is sent through here. */
+  onGift?: (id: GiftId, to: Seat | 'table') => unknown;
 }
 
 export function TableScreen(props: TableScreenProps) {
@@ -172,6 +184,7 @@ export function TableScreen(props: TableScreenProps) {
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
     hardMode = false, series, askedRematch, waitingFor, onRematch, onForceRematch,
     handSort = 'auto', onHandSortChange, confirmPlay = 'ambiguous',
+    gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift,
   } = props;
 
   // Every dimension the table draws is derived from the real window, so eight
@@ -356,10 +369,38 @@ export function TableScreen(props: TableScreenProps) {
   }, [matchOver]);
   const leavingRef = useRef(leaving);
   leavingRef.current = leaving;
+
+  // The gift picker: opened from a puck (mine is "treat the table"). It shuts
+  // when my turn comes, when the sheet goes up, on back, and once sent — a
+  // gift is never in the way of a decision.
+  const [giftTarget, setGiftTarget] = useState<Seat | 'table' | null>(null);
+  const giftTargetRef = useRef(giftTarget);
+  giftTargetRef.current = giftTarget;
+  const giftable = !!onGift && !settled && !arranging && !leaving;
+  useEffect(() => {
+    if (!giftable) setGiftTarget(null);
+  }, [giftable]);
+  const myTurnWas = useRef(myTurn);
+  useEffect(() => {
+    if (myTurn && !myTurnWas.current) setGiftTarget(null);
+    myTurnWas.current = myTurn;
+  }, [myTurn]);
+  const openGifts = useCallback(
+    (target: Seat | 'table') => {
+      if (!giftable) return;
+      setTrayOpen(false);
+      setGiftTarget(target);
+    },
+    [giftable],
+  );
   const matchOverRef = useRef(matchOver);
   matchOverRef.current = matchOver;
   useEffect(() => {
     setBackGuard(() => {
+      if (giftTargetRef.current !== null) {
+        setGiftTarget(null); // back closes the picker; nothing was spent
+        return true;
+      }
       if (leavingRef.current) {
         setLeaving(false); // back answers the question safely
         return true;
@@ -381,6 +422,20 @@ export function TableScreen(props: TableScreenProps) {
     onEmote(id);
   };
 
+  // A gift landing on me is said aloud; the badge itself is decoration.
+  const myLandings = giftLanded?.[mySeat] ?? 0;
+  const seenMyLandings = useRef(myLandings);
+  useEffect(() => {
+    if (myLandings === seenMyLandings.current) return;
+    seenMyLandings.current = myLandings;
+    const id = gifts?.[mySeat];
+    const from = giftFrom?.[mySeat];
+    if (!id || from == null) return;
+    AccessibilityInfo.announceForAccessibility(lang.s.ui.giftReceived(lang.s.ui.giftName(id), meta(from).name));
+    // meta is re-derived each render; the landing count alone decides.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myLandings]);
+
   // Bela runs counter-clockwise, so the seat that acts AFTER me sits on my
   // RIGHT. Pucks and trick slots read the same map, so they can never drift
   // apart and fly a card to the wrong side of the table.
@@ -394,11 +449,29 @@ export function TableScreen(props: TableScreenProps) {
       connected: true,
     };
 
+  /** A puck that opens the gift picker (for its seat, or the table for mine). */
+  const giftPress = (s: Seat, child: ReactElement) => {
+    if (!onGift) return child;
+    const id = gifts?.[s] ?? null;
+    return (
+      <PressScale
+        disabled={!giftable}
+        onPress={() => openGifts(s === mySeat ? 'table' : s)}
+        accessibilityRole="button"
+        accessibilityLabel={lang.s.ui.giftPuckLabel(meta(s).name, id ? lang.s.ui.giftName(id) : null)}
+        accessibilityHint={s === mySeat ? lang.s.ui.giftTreatTable : lang.s.ui.giftHint}
+        scaleTo={0.95}
+      >
+        {child}
+      </PressScale>
+    );
+  };
+
   const puck = (s: Seat) => (
     <Animated.View
       entering={reduced ? undefined : ZoomIn.delay(((s - mySeat + 4) % 4) * 60).duration(220)}
     >
-    <SeatPuck
+    {giftPress(s, <SeatPuck
       seat={s}
       name={meta(s).name}
       avatar={meta(s).avatar}
@@ -416,7 +489,9 @@ export function TableScreen(props: TableScreenProps) {
       reduced={reduced}
       gesture={cue && (cue.kind === 'nod' || cue.kind === 'pulse') && cue.seat === s ? cue : null}
       tricks={view.dealProgress?.tricksWon[teamOf(s)] ?? 0}
-    />
+      gift={gifts?.[s] ?? null}
+      giftN={giftLanded?.[s] ?? 0}
+    />)}
     </Animated.View>
   );
 
@@ -851,7 +926,8 @@ export function TableScreen(props: TableScreenProps) {
   // My own puck: the same disc as everyone else's, a shade smaller, with my
   // clock on it — centred under my fan in portrait, beside it in landscape.
   // Its anchor is NOT the seat's: the hand is where my cards fly from and to.
-  const selfPuck = (
+  const selfPuck = giftPress(
+    mySeat,
     <SeatPuck
       seat={mySeat}
       name={meta(mySeat).name}
@@ -876,7 +952,9 @@ export function TableScreen(props: TableScreenProps) {
       gesture={cue && (cue.kind === 'nod' || cue.kind === 'pulse') && cue.seat === mySeat ? cue : null}
       tricks={view.dealProgress?.tricksWon[teamOf(mySeat)] ?? 0}
       anchored={false}
-    />
+      gift={gifts?.[mySeat] ?? null}
+      giftN={giftLanded?.[mySeat] ?? 0}
+    />,
   );
 
   // A fixed box — portrait's 34px row, landscape's 74x114 in the rail — so
@@ -1119,6 +1197,26 @@ export function TableScreen(props: TableScreenProps) {
           <EffectsOverlay bus={fxBus} />
           {__DEV__ && probe && <PerfProbe />}
 
+          {/* The gift picker: an overlay, so opening it moves no row of the table. */}
+          {giftTarget !== null && onGift && (
+            <GiftPicker
+              lang={lang}
+              target={giftTarget}
+              nameOf={(s) => meta(s).name}
+              giftOf={(s) => gifts?.[s] ?? null}
+              profile={profile}
+              readyAt={giftReadyAt}
+              land={land}
+              reduced={reduced}
+              ground={baize.page}
+              onClose={() => setGiftTarget(null)}
+              onSend={(id, to) => {
+                setGiftTarget(null);
+                onGift(id, to);
+              }}
+            />
+          )}
+
           {/* Not once the match is over: offline the same button then means a
               new match, and "Napusti" must never start one. */}
           {leaving && !matchOver && (
@@ -1282,7 +1380,8 @@ const ProfileBar = memo(
     // The total changes when the last coin lands on it, not when the deal is
     // scored with the coins still in the air — and the coins set off from the
     // sheet's total, a moment after the sheet has slid up.
-    const coins = useLaggedNumber(profile.coins, lag);
+    // A gift paid for leaves the wallet at once; an award waits for its coins.
+    const coins = useLaggedNumber(profile.coins, lag, 300, 0);
     // The XP bar fills rather than jumps; a new level swells the badge. Only on
     // a change: a rotation remounts the strip already full to where it is, and
     // an animation to that same value kept writing to the torn-down one.

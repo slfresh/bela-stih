@@ -91,6 +91,38 @@ export function giftBadgeBox(size: number): { d: number; left: number; top: numb
   const d = Math.max(14, Math.min(22, Math.round(size * 0.42)));
   return { d, left: -d / 2, top: ring / 2 + 3 - d / 2 };
 }
+
+/** The gift picker's fixed rows, in dp. */
+export const GIFT_PICKER = {
+  PAD: 12,
+  GAP: 6,
+  HEADER: 36,
+  CHIPS: 36,
+  SEND: 44,
+  NOTE: 28,
+  /** A cell's price line under its art. */
+  CAPTION: 14,
+  MAX_CELL: 56,
+} as const;
+
+/**
+ * The gift picker drawn to the box it opens in: five columns upright, eight
+ * on a phone held sideways (with its chips beside the title and its note
+ * beside the button, so the whole picker fits a 336 dp rail height), cells
+ * never above 56 dp. `scroll` is only ever true below any real phone.
+ */
+export function giftPickerLayout(w: number, h: number, land: boolean, count = 15) {
+  const P = GIFT_PICKER;
+  const cols = land ? 8 : 5;
+  const rows = Math.ceil(count / cols);
+  const panelW = Math.min(land ? 560 : 360, w - 24);
+  const cell = Math.min(P.MAX_CELL, Math.floor((panelW - 2 * P.PAD - (cols - 1) * P.GAP) / cols));
+  const gridH = rows * (cell + P.CAPTION) + (rows - 1) * P.GAP;
+  const panelH = land
+    ? 2 * P.PAD + P.HEADER + P.GAP + gridH + P.GAP + P.SEND
+    : 2 * P.PAD + P.HEADER + P.GAP + P.CHIPS + P.GAP + gridH + P.GAP + P.NOTE + P.GAP + P.SEND;
+  return { cols, rows, cell, panelW, panelH, gridH, scroll: panelH > h - 24 };
+}
 /** Landscape's gap between each rail and the centre column (styles.rootLand). */
 export const LAND_GAP = 6;
 

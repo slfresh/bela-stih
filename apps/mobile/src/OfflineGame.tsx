@@ -10,6 +10,7 @@ import { pattern } from './haptics';
 import { TableScreen } from './TableScreen';
 import { HUMAN, useGame } from './useGame';
 import type { Settings } from './storage';
+import { NO_GIFTS, type GiftSeats } from './table/useGifts';
 
 /**
  * A local game against the bots. A rematch remounts the inner match component,
@@ -25,6 +26,9 @@ export function OfflineGame({
   onExit: () => void;
 }) {
   const [matchId, setMatchId] = useState(0);
+  // The table's gifts belong to the table, not to one match: a rematch keeps
+  // everybody's badge on, and only leaving the table takes them off.
+  const giftStore = useRef<GiftSeats>(NO_GIFTS);
   return (
     <OfflineMatch
       key={matchId}
@@ -32,6 +36,7 @@ export function OfflineGame({
       onSettingsChange={onSettingsChange}
       onExit={onExit}
       onRematch={() => setMatchId((n) => n + 1)}
+      giftStore={giftStore}
     />
   );
 }
@@ -41,18 +46,20 @@ function OfflineMatch({
   onSettingsChange,
   onExit,
   onRematch,
+  giftStore,
 }: {
   settings: Settings;
   onSettingsChange?: (s: Settings) => void;
   onExit: () => void;
   onRematch: () => void;
+  giftStore: { current: GiftSeats };
 }) {
   // Not on the web: the Wake Lock API needs a gesture and a secure context,
   // and deactivating a lock that never activated rejects with
   // ERR_KEEP_AWAKE_TAG_INVALID on every exit. The platform never changes at
   // runtime, so the hook order is stable.
   if (Platform.OS !== 'web') useKeepAwake(); // eslint-disable-line react-hooks/rules-of-hooks
-  const g = useGame(settings);
+  const g = useGame(settings, 'medium', giftStore);
 
   const settled = g.view.phase === 'DEAL_OVER' || g.view.phase === 'MATCH_OVER';
   const matchOver = g.view.phase === 'MATCH_OVER';
@@ -151,6 +158,11 @@ function OfflineMatch({
       onFinish={matchOver ? onRematch : onExit}
       finishLabel={matchOver ? g.lang.s.newMatch : g.lang.s.ui.back}
       onEmote={g.emote}
+      gifts={g.gifts}
+      giftLanded={g.giftLanded}
+      giftFrom={g.giftFrom}
+      giftReadyAt={g.giftReadyAt}
+      onGift={g.gift}
     />
   );
 }
