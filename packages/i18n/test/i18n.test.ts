@@ -157,13 +157,18 @@ describe('the Cyrillic locale is actually Cyrillic', () => {
 
   it('translates every plain ui string', () => {
     // The walk above sees only the top level: a Latin ui string slipped by.
+    // `rulesAnchor` is not prose: it is the fragment of the rules page's URL,
+    // and that page writes its Croatian half's anchor in Latin.
+    const NOT_PROSE = new Set(['rulesAnchor']);
     let n = 0;
     for (const [key, value] of Object.entries(cyr.s.ui)) {
-      if (typeof value !== 'string') continue;
+      if (typeof value !== 'string' || NOT_PROSE.has(key)) continue;
       n++;
       assertNoLatin(`ui.${key}`, value);
     }
     expect(n).toBeGreaterThan(50);
+    // And the anchor is one the page actually has.
+    for (const l of LOCALE_IDS) expect(['pravila', 'conduct']).toContain(new Lang(l).s.ui.rulesAnchor);
   });
 
   it('translates the spoken rank names', () => {

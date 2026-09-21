@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Lang, LOCALE_IDS } from '@belot/i18n';
-import { mutedSeats, type MutedGift } from '../src/gifts';
+import { mutedSeats, unmutedSeats, type MutedGift } from '../src/gifts';
 import { REPORT_EMAIL, reportMailto, reportStamp } from '../src/report';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -60,6 +60,30 @@ describe("a hidden player's gift stays off the puck", () => {
   });
 });
 
+describe('showing a hidden player again puts their gift back with its giver', () => {
+  const hid = (id: 'kava' | 'ruza', from: 0 | 1 | 2 | 3): MutedGift => ({ id, from });
+  it('names the seats to restore, so the same player can be hidden a second time', () => {
+    const muted = [null, hid('kava', 2), null, hid('ruza', 2)];
+    const r = unmutedSeats(muted, 2);
+    expect(r.back).toEqual([{ seat: 1, id: 'kava' }, { seat: 3, id: 'ruza' }]);
+    expect(r.muted).toEqual([null, null, null, null]);
+  });
+
+  it('leaves another hidden player-s records alone', () => {
+    const muted = [hid('kava', 1), hid('ruza', 2), null, null];
+    const r = unmutedSeats(muted, 2);
+    expect(r.back).toEqual([{ seat: 1, id: 'ruza' }]);
+    expect(r.muted).toEqual([hid('kava', 1), null, null, null]);
+  });
+
+  it('the hook restores the badge itself instead of waiting for the room', () => {
+    const src = readFileSync(join(here, '../src/table/useGifts.ts'), 'utf8');
+    expect(src).toMatch(/const \{ back, muted: rest \} = unmutedSeats\(muted\.current, giver\);/);
+    // The giver goes back on the seat: without it a second hide finds nothing.
+    expect(src).toMatch(/from\[seat\] = giver;/);
+  });
+});
+
 describe('no release carries the placeholder report address', () => {
   it('the web build, the deploy and the Android build all look for it', () => {
     const read = (f: string) => readFileSync(join(here, '../../..', f), 'utf8');
@@ -75,5 +99,15 @@ describe('no release carries the placeholder report address', () => {
     expect(android).toMatch(/^check_report "\$AAB" base\/assets\/index\.android\.bundle$/m);
     expect(android).toMatch(/^ {2}check_report "\$APK" assets\/index\.android\.bundle$/m);
     expect(android).toMatch(/b'REPORT-ADDRESS-NOT-SET' in zipfile/);
+    // And a waived build cannot be mistaken for a shippable one: it is moved
+    // off the path the submit line names, and that line is never printed.
+    expect(android).toMatch(/^ {6}TEST_BUILD=1$/m);
+    expect(android).toMatch(/TEST_AAB="\$\{AAB%\.aab\}-TESTBUILD\.aab"/);
+    const branch = android.indexOf('if [ "${TEST_BUILD:-}" = 1 ]; then');
+    const exits = android.indexOf('exit 0', branch);
+    const submit = android.indexOf('eas-cli submit');
+    expect(branch).toBeGreaterThan(-1);
+    expect(exits).toBeGreaterThan(branch);
+    expect(submit).toBeGreaterThan(exits);
   });
 });

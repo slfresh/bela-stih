@@ -345,6 +345,13 @@ export function useNetGame(settings: Settings) {
     roomRef.current = room;
     reconnectTokenRef.current = room.reconnectionToken;
     setRoomId(room.roomId);
+    // What the last deal scored, and who won the match, are this client's own
+    // record of events it watched. A reconnect rebuilds the view from the
+    // room and may land straight in DEAL_OVER or MATCH_OVER, having missed
+    // both - so the record goes, and the sheet shows the match score alone
+    // rather than another deal's numbers.
+    setLastDealResult(null);
+    setWinnerTeam(null);
     // A reconnect to the same table keeps the players I hid; a new table
     // starts with nobody hidden.
     if (hiddenRoomRef.current !== room.roomId) {

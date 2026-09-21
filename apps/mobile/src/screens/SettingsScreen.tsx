@@ -69,10 +69,13 @@ export function SettingsScreen({
         {/* Play's user-content policy: the rules, accepted where the name is made. */}
         <PressScale
           onPress={() => {
-            void Linking.openURL('https://belastih.com/#pravila').catch(() => {});
+            // The page says the rules in both languages; each anchor opens the
+            // half this player reads (sr reads the hr half).
+            void Linking.openURL(`https://belastih.com/#${ui.rulesAnchor}`).catch(() => {});
           }}
           hitSlop={6}
           accessibilityRole="link"
+          accessibilityLabel={ui.nicknameRulesLabel}
         >
           <Text style={styles.hint}>{ui.nicknameRules} ↗</Text>
         </PressScale>

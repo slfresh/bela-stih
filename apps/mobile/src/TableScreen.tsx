@@ -395,6 +395,12 @@ export function TableScreen(props: TableScreenProps) {
   // Online, a room that marks nobody as able to see gifts — not even me,
   // who joined saying I can — is an older server: no gifts at all there.
   const giftable = !!onGift && (giftReach?.[mySeat] ?? true) && !settled && !arranging && !leaving;
+  // Hiding and reporting are not gifts and do not wait for a gift's moment:
+  // the sheet at the end of a deal or a match is exactly when a player wants
+  // them, so another player's puck opens the player view even then. (The
+  // rules page and the compliance checklist both promise it without a
+  // condition.) My own puck stays a gift-only puck.
+  const moderatable = !!onHide && !!onReport && !leaving;
   // Whatever shuts the picker — the table (my turn, the sheet) or a tap on
   // send, close or beside it — shuts it under a finger that may be coming
   // down again, and under the picker lie the fan and the question's
@@ -413,8 +419,8 @@ export function TableScreen(props: TableScreenProps) {
     return () => clearTimeout(t);
   }, [giftShield]);
   useEffect(() => {
-    if (!giftable) shutGifts();
-  }, [giftable, shutGifts]);
+    if (!giftable && !moderatable) shutGifts();
+  }, [giftable, moderatable, shutGifts]);
   const myTurnWas = useRef(myTurn);
   useEffect(() => {
     if (myTurn && !myTurnWas.current) shutGifts();
@@ -422,11 +428,11 @@ export function TableScreen(props: TableScreenProps) {
   }, [myTurn, shutGifts]);
   const openGifts = useCallback(
     (target: Seat | 'table') => {
-      if (!giftable) return;
+      if (target === 'table' ? !giftable : !giftable && !moderatable) return;
       setTrayOpen(false);
       setGiftTarget(target);
     },
-    [giftable],
+    [giftable, moderatable],
   );
   const matchOverRef = useRef(matchOver);
   matchOverRef.current = matchOver;
@@ -498,7 +504,7 @@ export function TableScreen(props: TableScreenProps) {
     const id = gifts?.[s] ?? null;
     return (
       <PressScale
-        disabled={!giftable}
+        disabled={s === mySeat ? !giftable : !giftable && !moderatable}
         onPress={() => openGifts(s === mySeat ? 'table' : s)}
         accessibilityRole="button"
         // The button hides the puck's own parts from a screen reader, so it
@@ -511,7 +517,17 @@ export function TableScreen(props: TableScreenProps) {
           gift: id ? lang.s.ui.giftName(id) : null,
         })}
         accessibilityHint={
-          giftable ? (s === mySeat ? lang.s.ui.giftTreatTable : onReport ? lang.s.ui.playerHint : lang.s.ui.giftHint) : undefined
+          s === mySeat
+            ? giftable
+              ? lang.s.ui.giftTreatTable
+              : undefined
+            : giftable
+              ? onReport
+                ? lang.s.ui.playerHint
+                : lang.s.ui.giftHint
+              : moderatable
+                ? lang.s.ui.playerHint
+                : undefined
         }
         scaleTo={0.95}
       >
@@ -1155,7 +1171,7 @@ export function TableScreen(props: TableScreenProps) {
               </View>
 
               <View style={styles.centre}>
-                {status ? <Text style={[styles.status, statusIsError && styles.statusError]} role={statusIsError ? 'alert' : undefined}>{status}</Text> : null}
+                {status ? <Text style={[styles.status, statusIsError && styles.statusError]} role={statusIsError ? 'alert' : undefined} accessibilityLiveRegion={statusIsError ? 'assertive' : 'none'}>{status}</Text> : null}
                 {felt}
                 {prompts}
                 {/* My puck beside my fan, on the faces' side: between my cards
@@ -1203,7 +1219,7 @@ export function TableScreen(props: TableScreenProps) {
                 </View>
                 {leaveButton}
               </View>
-              {status && !shed ? <Text style={[styles.status, statusIsError && styles.statusError]} role={statusIsError ? 'alert' : undefined}>{status}</Text> : null}
+              {status && !shed ? <Text style={[styles.status, statusIsError && styles.statusError]} role={statusIsError ? 'alert' : undefined} accessibilityLiveRegion={statusIsError ? 'assertive' : 'none'}>{status}</Text> : null}
 
               {/* score strip: match score, plus this deal's running count */}
               <TableHeader
@@ -1262,6 +1278,8 @@ export function TableScreen(props: TableScreenProps) {
               target={giftTarget}
               mySeat={mySeat}
               reach={giftReach}
+              // Opened while no gift can be sent: straight to the player view.
+              giftsOff={!giftable}
               // Online, another player's puck also hides or reports them.
               moderate={
                 onHide && onReport && giftTarget !== 'table'
@@ -2090,13 +2108,8 @@ function DealResult({
   onFinish: () => void;
   finishLabel: string;
 }) {
-  if (!result) return null;
   const us = teamOf(mySeat);
   const them = (1 - us) as TeamId;
-  // Ours or theirs — the same rule the sounds use (feedback.ts).
-  const won = result.finalScore[us] > result.finalScore[them];
-  const made = renonsText ? false : result.callerMade;
-  const stiglja = result.valatTeam !== null;
   // Rows arrive one after another; the totals count up to their values.
   let order = 0;
   const enter = () => (reduced ? undefined : FadeInDown.delay(order++ * 60).duration(220));
@@ -2118,6 +2131,61 @@ function DealResult({
     </Animated.View>
   );
   const rule = <View style={styles.rule} />;
+  const foot = (
+    <ResultFoot
+      lang={lang}
+      matchOver={matchOver}
+      series={series}
+      askedRematch={askedRematch}
+      waitingFor={waitingFor}
+      onRematch={onRematch}
+      rematchLabel={rematchLabel}
+      onForceRematch={onForceRematch}
+      onNext={onNext}
+      onFinish={onFinish}
+      finishLabel={finishLabel}
+    />
+  );
+
+  // A deal scored while this client was away (it reconnected into DEAL_OVER):
+  // its rows would be another deal's, so it shows the match score, says what
+  // happened, and above all still answers - a sheet with no way on would
+  // leave the table with nothing but Napusti.
+  if (!result) {
+    return (
+      <Animated.View entering={reduced ? undefined : SlideInDown.duration(280)}>
+        <ScrollView
+          style={[styles.resultPanel, { maxHeight, backgroundColor: room().page }]}
+          contentContainerStyle={styles.resultContent}
+        >
+          <View style={[styles.sheetBand, matchOver ? styles.sheetBandMatch : styles.sheetBandPlain]}>
+            {matchOver && <Crown size={26} />}
+            <View style={styles.sheetBandText}>
+              <Text style={styles.sheetTitle} numberOfLines={2}>
+                {/* The winner's name came with an event this client missed
+                    too: then the score below is all there is to say. */}
+                {matchOver ? (winnerLabel ? lang.s.winner(winnerLabel) : lang.s.matchScore) : lang.s.dealResult}
+              </Text>
+              <Text style={styles.sheetVerdict} numberOfLines={2}>
+                {lang.s.ui.resultMissed}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.resultHeads}>
+            <Text style={[styles.resultHead, styles.resultHeadUs]}>{lang.team(us, mySeat)}</Text>
+            <Text style={[styles.resultHead, styles.resultHeadThem]}>{lang.team(them, mySeat)}</Text>
+          </View>
+          {row(lang.s.matchScore, matchScores, { hero: true })}
+          {foot}
+        </ScrollView>
+      </Animated.View>
+    );
+  }
+
+  // Ours or theirs — the same rule the sounds use (feedback.ts).
+  const won = result.finalScore[us] > result.finalScore[them];
+  const made = renonsText ? false : result.callerMade;
+  const stiglja = result.valatTeam !== null;
 
   return (
     <Animated.View entering={reduced ? undefined : SlideInDown.duration(280)}>
@@ -2201,6 +2269,40 @@ function DealResult({
         </Animated.View>
       )}
 
+      {foot}
+    </ScrollView>
+    </Animated.View>
+  );
+}
+
+/** The sheet's answers: another match, the next deal, or the way out. */
+function ResultFoot({
+  lang,
+  matchOver,
+  series,
+  askedRematch,
+  waitingFor = 0,
+  onRematch,
+  rematchLabel,
+  onForceRematch,
+  onNext,
+  onFinish,
+  finishLabel,
+}: {
+  lang: Lang;
+  matchOver: boolean;
+  series?: readonly [number, number] | null;
+  askedRematch?: boolean;
+  waitingFor?: number;
+  onRematch?: () => void;
+  rematchLabel?: string;
+  onForceRematch?: () => void;
+  onNext: () => void;
+  onFinish: () => void;
+  finishLabel: string;
+}) {
+  return (
+    <>
       {matchOver ? (
         // Online stacks the series line over its buttons; offline has no
         // series, and its two answers sit side by side like a deal's.
@@ -2233,8 +2335,7 @@ function DealResult({
           <Button label={finishLabel} tone="plain" onPress={onFinish} />
         </View>
       )}
-    </ScrollView>
-    </Animated.View>
+    </>
   );
 }
 
@@ -2616,6 +2717,8 @@ const styles = StyleSheet.create({
     marginBottom: space.sm,
   },
   sheetBandWon: { backgroundColor: team.usDim, borderColor: team.usEdge },
+  // Neither side's colour: a deal whose score this client never saw.
+  sheetBandPlain: { backgroundColor: surface.sunk, borderColor: theme.line },
   sheetBandLost: { backgroundColor: team.themDim, borderColor: team.themEdge },
   sheetBandMatch: { backgroundColor: surface.sunk, borderColor: theme.accent },
   sheetBandText: { flex: 1, gap: 2 },

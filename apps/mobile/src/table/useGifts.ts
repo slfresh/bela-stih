@@ -8,7 +8,7 @@ import { GIFT_FLY_MS } from '../anim/lifetimes';
 import { playSfx } from '../audio';
 import { pattern } from '../haptics';
 import { spawnGift } from './fx';
-import { mutedSeats, type MutedGift } from '../gifts';
+import { mutedSeats, unmutedSeats, type MutedGift } from '../gifts';
 
 /**
  * What each seat wears: its latest gift, and how many gifts have LANDED on it
@@ -169,7 +169,22 @@ export function useGifts(opts: {
   const mute = useCallback((giver: Seat, on: boolean) => {
     if (!on) {
       mutedGivers.current.delete(giver);
-      muted.current = muted.current.map((x) => (x && x.from === giver ? null : x));
+      const { back, muted: rest } = unmutedSeats(muted.current, giver);
+      muted.current = rest;
+      // Put the badges back here, with their giver: the room's next record
+      // knows the gift but not who gave it, and a badge whose giver is
+      // unknown can never be taken off again.
+      const put = back.filter(({ seat }) => pending.current[seat]! === 0);
+      if (put.length === 0) return;
+      setSeats((prev) => {
+        const ids = [...prev.ids];
+        const from = [...prev.from];
+        for (const { seat, id } of put) {
+          ids[seat] = id;
+          from[seat] = giver;
+        }
+        return { ids, landed: prev.landed, from };
+      });
       return;
     }
     mutedGivers.current.add(giver);

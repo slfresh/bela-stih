@@ -677,14 +677,26 @@ describe('table gifts', () => {
       readdirSync(join(here, '../src', d), { withFileTypes: true }).flatMap((e) =>
         e.isDirectory() ? walk(join(d, e.name)) : /\.tsx?$/.test(e.name) ? [join(d, e.name)] : [],
       );
-    let emitters = 0;
+    // Per emit, not per file: a file that mentions the policy anywhere (a
+    // `reducedMotion={...}` prop, a ref declaration) used to answer for every
+    // emit in it, so a gate could be deleted with the suite still green.
+    const GATE = /(motion (===|!==) 'reduced'|reducedRef\.current|reduced\(\)|isReduced\(\))/;
+    let emits = 0;
     for (const f of walk('.')) {
       const t = src(f);
-      if (!/emit\(\{ kind: '(coins|confetti|burst)'/.test(t)) continue;
-      emitters++;
-      expect(t, f).toMatch(/motion (===|!==) 'reduced'|reducedRef\.current/);
+      for (const m of t.matchAll(/emit\(\{ kind: '(?:coins|confetti|burst)'/g)) {
+        emits++;
+        // The gate stands above the emit, inside the same handler: the 600
+        // characters before it, with the prop and ref lines taken out so only
+        // a real test can satisfy it.
+        const before = t
+          .slice(Math.max(0, m.index - 600), m.index)
+          .replace(/reducedMotion=\{[^}]*\}/g, '')
+          .replace(/useRef\(reduced\)|reducedRef\.current = reduced;/g, '');
+        expect(before, `${f}: the ${m[0]} emit is not gated`).toMatch(GATE);
+      }
     }
-    expect(emitters).toBeGreaterThanOrEqual(3);
+    expect(emits).toBeGreaterThanOrEqual(5);
   });
 
   it('the profile puts every number under its own label', () => {
@@ -750,7 +762,10 @@ describe('table gifts', () => {
     expect(o).toMatch(/net\.error \?\?\s*\(away\.length > 0 \?/);
     expect(o).toMatch(/statusIsError=\{net\.error !== null\}/);
     const t = src('TableScreen.tsx');
-    expect((t.match(/<Text style=\{\[styles\.status, statusIsError && styles\.statusError\]\} role=\{statusIsError \? 'alert' : undefined\}>/g) ?? []).length).toBe(2);
+    // Both lines say it, and say it OUT LOUD: role="alert" is a live region on
+    // the web only, so Android needs its own word for the same thing.
+    const said = /<Text style=\{\[styles\.status, statusIsError && styles\.statusError\]\} role=\{statusIsError \? 'alert' : undefined\} accessibilityLiveRegion=\{statusIsError \? 'assertive' : 'none'\}>/g;
+    expect((t.match(said) ?? []).length).toBe(2);
     expect(t).toMatch(/statusError: \{ color: theme\.dangerInk \}/);
   });
 
@@ -773,8 +788,18 @@ describe('table gifts', () => {
     const next = n.slice(n.indexOf('const next = useCallback'), n.indexOf('const sendEmote'));
     expect(next).toMatch(/roomRef\.current\?\.send\('next', \{\}\)/);
     expect(next).not.toMatch(/setLastDealResult|setBanner/);
-    // Wiped only by a new match and by leaving; replaced by the next dealScored.
-    expect((n.match(/setLastDealResult\(null\)/g) ?? []).length).toBe(2);
+    // Wiped by a new match, by leaving, and by attaching to a room - a
+    // reconnect can land straight in DEAL_OVER, and the deal it holds is then
+    // another deal's. Replaced by the next dealScored.
+    expect((n.match(/setLastDealResult\(null\)/g) ?? []).length).toBe(3);
+    const attach = n.slice(n.indexOf('const attach = useCallback'), n.indexOf("room.onMessage('view'"));
+    expect(attach).toMatch(/setLastDealResult\(null\);\s*setWinnerTeam\(null\);/);
+    // And the sheet itself always answers, even with no result to show.
+    const t = src('TableScreen.tsx');
+    expect(t).not.toMatch(/if \(!result\) return null;/);
+    const short = t.slice(t.indexOf('  if (!result) {'), t.indexOf('  // Ours or theirs'));
+    expect(short).toContain('{foot}');
+    expect(short).toMatch(/lang\.s\.ui\.resultMissed/);
     const onEvent = n.slice(n.indexOf('const onEvent = useCallback'), n.indexOf('const onEventRef'));
     const clear = onEvent.indexOf("if (e.kind === 'dealStarted') setBanner(null);");
     expect(clear).toBeGreaterThan(-1);
@@ -809,7 +834,16 @@ describe('table gifts', () => {
     // shuts the picker when my turn comes or the sheet goes up...
     expect(t).toMatch(/const giftable = !!onGift && \(giftReach\?\.\[mySeat\] \?\? true\) && !settled && !arranging && !leaving;/);
     expect(t).toMatch(/if \(myTurn && !myTurnWas\.current\) shutGifts\(\);/);
-    expect(t).toMatch(/if \(!giftable\) shutGifts\(\);/);
+    // ...but hiding and reporting are not gifts: another player's puck opens
+    // the player view even with the sheet up, which is when a player most
+    // wants it (the rules page and the checklist promise it unconditionally).
+    expect(t).toMatch(/const moderatable = !!onHide && !!onReport && !leaving;/);
+    expect(t).toMatch(/if \(!giftable && !moderatable\) shutGifts\(\);/);
+    expect(t).toMatch(/if \(target === 'table' \? !giftable : !giftable && !moderatable\) return;/);
+    expect(t).toMatch(/disabled=\{s === mySeat \? !giftable : !giftable && !moderatable\}/);
+    expect(t).toMatch(/giftsOff=\{!giftable\}/);
+    // Opened that way, the picker IS the player view - there is no gift to pick.
+    expect(src('table/GiftPicker.tsx')).toMatch(/useState\(giftsOff && !!moderate\)/);
     // ...and a shut it did by itself raises the shield, which swallows the
     // touches of the next moment and always comes down again.
     const shut = t.slice(t.indexOf('const shutGifts = useCallback'), t.indexOf('const myTurnWas'));
@@ -1107,6 +1141,9 @@ describe('the rules of conduct', () => {
     expect(rules).toBeGreaterThan(field);
     // In the same panel as the field, before the next one opens.
     expect(rules).toBeLessThan(t.indexOf('<Panel>', field));
-    expect(t.slice(field, rules)).toMatch(/Linking\.openURL\('https:\/\/belastih\.com\/#pravila'\)/);
+    // Each language opens the half of the page it can read, and the link says
+    // what it is rather than reading the whole sentence aloud.
+    expect(t.slice(field, rules)).toMatch(/Linking\.openURL\(`https:\/\/belastih\.com\/#\$\{ui\.rulesAnchor\}`\)/);
+    expect(t.slice(field, rules)).toMatch(/accessibilityLabel=\{ui\.nicknameRulesLabel\}/);
   });
 });

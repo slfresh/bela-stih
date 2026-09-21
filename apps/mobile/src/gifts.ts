@@ -65,6 +65,22 @@ export function mutedSeats(server: readonly (string | null | undefined)[], muted
   return { keep: next.map((m) => m !== null), muted: next };
 }
 
+/**
+ * Showing a hidden player again: the badges of theirs to put straight back,
+ * and the records that go with them. The badge is restored here rather than
+ * left to the room's next record, which knows the gift but not who gave it -
+ * and a giver it cannot name can never be hidden a second time.
+ */
+export function unmutedSeats(muted: readonly MutedGift[], giver: Seat) {
+  const back: { seat: Seat; id: GiftId }[] = [];
+  const next = muted.map((m, t) => {
+    if (!m || m.from !== giver) return m;
+    back.push({ seat: t as Seat, id: m.id });
+    return null;
+  });
+  return { back, muted: next };
+}
+
 /** The room's word on who can see a gift (SeatInfo.seesGifts), as a GiftReach. */
 export function reachOf(seats: readonly { seat: Seat; seesGifts?: boolean }[]): boolean[] {
   return ([0, 1, 2, 3] as Seat[]).map((s) => seats.some((x) => x.seat === s && x.seesGifts === true));

@@ -40,6 +40,7 @@ LogBox.ignoreLogs(['Reduced motion setting is overwritten']);
 import { setCardLocale, setCosmetics, setDeckStyle } from './src/cosmetics';
 import { ErrorBoundary } from './src/ui/ErrorBoundary';
 import { useMotionPolicy } from './src/anim/useMotionPolicy';
+import { MotionProvider } from './src/anim/MotionHere';
 
 /** The menu stack, one level deep: home, or one of its satellite screens. */
 type MenuScreen = 'home' | 'shop' | 'settings' | 'profile';
@@ -229,16 +230,20 @@ export default function App() {
     <SafeAreaProvider>
       <ReducedMotionConfig mode={ReduceMotion.Never} />
       <StatusBar style="light" />
-      {/* On the web the app lives in a centred column; phones get the viewport. */}
-      {Platform.OS === 'web' ? (
-        <WebShell>
-          {guarded}
-          {/* Browsers refuse audio before a gesture; this says so, once, if it happens. */}
-          <AudioUnlockChip label={lang.s.ui.soundBlocked} />
-        </WebShell>
-      ) : (
-        guarded
-      )}
+      {/* Now that reanimated obeys nobody else, the policy has to reach the
+          shared pieces that take no props: every press in the app. */}
+      <MotionProvider value={motion}>
+        {/* On the web the app lives in a centred column; phones get the viewport. */}
+        {Platform.OS === 'web' ? (
+          <WebShell>
+            {guarded}
+            {/* Browsers refuse audio before a gesture; this says so, once, if it happens. */}
+            <AudioUnlockChip label={lang.s.ui.soundBlocked} />
+          </WebShell>
+        ) : (
+          guarded
+        )}
+      </MotionProvider>
     </SafeAreaProvider>
   );
 }

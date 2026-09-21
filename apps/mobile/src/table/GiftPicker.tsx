@@ -35,6 +35,7 @@ export function GiftPicker({
   onSend,
   onClose,
   moderate,
+  giftsOff = false,
 }: {
   lang: Lang;
   /** A seat, or 'table' when opened from my own puck. */
@@ -54,14 +55,21 @@ export function GiftPicker({
   onClose: () => void;
   /** Online, another player's puck: hide them on this device, or report them. */
   moderate?: { hidden: boolean; onHide: () => void; onReport: () => void };
+  /**
+   * Opened at a moment when no gift can be sent (the result sheet is up, or
+   * the hand is being arranged): there is nothing to pick, so this IS the
+   * player view. Hiding and reporting never wait for a gift's moment.
+   */
+  giftsOff?: boolean;
 }) {
   const ui = lang.s.ui;
   const { width, height } = useWindowDimensions();
   const L = giftPickerLayout(width, height, land, GIFTS.length);
   const [everyone, setEveryone] = useState(target === 'table');
   const [chosen, setChosen] = useState<GiftId | null>(null);
-  // The player view: hide or report instead of a gift.
-  const [moderating, setModerating] = useState(false);
+  // The player view: hide or report instead of a gift. It is the whole sheet
+  // when there is no gift to send.
+  const [moderating, setModerating] = useState(giftsOff && !!moderate);
   const to: Seat | 'table' = everyone || target === 'table' ? 'table' : target;
   const can = (s: Seat) => reach?.[s] ?? true;
   const others = ([0, 1, 2, 3] as Seat[]).filter((s) => s !== mySeat && can(s)).length;
