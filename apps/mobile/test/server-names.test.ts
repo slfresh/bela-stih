@@ -15,7 +15,10 @@ describe("the server's nickname filter", () => {
 
   it('refuses a name holding a listed word, however it is dressed up', () => {
     const list = ['budala', 'будала'];
-    for (const name of ['Budala', 'BUDALA 7', 'b.u.d.a.l.a', 'bud4la', 'Ja sam budala', 'Будала']) {
+    // Dressed up with case, spacing, punctuation, digits, the '@' that stands
+    // for an a, a doubled letter, and one letter borrowed from the other script.
+    for (const name of ['Budala', 'BUDALA 7', 'b.u.d.a.l.a', 'bud4la', 'Ja sam budala', 'Будала',
+      'bud@la', 'BuD@l@', 'buddala', 'budalа', 'Будалa']) {
       expect(isBlockedName(name, list), name).toBe(true);
       expect(cleanName(name, list), name).toBe('');
     }
@@ -28,10 +31,13 @@ describe("the server's nickname filter", () => {
     expect(isBlockedName('anything', ['', '   ', '.'])).toBe(false);
   });
 
-  it('folds accents and stand-ins, and keeps Cyrillic', () => {
+  it('folds accents and stand-ins, and reads Cyrillic lookalikes as Latin', () => {
     expect(foldName('Đuro Šćekić')).toBe('djurosceki' + 'c');
-    expect(foldName('P4$$w0rd!')).toBe('passwordi');
-    expect(foldName('Ђорђе')).toBe('ђорђе');
+    // A doubled letter counts once, so 'ss' folds to one s.
+    expect(foldName('P4$$w0rd!')).toBe('paswordi');
+    // The Cyrillic letters that pass for Latin ones are read as Latin.
+    expect(foldName('Ђорђе')).toBe('ђopђe');
+    expect(foldName('budalа')).toBe(foldName('budala'));
   });
 
   it('is the one the room uses, and ships an explicit list', () => {

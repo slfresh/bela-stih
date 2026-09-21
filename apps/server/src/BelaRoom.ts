@@ -284,7 +284,9 @@ export class BelaRoom extends Room {
     this.occupants[seat] = {
       origin: (client.auth as { origin?: string } | undefined)?.origin ?? '',
       sessionId: client.sessionId,
-      name: cleanName(options.name) || `Igrač ${seat + 1}`,
+      // Just what they gave: seatInfo names an empty one by the chair it is in
+      // at the time, so a move in the lobby cannot carry the old chair's number.
+      name: cleanName(options.name),
       // Echoed verbatim to other clients, so keep it to a short safe token.
       avatar: typeof options.avatar === 'string' ? options.avatar.replace(/[^a-z]/g, '').slice(0, 20) : '',
       connected: true,

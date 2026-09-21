@@ -15,9 +15,21 @@
 export const BLOCKED_NAME_PARTS: readonly string[] = [];
 
 /**
+ * The Cyrillic letters that pass for Latin ones on a puck. Read as Latin, so
+ * one borrowed letter cannot carry a word past the entry it matches: "budalа"
+ * with a Cyrillic а folds exactly as "budala" does. The rest of Cyrillic is
+ * left alone, so a Cyrillic word needs its own entry (both are listed above).
+ */
+const TWINS: Record<string, string> = {
+  а: 'a', в: 'b', с: 'c', ԁ: 'd', е: 'e', ѕ: 's', і: 'i', ј: 'j', к: 'k',
+  м: 'm', н: 'h', о: 'o', р: 'p', т: 't', у: 'y', х: 'x', ԛ: 'q', ԝ: 'w',
+};
+
+/**
  * A name reduced to what a filter should compare: no case, no accents, the
- * usual digit and symbol stand-ins read as letters, and no spaces or
- * punctuation between them. Cyrillic stays Cyrillic.
+ * usual digit and symbol stand-ins read as letters ('@' is an a, as in
+ * "p@ssword"), Cyrillic lookalikes read as Latin, no spaces or punctuation
+ * between them, and a doubled letter counted once.
  */
 export function foldName(s: string): string {
   return s
@@ -25,12 +37,14 @@ export function foldName(s: string): string {
     .replace(/\p{M}/gu, '')
     .toLowerCase()
     .replace(/đ/g, 'dj')
-    .replace(/[0@]/g, 'o')
+    .replace(/0/g, 'o')
     .replace(/[1!|]/g, 'i')
     .replace(/3/g, 'e')
-    .replace(/4/g, 'a')
+    .replace(/[4@]/g, 'a')
     .replace(/[5$]/g, 's')
-    .replace(/[^a-zЀ-ӿ]/g, '');
+    .replace(/[авсԁеѕіјкмнортухԛԝ]/g, (c) => TWINS[c]!)
+    .replace(/[^a-zЀ-ӿ]/g, '')
+    .replace(/(.)\1+/g, '$1');
 }
 
 export function isBlockedName(name: string, parts: readonly string[] = BLOCKED_NAME_PARTS): boolean {

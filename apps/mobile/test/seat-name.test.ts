@@ -10,8 +10,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 describe("the server's fallback seat name is said in the player's language", () => {
   it('is exactly the name the server gives a seat nobody named', () => {
     const room = readFileSync(join(here, '../../server/src/BelaRoom.ts'), 'utf8');
-    // Both fallbacks there (a nameless join, a vacant chair) use this template.
-    expect((room.match(/`Igrač \$\{(seat|i) \+ 1\}`/g) ?? []).length).toBe(2);
+    // ONE fallback there, in seatInfo, by the seat the occupant sits in now.
+    // Baking it into the occupant at join would send the wrong chair's number
+    // - untranslated - to everyone after that player moves seats in the lobby.
+    expect((room.match(/`Igrač \$\{(seat|i) \+ 1\}`/g) ?? []).length).toBe(1);
+    expect(room).toMatch(/name: cleanName\(options\.name\),/);
     expect(SERVER_FALLBACK(2)).toBe('Igrač 3');
   });
 
