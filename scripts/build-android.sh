@@ -111,6 +111,7 @@ PY
   then
     if [ "${ALLOW_UNSET_REPORT_ADDRESS:-}" = 1 ]; then
       echo "   $artifact: TEST BUILD - the report address is still the placeholder; never upload this"
+      TEST_BUILD=1
     else
       echo "!! $artifact carries the placeholder report address (apps/mobile/src/report.ts) - not shippable (ALLOW_UNSET_REPORT_ADDRESS=1 for a test build)"
       exit 1
@@ -126,6 +127,18 @@ if [ "$WHAT" != "aab" ]; then
   check "$APK" assets/index.android.bundle
   check_report "$APK" assets/index.android.bundle
   check_audio "$APK"
+fi
+
+# A test build is moved off the path the submit line names, and that line is
+# not printed at all: nothing here may be pasted into an upload by mistake.
+if [ "${TEST_BUILD:-}" = 1 ]; then
+  TEST_AAB="${AAB%.aab}-TESTBUILD.aab"
+  mv "$AAB" "$TEST_AAB"
+  echo
+  echo "!! TEST BUILD - the report address is still the placeholder."
+  echo "   Never upload it. The bundle is at $TEST_AAB, off the submit path."
+  [ "$WHAT" != "aab" ] && echo "   apk (for the phone): $APK"
+  exit 0
 fi
 
 echo "== ok: the release points at $EXPO_PUBLIC_SERVER_URL"

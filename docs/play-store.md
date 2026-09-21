@@ -127,8 +127,12 @@ Internal testing goes out without notes. For closed testing and production:
 
 ## 4. Upload the build
 
-The signed AAB comes from EAS (`npx eas-cli build -p android --profile
-production` in `apps/mobile`; download from expo.dev). Console → Testing →
+The signed AAB comes from `bash scripts/build-android.sh`, and only from
+there: it is the one path that reads the finished bundle back and refuses a
+build whose report address is still the placeholder, whose server URL is wrong
+or whose audio patch did not take. (An EAS cloud build - `npx eas-cli build -p
+android` - runs none of those checks, so it is not the way this app ships.)
+Console → Testing →
 **Internal testing** → create release → upload the `.aab` → add your own
 Google account as tester → install via the opt-in link and sanity-check.
 
