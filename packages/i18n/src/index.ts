@@ -165,7 +165,7 @@ export interface UiStrings {
   reportBody: (p: { name: string; code: string; at: string; version: string }) => string;
   /** A screen reader's hint on another player's puck, online. */
   playerHint: string;
-  /** The sheet for a deal whose score this client never saw (a reconnect). */
+  /** The sheet for a deal whose score this client never saw (after a reconnect). */
   resultMissed: string;
   /** Under the nickname field: who sees it, and the rules its owner accepts. */
   nicknameRules: string;
@@ -624,7 +624,7 @@ const hr: Strings = {
     reportBody: (p) =>
       `Prijavljujem igrača s nadimkom: „${p.name}”\nKod stola: ${p.code}\nVrijeme: ${p.at}\nVerzija igre: ${p.version}\n\nŠto je bilo neprimjereno (nije obavezno):\n`,
     playerHint: 'Dodirni za dar ili prijavu',
-    resultMissed: 'Ovo je dijeljenje završeno dok te nije bilo.',
+    resultMissed: 'Veza se prekinula, pa brojke ovog dijeljenja nisu stigle.',
     nicknameRules: 'Ime vide drugi igrači. Upisom prihvaćaš pravila ponašanja: bez uvreda, mržnje i tuđih osobnih podataka.',
     nicknameRulesLabel: 'Pravila ponašanja, otvara web stranicu',
     rulesAnchor: 'pravila',
@@ -923,7 +923,7 @@ const srCyrl: Strings = {
     reportBody: (p) =>
       `Пријављујем играча са надимком: „${p.name}”\nКод стола: ${p.code}\nВреме: ${p.at}\nВерзија игре: ${p.version}\n\nШта је било неприкладно (није обавезно):\n`,
     playerHint: 'Додирни за поклон или пријаву',
-    resultMissed: 'Ово дељење је завршено док те није било.',
+    resultMissed: 'Веза се прекинула, па бројке овог дељења нису стигле.',
     nicknameRules: 'Име виде други играчи. Уписом прихваташ правила понашања: без увреда, мржње и туђих личних података.',
     nicknameRulesLabel: 'Правила понашања, отвара веб страницу',
     rulesAnchor: 'pravila',
@@ -1218,7 +1218,7 @@ const en: Strings = {
     reportBody: (p) =>
       `Reporting the player with the nickname: "${p.name}"\nTable code: ${p.code}\nTime: ${p.at}\nApp version: ${p.version}\n\nWhat was wrong (optional):\n`,
     playerHint: 'Tap to send a gift or report',
-    resultMissed: 'This deal was scored while you were away.',
+    resultMissed: "The connection dropped, so this deal's numbers are missing.",
     nicknameRules: "Other players see this name. By entering one you accept the rules of conduct: no insults, hate or other people's personal details.",
     nicknameRulesLabel: 'Rules of conduct, opens a web page',
     rulesAnchor: 'conduct',

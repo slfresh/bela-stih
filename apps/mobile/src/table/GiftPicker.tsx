@@ -35,7 +35,8 @@ export function GiftPicker({
   onSend,
   onClose,
   moderate,
-  giftsOff = false,
+  moderating,
+  onModerate,
 }: {
   lang: Lang;
   /** A seat, or 'table' when opened from my own puck. */
@@ -56,20 +57,21 @@ export function GiftPicker({
   /** Online, another player's puck: hide them on this device, or report them. */
   moderate?: { hidden: boolean; onHide: () => void; onReport: () => void };
   /**
-   * Opened at a moment when no gift can be sent (the result sheet is up, or
-   * the hand is being arranged): there is nothing to pick, so this IS the
-   * player view. Hiding and reporting never wait for a gift's moment.
+   * Showing the player view (hide / report) rather than the gifts. The table
+   * owns this, not the picker: it opens straight into the player view when no
+   * gift can be sent, and it must know which of the two is on screen before it
+   * takes the panel away - a grid whose moment has passed goes, a report
+   * someone is in the middle of stays.
    */
-  giftsOff?: boolean;
+  moderating: boolean;
+  /** The pill in the header: from here on this panel is the player view. */
+  onModerate: () => void;
 }) {
   const ui = lang.s.ui;
   const { width, height } = useWindowDimensions();
   const L = giftPickerLayout(width, height, land, GIFTS.length);
   const [everyone, setEveryone] = useState(target === 'table');
   const [chosen, setChosen] = useState<GiftId | null>(null);
-  // The player view: hide or report instead of a gift. It is the whole sheet
-  // when there is no gift to send.
-  const [moderating, setModerating] = useState(giftsOff && !!moderate);
   const to: Seat | 'table' = everyone || target === 'table' ? 'table' : target;
   const can = (s: Seat) => reach?.[s] ?? true;
   const others = ([0, 1, 2, 3] as Seat[]).filter((s) => s !== mySeat && can(s)).length;
@@ -206,7 +208,7 @@ export function GiftPicker({
           {land && !moderating && chips}
           {moderate && !moderating && (
             <PressScale
-              onPress={() => setModerating(true)}
+              onPress={onModerate}
               accessibilityRole="button"
               accessibilityLabel={ui.reportOpenLabel}
               hitSlop={{ top: 7, bottom: 7 }}

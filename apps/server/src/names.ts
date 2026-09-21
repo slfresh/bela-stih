@@ -43,15 +43,27 @@ export function foldName(s: string): string {
     .replace(/[4@]/g, 'a')
     .replace(/[5$]/g, 's')
     .replace(/[авсԁеѕіјкмнортухԛԝ]/g, (c) => TWINS[c]!)
-    .replace(/[^a-zЀ-ӿ]/g, '')
-    .replace(/(.)\1+/g, '$1');
+    .replace(/[^a-zЀ-ӿ]/g, '');
 }
 
+/** Runs of one letter read as one: "buddala" is "budala" with a stutter. */
+const collapse = (s: string): string => s.replace(/(.)\1+/g, '$1');
+
+/**
+ * Does a name hold a listed word?
+ *
+ * The name is tried both as it folds and with its doubled letters collapsed,
+ * so "buddala" cannot slip past an entry of "budala". The LISTED WORD is
+ * never collapsed: folding it the way a name is folded would turn an entry
+ * like "kkk" into "k" and blank every nickname holding that letter, for
+ * everyone, on the next deploy. An entry means exactly what it says.
+ */
 export function isBlockedName(name: string, parts: readonly string[] = BLOCKED_NAME_PARTS): boolean {
   const f = foldName(name);
+  const c = collapse(f);
   return parts.some((w) => {
     const x = foldName(w);
-    return x !== '' && f.includes(x);
+    return x !== '' && (f.includes(x) || c.includes(x));
   });
 }
 

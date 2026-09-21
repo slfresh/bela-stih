@@ -408,9 +408,16 @@ export function TableScreen(props: TableScreenProps) {
   // so a tap meant for a gift never plays a card or answers for me. Only
   // Android back, which is no touch, closes it without.
   const [giftShield, setGiftShield] = useState(false);
+  // Which of the two the open panel is showing. The table owns it, not the
+  // picker: it has to know whether the panel is a gift grid (whose moment can
+  // pass) or a player view someone is in the middle of.
+  const [moderating, setModerating] = useState(false);
+  const moderatingRef = useRef(moderating);
+  moderatingRef.current = moderating;
   const shutGifts = useCallback(() => {
     if (giftTargetRef.current === null) return;
     setGiftTarget(null);
+    setModerating(false);
     setGiftShield(true);
   }, []);
   useEffect(() => {
@@ -418,18 +425,23 @@ export function TableScreen(props: TableScreenProps) {
     const t = setTimeout(() => setGiftShield(false), GIFT_SHIELD_MS);
     return () => clearTimeout(t);
   }, [giftShield]);
+  // A gift grid whose moment has passed goes - it would otherwise sit over the
+  // result sheet with a live "Pošalji" and spend coins the table no longer
+  // allows. A player view stays: nobody should lose a report half-made.
   useEffect(() => {
-    if (!giftable && !moderatable) shutGifts();
+    if (!giftable && !(moderatable && moderatingRef.current)) shutGifts();
   }, [giftable, moderatable, shutGifts]);
   const myTurnWas = useRef(myTurn);
   useEffect(() => {
-    if (myTurn && !myTurnWas.current) shutGifts();
+    if (myTurn && !myTurnWas.current && !moderatingRef.current) shutGifts();
     myTurnWas.current = myTurn;
   }, [myTurn, shutGifts]);
   const openGifts = useCallback(
     (target: Seat | 'table') => {
       if (target === 'table' ? !giftable : !giftable && !moderatable) return;
       setTrayOpen(false);
+      // No gift to be sent at this moment: the panel IS the player view.
+      setModerating(!giftable && target !== 'table');
       setGiftTarget(target);
     },
     [giftable, moderatable],
@@ -1278,8 +1290,8 @@ export function TableScreen(props: TableScreenProps) {
               target={giftTarget}
               mySeat={mySeat}
               reach={giftReach}
-              // Opened while no gift can be sent: straight to the player view.
-              giftsOff={!giftable}
+              moderating={moderating}
+              onModerate={() => setModerating(true)}
               // Online, another player's puck also hides or reports them.
               moderate={
                 onHide && onReport && giftTarget !== 'table'
@@ -1304,7 +1316,10 @@ export function TableScreen(props: TableScreenProps) {
               onClose={shutGifts}
               onSend={(id, to) => {
                 shutGifts();
-                onGift(id, to);
+                // Belt and braces: the grid is gone by now whenever a gift
+                // cannot be sent, and a send that slipped through anyway must
+                // not spend coins the table would refuse.
+                if (giftable) onGift(id, to);
               }}
             />
           )}

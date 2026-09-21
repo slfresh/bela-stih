@@ -173,8 +173,10 @@ export function useGifts(opts: {
       muted.current = rest;
       // Put the badges back here, with their giver: the room's next record
       // knows the gift but not who gave it, and a badge whose giver is
-      // unknown can never be taken off again.
-      const put = back.filter(({ seat }) => pending.current[seat]! === 0);
+      // unknown can never be taken off again. Even a seat with a gift in the
+      // air is restored - that landing overwrites both id and giver anyway,
+      // while skipping it would lose the giver for good.
+      const put = back;
       if (put.length === 0) return;
       setSeats((prev) => {
         const ids = [...prev.ids];

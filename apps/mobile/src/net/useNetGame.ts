@@ -724,7 +724,13 @@ export function useNetGame(settings: Settings) {
     motion,
     matchOver: view?.phase === 'MATCH_OVER',
     retry,
-    winnerTeam,
+    // The matchOver event says who won, but a client that reconnected into a
+    // finished match never heard it. The view still knows: at MATCH_OVER the
+    // higher score has won - the engine's own rule (matchWinner,
+    // packages/engine/src/state.ts), so the two can never disagree.
+    winnerTeam:
+      winnerTeam ??
+      (view?.phase === 'MATCH_OVER' ? ((view.matchScores[0] > view.matchScores[1] ? 0 : 1) as TeamId) : null),
     turnDeadline,
     turnTotalMs,
     anchors,

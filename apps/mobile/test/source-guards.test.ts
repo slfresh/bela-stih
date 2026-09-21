@@ -794,6 +794,13 @@ describe('table gifts', () => {
     expect((n.match(/setLastDealResult\(null\)/g) ?? []).length).toBe(3);
     const attach = n.slice(n.indexOf('const attach = useCallback'), n.indexOf("room.onMessage('view'"));
     expect(attach).toMatch(/setLastDealResult\(null\);\s*setWinnerTeam\(null\);/);
+    // Clearing the winner is safe because the view can say it again: the
+    // engine's rule, spelled the same way on both sides so they cannot drift.
+    const RULE = /matchScores\[0\] > .*matchScores\[1\] \? 0 : 1/;
+    expect(n, 'useNetGame derives the winner at MATCH_OVER').toMatch(RULE);
+    const engine = readFileSync(join(here, '../../../packages/engine/src/state.ts'), 'utf8');
+    const winner = engine.slice(engine.indexOf('export function matchWinner'));
+    expect(winner.slice(0, 220), 'the engine still decides it that way').toMatch(RULE);
     // And the sheet itself always answers, even with no result to show.
     const t = src('TableScreen.tsx');
     expect(t).not.toMatch(/if \(!result\) return null;/);
@@ -833,21 +840,29 @@ describe('table gifts', () => {
     // A gift never stands in the way of a decision or a question: the table
     // shuts the picker when my turn comes or the sheet goes up...
     expect(t).toMatch(/const giftable = !!onGift && \(giftReach\?\.\[mySeat\] \?\? true\) && !settled && !arranging && !leaving;/);
-    expect(t).toMatch(/if \(myTurn && !myTurnWas\.current\) shutGifts\(\);/);
     // ...but hiding and reporting are not gifts: another player's puck opens
     // the player view even with the sheet up, which is when a player most
     // wants it (the rules page and the checklist promise it unconditionally).
     expect(t).toMatch(/const moderatable = !!onHide && !!onReport && !leaving;/);
-    expect(t).toMatch(/if \(!giftable && !moderatable\) shutGifts\(\);/);
     expect(t).toMatch(/if \(target === 'table' \? !giftable : !giftable && !moderatable\) return;/);
     expect(t).toMatch(/disabled=\{s === mySeat \? !giftable : !giftable && !moderatable\}/);
-    expect(t).toMatch(/giftsOff=\{!giftable\}/);
-    // Opened that way, the picker IS the player view - there is no gift to pick.
-    expect(src('table/GiftPicker.tsx')).toMatch(/useState\(giftsOff && !!moderate\)/);
+    // A grid whose moment passed goes; a player view someone is in the middle
+    // of stays. The table owns which one is up, so it can tell them apart -
+    // otherwise a live "Pošalji" sits over the result sheet and spends coins.
+    expect(t).toMatch(/if \(!giftable && !\(moderatable && moderatingRef\.current\)\) shutGifts\(\);/);
+    expect(t).toMatch(/if \(myTurn && !myTurnWas\.current && !moderatingRef\.current\) shutGifts\(\);/);
+    expect(t).toMatch(/setModerating\(!giftable && target !== 'table'\);/);
+    expect(t).toMatch(/moderating=\{moderating\}\s*onModerate=\{\(\) => setModerating\(true\)\}/);
+    expect(t).toMatch(/if \(giftable\) onGift\(id, to\);/);
+    const picker = src('table/GiftPicker.tsx');
+    // The picker keeps no mode of its own: a prop it cannot fall out of step with.
+    expect(picker).not.toMatch(/useState\(giftsOff/);
+    expect(picker).not.toMatch(/setModerating/);
+    expect(picker).toMatch(/moderating: boolean;/);
     // ...and a shut it did by itself raises the shield, which swallows the
     // touches of the next moment and always comes down again.
     const shut = t.slice(t.indexOf('const shutGifts = useCallback'), t.indexOf('const myTurnWas'));
-    expect(shut).toMatch(/setGiftTarget\(null\);\s*setGiftShield\(true\);/);
+    expect(shut).toMatch(/setGiftTarget\(null\);\s*setModerating\(false\);\s*setGiftShield\(true\);/);
     expect(shut).toMatch(/setTimeout\(\(\) => setGiftShield\(false\), GIFT_SHIELD_MS\);\s*return \(\) => clearTimeout\(t\);/);
     const shield = t.slice(t.indexOf('{giftShield && ('));
     expect(t.indexOf('{giftShield && (')).toBeGreaterThan(t.indexOf('<GiftPicker'));
@@ -856,7 +871,7 @@ describe('table gifts', () => {
     // only shutGifts itself and Android back set the target directly.
     expect((t.match(/setGiftTarget\(null\)/g) ?? []).length).toBe(2);
     expect(t).toMatch(/onClose=\{shutGifts\}/);
-    expect(t).toMatch(/onSend=\{\(id, to\) => \{\s*shutGifts\(\);\s*onGift\(id, to\);/);
+    expect(t).toMatch(/onSend=\{\(id, to\) => \{\s*shutGifts\(\);[\s\S]{0,240}if \(giftable\) onGift\(id, to\);/);
     // Back closes the picker before it asks about leaving.
     const guard = t.slice(t.indexOf('setBackGuard(() => {'));
     expect(guard.indexOf('giftTargetRef.current !== null')).toBeLessThan(guard.indexOf('leavingRef.current'));

@@ -27,14 +27,28 @@ describe("the server's nickname filter", () => {
   it('lets innocent names through, and an empty list blocks nothing', () => {
     const list = ['budala'];
     for (const name of ['Ana', 'Marko 1987', 'Đuro', 'Igrač 3', 'Ђорђе']) expect(isBlockedName(name, list), name).toBe(false);
+    // A listed word that is itself a repeated letter stays that word. Folding
+    // it the way a NAME is folded would shorten it to one letter and blank
+    // every nickname holding that letter - on the next server deploy, for
+    // everyone. ('kkk' and 'ss' are exactly the sort of entry a report brings.)
+    for (const name of ['Marko', 'Nikola', 'Luka', 'Kristina', 'Ана', 'Слободан']) {
+      expect(isBlockedName(name, ['kkk']), `${name} vs kkk`).toBe(false);
+      expect(isBlockedName(name, ['ss']), `${name} vs ss`).toBe(false);
+      expect(isBlockedName(name, ['aa', 'oo']), `${name} vs aa/oo`).toBe(false);
+    }
+    // It still blocks what it names.
+    expect(isBlockedName('KKK Fan', ['kkk'])).toBe(true);
+    expect(isBlockedName('Ana', ['ana'])).toBe(true);
     expect(isBlockedName('budala', [])).toBe(false);
     expect(isBlockedName('anything', ['', '   ', '.'])).toBe(false);
   });
 
   it('folds accents and stand-ins, and reads Cyrillic lookalikes as Latin', () => {
     expect(foldName('Đuro Šćekić')).toBe('djurosceki' + 'c');
-    // A doubled letter counts once, so 'ss' folds to one s.
-    expect(foldName('P4$$w0rd!')).toBe('paswordi');
+    // foldName keeps doubled letters: only the NAME side is collapsed, inside
+    // isBlockedName, so a listed word can never shrink.
+    expect(foldName('P4$$w0rd!')).toBe('passwordi');
+    expect(foldName('buddala')).toBe('buddala');
     // The Cyrillic letters that pass for Latin ones are read as Latin.
     expect(foldName('Ђорђе')).toBe('ђopђe');
     expect(foldName('budalа')).toBe(foldName('budala'));
