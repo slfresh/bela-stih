@@ -11,6 +11,7 @@ import { WebShell } from './src/WebShell';
 import { OfflineGame } from './src/OfflineGame';
 import { OnlineGame } from './src/net/OnlineGame';
 import { ProfileScreen } from './src/screens/ProfileScreen';
+import { RulesScreen } from './src/screens/RulesScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ShopScreen } from './src/screens/ShopScreen';
 import {
@@ -43,7 +44,7 @@ import { useMotionPolicy } from './src/anim/useMotionPolicy';
 import { MotionProvider } from './src/anim/MotionHere';
 
 /** The menu stack, one level deep: home, or one of its satellite screens. */
-type MenuScreen = 'home' | 'shop' | 'settings' | 'profile';
+type MenuScreen = 'home' | 'shop' | 'settings' | 'profile' | 'rules';
 
 /**
  * A handful of screens and no router: the menu (home plus shop / settings /
@@ -150,7 +151,10 @@ export default function App() {
             onSettingsChange={updateSettings}
             onProfileChange={updateProfile}
             onBack={toHome}
+            onOpenRules={() => setMenu('rules')}
           />
+        ) : menu === 'rules' ? (
+          <RulesScreen lang={lang} settings={settings} onBack={toHome} />
         ) : menu === 'profile' ? (
           <ProfileScreen
             lang={lang}
@@ -170,6 +174,7 @@ export default function App() {
             onOpenShop={() => setMenu('shop')}
             onOpenSettings={() => setMenu('settings')}
             onOpenProfile={() => setMenu('profile')}
+            onOpenRules={() => setMenu('rules')}
           />
         )
     ) : launch.mode === 'gallery' ? (

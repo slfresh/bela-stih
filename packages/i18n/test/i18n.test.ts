@@ -144,8 +144,9 @@ describe('the Cyrillic locale is actually Cyrillic', () => {
   const LATIN = /[A-Za-zČĆĐŠŽčćđšž]/;
 
   function assertNoLatin(label: string, text: string): void {
-    // Card ranks (A K Q J 10) stay Latin — they are printed on the cards.
-    const withoutRanks = text.replace(/\b(?:10|[AKQJ789])\b/g, '');
+    // Card ranks (A K Q J 10) stay Latin — they are printed on the cards —
+    // and so does "QR", the code's own name in Serbian as everywhere.
+    const withoutRanks = text.replace(/\b(?:10|[AKQJ789]|QR)\b/g, '');
     expect(LATIN.test(withoutRanks), `${label} still reads Latin: "${text}"`).toBe(false);
   }
 

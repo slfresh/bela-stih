@@ -27,6 +27,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useCountUp } from './anim/useCountUp';
 import type { TableCue } from './table/cues';
+import { illegalReason } from './table/illegal';
+import { summarize, type MatchLog, type MatchSummary } from './matchLog';
 import type {
   Action,
   Card,
@@ -34,7 +36,9 @@ import type {
   DealScoreResult,
   PublicView,
   Seat,
+  Suit,
   TeamId,
+  TrickPlay,
 } from '@belot/engine';
 import { cardId, teamOf } from '@belot/engine';
 import type { Lang } from '@belot/i18n';
@@ -87,7 +91,7 @@ import { CardBackFace, SuitPip } from './deck';
 import { playSfx } from './audio';
 import { pattern } from './haptics';
 import { Button } from './ui/Button';
-import { Check, Coin, Crown, Pause, Star } from './ui/icons';
+import { Check, Coin, Crown, Eye, Pause, Star } from './ui/icons';
 import { EmoteFace } from './emoteArt';
 import { PressScale } from './ui/PressScale';
 import { font, ink, num, radius, space, stroke, surface, team, theme, type } from './theme';
@@ -189,6 +193,10 @@ export interface TableScreenProps {
    * is a renons the engine punishes. The claim/bela buttons stay unassisted too.
    */
   hardMode?: boolean;
+  /** Points the match is played to: 1001, or what a private table's host chose. */
+  matchTarget?: number;
+  /** The deals of the match so far, for the match-end summary (matchLog.ts). */
+  matchLog?: MatchLog;
   /** Each seat's latest table gift (useGifts). */
   gifts?: readonly (GiftId | null)[];
   /** Gifts that have landed on each seat, so each landing bounces once. */
@@ -211,6 +219,10 @@ export interface TableScreenProps {
 
 /** How long touches are swallowed after the table shuts the gift picker by itself. */
 export const GIFT_SHIELD_MS = 400;
+/** How long the last trick stays up after "Zadnji štih" is tapped. */
+export const PEEK_MS = 4000;
+/** The narrowest peek chip that still carries its name; below it, an eye. */
+export const PEEK_TEXT_W = 44;
 
 export function TableScreen(props: TableScreenProps) {
   const {
@@ -220,7 +232,7 @@ export function TableScreen(props: TableScreenProps) {
     cue = null,
     dealerHop = false,
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
-    hardMode = false, series, askedRematch, waitingFor, onRematch, onForceRematch, rematchLabel,
+    hardMode = false, matchTarget = 1001, matchLog, series, askedRematch, waitingFor, onRematch, onForceRematch, rematchLabel,
     nextDeal, hold: tableHold = null, onPause, onResume, onPlayOn, reconnecting = false,
     handSort = 'auto', onHandSortChange, confirmPlay = 'ambiguous',
     gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift, giftReach, hidden, onHide, onReport,
@@ -289,6 +301,38 @@ export function TableScreen(props: TableScreenProps) {
     [feltBox.w, feltBox.h, m.slotH],
   );
   const slots = useMemo(() => slotOffsets(slot.slotW, slot.slotH), [slot.slotW, slot.slotH]);
+
+  // "Zadnji štih": the last full trick, remembered from the views already
+  // shown - the view itself carries only the trick in play. Each full trick
+  // replaces the one before; the count it was taken at says whether it is
+  // still the last one (a new deal, or a flushed batch, and it is not).
+  const lastTrick = useRef<{ plays: readonly TrickPlay[]; after: number } | null>(null);
+  if (view.currentTrick.length === 4 && view.dealProgress) {
+    lastTrick.current = { plays: view.currentTrick, after: view.dealProgress.tricksPlayed + 1 };
+  }
+  // Offered on my turn only: that is when it helps, and the table waits.
+  const peekable =
+    view.phase === 'PLAY' &&
+    myTurn &&
+    !settled &&
+    lastTrick.current !== null &&
+    lastTrick.current.after === view.dealProgress?.tricksPlayed;
+  const [peeking, setPeeking] = useState(false);
+  useEffect(() => {
+    if (!peekable) setPeeking(false);
+  }, [peekable]);
+  useEffect(() => {
+    if (!peeking) return;
+    const t = setTimeout(() => setPeeking(false), PEEK_MS);
+    return () => clearTimeout(t);
+  }, [peeking]);
+  // The chip sits in the free middle of the trick's cross (slotOffsets: the
+  // side cards start gapX from the centre), clear of their rings - which
+  // stand 3 outside a card - by 4 more on each side.
+  const peekW = Math.min(56, 2 * Math.round(slot.slotW * (31 / 46)) - 14);
+  // While looked at, the last trick stands in the slots, and the card that
+  // took it is ringed: whoever took it leads the trick now in play.
+  const shownTrick = peeking && peekable ? lastTrick.current!.plays : view.currentTrick;
 
   const [arranging, setArranging] = useState(false);
   // The zvanja round: you mark the cards that make up your combination, then
@@ -650,6 +694,46 @@ export function TableScreen(props: TableScreenProps) {
     </Animated.View>
   );
 
+  // A dimmed card, tapped: say which duty rules it out, over my hand, the way
+  // a partner across the table would. The follow-suit case carries the led
+  // suit's pip, so no suit name has to be declined.
+  const trickRef = useRef(view.currentTrick);
+  trickRef.current = view.currentTrick;
+  const trumpRef = useRef(view.context.trumpSuit);
+  trumpRef.current = view.context.trumpSuit;
+  const explainIllegal = useCallback(
+    (card: Card, legal: Card[]) => {
+      const why = illegalReason(card, legal, trickRef.current, trumpRef.current);
+      if (why === null) return;
+      pattern('error');
+      const ui = lang.s.ui;
+      const text =
+        why.kind === 'follow'
+          ? `${ui.mustFollow}: ${lang.suitName(why.suit)}`
+          : why.kind === 'trump'
+            ? ui.mustTrump
+            : why.kind === 'beat'
+              ? ui.mustBeat
+              : ui.moveRefused;
+      // Said aloud too: the bubble is a picture to a screen reader. There the
+      // suit is named, since its pip cannot be seen.
+      AccessibilityInfo.announceForAccessibility(text);
+      const at = anchors.centre(anchorId.seat(mySeat));
+      if (!at) return;
+      fxBus.emit({
+        kind: 'bubble',
+        at,
+        text: why.kind === 'follow' ? ui.mustFollow : text,
+        tone: 'plain',
+        duration: 2200,
+        speed: 1,
+        ...(why.kind === 'follow' ? { pip: why.suit } : {}),
+        fade: reducedRef.current,
+      });
+    },
+    [anchors, fxBus, lang, mySeat],
+  );
+
   // A ring of light bursts from the hand as a cue lands — the sound's
   // visible twin, fired from the very same edge so it can never be held on.
   const pulseHand = useCallback(() => {
@@ -843,7 +927,9 @@ export function TableScreen(props: TableScreenProps) {
         {/* one trick slot per seat, positioned by table side */}
         {([0, 1, 2, 3] as Seat[]).map((s) => {
           const pos = seatPosition(s, mySeat);
-          const played = view.currentTrick.find((p) => p.seat === s);
+          const played = shownTrick.find((p) => p.seat === s);
+          // The card that took the last trick, while it is looked at.
+          const took = peeking && peekable && s === view.trickLeader;
           return (
             <Anchor
               key={s}
@@ -867,7 +953,7 @@ export function TableScreen(props: TableScreenProps) {
                       and was never actually seen. */}
                   <View
                     pointerEvents="none"
-                    style={[styles.slotRing, { borderColor: seatTone(s, mySeat).edge }]}
+                    style={[styles.slotRing, { borderColor: seatTone(s, mySeat).edge }, took && styles.slotRingTook]}
                   />
                 </>
               ) : (
@@ -881,6 +967,29 @@ export function TableScreen(props: TableScreenProps) {
             </Anchor>
           );
         })}
+        {peekable && (
+          <PressScale
+            onPress={() => setPeeking((p) => !p)}
+            hitSlop={8}
+            accessibilityLabel={lang.s.ui.peekLastTrick}
+            accessibilityState={{ expanded: peeking }}
+            style={[
+              styles.peek,
+              // Centred on the cross: two lines of words stand 38 tall, the eye 26.
+              { width: peekW, marginLeft: -peekW / 2, marginTop: peekW >= PEEK_TEXT_W ? -19 : -13 },
+              peeking && styles.peekOn,
+            ]}
+          >
+            {/* Its name where it fits ("zadnji" alone is about 33 wide at the
+                caption size), an eye where it does not: small phones and
+                the landscape felt leave 26-28 between the side cards. */}
+            {peekW >= PEEK_TEXT_W ? (
+              <Text style={[styles.peekText, peeking && styles.peekTextOn]}>{lang.s.ui.lastTrick}</Text>
+            ) : (
+              <Eye size={16} colour={peeking ? theme.accent : ink.mid} />
+            )}
+          </PressScale>
+        )}
       </View>
     </Animated.View>
   );
@@ -1078,6 +1187,7 @@ export function TableScreen(props: TableScreenProps) {
           armCaption={lang.s.ui.play}
           glow={cue?.kind === 'glow' ? cue : null}
           restFloor={short ? FAN_REST_SHORT : 0}
+          onIllegal={explainIllegal}
         />
         </Animated.View>
       </Pressable>
@@ -1237,6 +1347,17 @@ export function TableScreen(props: TableScreenProps) {
             : null
         }
         series={series}
+        call={
+          view.callerSeat !== null
+            ? {
+                name: view.callerSeat === mySeat ? null : meta(view.callerSeat).name,
+                team: teamOf(view.callerSeat),
+                trump: view.context.trumpSuit,
+                multiplier: view.multiplier,
+              }
+            : null
+        }
+        summary={matchOver && matchLog ? summarize(matchLog, matchScores, teamOf(mySeat)) : null}
         askedRematch={askedRematch}
         waitingFor={waitingFor}
         onRematch={onRematch}
@@ -1271,6 +1392,8 @@ export function TableScreen(props: TableScreenProps) {
                   reduced={reduced}
                   winner={matchOver ? winnerTeam : null}
                   series={series}
+                  target={matchTarget}
+                  hard={hardMode}
                 />
                 {plaque}
                 {calls}
@@ -1309,7 +1432,9 @@ export function TableScreen(props: TableScreenProps) {
                 </View>
                 {!settled && (
                   <View style={styles.actionsCol}>
-                    {declareButtons ?? (
+                    {/* While the app answers "Nemam" itself, nothing to press:
+                        the plain action list would offer the same skip again. */}
+                    {autoSkipping ? null : declareButtons ?? (
                       <NonCardActions options={options} lang={lang} onChoose={answer} compact />
                     )}
                     {emoteToggle}
@@ -1339,6 +1464,8 @@ export function TableScreen(props: TableScreenProps) {
                 reduced={reduced}
                 winner={matchOver ? winnerTeam : null}
                 series={series}
+                target={matchTarget}
+                hard={hardMode}
               />
 
               {felt}
@@ -1366,7 +1493,7 @@ export function TableScreen(props: TableScreenProps) {
               {!settled && (
                 <View style={styles.actionsRow}>
                   {emoteToggle}
-                  {declareButtons ?? (
+                  {autoSkipping ? null : declareButtons ?? (
                     <NonCardActions options={options} lang={lang} onChoose={onAction} short={short} />
                   )}
                 </View>
@@ -1487,11 +1614,17 @@ const TableHeader = memo(function TableHeader({
   reduced = false,
   winner = null,
   series = null,
+  target = 1001,
+  hard = false,
 }: {
   lang: Lang;
   mySeat: Seat;
   matchScores: readonly [number, number];
   progress: DealProgress | null;
+  /** Points the match is played to, shown between deals. */
+  target?: number;
+  /** Prava bela: said beside the target, so nobody is caught out by a renons. */
+  hard?: boolean;
   /**
    * Matches won per side since these four sat down (online; absolute team
    * ids like matchScores). Between the pills once a match has been won, so the
@@ -1586,7 +1719,10 @@ const TableHeader = memo(function TableHeader({
           </Text>
         </Anchor>
       ) : (
-        <Text style={styles.subDim}>{lang.s.gameToTarget(1001)}</Text>
+        <Text style={styles.subDim}>
+          {lang.s.gameToTarget(target)}
+          {hard ? ` · ${lang.s.difficultyHard}` : ''}
+        </Text>
       )}
     </View>
   );
@@ -1600,6 +1736,8 @@ const TableHeader = memo(function TableHeader({
   a.slim === b.slim &&
   a.reduced === b.reduced &&
   a.winner === b.winner &&
+  a.target === b.target &&
+  a.hard === b.hard &&
   (a.series?.[0] ?? -1) === (b.series?.[0] ?? -1) &&
   (a.series?.[1] ?? -1) === (b.series?.[1] ?? -1) &&
   a.matchScores[0] === b.matchScores[0] &&
@@ -1726,11 +1864,17 @@ function Hand({
   armCaption,
   glow = null,
   restFloor = 0,
+  onIllegal,
 }: {
   cards: Card[];
   options: Action[];
   enabled: boolean;
   onPlay: (a: Action) => void;
+  /**
+   * A tap on a card the engine does not allow now (never in hard mode, where
+   * every card goes): the card shakes, and this says why.
+   */
+  onIllegal?: (card: Card, legal: Card[]) => void;
   /** Hard mode: any card is tappable and nothing is dimmed or lifted as a hint. */
   freePlay?: boolean;
   /** Space the fan may use; the cards size themselves to fit it in ONE row. */
@@ -1779,6 +1923,8 @@ function Hand({
   // the legal list relaxed the guard precisely when one legal card sat among
   // seven renons-scoring ones — the most dangerous tap surface in the game.
   const [armed, setArmed] = useState<string | null>(null);
+  // The card a refused tap shook, and a count so the same card can shake again.
+  const [shake, setShake] = useState<{ id: string | null; n: number }>({ id: null, n: 0 });
   // Arrange mode picks a card to SWAP, which is a different meaning; sharing
   // one slot left a swap selection armed to fire the moment arranging ended.
   const [arrangePick, setArrangePick] = useState<string | null>(null);
@@ -1865,7 +2011,16 @@ function Hand({
     }
     const card = cards.find((c) => cardId(c) === id);
     const chosen = card ? chosenFor(card) : undefined;
-    if (!chosen) return;
+    if (!chosen) {
+      // Dimmed, and now saying why instead of doing nothing at all.
+      anchors.delete(anchorId.card(id));
+      lastTap.current = null;
+      if (card && plays.length > 0 && !freePlay) {
+        setShake((s) => ({ id, n: s.n + 1 }));
+        onIllegal?.(card, plays.map((p) => p.card));
+      }
+      return;
+    }
     if (needsConfirm && armed !== id) {
       // Arming is a decision too; it used to happen in silence.
       playSfx('arm');
@@ -1913,7 +2068,9 @@ function Hand({
             selected={picking && isArmed}
             armed={!picking && isArmed}
             caption={armCaption}
-            disabled={!playable && !arranging && !marking}
+            // An illegal card takes the tap, to say why it is dimmed.
+            disabled={!playable && !arranging && !marking && !illegalNow}
+            shakeN={shake.id === id ? shake.n : 0}
             glowN={glow && glow.cardIds.includes(id) ? glow.n : 0}
             onPress={onPressCard}
           />
@@ -1950,6 +2107,7 @@ const FanCard = memo(
     caption,
     disabled,
     glowN,
+    shakeN = 0,
     onPress,
   }: {
     id: string;
@@ -1975,6 +2133,8 @@ const FanCard = memo(
     disabled: boolean;
     /** Non-zero, and new: glow gold for a moment (my bela's king and queen). */
     glowN: number;
+    /** Non-zero, and new: a short shake - this card was tapped and may not go. */
+    shakeN?: number;
     onPress: (id: string) => void;
   }) {
     // A card has no entrance of its own: the dealt back flies to the very spot
@@ -2021,8 +2181,24 @@ const FanCard = memo(
     // could not leave a card at another place's angle) cost more than it
     // saved: over quick rotations the table began to lag a whole orientation
     // behind, on the Samsung in 10 of 60 flips, and never with the one view.
+    // A refused tap shakes the card, once per tap. Only a shake that arrived
+    // after this card mounted plays (a rotation remounts the fan), and never
+    // under reduce-motion, where the words say it alone.
+    const shakeX = useSharedValue(0);
+    const seenShake = useRef(shakeN);
+    useEffect(() => {
+      if (seenShake.current === shakeN) return;
+      seenShake.current = shakeN;
+      if (shakeN === 0 || reduced) return;
+      shakeX.value = withSequence(
+        withTiming(-6, { duration: 45 }),
+        withTiming(6, { duration: 90 }),
+        withTiming(-3, { duration: 70 }),
+        withTiming(0, { duration: 55 }),
+      );
+    }, [shakeX, shakeN, reduced]);
     const motion = useAnimatedStyle(() => ({
-      transform: [{ translateY: baseY + liftV.value }, { rotateZ: `${rotate}deg` }],
+      transform: [{ translateX: shakeX.value }, { translateY: baseY + liftV.value }, { rotateZ: `${rotate}deg` }],
     }));
     // Where this card is on screen at the moment of the tap: the flight sets
     // off from here, at this size. One transient rect, read once by the
@@ -2100,6 +2276,7 @@ const FanCard = memo(
     a.caption === b.caption &&
     a.disabled === b.disabled &&
     a.glowN === b.glowN &&
+    a.shakeN === b.shakeN &&
     // `enter` is read once, at mount: its later flips need no render.
     a.onPress === b.onPress,
 );
@@ -2225,6 +2402,8 @@ function DealResult({
   weWon = null,
   renonsText,
   series,
+  call = null,
+  summary = null,
   award = null,
   askedRematch = false,
   waitingFor = 0,
@@ -2251,6 +2430,10 @@ function DealResult({
   renonsText?: string | null;
   /** Matches won per side since this roster sat down; online only. */
   series?: readonly [number, number] | null;
+  /** Who called the deal (null name: me), on which trump, at what stake. */
+  call?: { name: string | null; team: TeamId; trump: Suit | null; multiplier: 1 | 2 | 4 } | null;
+  /** At the end of a match: deals taken and our best one (null: not the whole match seen). */
+  summary?: MatchSummary | null;
   /** What this deal (or match) earned: shown at the foot of the sheet, where the coins set off from. */
   award?: Award | null;
   /** Has this seat already asked for another match? */
@@ -2299,7 +2482,9 @@ function DealResult({
     <ResultFoot
       lang={lang}
       matchOver={matchOver}
-      series={series}
+      // Ours first, as the header's chip has it: absolute order swapped the
+      // two sides for whoever sat on the second team.
+      series={series ? [series[us], series[them]] : null}
       askedRematch={askedRematch}
       waitingFor={waitingFor}
       onRematch={onRematch}
@@ -2359,6 +2544,19 @@ function DealResult({
   const won = result.finalScore[us] > result.finalScore[them];
   const made = renonsText ? false : result.callerMade;
   const stiglja = result.valatTeam !== null;
+  // Why it went the way it did, in the callers' own numbers: the callers
+  // must end with more than the defenders, or everything goes across.
+  const verdict = renonsText
+    ? `${lang.s.renonsTitle} ${renonsText}`
+    : call
+      ? (made ? lang.s.ui.madeLine : lang.s.ui.padLine)(
+          call.team === us,
+          result.rawTotal[call.team],
+          result.rawTotal[(1 - call.team) as TeamId],
+        )
+      : made
+        ? lang.s.callerMade
+        : lang.s.callerFailed;
 
   return (
     <Animated.View entering={reduced ? undefined : SlideInDown.duration(280)}>
@@ -2390,8 +2588,17 @@ function DealResult({
                 ? `${lang.s.valat}!`
                 : lang.s.dealResult}
           </Text>
-          <Text style={styles.sheetVerdict} numberOfLines={2}>
-            {renonsText ? `${lang.s.renonsTitle} ${renonsText}` : made ? lang.s.callerMade : lang.s.callerFailed}
+          {call && (
+            <View style={styles.sheetCall}>
+              {call.trump && <SuitPip suit={call.trump} size={14} />}
+              <Text style={styles.sheetCallText} numberOfLines={1}>
+                {call.name === null ? lang.s.calledByYou : lang.s.calledBy(call.name)}
+                {call.multiplier > 1 ? ` · ×${call.multiplier}` : ''}
+              </Text>
+            </View>
+          )}
+          <Text style={styles.sheetVerdict} numberOfLines={3}>
+            {verdict}
           </Text>
         </View>
         {!matchOver && (
@@ -2433,6 +2640,19 @@ function DealResult({
         ],
         countAfter: 600,
       })}
+
+      {/* The whole match in two lines, when this device saw all of it. */}
+      {matchOver && summary && (
+        <>
+          {rule}
+          {row(lang.s.ui.dealsWon, summary.won)}
+          {summary.best && (
+            <Animated.Text style={styles.summaryNote} entering={enter()}>
+              {lang.s.ui.bestDeal(summary.best.points, summary.best.deal)}
+            </Animated.Text>
+          )}
+        </>
+      )}
 
       {award && (award.xp > 0 || award.coins > 0 || award.levelUp !== null) && (
         <Animated.View style={styles.sheetAward} entering={enter()}>
@@ -2815,6 +3035,23 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: radius.card + 2,
   },
+  slotRingTook: { borderColor: theme.accent, borderWidth: 3 },
+  // "Zadnji štih", in the free middle of the trick's cross (about 1.35 slot
+  // widths by 1.16 slot heights): two short lines. Its width is the table's.
+  peek: {
+    position: 'absolute',
+    left: '50%',
+    top: '55%',
+    paddingVertical: 4,
+    alignItems: 'center',
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: theme.line,
+    backgroundColor: surface.sunk,
+  },
+  peekOn: { borderColor: theme.accent },
+  peekText: { color: ink.mid, ...type.caption, textAlign: 'center' },
+  peekTextOn: { color: theme.accent },
   deckAnchor: { position: 'absolute', left: '50%', top: '50%', width: 0, height: 0 },
   tableFloat: {
     position: 'absolute',
@@ -2991,6 +3228,9 @@ const styles = StyleSheet.create({
   sheetTitle: { color: ink.hi, ...type.h3, fontFamily: font.bold },
   sheetTitleStiglja: { color: theme.accent },
   sheetVerdict: { color: ink.mid, ...type.caption },
+  sheetCall: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  sheetCallText: { color: ink.hi, ...type.caption, fontFamily: font.medium },
+  summaryNote: { color: ink.mid, ...type.caption, textAlign: 'right' },
   sheetWord: { ...type.h2, fontFamily: font.bold },
   sheetWordMade: { color: theme.okInk },
   sheetWordFailed: { color: theme.dangerInk },

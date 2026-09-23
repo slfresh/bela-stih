@@ -9,6 +9,8 @@ import { FxBus } from './anim/FxBus';
 import { useDirector } from './anim/useDirector';
 import { makeFxSpawner, spawnEmote } from './table/fx';
 import { timingsFor, type MotionPolicy } from './anim/director';
+import { botThinkMs } from './anim/think';
+import { EMPTY_LOG, logEvent } from './matchLog';
 import { cueFor, type TableCue } from './table/cues';
 import { useMotionPolicy } from './anim/useMotionPolicy';
 import { BOT_EMOTES } from './emotes';
@@ -138,10 +140,18 @@ export function useGame(
   });
   const ownBotGifts = useRef(BOT_GIFTS_START);
   const botGifts = botGiftStore ?? ownBotGifts;
+  // The deals of the match in play, for the match-end summary (matchLog.ts).
+  const matchLogRef = useRef(EMPTY_LOG);
+  const [matchLog, setMatchLog] = useState(EMPTY_LOG);
   const { view, idle, enqueue, getView } = useDirector(
     HUMAN,
     useMemo(() => preDealView(table.view(HUMAN)), [table]),
     (e, flushed, speed) => {
+      const logged = logEvent(matchLogRef.current, e);
+      if (logged !== matchLogRef.current) {
+        matchLogRef.current = logged;
+        setMatchLog(logged);
+      }
       const r = processEvents({
         events: [e],
         profile: profileRef.current,
@@ -203,6 +213,11 @@ export function useGame(
       onSkip: (n) => {
         if (n >= 2) playSfx('settle');
       },
+      // Every seat but mine is a bot here: each takes a moment of its own
+      // before its move shows, lit meanwhile. Pace only, never under reduce-motion.
+      thinkMs: (e, v) =>
+        motionRef.current !== 'reduced' && 'seat' in e && e.seat !== HUMAN ? botThinkMs(e, v, Math.random()) : 0,
+      onThink: (e) => setSpotlight('seat' in e ? e.seat : null),
     },
   );
 
@@ -301,6 +316,7 @@ export function useGame(
     lang,
     myTurn: idle && view.toAct === HUMAN,
     spotlight,
+    matchLog,
     cue,
     dealerHop,
     motion,

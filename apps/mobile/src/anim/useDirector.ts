@@ -30,6 +30,9 @@ export function useDirector(
     onEventEnd?: (e: TableEvent, speed: number) => void;
     /** The director flushed past `n` events without animating them. */
     onSkip?: (n: number) => void;
+    /** A bot's think before its move shows (see DirectorCallbacks.thinkMs). */
+    thinkMs?: (e: TableEvent, view: PublicView) => number;
+    onThink?: (e: TableEvent) => void;
   } = {},
 ) {
   const [view, setView] = useState<PublicView>(initialView);
@@ -45,6 +48,10 @@ export function useDirector(
   onEventEndRef.current = opts.onEventEnd;
   const onSkipRef = useRef(opts.onSkip);
   onSkipRef.current = opts.onSkip;
+  const thinkRef = useRef(opts.thinkMs);
+  thinkRef.current = opts.thinkMs;
+  const onThinkRef = useRef(opts.onThink);
+  onThinkRef.current = opts.onThink;
 
   const directorRef = useRef<Director | null>(null);
   if (directorRef.current === null) {
@@ -61,6 +68,8 @@ export function useDirector(
         onSkip: (n) => onSkipRef.current?.(n),
         onIdle: setIdle,
         onBatch: () => onBatchRef.current?.(),
+        thinkMs: (e, v) => thinkRef.current?.(e, v) ?? 0,
+        onThink: (e) => onThinkRef.current?.(e),
       },
       opts.timings ?? DEFAULT_TIMINGS,
     );

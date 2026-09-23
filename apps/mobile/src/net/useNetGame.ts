@@ -9,6 +9,8 @@ import { Lang } from '@belot/i18n';
 import { canAffordGift, spendOnGift, type Award, type GiftId, type PlayerProfile } from '@belot/progression';
 import { AnchorMap } from '../anim/AnchorRegistry';
 import { Director, timingsFor, type MotionPolicy } from '../anim/director';
+import { botThinkMs } from '../anim/think';
+import { EMPTY_LOG, logEvent } from '../matchLog';
 import { FxBus } from '../anim/FxBus';
 import { makeFxSpawner, spawnEmote } from '../table/fx';
 import { useMotionPolicy } from '../anim/useMotionPolicy';
@@ -122,6 +124,8 @@ interface RoomMessage {
   rematchVotes?: Seat[];
   /** The table's turn clock in seconds (a private table's host picks it). */
   turnSeconds?: number;
+  /** Points the match is played to (a private table's host picks it; absent from an older server: 1001). */
+  target?: number;
   /** Friends' table, by code: only there does it pause and wait. */
   private?: true;
   /** Present while a private table stands still. */
@@ -194,6 +198,7 @@ export function useNetGame(settings: Settings) {
   const [nextDeadline, setNextDeadline] = useState<number | null>(null);
   const [nextVotes, setNextVotes] = useState<Seat[]>([]);
   const [turnSeconds, setTurnSeconds] = useState(30);
+  const [target, setTarget] = useState(1001);
   const [isPrivate, setIsPrivate] = useState(false);
   // Once this room has been a table, a dropped connection keeps the table on
   // screen while the hook gets back into the seat - not the lobby, which is
@@ -256,8 +261,19 @@ export function useNetGame(settings: Settings) {
   const langRef = useRef(lang);
   langRef.current = lang;
 
+  // The deals of the match in play, for the match-end summary. Every event,
+  // flushed ones too; one missed while away leaves it short, and then the
+  // sheet shows no summary rather than a wrong one (matchLog.ts).
+  const matchLogRef = useRef(EMPTY_LOG);
+  const [matchLog, setMatchLog] = useState(EMPTY_LOG);
+
   const onEvent = useCallback(
     (e: TableEvent, flushed: boolean, speed: number) => {
+      const logged = logEvent(matchLogRef.current, e);
+      if (logged !== matchLogRef.current) {
+        matchLogRef.current = logged;
+        setMatchLog(logged);
+      }
       const mine = mySeatRef.current;
       if (mine === null) return;
       const r = processEvents({
@@ -431,6 +447,17 @@ export function useNetGame(settings: Settings) {
             // Anchors re-measure as each batch starts; the table bumps them too
             // whenever a row around the felt comes or goes.
             onBatch: () => anchors.bump(),
+            // The server's bots move the instant they may; they take a moment
+            // here, as offline. A person's move shows as it came: they took
+            // their own time.
+            thinkMs: (e, v) =>
+              motionRef.current !== 'reduced' &&
+              'seat' in e &&
+              e.seat !== mySeatRef.current &&
+              seatsRef.current[e.seat]?.bot === true
+                ? botThinkMs(e, v, Math.random())
+                : 0,
+            onThink: (e) => setSpotlight('seat' in e ? e.seat : null),
           },
           timingsFor(motionRef.current),
         );
@@ -472,6 +499,7 @@ export function useNetGame(settings: Settings) {
       setNextDeadline(msg.nextMsLeft != null ? now + msg.nextMsLeft : null);
       setNextVotes(msg.nextVotes ?? []);
       setTurnSeconds(msg.turnSeconds ?? 30);
+      setTarget(msg.target ?? 1001);
       setIsPrivate(msg.private === true);
       // A stale-tap refusal is stale itself the moment the game moves on.
       if (msg.events.length > 0) setError(null);
@@ -688,6 +716,11 @@ export function useNetGame(settings: Settings) {
   const playOn = useCallback(() => roomRef.current?.send('playOn', {}), []);
   /** Host, before the start: the turn clock. */
   const setClock = useCallback((seconds: number) => roomRef.current?.send('clock', { seconds }), []);
+  /** Host, before the start: the match length and Prava bela (either may be left out). */
+  const setRules = useCallback(
+    (rules: { target?: number; hard?: boolean }) => roomRef.current?.send('rules', rules),
+    [],
+  );
 
   // The server validates, rate-limits and echoes it back; the bubble spawns
   // from the broadcast, so what I see is exactly what the table saw.
@@ -778,6 +811,7 @@ export function useNetGame(settings: Settings) {
     banner,
     lastDealResult,
     spotlight,
+    matchLog,
     cue,
     dealerHop,
     motion,
@@ -787,6 +821,7 @@ export function useNetGame(settings: Settings) {
     nextDeadline,
     nextVotes,
     turnSeconds,
+    target,
     isPrivate,
     // Getting back into a seat after a drop: the table stays up meanwhile.
     reconnecting: atTable && (status === 'disconnected' || status === 'connecting'),
@@ -794,6 +829,7 @@ export function useNetGame(settings: Settings) {
     resume,
     playOn,
     setClock,
+    setRules,
     // The matchOver event says who won, but a client that reconnected into a
     // finished match never heard it. The view still knows: at MATCH_OVER the
     // higher score has won - the engine's own rule (matchWinner,

@@ -205,6 +205,7 @@ async function main(): Promise<void> {
   wire(await client.create(ROOM_NAME, { name: 'Stranac', gifts: true }), P);
   await wait(500);
   check(P.last?.private === undefined, 'a quick-play table is not private');
+  check(/^[ABCDEFGHJKMNPQRSTUVWXYZ2-9]{5}$/.test(P.room.roomId), `but its code is as readable (${P.room.roomId})`);
   P.room.send('clock', { seconds: 90 });
   await wait(300);
   check(P.last?.turnSeconds === 30, 'and its clock cannot be changed');

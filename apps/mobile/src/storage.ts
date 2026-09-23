@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { emptyProfile, ensureQuests, isoDay, type PlayerProfile } from '@belot/progression';
+import { localeFor } from './locale';
 
 /**
  * Local persistence.
@@ -44,6 +45,7 @@ const store: KV =
 const KEY = {
   profile: 'profile.v1',
   settings: 'settings.v1',
+  series: 'series.v1',
 } as const;
 
 export type ConfirmPlay = 'off' | 'ambiguous' | 'always';
@@ -124,7 +126,25 @@ export function saveProfile(profile: PlayerProfile): void {
   write(KEY.profile, profile);
 }
 
+/** The system's locale tag through Intl: Hermes has it on Android, and every browser. */
+function deviceTag(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().locale;
+  } catch {
+    return undefined;
+  }
+}
+
 export function loadSettings(): Settings {
+  // First launch - nothing stored at all - speaks the phone's language. Saved
+  // at once: were it left to the default, the first saved profile would make
+  // the next launch look like an old install and flip the app to Croatian.
+  // An existing install keeps what it had.
+  if (store.getString(KEY.settings) === undefined && store.getString(KEY.profile) === undefined) {
+    const first = { ...DEFAULT_SETTINGS, locale: localeFor(deviceTag()) };
+    write(KEY.settings, first);
+    return first;
+  }
   const s = read(KEY.settings, DEFAULT_SETTINGS);
   // A volume saved by a build with other steps snaps to the nearest chip, or
   // Settings would light none.
@@ -136,6 +156,27 @@ export function loadSettings(): Settings {
 
 export function saveSettings(settings: Settings): void {
   write(KEY.settings, settings);
+}
+
+/**
+ * The series between the same four people, across evenings - on this device
+ * only, like everything else. Keyed by who played with whom (groupKey), from
+ * this player's side; `seen` names the matches already counted, so a
+ * reconnect or a relaunch never counts one twice.
+ */
+export interface SeriesEntry {
+  us: number;
+  them: number;
+  seen: string[];
+}
+export type SeriesBook = Record<string, SeriesEntry>;
+
+export function loadSeries(): SeriesBook {
+  return read<SeriesBook>(KEY.series, {});
+}
+
+export function saveSeries(book: SeriesBook): void {
+  write(KEY.series, book);
 }
 
 /** Wipes local progress. Exposed in settings so testers can start clean. */

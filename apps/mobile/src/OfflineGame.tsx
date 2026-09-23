@@ -141,6 +141,7 @@ function OfflineMatch({
       lang={g.lang}
       view={g.view}
       spotlightSeat={g.spotlight}
+      matchLog={g.matchLog}
       cue={g.cue}
       dealerHop={g.dealerHop}
       reducedMotion={g.motion === 'reduced'}

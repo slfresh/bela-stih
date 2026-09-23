@@ -3,7 +3,9 @@ import { room } from '../cosmetics';
 import {
   ActivityIndicator,
   Linking,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   Share,
   StyleSheet,
@@ -28,10 +30,13 @@ import { SERVER_FALLBACK, seatName } from './seatName';
 import { botIdentity } from '../table/bots';
 import { stillReading } from './hold';
 import { PressScale } from '../ui/PressScale';
-import { TURN_CHOICES_S } from './clock';
+import { MATCH_TARGETS_P, TURN_CHOICES_S } from './clock';
+import { QrCode } from './QrCode';
 import { reportMailto, reportStamp } from '../report';
 import { APP_VERSION } from '../screens/common';
-import type { Settings } from '../storage';
+import { loadSeries, saveSeries, type SeriesEntry, type Settings } from '../storage';
+import { groupKey, recordMatch } from './series';
+import { isoDay } from '@belot/progression';
 import { SERVER_URL, useNetGame, type NetGame } from './useNetGame';
 
 /**
@@ -124,6 +129,42 @@ export function OnlineGame({
   const seatedHumans = net.seats.filter((s) => s.connected && !s.bot).length;
   const waitingForRematch = Math.max(0, seatedHumans - net.rematchVotes.length);
 
+  // The same four people, in the same teams, from one evening to the next:
+  // their series lives on this device (storage.ts) and carries on from where
+  // it stood last time. Only a table of four people counts - a bot is not
+  // somebody to have a series with - and each match counts once, however
+  // often this device reconnects or relaunches. A friend whose phone dropped
+  // is still one of the four: their seat keeps their name while a bot holds
+  // it, and only a seat nobody ever sat in carries the room's fallback name.
+  const fourPeople = net.seats.length === 4 && net.seats.every((s) => s.name !== SERVER_FALLBACK(s.seat));
+  const mine = net.seat;
+  const group =
+    fourPeople && mine !== null
+      ? groupKey(
+          [mine, ((mine + 2) % 4) as Seat].map((s) => net.realName(s)),
+          [((mine + 1) % 4) as Seat, ((mine + 3) % 4) as Seat].map((s) => net.realName(s)),
+        )
+      : null;
+  const [seriesEntry, setSeriesEntry] = useState<SeriesEntry | null>(null);
+  useEffect(() => {
+    setSeriesEntry(group !== null ? (loadSeries()[group] ?? null) : null);
+  }, [group]);
+  useEffect(() => {
+    if (group === null || mine === null || !net.matchOver || net.winnerTeam === null || !net.roomId) return;
+    const id = `${isoDay(new Date())}:${net.roomId}:${net.matchNumber}`;
+    const book = recordMatch(loadSeries(), group, id, net.winnerTeam === teamOf(mine));
+    saveSeries(book);
+    setSeriesEntry(book[group] ?? null);
+  }, [group, mine, net.matchOver, net.winnerTeam, net.roomId, net.matchNumber]);
+  // The series as the table shows it, by team id: the long one when there is
+  // one, tonight's otherwise (a table with a bot, or before four sat down).
+  const shownSeries: [number, number] =
+    seriesEntry && mine !== null
+      ? teamOf(mine) === 0
+        ? [seriesEntry.us, seriesEntry.them]
+        : [seriesEntry.them, seriesEntry.us]
+      : net.series;
+
   // Every match of a series deserves its own confetti, so the latch is keyed
   // on the match rather than on the mount.
   const cheeredMatch = useRef(-1);
@@ -184,15 +225,19 @@ export function OnlineGame({
       lang={net.lang}
       view={net.view}
       spotlightSeat={net.spotlight}
+      matchLog={net.matchLog}
       cue={net.cue}
       dealerHop={net.dealerHop}
       reducedMotion={net.motion === 'reduced'}
       hardMode={net.hard}
+      matchTarget={net.target}
       handSort={settings.handSort}
       onHandSortChange={(m) => onSettingsChange?.({ ...settings, handSort: m })}
       confirmPlay={settings.confirmPlay}
-      series={net.series}
+      series={shownSeries}
       askedRematch={net.rematchVotes.includes(net.seat)}
+      // The same four again: a return match, not just another one.
+      rematchLabel={fourPeople ? net.lang.s.ui.revans : undefined}
       waitingFor={waitingForRematch}
       onRematch={net.rematch}
       onForceRematch={net.seat === net.hostSeat ? net.rematchStart : undefined}
@@ -275,6 +320,9 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
   const [box, setBox] = useState({ w: 0, h: 0 });
   const [copied, setCopied] = useState(false);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The invite as a QR code, for friends at the same table: one scan instead
+  // of reading a code out. Over everything, so the lobby does not reflow.
+  const [qrOpen, setQrOpen] = useState(false);
   // The clipboard answers asynchronously; the game may have started by then.
   const mounted = useRef(true);
   useEffect(
@@ -286,6 +334,17 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
   );
   const seated = net.seats.filter((s) => s.connected).length;
   const ui = net.lang.s.ui;
+  // Quick play looks for strangers, and an empty server could keep a player
+  // waiting forever: after a while with nobody new, starting with bots is
+  // offered right under the status instead of among the invitation's buttons.
+  const quick = !net.isPrivate;
+  const [longWait, setLongWait] = useState(false);
+  useEffect(() => {
+    setLongWait(false);
+    if (!quick || net.status !== 'waiting') return;
+    const t = setTimeout(() => setLongWait(true), QUICK_BOTS_OFFER_MS);
+    return () => clearTimeout(t);
+  }, [quick, net.status, seated]);
 
   const message =
     net.status === 'connecting'
@@ -294,7 +353,9 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
         ? ui.cannotConnect(SERVER_URL)
         : net.status === 'disconnected'
           ? ui.connectionLost
-          : ui.waitingForPlayers(seated);
+          : quick
+            ? ui.searchingPlayers(seated)
+            : ui.waitingForPlayers(seated);
 
   // Side by side whenever the screen is wider than tall and short enough that
   // the stacked lobby (about 610 dp with the bots button) would scroll.
@@ -309,11 +370,14 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
 
   const canStart =
     net.seat !== null && net.seat === net.hostSeat && net.status === 'waiting' && seated >= 1 && seated < 4;
+  const offerBots = quick && longWait && canStart;
 
+  // The link opens the app straight into this table; for anyone without the
+  // app it lands on a page showing the code, with the browser game and the
+  // store a tap away. The QR code carries the same link.
+  const link = `https://belastih.com/join/${net.roomId}`;
   const invite = () => {
-    // The link opens the app straight into this table; for anyone without the
-    // app it lands on a page showing the code.
-    const text = ui.inviteText(`https://belastih.com/join/${net.roomId}`);
+    const text = ui.inviteText(link);
     Share.share({ message: text }).catch((err: unknown) => {
       // A browser with no share sheet (most desktops) refuses at once, and the
       // button used to do nothing at all there: the invitation goes to the
@@ -340,6 +404,12 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
       <Text style={styles.title}>{message}</Text>
       {net.error && net.status !== 'waiting' && <Text style={styles.error}>{net.error}</Text>}
       {net.status === 'error' && <Button label={ui.retry} tone="strong" onPress={net.retry} />}
+      {offerBots && (
+        <>
+          <Text style={styles.hint}>{ui.nobodyYet}</Text>
+          <Button label={ui.startWithBots} tone="strong" onPress={net.startWithBots} />
+        </>
+      )}
     </View>
   );
 
@@ -371,45 +441,72 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
           </Text>
           <Text style={styles.hint}>{ui.shareCode}</Text>
         </View>
-        <Button label={ui.invite} tone="strong" onPress={invite} />
+        <View style={styles.inviteRow}>
+          <View style={styles.inviteMain}>
+            <Button label={ui.invite} tone="strong" onPress={invite} />
+          </View>
+          <Button label={ui.showQr} tone="plain" onPress={() => setQrOpen(true)} />
+        </View>
         {/* An alert, so a screen reader says it the moment it appears. */}
         {copied && (
           <Text style={styles.copied} role="alert">
             {ui.inviteCopied}
           </Text>
         )}
-        {canStart && <Button label={ui.startWithBots} onPress={net.startWithBots} />}
+        {canStart && !offerBots && <Button label={ui.startWithBots} onPress={net.startWithBots} />}
       </Panel>
     ) : null;
 
-  // A private table's turn clock: the host picks, everyone sees it. Quick
-  // play keeps 30 s for strangers and shows nothing here.
+  // A private table's rules in one place: how long the match runs, Lagana or
+  // Prava bela, and the turn clock. The host picks, everyone sees them before
+  // sitting down to play - friends were punished for a renons nobody had said
+  // was on. Quick play keeps 1001, Lagana and 30 s for strangers, and shows
+  // nothing here.
   const isHost = net.seat !== null && net.seat === net.hostSeat;
-  const clock =
+  const rules =
     net.isPrivate && net.status === 'waiting' && columnW > 0 ? (
-      <View style={[styles.clock, { width: columnW }]}>
-        <Text style={styles.clockLabel}>{ui.turnClock}</Text>
-        <View style={styles.clockRow} accessibilityRole="radiogroup">
-          {TURN_CHOICES_S.map((sec) => {
-            const on = net.turnSeconds === sec;
-            return (
-              <PressScale
-                key={sec}
-                disabled={!isHost}
-                onPress={() => net.setClock(sec)}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: on, disabled: !isHost }}
-                style={[styles.clockChip, on && styles.clockChipOn, !isHost && !on && styles.clockChipIdle]}
-              >
-                <Text style={[styles.clockText, on && styles.clockTextOn]}>{ui.seconds(sec)}</Text>
-              </PressScale>
-            );
-          })}
-        </View>
+      <View style={[styles.rules, { width: columnW }]}>
+        <Choice
+          label={ui.matchLength}
+          host={isHost}
+          options={MATCH_TARGETS_P.map((t) => ({ key: String(t), text: String(t), on: net.target === t }))}
+          onPick={(k) => net.setRules({ target: Number(k) })}
+        />
+        <Choice
+          label={net.lang.s.difficulty}
+          host={isHost}
+          options={[
+            { key: 'easy', text: net.lang.s.difficultyEasy, on: !net.hard },
+            { key: 'hard', text: net.lang.s.difficultyHard, on: net.hard },
+          ]}
+          onPick={(k) => net.setRules({ hard: k === 'hard' })}
+        />
+        <Choice
+          label={ui.turnClock}
+          host={isHost}
+          options={TURN_CHOICES_S.map((sec) => ({ key: String(sec), text: ui.seconds(sec), on: net.turnSeconds === sec }))}
+          onPick={(k) => net.setClock(Number(k))}
+        />
       </View>
     ) : null;
 
   const back = <Button label={ui.back} tone="plain" onPress={onExit} />;
+
+  const qrSize = Math.max(160, Math.min(320, Math.round(Math.min(box.w, box.h) * 0.72)));
+  const qr = net.roomId ? (
+    <Modal visible={qrOpen} transparent animationType="fade" onRequestClose={() => setQrOpen(false)}>
+      <Pressable style={styles.qrBackdrop} onPress={() => setQrOpen(false)} accessibilityLabel={ui.close}>
+        <View style={styles.qrCard}>
+          <QrCode text={link} size={qrSize} label={ui.qrLabel(net.roomId)} />
+          <Text style={styles.qrCode} selectable>
+            {net.roomId}
+          </Text>
+          <Text style={styles.qrHint}>{ui.qrHint}</Text>
+          <Button label={ui.close} tone="plain" onPress={() => setQrOpen(false)} />
+        </View>
+      </Pressable>
+    </Modal>
+  ) : null;
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: room().page }]}>
@@ -417,13 +514,14 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
         contentContainerStyle={[styles.centre, { padding: pad, gap: tight ? space.md : space.lg + 2 }, land && styles.row]}
         onLayout={(e) => setBox({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
       >
+        {qr}
         {land ? (
           <>
             {map}
             <View style={[styles.column, { width: columnW }]}>
               {status}
               {invitation}
-              {clock}
+              {rules}
               {back}
             </View>
           </>
@@ -432,7 +530,7 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
             {status}
             {map}
             {invitation}
-            {clock}
+            {rules}
             {back}
           </>
         )}
@@ -441,8 +539,50 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
   );
 }
 
+/**
+ * One of the table's rules: its name, and the choices as a row of chips. Only
+ * the host can change it; everyone else sees the chosen one lit.
+ */
+function Choice({
+  label,
+  host,
+  options,
+  onPick,
+}: {
+  label: string;
+  host: boolean;
+  options: { key: string; text: string; on: boolean }[];
+  onPick: (key: string) => void;
+}) {
+  return (
+    <View style={styles.choice}>
+      <Text style={styles.choiceLabel}>{label}</Text>
+      <View style={styles.choiceRow} accessibilityRole="radiogroup" accessibilityLabel={label}>
+        {options.map((o) => (
+          <PressScale
+            key={o.key}
+            disabled={!host}
+            onPress={() => {
+              if (!o.on) onPick(o.key);
+            }}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: o.on, disabled: !host }}
+            style={[styles.choiceChip, o.on && styles.choiceChipOn, !host && !o.on && styles.choiceChipIdle]}
+          >
+            <Text style={[styles.choiceText, o.on && styles.choiceTextOn]} numberOfLines={1}>
+              {o.text}
+            </Text>
+          </PressScale>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 /** How long "copied" stays under the invite button. */
 const COPIED_MS = 4000;
+/** Quick play: how long with nobody new before starting with bots is offered. */
+export const QUICK_BOTS_OFFER_MS = 15_000;
 /** Neither the seat map nor the invitation beside it grows past this. */
 const MAP_MAX_W = 420;
 /** Taller than this and a screen on its side has room to stack (a big tablet). */
@@ -457,25 +597,42 @@ const styles = StyleSheet.create({
   title: { color: theme.text, fontSize: 20, fontFamily: font.bold, textAlign: 'center' },
   error: { color: theme.dangerInk, fontSize: 13, textAlign: 'center' },
   invite: { gap: space.sm + 2 },
+  inviteRow: { flexDirection: 'row', gap: space.sm, alignItems: 'center' },
+  inviteMain: { flex: 1 },
+  qrBackdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: surface.scrim, padding: space.lg },
+  qrCard: {
+    alignItems: 'center',
+    gap: space.sm,
+    padding: space.lg,
+    borderRadius: radius.lg,
+    backgroundColor: theme.feltDeep,
+    borderWidth: 1,
+    borderColor: theme.line,
+  },
+  qrCode: { color: theme.accent, ...type.h1, letterSpacing: 2 },
+  qrHint: { color: ink.mid, ...type.sub, textAlign: 'center', maxWidth: 280 },
   codeBlock: { alignItems: 'center', gap: 2 },
   codeLabel: { color: ink.mid, ...type.caption },
   code: { color: theme.accent, ...type.h1, letterSpacing: 2, textAlign: 'center' },
   hint: { color: ink.mid, ...type.sub, textAlign: 'center', marginTop: space.xs },
   copied: { color: theme.okInk, ...type.sub, textAlign: 'center' },
-  clock: { alignItems: 'center', gap: space.xs },
-  clockLabel: { color: ink.mid, ...type.caption },
-  clockRow: { flexDirection: 'row', gap: space.sm, alignSelf: 'stretch' },
-  clockChip: {
+  rules: { gap: space.sm },
+  // Label left, chips right: three rules in the height the clock alone took.
+  choice: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  choiceLabel: { color: ink.mid, ...type.caption, width: 96 },
+  choiceRow: { flex: 1, flexDirection: 'row', gap: space.xs + 2 },
+  choiceChip: {
     flex: 1,
     alignItems: 'center',
-    paddingVertical: space.sm,
+    paddingVertical: space.sm - 1,
+    paddingHorizontal: space.xs,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: theme.line,
     backgroundColor: surface.chip,
   },
-  clockChipOn: { borderColor: theme.accent },
-  clockChipIdle: { opacity: 0.55 },
-  clockText: { color: ink.mid, fontFamily: font.medium, fontSize: 14 },
-  clockTextOn: { color: theme.accent },
+  choiceChipOn: { borderColor: theme.accent },
+  choiceChipIdle: { opacity: 0.55 },
+  choiceText: { color: ink.mid, fontFamily: font.medium, fontSize: 14 },
+  choiceTextOn: { color: theme.accent },
 });

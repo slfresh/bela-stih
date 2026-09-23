@@ -56,14 +56,21 @@ async function main(): Promise<void> {
   // And B can answer.
   b.send('emote', { id: 'hvala' });
   await wait(400);
+  // The phrases added in 1.4 go through like the old ones.
+  await wait(EMOTE_GAP_MS);
+  a.send('emote', { id: 'dobro' });
+  b.send('emote', { id: 'idemo' });
+  await wait(400);
 
   const ok =
     afterBurst === 1 &&
-    seenByB.length === 3 &&
-    seenByA.length === 3 &&
+    seenByB.length === 5 &&
+    seenByA.length === 5 &&
     seenByB[0]!.id === 'laugh' &&
     seenByB[1]!.id === 'bravo' &&
     seenByB[2]!.id === 'hvala' &&
+    seenByB[3]!.id === 'dobro' &&
+    seenByB[4]!.id === 'idemo' &&
     seenByA[2]!.seat !== seenByA[0]!.seat;
 
   console.log(`[emote-smoke] A saw: ${seenByA.map((m) => `${m.seat}:${m.id}`).join(' ')}`);

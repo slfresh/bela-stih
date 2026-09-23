@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Linking, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { PressScale } from '../ui/PressScale';
+import { Button } from '../ui/Button';
 import type { Lang } from '@belot/i18n';
 import type { PlayerProfile } from '@belot/progression';
 import { resetProfile, type Settings, VOLUME_OPTIONS } from '../storage';
@@ -23,12 +24,15 @@ export function SettingsScreen({
   onSettingsChange,
   onProfileChange,
   onBack,
+  onOpenRules,
 }: {
   lang: Lang;
   settings: Settings;
   onSettingsChange: (s: Settings) => void;
   onProfileChange: (p: PlayerProfile) => void;
   onBack: () => void;
+  /** "Kako se igra". */
+  onOpenRules: () => void;
 }) {
   const ui = lang.s.ui;
   // Reset arms on the first tap and fires on the second — a dialog would be
@@ -56,6 +60,7 @@ export function SettingsScreen({
 
   return (
     <ScreenShell title={ui.settings} onBack={onBack} backLabel={ui.back}>
+      <Button label={lang.s.rules.title} tone="plain" onPress={onOpenRules} />
       <Panel label={ui.nicknameLabel}>
         <TextInput
           value={settings.nickname}

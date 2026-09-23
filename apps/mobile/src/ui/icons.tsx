@@ -124,6 +124,22 @@ export function Close({ size = 16, colour = ink.hi }: IconProps) {
   );
 }
 
+/** Look: an open eye - the last trick, where there is no room for its name. */
+export function Eye({ size = 16, colour = ink.hi }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path
+        d="M2.5 12C5.2 7.6 8.4 5.5 12 5.5s6.8 2.1 9.5 6.5c-2.7 4.4-5.9 6.5-9.5 6.5S5.2 16.4 2.5 12z"
+        fill="none"
+        stroke={colour}
+        strokeWidth={2.2}
+        strokeLinejoin="round"
+      />
+      <Circle cx={12} cy={12} r={3.3} fill={colour} />
+    </Svg>
+  );
+}
+
 /** Pause: two upright bars, rounded like the rest of the set. */
 export function Pause({ size = 16, colour = ink.hi }: IconProps) {
   return (

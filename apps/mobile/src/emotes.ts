@@ -1,7 +1,7 @@
 import type { Lang } from '@belot/i18n';
 
 /**
- * The quick-emote vocabulary: six faces and four table phrases. A fixed set —
+ * The quick-emote vocabulary: six faces and seven table phrases. A fixed set —
  * there is deliberately no free text, so nothing a player sends can ever need
  * moderation. Keep the id list in step with `apps/server/src/protocol.ts`,
  * which is what the server actually accepts.
@@ -17,6 +17,9 @@ export const EMOTES: ReadonlyArray<{ id: string; glyph?: string }> = [
   { id: 'brze' },
   { id: 'ajme' },
   { id: 'hvala' },
+  { id: 'dobro' },
+  { id: 'ups' },
+  { id: 'idemo' },
 ];
 
 export const EMOTE_IDS: readonly string[] = EMOTES.map((e) => e.id);

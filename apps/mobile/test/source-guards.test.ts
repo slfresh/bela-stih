@@ -213,7 +213,10 @@ describe('anchors measure on demand', () => {
     // behind over quick rotations.
     const fan = src('TableScreen.tsx');
     expect(fan).toMatch(/<View style=\{\[styles\.fanCard, \{ marginLeft, zIndex \}\]\}>\s*<Animated\.View style=\{motion\}>\s*<Pressable/);
-    expect(fan).toMatch(/transform: \[\{ translateY: baseY \+ liftV\.value \}, \{ rotateZ: `\$\{rotate\}deg` \}\],/);
+    // A refused tap's shake rides the same view: an offset that always comes
+    // back to 0, never the card's place.
+    expect(fan).toMatch(/transform: \[\{ translateX: shakeX\.value \}, \{ translateY: baseY \+ liftV\.value \}, \{ rotateZ: `\$\{rotate\}deg` \}\],/);
+    expect(fan).toMatch(/withTiming\(-3, \{ duration: 70 \}\),\s*withTiming\(0, \{ duration: 55 \}\),/);
     expect(fan).not.toMatch(/translateX: xV|useSharedValue\(x\)/);
     expect(fan).toMatch(/fanCard: \{\},/);
     expect(fan).toMatch(/marginLeft=\{i === 0 \? 0 : fit\.overlap\}/);

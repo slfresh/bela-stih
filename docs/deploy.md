@@ -41,7 +41,16 @@ cd apps/server && SERVER_URL=wss://bela.yourdomain.com npx tsx src/emote-smoke.t
 # and the gift relay (rate limit, the table gift, a seat keeping its gift
 # through a dropped connection and losing it when its player leaves):
 SERVER_URL=wss://bela.yourdomain.com npx tsx src/gift-smoke.ts
+# a private table's rules: the host's match length and Prava bela, and a 501
+# match (and its rematch) actually ending at 501 - under a minute:
+SERVER_URL=wss://bela.yourdomain.com npx tsx src/rules-smoke.ts
+# pausing, waiting for a dropped friend, the next-deal countdown, short codes
+# (about two minutes; it waits out the old 60 s seat hold on purpose):
+SERVER_URL=wss://bela.yourdomain.com npx tsx src/hold-smoke.ts
 ```
+
+The new quick phrases (`dobro`, `ups`, `idemo`) and the rules message need
+the new server first too: an older server drops both, silently.
 
 A server that knows gifts must be live BEFORE any app build that sends them:
 an older server drops the message silently, and the sender, who pays only on

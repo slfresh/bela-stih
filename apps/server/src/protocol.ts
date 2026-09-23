@@ -49,6 +49,11 @@ export type ClientMessage =
   /** Host, private table, before the start: the turn clock in seconds (one of TURN_CHOICES). */
   | { type: 'clock'; seconds: number }
   /**
+   * Host, private table, before the start: how long the match runs (one of
+   * MATCH_TARGETS) and whether it is Prava bela. Either may be left out.
+   */
+  | { type: 'rules'; target?: number; hard?: boolean }
+  /**
    * Private tables: this player's app went to the background - a phone call
    * that did not drop the connection. The table waits for them exactly as for
    * a dropped one, instead of letting the turn clock play their cards.
@@ -59,6 +64,12 @@ export type ClientMessage =
 
 /** Turn clocks a private table's host may choose, in seconds. Quick play keeps the first. */
 export const TURN_CHOICES: readonly number[] = [30, 60, 90];
+
+/**
+ * Match lengths a private table's host may choose. Quick play keeps the last:
+ * 1001, the full game, the same for every stranger.
+ */
+export const MATCH_TARGETS: readonly number[] = [501, 701, 1001];
 
 /**
  * How long a scored deal's sheet stays up before the next deal starts by
@@ -94,6 +105,8 @@ export interface HoldInfo {
 export const EMOTE_IDS: readonly string[] = [
   'smile', 'laugh', 'wow', 'cry', 'clap', 'think',
   'bravo', 'brze', 'ajme', 'hvala',
+  // An older app draws nothing for an id it does not know (emoteText is '').
+  'dobro', 'ups', 'idemo',
 ];
 
 /** Minimum gap between one seat's emotes. */
@@ -183,6 +196,8 @@ export interface RoomMessage {
   rematchVotes?: Seat[];
   /** The table's turn clock in seconds; a private table's host may change it before the start. */
   turnSeconds?: number;
+  /** Points the match is played to; a private table's host may change it before the start. */
+  target?: number;
   /** A private table (friends, by code): only there does it pause and wait. */
   private?: true;
   /** Present while the table stands still: paused, or waiting for a dropped player. */

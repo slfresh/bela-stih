@@ -114,6 +114,10 @@ describe('zvanja in normal play', () => {
     expect(t).toMatch(/const autoSkipping = declaring && !hardMode && view\.myDeclarations\.length === 0;/);
     expect(t).toMatch(/onActionRef\.current\(\{ type: 'DECLARE_SKIP', seat: mySeat \}\)/);
     expect(t).toMatch(/const declareButtons = declaring && !autoSkipping \? \(/);
+    // ...nor the plain action list, which offered the same skip as "šuti (ne
+    // zovi)" in both orientations while the app was answering.
+    expect((t.match(/\{autoSkipping \? null : declareButtons \?\? \(/g) ?? []).length).toBe(2);
+    expect(t).not.toMatch(/\{declareButtons \?\? \(/);
     // Prava bela asks as before.
     expect(t).toMatch(/if \(!declaring \|\| hardMode\) return;/);
   });

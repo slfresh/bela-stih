@@ -138,6 +138,12 @@ export interface UiStrings {
   connectionLost: string;
   disconnectedWithCode: (code: number) => string;
   waitingForPlayers: (seated: number) => string;
+  /** Quick play's lobby: strangers are being looked for. */
+  searchingPlayers: (seated: number) => string;
+  /** ...and after a while with nobody new: no need to wait. */
+  nobodyYet: string;
+  /** Under the home screen's big IGRAJ: what it is. */
+  playOnlineSub: string;
   shareCode: string;
   leaveTable: string;
   /** Asked before a match in progress is abandoned: the leave button, the result sheet's, Android's back. */
@@ -193,6 +199,8 @@ export interface UiStrings {
   /** The private-table lobby: the host's choice of turn clock. */
   turnClock: string;
   seconds: (n: number) => string;
+  /** ...and of how long the match runs (501 / 701 / 1001). */
+  matchLength: string;
   /** Under the nickname field: who sees it, and the rules its owner accepts. */
   nicknameRules: string;
   /** That line is a link: a screen reader says this instead of the whole sentence. */
@@ -201,10 +209,15 @@ export interface UiStrings {
   rulesAnchor: string;
   startWithBots: string;
   sitHere: string;
+  /** Under a lobby chair: the partner's side, and the other one (no gendered noun). */
+  withYou: string;
+  againstYou: string;
   /** The lobby's error state: try the connection again. */
   retry: string;
   /** Rematch flow after a finished match. */
   playAgain: string;
+  /** ...when it is the same four people: the return match. */
+  revans: string;
   waitingForRematch: (n: number) => string;
   rematchAsked: string;
   startAnyway: string;
@@ -230,6 +243,27 @@ export interface UiStrings {
   volumeLoud: string;
   soundBlocked: string;
   invite: string;
+  /**
+   * The deal's verdict in the callers' numbers, said from our side (plural
+   * verbs, no gender): made, or pad and why - the callers need more than the
+   * defenders, a tie included.
+   */
+  madeLine: (ours: boolean, callers: number, defenders: number) => string;
+  padLine: (ours: boolean, callers: number, defenders: number) => string;
+  /** The match-end sheet: deals each side took, and our best one. */
+  dealsWon: string;
+  bestDeal: (points: number, deal: number) => string;
+  /** A dimmed card, tapped: why it may not go (the led suit's pip goes with the first). */
+  mustFollow: string;
+  mustTrump: string;
+  mustBeat: string;
+  /** The table: a look at the last trick, on my turn. */
+  lastTrick: string;
+  peekLastTrick: string;
+  /** The lobby's QR button, the code's screen-reader name, and what to do with it. */
+  showQr: string;
+  qrLabel: (code: string) => string;
+  qrHint: string;
   inviteText: (url: string) => string;
   /** A browser with no share sheet: the invitation went to the clipboard instead. */
   inviteCopied: string;
@@ -392,7 +426,26 @@ interface Strings {
   /** The caller is already past the line. */
   contractSafe: string;
 
+  /** "Kako se igra": the rules as this app plays them, a card table, and a glossary. */
+  rules: RulesText;
+
   ui: UiStrings;
+}
+
+/**
+ * The rules screen's words. Every number in them is the engine's own
+ * (power.ts, declarations.ts, scoring.ts, legality.ts); a test holds them to it.
+ */
+export interface RulesText {
+  title: string;
+  /** Text sections in order; the card table goes after the second. */
+  sections: { title: string; lines: string[] }[];
+  cardsTitle: string;
+  trumpRow: string;
+  plainRow: string;
+  cardsNote: string;
+  glossaryTitle: string;
+  glossary: [string, string][];
 }
 
 type QuestKind = 'playDeals' | 'winDeals' | 'callZvanja' | 'callBela' | 'winMatch';
@@ -427,6 +480,11 @@ const HR_EMOTES: Record<string, string> = {
   brze: 'Brže!',
   ajme: 'Ajme!',
   hvala: 'Hvala!',
+  // No wider than en "Thanks!" in Rubik-700 (51 dp): the landscape rail's
+  // chips are sized to it. "Dobar potez!" measured 82.
+  dobro: 'Dobro!',
+  ups: 'Ups!',
+  idemo: 'Idemo!',
 };
 
 const HR_GIFTS: Record<string, string> = {
@@ -574,6 +632,82 @@ const hr: Strings = {
   needsMore: (points, ours) => (ours ? `treba nam još ${points}` : `treba im još ${points}`),
   contractSafe: 'prošlo',
 
+  rules: {
+    title: 'Kako se igra',
+    sections: [
+      {
+        title: 'Ukratko',
+        lines: [
+          'Igra se u četvero, u dva para: partner ti sjedi nasuprot.',
+          'Špil ima 32 karte: žir, list, srce i bundeva, od sedmice do asa.',
+          'Igra ide nadesno. Svako dijeljenje piše bodove objema stranama, a partiju dobiva par koji prvi dođe do 1001 boda (za privatnim stolom može i do 501 ili 701).',
+        ],
+      },
+      {
+        title: 'Adut',
+        lines: [
+          'Svatko dobije šest karata. Počevši desno od djelitelja, svatko zove adut ili kaže „dalje”.',
+          'Ako svi kažu dalje, djelitelj mora zvati: to je muss.',
+          'Zatim svatko dobije još dvije karte, pa ih ima osam.',
+        ],
+      },
+      {
+        title: 'Igra',
+        lines: [
+          'Prvu kartu baca igrač desno od djelitelja; tko uzme štih, baca prvi u sljedećem.',
+          'Moraš odgovoriti na boju, i to jačom kartom ako je imaš (iber). Kad je štih već presječen adutom, dovoljna je bilo koja karta te boje.',
+          'Nemaš li tu boju, moraš rezati adutom, i onda kad štih drži partner. Ako je adut već na stolu, moraš ga prebiti ako možeš.',
+          'Tek kad nemaš ni tu boju ni aduta, bacaš što hoćeš.',
+        ],
+      },
+      {
+        title: 'Zvanja',
+        lines: [
+          'Prije prve karte svatko prijavi zvanja iz svoje ruke:',
+          'terca, tri zaredom u istoj boji: 20 · kvarta, četiri zaredom: 50 · kvinta, pet ili više zaredom: 100',
+          'četiri dečka: 200 · četiri devetke: 150 · četiri asa, desetke, kralja ili babe: 100 (sedmice i osmice ne vrijede)',
+          'Piše samo par s najjačim zvanjem, ali onda sva svoja: četiri iste jače su od niza, duži niz od kraćeg, a kod jednake duljine viša karta. Kod posve jednakih zvanja prednost ima tko je ranije na redu.',
+          'Par koji ne uzme nijedan štih ne piše svoja zvanja: idu paru koji je uzeo sve.',
+          'Bela: kralj i baba aduta u istoj ruci vrijede 20. Zove se u trenutku kad baciš prvu od njih.',
+        ],
+      },
+      {
+        title: 'Tko prolazi',
+        lines: [
+          'Par koji je zvao adut mora skupiti više bodova od protivnika, zvanja i belu uključujući. Neriješeno je pad.',
+          'Pad: protivnici pišu sve, karte, zadnji štih i sva zvanja. Zvači zadrže samo svoju belu.',
+          'Štiglja: tko uzme svih osam štihova, dobije još 90.',
+        ],
+      },
+      {
+        title: 'Prava bela',
+        lines: [
+          'Za privatnim stolom ili u postavkama (Težina) možeš igrati bez pomoći: aplikacija ne traži zvanja umjesto tebe, a kriva karta je auzmeš. Dijeljenje tada staje i protivnici pišu sve.',
+        ],
+      },
+    ],
+    cardsTitle: 'Karte i bodovi',
+    trumpRow: 'Adut',
+    plainRow: 'Ostale boje',
+    cardsNote: 'Karte nose 152 boda, a zadnji štih još 10: ukupno 162.',
+    glossaryTitle: 'Pojmovi',
+    glossary: [
+      ['adut', 'boja koja reže sve ostale'],
+      ['zvati', 'odabrati adut; tko ga je odabrao, zvač je'],
+      ['dalje', 'ne zvati'],
+      ['muss', 'djelitelj mora zvati kad su svi rekli dalje'],
+      ['štih', 'četiri karte, po jedna od svakoga; uzima ga najjača'],
+      ['zadnji štih', 'donosi još 10 bodova'],
+      ['rezati', 'baciti adut na tuđu boju'],
+      ['iber', 'obaveza da prebiješ štih ako možeš'],
+      ['zvanja', 'nizovi i četiri iste, prijavljeni prije prve karte'],
+      ['bela', 'kralj i baba aduta, 20 bodova'],
+      ['pad', 'par koji je zvao nije skupio dovoljno; sve ide protivnicima'],
+      ['štiglja', 'svih osam štihova; još 90 bodova'],
+      ['auzmeš', 'kriva karta u pravoj beli; dijeljenje ide protivnicima'],
+    ],
+  },
+
   ui: {
     play: 'IGRAJ',
     playBots: 'Igraj protiv botova',
@@ -636,6 +770,9 @@ const hr: Strings = {
     connectionLost: 'Veza je prekinuta.',
     disconnectedWithCode: (code) => `veza prekinuta (${code})`,
     waitingForPlayers: (seated) => `Čekamo igrače… ${seated}/4`,
+    searchingPlayers: (seated) => `Tražimo igrače… ${seated}/4`,
+    nobodyYet: 'Još nitko nije došao — ne moraš čekati.',
+    playOnlineSub: 'Brza igra online, s pravim igračima',
     shareCode: 'Pošalji je prijateljima da ti se pridruže.',
     leaveTable: 'Napusti stol',
     leaveConfirm: 'Želiš li stvarno napustiti stol?',
@@ -674,14 +811,18 @@ const hr: Strings = {
     nextReady: 'Čekamo ostale',
     nextWaitingFor: (names) => `Čeka se: ${names}`,
     turnClock: 'Vrijeme za potez',
+    matchLength: 'Igra do',
     seconds: (n) => `${n} s`,
     nicknameRules: 'Ime vide drugi igrači. Upisom prihvaćaš pravila ponašanja: bez uvreda, mržnje i tuđih osobnih podataka.',
     nicknameRulesLabel: 'Pravila ponašanja, otvara web stranicu',
     rulesAnchor: 'pravila',
     startWithBots: 'Počni s botovima',
     sitHere: 'sjedni ovdje',
+    withYou: 's tobom',
+    againstYou: 'protiv tebe',
     retry: 'Pokušaj ponovno',
     playAgain: 'Igraj opet',
+    revans: 'Revanš!',
     waitingForRematch: (n) => `Čekamo još ${n} igrača…`,
     rematchAsked: 'Nova partija je zatražena',
     startAnyway: 'Počni svejedno',
@@ -706,6 +847,18 @@ const hr: Strings = {
     volumeLoud: 'Glasno',
     soundBlocked: 'Zvuk je isključen — dodirni za uključivanje',
     invite: 'Pozovi prijatelje',
+    madeLine: (ours, c, d) => `${ours ? 'Prošli smo' : 'Prošli su'}, ${c} prema ${d}.`,
+    padLine: (ours, c, d) => `Pad: ${c} prema ${d}, a zvač mora imati više. Sve ide ${ours ? 'njima' : 'nama'}.`,
+    dealsWon: 'Dobivena dijeljenja',
+    bestDeal: (points, deal) => `Naše najbolje dijeljenje: ${points} (${deal}.)`,
+    mustFollow: 'Moraš odgovoriti na boju',
+    mustTrump: 'Nemaš boju — moraš rezati',
+    mustBeat: 'Moraš prebiti — imaš jaču',
+    lastTrick: 'zadnji štih',
+    peekLastTrick: 'Pogledaj zadnji štih',
+    showQr: 'QR kod',
+    qrLabel: (code) => `QR kod stola ${code}`,
+    qrHint: 'Neka ga prijatelj skenira kamerom mobitela.',
     inviteText: (url) => `Zaigraj belu sa mnom! Pridruži se mom stolu: ${url}`,
     inviteCopied: 'Pozivnica je kopirana — zalijepi je prijateljima.',
     giftName: (id) => HR_GIFTS[id] ?? id,
@@ -743,6 +896,9 @@ const SR_EMOTES: Record<string, string> = {
   brze: 'Брже!',
   ajme: 'Ајме!',
   hvala: 'Хвала!',
+  dobro: 'Добро!',
+  ups: 'Упс!',
+  idemo: 'Идемо!',
 };
 
 const SR_GIFTS: Record<string, string> = {
@@ -892,6 +1048,82 @@ const srCyrl: Strings = {
   needsMore: (points, ours) => (ours ? `треба нам још ${points}` : `треба им још ${points}`),
   contractSafe: 'прошло',
 
+  rules: {
+    title: 'Како се игра',
+    sections: [
+      {
+        title: 'Укратко',
+        lines: [
+          'Игра се у четворо, у два пара: партнер ти седи преко пута.',
+          'Шпил има 32 карте: жир, лист, срце и бундева, од седмице до аса.',
+          'Игра иде надесно. Свако дељење пише бодове обема странама, а партију добија пар који први дође до 1001 бода (за приватним столом може и до 501 или 701).',
+        ],
+      },
+      {
+        title: 'Адут',
+        lines: [
+          'Свако добије шест карата. Почевши десно од делитеља, свако зове адут или каже „даље”.',
+          'Ако сви кажу даље, делитељ мора да зове: то је мус.',
+          'Затим свако добије још две карте, па их има осам.',
+        ],
+      },
+      {
+        title: 'Игра',
+        lines: [
+          'Прву карту баца играч десно од делитеља; ко узме штих, баца први у следећем.',
+          'Мораш да одговориш на боју, и то јачом картом ако је имаш (ибер). Кад је штих већ пресечен адутом, довољна је било која карта те боје.',
+          'Ако немаш ту боју, мораш да сечеш адутом, и онда кад штих држи партнер. Ако је адут већ на столу, мораш да га пребијеш ако можеш.',
+          'Тек кад немаш ни ту боју ни адута, бацаш шта хоћеш.',
+        ],
+      },
+      {
+        title: 'Звања',
+        lines: [
+          'Пре прве карте свако пријави звања из своје руке:',
+          'терца, три заредом у истој боји: 20 · кварта, четири заредом: 50 · квинта, пет или више заредом: 100',
+          'четири дечка: 200 · четири деветке: 150 · четири аса, десетке, краља или бабе: 100 (седмице и осмице не важе)',
+          'Пише само пар са најјачим звањем, али онда сва своја: четири иста су јача од низа, дужи низ од краћег, а при једнакој дужини виша карта. Код потпуно једнаких звања предност има ко је раније на реду.',
+          'Пар који не узме ниједан штих не пише своја звања: иду пару који је узео све.',
+          'Бела: краљ и баба адута у истој руци вреде 20. Зове се у тренутку кад бациш прву од њих.',
+        ],
+      },
+      {
+        title: 'Ко пролази',
+        lines: [
+          'Пар који је звао адут мора да скупи више бодова од противника, звања и белу укључујући. Нерешено је пад.',
+          'Пад: противници пишу све, карте, последњи штих и сва звања. Звачи задрже само своју белу.',
+          'Штигља: ко узме свих осам штихова, добије још 90.',
+        ],
+      },
+      {
+        title: 'Права бела',
+        lines: [
+          'За приватним столом или у подешавањима (Тежина) можеш да играш без помоћи: апликација не тражи звања уместо тебе, а погрешна карта је аузмеш. Дељење тада стаје и противници пишу све.',
+        ],
+      },
+    ],
+    cardsTitle: 'Карте и бодови',
+    trumpRow: 'Адут',
+    plainRow: 'Остале боје',
+    cardsNote: 'Карте носе 152 бода, а последњи штих још 10: укупно 162.',
+    glossaryTitle: 'Појмови',
+    glossary: [
+      ['адут', 'боја која сече све остале'],
+      ['звати', 'изабрати адут; ко га је изабрао, звач је'],
+      ['даље', 'не звати'],
+      ['мус', 'делитељ мора да зове кад су сви рекли даље'],
+      ['штих', 'четири карте, по једна од свакога; узима га најјача'],
+      ['последњи штих', 'доноси још 10 бодова'],
+      ['сећи', 'бацити адут на туђу боју'],
+      ['ибер', 'обавеза да пребијеш штих ако можеш'],
+      ['звања', 'низови и четири иста, пријављени пре прве карте'],
+      ['бела', 'краљ и баба адута, 20 бодова'],
+      ['пад', 'пар који је звао није скупио довољно; све иде противницима'],
+      ['штигља', 'свих осам штихова; још 90 бодова'],
+      ['аузмеш', 'погрешна карта у правој бели; дељење иде противницима'],
+    ],
+  },
+
   ui: {
     play: 'ИГРАЈ',
     playBots: 'Играј против ботова',
@@ -954,6 +1186,9 @@ const srCyrl: Strings = {
     connectionLost: 'Веза је прекинута.',
     disconnectedWithCode: (code) => `веза прекинута (${code})`,
     waitingForPlayers: (seated) => `Чекамо играче… ${seated}/4`,
+    searchingPlayers: (seated) => `Тражимо играче… ${seated}/4`,
+    nobodyYet: 'Још нико није дошао — не мораш да чекаш.',
+    playOnlineSub: 'Брза игра онлајн, са правим играчима',
     shareCode: 'Пошаљи је пријатељима да ти се придруже.',
     leaveTable: 'Напусти сто',
     leaveConfirm: 'Желиш ли стварно да напустиш сто?',
@@ -992,14 +1227,18 @@ const srCyrl: Strings = {
     nextReady: 'Чекамо остале',
     nextWaitingFor: (names) => `Чека се: ${names}`,
     turnClock: 'Време за потез',
+    matchLength: 'Игра до',
     seconds: (n) => `${n} с`,
     nicknameRules: 'Име виде други играчи. Уписом прихваташ правила понашања: без увреда, мржње и туђих личних података.',
     nicknameRulesLabel: 'Правила понашања, отвара веб страницу',
     rulesAnchor: 'pravila',
     startWithBots: 'Почни са ботовима',
     sitHere: 'седни овде',
+    withYou: 'с тобом',
+    againstYou: 'против тебе',
     retry: 'Покушај поново',
     playAgain: 'Играј опет',
+    revans: 'Реванш!',
     waitingForRematch: (n) => `Чекамо још ${n} играча…`,
     rematchAsked: 'Нова партија је затражена',
     startAnyway: 'Почни свеједно',
@@ -1024,6 +1263,18 @@ const srCyrl: Strings = {
     volumeLoud: 'Гласно',
     soundBlocked: 'Звук је искључен — додирни за укључивање',
     invite: 'Позови пријатеље',
+    madeLine: (ours, c, d) => `${ours ? 'Прошли смо' : 'Прошли су'}, ${c} према ${d}.`,
+    padLine: (ours, c, d) => `Пад: ${c} према ${d}, а звач мора да има више. Све иде ${ours ? 'њима' : 'нама'}.`,
+    dealsWon: 'Добијена дељења',
+    bestDeal: (points, deal) => `Наше најбоље дељење: ${points} (${deal}.)`,
+    mustFollow: 'Мораш да одговориш на боју',
+    mustTrump: 'Немаш боју — мораш да сечеш',
+    mustBeat: 'Мораш да пребијеш — имаш јачу',
+    lastTrick: 'задњи штих',
+    peekLastTrick: 'Погледај задњи штих',
+    showQr: 'QR код',
+    qrLabel: (code) => `QR код стола ${code}`,
+    qrHint: 'Нека га пријатељ скенира камером телефона.',
     inviteText: (url) => `Заиграј белу са мном! Придружи се мом столу: ${url}`,
     inviteCopied: 'Позивница је копирана — налепи је пријатељима.',
     giftName: (id) => SR_GIFTS[id] ?? id,
@@ -1061,6 +1312,10 @@ const EN_EMOTES: Record<string, string> = {
   brze: 'Faster!',
   ajme: 'Oops!',
   hvala: 'Thanks!',
+  dobro: 'Great!',
+  ups: 'My bad!',
+  // Without the "!": "Let's go!" is 54 dp, past the rail's chip.
+  idemo: "Let's go",
 };
 
 const EN_GIFTS: Record<string, string> = {
@@ -1206,6 +1461,82 @@ const en: Strings = {
   needsMore: (points, ours) => (ours ? `we need ${points} more` : `they need ${points} more`),
   contractSafe: 'safe',
 
+  rules: {
+    title: 'How to play',
+    sections: [
+      {
+        title: 'In short',
+        lines: [
+          'Four players in two pairs: your partner sits across from you.',
+          'The deck has 32 cards: acorns, leaves, hearts and bells, from seven to ace.',
+          'Play goes to the right. Every deal scores points for both sides, and the first pair to reach 1001 wins the match (a private table can play to 501 or 701).',
+        ],
+      },
+      {
+        title: 'Trump',
+        lines: [
+          'Everyone gets six cards. Starting right of the dealer, each player calls a trump or says "pass".',
+          'If everyone passes, the dealer must call: that is the muss.',
+          'Then everyone gets two more cards, eight in all.',
+        ],
+      },
+      {
+        title: 'Play',
+        lines: [
+          'The player right of the dealer leads the first trick; whoever takes a trick leads the next.',
+          'You must follow suit, with a higher card if you have one (iber). Once a trick has been trumped, any card of the suit will do.',
+          'If you have none of the suit, you must trump, even when your partner is winning the trick. If a trump is already down, you must beat it if you can.',
+          'Only with neither the suit nor a trump may you play anything.',
+        ],
+      },
+      {
+        title: 'Declarations',
+        lines: [
+          'Before the first card, everyone declares what their hand holds:',
+          'terca, three in a row of one suit: 20 · kvarta, four in a row: 50 · kvinta, five or more: 100',
+          'four jacks: 200 · four nines: 150 · four aces, tens, kings or queens: 100 (sevens and eights count for nothing)',
+          'Only the pair with the strongest declaration scores, but then all of theirs: four of a kind beats a run, a longer run a shorter one, and at equal length the higher card. Exactly equal ones go to whoever comes first in play.',
+          'A pair that takes no trick cannot keep its declarations: they go to the pair that took them all.',
+          'Bela: the king and queen of trumps in one hand are worth 20. Call it as you play the first of them.',
+        ],
+      },
+      {
+        title: 'Who makes it',
+        lines: [
+          'The pair that called trump must end with more points than the other pair, declarations and bela included. A tie is down.',
+          'Down (pad): the other pair takes everything, the cards, the last trick and every declaration. The callers keep only their bela.',
+          'Štiglja: taking all eight tricks is worth 90 more.',
+        ],
+      },
+      {
+        title: 'Prava bela',
+        lines: [
+          'At a private table, or in Settings (Difficulty), you can play without help: the app does not find your declarations, and a wrong card is a renons (auzmeš). The deal then stops and the other pair takes everything.',
+        ],
+      },
+    ],
+    cardsTitle: 'Cards and points',
+    trumpRow: 'Trump',
+    plainRow: 'Other suits',
+    cardsNote: 'The cards are worth 152 points, and the last trick 10 more: 162 in all.',
+    glossaryTitle: 'Words',
+    glossary: [
+      ['trump (adut)', 'the suit that beats all the others'],
+      ['call (zvati)', 'choose the trump; whoever did is the caller'],
+      ['pass (dalje)', 'not calling'],
+      ['muss', 'the dealer must call when everyone passed'],
+      ['trick (štih)', 'four cards, one from each player; the strongest takes it'],
+      ['last trick', 'worth 10 more points'],
+      ['trump in (rezati)', 'play a trump on another suit'],
+      ['iber', 'the duty to beat the trick if you can'],
+      ['declarations (zvanja)', 'runs and four of a kind, declared before the first card'],
+      ['bela', 'the king and queen of trumps, 20 points'],
+      ['down (pad)', 'the callers fell short; everything goes to the others'],
+      ['štiglja', 'all eight tricks; 90 more points'],
+      ['renons (auzmeš)', 'a wrong card in Prava bela; the deal goes to the others'],
+    ],
+  },
+
   ui: {
     play: 'PLAY',
     playBots: 'Play vs bots',
@@ -1268,6 +1599,9 @@ const en: Strings = {
     connectionLost: 'Connection lost.',
     disconnectedWithCode: (code) => `connection lost (${code})`,
     waitingForPlayers: (seated) => `Waiting for players… ${seated}/4`,
+    searchingPlayers: (seated) => `Looking for players… ${seated}/4`,
+    nobodyYet: 'Nobody has joined yet — no need to wait.',
+    playOnlineSub: 'Quick play online, with real people',
     shareCode: 'Send it to friends so they can join you.',
     leaveTable: 'Leave table',
     leaveConfirm: 'Do you really want to leave the table?',
@@ -1306,14 +1640,18 @@ const en: Strings = {
     nextReady: 'Waiting for the others',
     nextWaitingFor: (names) => `Waiting for: ${names}`,
     turnClock: 'Time per move',
+    matchLength: 'Play to',
     seconds: (n) => `${n} s`,
     nicknameRules: "Other players see this name. By entering one you accept the rules of conduct: no insults, hate or other people's personal details.",
     nicknameRulesLabel: 'Rules of conduct, opens a web page',
     rulesAnchor: 'conduct',
     startWithBots: 'Start with bots',
     sitHere: 'sit here',
+    withYou: 'with you',
+    againstYou: 'against you',
     retry: 'Try again',
     playAgain: 'Play again',
+    revans: 'Rematch!',
     waitingForRematch: (n) => `Waiting for ${n} more…`,
     rematchAsked: 'You asked for another match',
     startAnyway: 'Start anyway',
@@ -1338,6 +1676,18 @@ const en: Strings = {
     volumeLoud: 'Loud',
     soundBlocked: 'Sound is off — tap to turn it on',
     invite: 'Invite friends',
+    madeLine: (ours, c, d) => `${ours ? 'We made it' : 'They made it'}, ${c} to ${d}.`,
+    padLine: (ours, c, d) => `Down: ${c} to ${d}, and the callers need more. It all goes to ${ours ? 'them' : 'us'}.`,
+    dealsWon: 'Deals won',
+    bestDeal: (points, deal) => `Our best deal: ${points} (deal ${deal})`,
+    mustFollow: 'Follow suit',
+    mustTrump: 'None of that suit — you must trump',
+    mustBeat: 'Beat it — you hold a higher card',
+    lastTrick: 'last trick',
+    peekLastTrick: 'Show the last trick',
+    showQr: 'QR code',
+    qrLabel: (code) => `QR code for table ${code}`,
+    qrHint: 'Let a friend scan it with their phone camera.',
     inviteText: (url) => `Come play Bela with me! Join my table: ${url}`,
     inviteCopied: 'Invite copied — paste it to your friends.',
     giftName: (id) => EN_GIFTS[id] ?? id,

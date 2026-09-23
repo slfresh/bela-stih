@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Room, ServerError, type AuthContext, type Client } from '@colyseus/core';
 import type { Action, Seat } from '@belot/engine';
-import { HARD_CONFIG_OVERRIDES, RANKS, SEATS, SUITS } from '@belot/engine';
+import { DEFAULT_CONFIG, HARD_CONFIG_OVERRIDES, RANKS, SEATS, SUITS } from '@belot/engine';
 import type { Card, Rank, Rng, Suit } from '@belot/engine';
 import { Table } from '@belot/table';
 import {
@@ -9,6 +9,7 @@ import {
   EMOTE_IDS,
   GIFT_GAP_MS,
   GIFT_IDS,
+  MATCH_TARGETS,
   MSG,
   NEXT_DEAL_MS,
   PAUSE_MAX_MS,
@@ -170,6 +171,8 @@ export class BelaRoom extends Room {
 
   private table!: Table;
   private hard = false;
+  /** Points the match is played to: quick play's 1001, or what a private table's host chose. */
+  private target = DEFAULT_CONFIG.matchTarget;
   /** Public tables are the ones strangers are matched into. */
   private isPublic = true;
   /** The table's creator (first joiner); start-with-bots rights follow them. */
@@ -231,30 +234,26 @@ export class BelaRoom extends Room {
    */
   private gifts: (string | null)[] = [null, null, null, null];
 
-  override onCreate(options: { private?: boolean; hard?: boolean } = {}): void {
+  override onCreate(options: { private?: boolean; hard?: boolean; target?: number } = {}): void {
     this.occupants = SEATS.map(vacant);
-    // "Prava bela" is the host's choice, and only on private tables — quick
-    // play must stay predictable for strangers.
+    // "Prava bela" and a shorter match are the host's choice, and only on
+    // private tables — quick play must stay predictable for strangers. The
+    // host may change both in the lobby, until the start.
     this.hard = options.private === true && options.hard === true;
-    // Four humans: nothing moves until a real player acts, or a timer fires.
-    this.table = new Table({
-      humanSeats: [...SEATS],
-      config: this.hard ? HARD_CONFIG_OVERRIDES : undefined,
-      // No seed at all. Table's default is `Date.now()`, which is fine for the
-      // CLI and offline play (dealer and player are the same device) and
-      // catastrophic here — but so is any 32-bit seed, crypto or not, because
-      // the generator behind it only has 32 bits of state to hide in.
-      rng: cryptoRng(),
-    });
-    this.table.drainEvents();
+    if (options.private === true && typeof options.target === 'number' && MATCH_TARGETS.includes(options.target)) {
+      this.target = options.target;
+    }
+    this.buildTable();
 
+    // A code friends can read out and type (codes.ts), at every table: a
+    // quick-play table shows its code and an invite too, and showed
+    // "IUxDQ8dvS" there. Colyseus registers the room under its id only after
+    // onCreate, so this is the id.
+    this.roomId = tableCode((c) => liveCodes.has(c));
+    liveCodes.add(this.roomId);
     if (options.private) {
       this.isPublic = false;
       this.setPrivate(true);
-      // A code friends can read out and type (codes.ts). Colyseus registers
-      // the room under its id only after onCreate, so this is the id.
-      this.roomId = tableCode((c) => liveCodes.has(c));
-      liveCodes.add(this.roomId);
     }
 
     // Colyseus looks the message type up on a plain object literal, so a client
@@ -458,6 +457,25 @@ export class BelaRoom extends Room {
   }
 
   /**
+   * A fresh table under this room's rules. Four humans: nothing moves until a
+   * real player acts, or a timer fires. Only ever before the start, when the
+   * lobby has shown nobody a card (publish withholds the hands until then),
+   * so the host changing the rules just deals a new, unseen deck.
+   */
+  private buildTable(): void {
+    this.table = new Table({
+      humanSeats: [...SEATS],
+      config: { ...(this.hard ? HARD_CONFIG_OVERRIDES : {}), matchTarget: this.target },
+      // No seed at all. Table's default is `Date.now()`, which is fine for the
+      // CLI and offline play (dealer and player are the same device) and
+      // catastrophic here — but so is any 32-bit seed, crypto or not, because
+      // the generator behind it only has 32 bits of state to hide in.
+      rng: cryptoRng(),
+    });
+    this.table.drainEvents();
+  }
+
+  /**
    * Close the table and fix who is a human from here.
    *
    * A seat only plays as a human if somebody is actually SITTING in it and
@@ -577,6 +595,26 @@ export class BelaRoom extends Room {
       if (this.started || this.isPublic || seat !== this.actingHostSeat()) return;
       if (typeof seconds !== 'number' || !TURN_CHOICES.includes(seconds)) return;
       this.turnMs = seconds * 1000;
+      this.publish();
+      return;
+    }
+
+    if (packet.type === 'rules') {
+      // The same four conditions as the clock: before the start, a private
+      // table, its host, and only what is offered.
+      const m = packet.message as { target?: unknown; hard?: unknown } | undefined;
+      if (this.started || this.isPublic || seat !== this.actingHostSeat()) return;
+      let changed = false;
+      if (typeof m?.target === 'number' && MATCH_TARGETS.includes(m.target) && m.target !== this.target) {
+        this.target = m.target;
+        changed = true;
+      }
+      if (typeof m?.hard === 'boolean' && m.hard !== this.hard) {
+        this.hard = m.hard;
+        changed = true;
+      }
+      if (!changed) return;
+      this.buildTable();
       this.publish();
       return;
     }
@@ -976,6 +1014,7 @@ export class BelaRoom extends Room {
         ? { turnMsLeft: Math.max(0, this.turnEndsAt - Date.now()), turnTotalMs: this.turnMs }
         : {}),
       turnSeconds: this.turnMs / 1000,
+      target: this.target,
       ...(this.isPublic ? {} : { private: true as const }),
       ...(this.isHeld() ? { hold: this.holdInfo()! } : {}),
       ...(this.nextEndsAt > 0 ? { nextMsLeft: Math.max(0, this.nextEndsAt - Date.now()) } : {}),

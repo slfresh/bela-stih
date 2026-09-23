@@ -56,6 +56,15 @@ export interface DirectorCallbacks {
    * sprite onward.
    */
   onBatch?(): void;
+  /**
+   * How long the seat behind this event seems to think before it shows, in
+   * ms at full pace - 0 for none (my own moves; people online, who took
+   * their own time). The director holds before the event starts, so a bot's
+   * card no longer lands on a metronome, and says whose think it is through
+   * onThink so the table can light that puck meanwhile.
+   */
+  thinkMs?(e: TableEvent, view: PublicView): number;
+  onThink?(e: TableEvent): void;
 }
 
 export interface EventTiming {
@@ -136,6 +145,8 @@ interface Current {
   batch: Batch;
   /** Index of the next event to START. */
   nextIndex: number;
+  /** The event whose think has been held already (it starts next, with none). */
+  thought: number;
 }
 
 export class Director {
@@ -271,7 +282,7 @@ export class Director {
         this.cb.onIdle(true);
         return;
       }
-      this.current = { batch, nextIndex: 0 };
+      this.current = { batch, nextIndex: 0, thought: -1 };
       // This batch came off the queue AFTER anything compress() flushed, so it
       // is the newer truth and its own finalView is the right terminal sync.
       this.pendingFinal = null;
@@ -284,6 +295,17 @@ export class Director {
 
     const { batch, nextIndex } = this.current;
     const e = batch.events[nextIndex]!;
+    // A think, once per event, BEFORE it counts as started: fastForward() in
+    // the middle of one flushes this event with the rest.
+    if (this.current.thought !== nextIndex) {
+      this.current.thought = nextIndex;
+      const think = (this.cb.thinkMs?.(e, this.view) ?? 0) * this.speed();
+      if (think > 0) {
+        this.cb.onThink?.(e);
+        this.schedule(think, () => this.next());
+        return;
+      }
+    }
     this.current.nextIndex = nextIndex + 1;
 
     const t = this.timings[e.kind] ?? { dur: 300, gap: 100 };

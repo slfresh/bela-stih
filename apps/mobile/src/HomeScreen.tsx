@@ -57,6 +57,7 @@ export function HomeScreen({
   onOpenShop,
   onOpenSettings,
   onOpenProfile,
+  onOpenRules,
 }: {
   lang: Lang;
   profile: PlayerProfile;
@@ -67,6 +68,8 @@ export function HomeScreen({
   onOpenShop: () => void;
   onOpenSettings: () => void;
   onOpenProfile: () => void;
+  /** "Kako se igra". */
+  onOpenRules: () => void;
 }) {
   const ui = lang.s.ui;
   const [code, setCode] = useState('');
@@ -172,6 +175,9 @@ export function HomeScreen({
               room={room()}
               onPress={() => go({ mode: 'quick' })}
             />
+            {/* The big word never said it goes online, to strangers: the two
+                tiles under it say what they are, and now so does it. */}
+            <Text style={[styles.hint, styles.heroSub]}>{ui.playOnlineSub}</Text>
 
             {/* the two other ways in */}
             <View style={styles.modeRow}>
@@ -281,6 +287,9 @@ export function HomeScreen({
               ))}
             </Panel>
 
+            {/* For whoever has never played bela, or plays it differently at home. */}
+            <Button label={lang.s.rules.title} tone="plain" onPress={onOpenRules} />
+
             <Text style={styles.disclaimer}>{ui.coinsDisclaimer}</Text>
           </ScrollView>
 
@@ -385,6 +394,7 @@ const styles = StyleSheet.create({
   bonusTitleRow: { flexDirection: 'row', alignItems: 'center', gap: space.xs + 1 },
   bonusTitle: { color: theme.accent, ...type.h3, fontFamily: font.bold, flexShrink: 1 },
   hint: { color: ink.mid, ...type.caption },
+  heroSub: { textAlign: 'center', marginTop: -space.xs },
   // As tall as the claim button it replaces, so a claim moves nothing below it.
   claimed: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },
   rule: { height: 1, backgroundColor: stroke.hair, marginVertical: space.xs },

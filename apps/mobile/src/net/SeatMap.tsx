@@ -74,13 +74,22 @@ export const SeatMap = memo(function SeatMap({
           const pos = seatPosition(seat, me);
           const free = !info || !info.connected;
           const sittable = free && canSit && mySeat !== null && mySeat !== seat;
+          // Which side each chair plays on, in words and in the team's colour:
+          // the partner's diamond alone was easy to miss while friends picked seats.
+          const tone = seatTone(seat, me);
+          const side = mySeat === null || seat === mySeat ? null : isPartner(seat, mySeat) ? lang.s.ui.withYou : lang.s.ui.againstYou;
           return (
             <View key={seat} style={[styles.seat, at(pos), { width: puck + 30 }]}>
               {free ? (
                 <PressScale
                   disabled={!sittable}
                   onPress={() => onSit(seat)}
-                  style={[styles.ghost, { width: puck, height: puck, borderRadius: puck / 2 }, sittable && styles.ghostFree]}
+                  style={[
+                    styles.ghost,
+                    { width: puck, height: puck, borderRadius: puck / 2 },
+                    sittable && styles.ghostFree,
+                    side !== null && { borderColor: tone.edge },
+                  ]}
                   accessibilityLabel={lang.s.ui.sitHere}
                 >
                   <Chair size={Math.round(puck * 0.45)} colour={sittable ? ink.hi : ink.lo} />
@@ -115,6 +124,11 @@ export const SeatMap = memo(function SeatMap({
                   {lang.s.ui.sitHere}
                 </Text>
               )}
+              {side !== null && (
+                <Text style={[styles.side, { color: tone.ink }]} numberOfLines={1}>
+                  {side}
+                </Text>
+              )}
             </View>
           );
         })}
@@ -136,4 +150,5 @@ const styles = StyleSheet.create({
   ghostFree: { borderColor: ink.hi },
   crown: { position: 'absolute', top: -6, right: -2 },
   sitHere: { color: ink.hi, ...type.caption },
+  side: { ...type.caption, fontSize: 11, lineHeight: 13 },
 });
