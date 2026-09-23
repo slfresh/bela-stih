@@ -31,6 +31,12 @@ export const blindZvanja = (m: PlayMode): boolean => m !== 'learn';
 export const freePlay = (m: PlayMode): boolean => m === 'hard';
 /** The coach speaks (only Učenje). */
 export const coaches = (m: PlayMode): boolean => m === 'learn';
+/**
+ * A tap on a card the rules forbid: Učenje says why in a bubble over the hand
+ * ("Moraš odgovoriti na boju"); Lagana only dims and shakes the card - the
+ * player asked for no bubbles there. (Prava bela forbids no card.)
+ */
+export const explainsRefusals = (m: PlayMode): boolean => m === 'learn';
 
 export function isPlayMode(x: unknown): x is PlayMode {
   return x === 'learn' || x === 'easy' || x === 'hard';

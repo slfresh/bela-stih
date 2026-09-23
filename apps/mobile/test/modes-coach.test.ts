@@ -21,6 +21,7 @@ import { wrongCardLines, wrongCardOf } from '../src/table/wrongCard';
 import {
   blindZvanja,
   coaches,
+  explainsRefusals,
   freePlay,
   isPlayMode,
   MODE_CONFIG,
@@ -82,6 +83,8 @@ describe('the three versions', () => {
     expect(PLAY_MODES.map(blindZvanja)).toEqual([false, true, true]);
     expect(PLAY_MODES.map(freePlay)).toEqual([false, false, true]);
     expect(PLAY_MODES.map(coaches)).toEqual([true, false, false]);
+    // "Moraš odgovoriti na boju" over the hand: Učenje only (the player asked for none in Lagana).
+    expect(PLAY_MODES.map(explainsRefusals)).toEqual([true, false, false]);
   });
 
   it('read an older app\'s switch as it always meant', () => {
@@ -463,6 +466,23 @@ describe("Lagana's zvanja: the player finds them, and a marking that is not one 
   });
 });
 
+describe('a card the rules forbid, tapped', () => {
+  it('shakes and sounds in Lagana, and only Učenje says why in a bubble', () => {
+    const t = src('src/TableScreen.tsx');
+    const explain = t.slice(t.indexOf('const explainIllegal = useCallback('), t.indexOf('[anchors, fxBus, lang, mySeat],'));
+    // The sound and the buzz come first, for every version that forbids a card...
+    expect(explain.indexOf("playSfx('denied'")).toBeLessThan(explain.indexOf('if (!explainsRef.current) return;'));
+    // ...and the bubble only after the version's say-so.
+    expect(explain.indexOf('if (!explainsRef.current) return;')).toBeGreaterThan(0);
+    expect(explain.indexOf('if (!explainsRef.current) return;')).toBeLessThan(explain.indexOf("kind: 'bubble'"));
+    expect(t).toMatch(/explainsRef\.current = explainsRefusals\(playMode\);/);
+    // Lagana's description no longer promises a why.
+    expect(new Lang('hr').s.difficultyEasyHint).not.toMatch(/zašto/);
+    expect(new Lang('sr-Cyrl').s.difficultyEasyHint).not.toMatch(/зашто/);
+    expect(new Lang('en').s.difficultyEasyHint).not.toMatch(/why/);
+  });
+});
+
 describe('the word nobody says', () => {
   it('"auzmeš" is gone from everything the player reads', () => {
     const i18n = readFileSync(join(__dirname, '../../../packages/i18n/src/index.ts'), 'utf8');
@@ -492,7 +512,9 @@ describe("the coach's place on the table", () => {
     expect(t).toMatch(/const coachShown = coachRowUp && !arranging;/);
     expect(t).toMatch(/const asking = askingBesidesArranging \|\| arranging;/);
     expect(t).toMatch(/const askingBesidesArranging =\s*bidding \|\|/);
-    expect(t).toMatch(/\{floatTip !== null && revealRow === null && !land && \(\s*<View style=\{styles\.coachFloat\} pointerEvents="none"/);
+    expect(t).toMatch(/\{floatTip !== null && revealRow === null && !land && \(\s*<View style=\{\[styles\.coachFloat, \{ maxWidth: bidFloatW \}\]\} pointerEvents="none"/);
+    // Between the side players' discs, clear of their badges.
+    expect(t).toMatch(/feltBox\.w \+ 2 \* \(RIM_W \+ FELT_PAD\) \+ 2 \* 4 \+ PUCK_NAME_ROOM - 2 \* 10/);
     // Sideways: one low, wide line under the side players' cards.
     expect(t).toMatch(/\{floatTip !== null && revealRow === null && land && \(\s*<View style=\{styles\.coachFloatLandBox\} pointerEvents="none">/);
     expect(t).toMatch(/coachFloatLandBox: \{ position: 'absolute', left: 0, right: 0, bottom: 2, alignItems: 'center' \}/);

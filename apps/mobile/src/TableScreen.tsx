@@ -68,7 +68,7 @@ import {
   type Position,
 } from './table/geometry';
 import { useTableMetrics } from './table/useTableMetrics';
-import { EMOTE_TOGGLE, FAN_REST_SHORT, LAND_GAP, LAND_TRAY_H, SELF_NESTLE, SELF_PUCK_GAP } from './table/metrics';
+import { EMOTE_TOGGLE, FAN_REST_SHORT, LAND_GAP, LAND_TRAY_H, PUCK_NAME_ROOM, SELF_NESTLE, SELF_PUCK_GAP } from './table/metrics';
 import { useHandOrder, type HandSort } from './table/useHandOrder';
 import { callsOnTable } from './table/calls';
 import { pickAnnouncement } from './table/zvanja';
@@ -84,10 +84,12 @@ import { HoldPanel, useNow } from './table/HoldPanel';
 import type { TableHold } from './net/hold';
 import { setBackGuard } from './ui/backGuard';
 import { useLeaveWarning } from './ui/webBack';
-import { blindZvanja, coaches, freePlay, modeName, type PlayMode } from './playMode';
+import { blindZvanja, coaches, explainsRefusals, freePlay, modeName, type PlayMode } from './playMode';
 import { FeltArt, RIM_W } from './table/FeltArt';
 import { garb } from './deck/palette';
 
+/** The coach's floating advice is never wider than this. */
+const COACH_FLOAT_MAX = 220;
 /** `styles.felt` padding: the cloth's margin inside the rim. Pinned with the border and margin. */
 const FELT_PAD = 5;
 /** A refused tap's "no" (a forbidden card, an emote too soon): a whisper of the server's. */
@@ -368,6 +370,8 @@ export function TableScreen(props: TableScreenProps) {
   const blind = blindZvanja(playMode);
   const cardsFree = freePlay(playMode);
   const coach = coaches(playMode);
+  const explainsRef = useRef(explainsRefusals(playMode));
+  explainsRef.current = explainsRefusals(playMode);
   const declaring = !settled && view.declareTurn === mySeat;
   // The zvanja question takes the taps (they mark), so arranging is off while
   // it is asked - from its very first frame - and closed by it (see below).
@@ -869,6 +873,9 @@ export function TableScreen(props: TableScreenProps) {
       // Said aloud too: the bubble is a picture to a screen reader. There the
       // suit is named, since its pip cannot be seen.
       AccessibilityInfo.announceForAccessibility(text);
+      // Lagana leaves it at the card's shake and the soft sound: the player
+      // asked for no bubble there. Učenje says why - it is there to teach.
+      if (!explainsRef.current) return;
       const at = anchors.centre(anchorId.seat(mySeat));
       if (!at) return;
       fxBus.emit({
@@ -1208,6 +1215,13 @@ export function TableScreen(props: TableScreenProps) {
     </Animated.View>
   );
 
+  // A bid's advice stays between the side players' discs, clear of their
+  // badges (the dealer's D matters while bidding): the felt, the row's two
+  // gaps and the room each puck keeps beside its disc, less 10 a side. On a
+  // 360 dp Samsung that is about 190; 220 at most anywhere.
+  const bidFloatW =
+    feltBox.w > 0 ? Math.min(COACH_FLOAT_MAX, Math.round(feltBox.w + 2 * (RIM_W + FELT_PAD) + 2 * 4 + PUCK_NAME_ROOM - 2 * 10)) : COACH_FLOAT_MAX;
+
   // Rows that appear for a moment — the zvanja reveal, the award — float
   // over the lower table instead of pushing the hand down. Over the whole
   // table area, not the felt: the felt's inner width on a phone is 140-184px
@@ -1219,7 +1233,7 @@ export function TableScreen(props: TableScreenProps) {
       <View style={styles.tableFloat} pointerEvents="box-none">
         {revealRow}
         {floatTip !== null && revealRow === null && !land && (
-          <View style={styles.coachFloat} pointerEvents="none" accessibilityLiveRegion="polite">
+          <View style={[styles.coachFloat, { maxWidth: bidFloatW }]} pointerEvents="none" accessibilityLiveRegion="polite">
             <Text style={styles.coachFloatTitle}>{lang.s.ui.coachTitle}</Text>
             <Text style={styles.coachFloatText}>{floatTip}</Text>
           </View>
@@ -3464,8 +3478,8 @@ const styles = StyleSheet.create({
   coachLabel: { color: theme.accent, fontFamily: font.bold, lineHeight: 16 },
   // A bid's advice, over the felt the bid leaves empty.
   coachFloat: {
-    // Over the felt, and no further than the side pucks' rings.
-    maxWidth: 220,
+    // Over the felt; bidFloatW narrows it to the side pucks' discs.
+    maxWidth: COACH_FLOAT_MAX,
     marginHorizontal: 16,
     backgroundColor: surface.scrim,
     borderRadius: radius.panel,

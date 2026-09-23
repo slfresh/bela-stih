@@ -736,7 +736,7 @@ const hr: Strings = {
   difficultyHardHint:
     'Prava bela: bez ikakve pomoći. Zvanja i belu nalaziš kao za pravim stolom, a kriva karta košta cijelo dijeljenje: protivnici pišu sve. Poslije ti aplikacija pokaže koja je karta trebala ići.',
   difficultyEasyHint:
-    'Lagana: zvanja i belu nalaziš i prijavljuješ ti, kao za pravim stolom; aplikacija samo kaže jesu li označene karte zvanje. Kriva karta se ne može odigrati, a aplikacija kaže zašto.',
+    'Lagana: zvanja i belu nalaziš i prijavljuješ ti, kao za pravim stolom; aplikacija samo kaže jesu li označene karte zvanje. Kriva karta se ne može odigrati.',
   difficultyLearnHint:
     'Učenje: aplikacija te vodi. Pronalazi tvoja zvanja, ne pušta krivu kartu i savjetuje kad zvati, što igrati i kako do štiglje.',
   deckStyleLabel: 'Karte',
@@ -1260,7 +1260,7 @@ const srCyrl: Strings = {
   difficultyHardHint:
     'Права бела: без икакве помоћи. Звања и белу налазиш као за правим столом, а погрешна карта кошта цело дељење: противници пишу све. После ти апликација покаже која је карта требало да иде.',
   difficultyEasyHint:
-    'Лагана: звања и белу налазиш и пријављујеш ти, као за правим столом; апликација само каже да ли су означене карте звање. Погрешна карта не може да се одигра, а апликација каже зашто.',
+    'Лагана: звања и белу налазиш и пријављујеш ти, као за правим столом; апликација само каже да ли су означене карте звање. Погрешна карта не може да се одигра.',
   difficultyLearnHint:
     'Учење: апликација те води. Проналази твоја звања, не пушта погрешну карту и саветује кад да зовеш, шта да играш и како до штигље.',
   deckStyleLabel: 'Карте',
@@ -1781,7 +1781,7 @@ const en: Strings = {
   difficultyHardHint:
     'True bela: no help at all. Your declarations and bela are yours to find, and a wrong card costs the whole deal: the opponents write everything. Afterwards the app shows which card should have gone.',
   difficultyEasyHint:
-    'Casual: you find and call your own declarations and bela, as at a real table; the app only says whether the cards you marked are one. A wrong card cannot be played, and the app says why.',
+    'Casual: you find and call your own declarations and bela, as at a real table; the app only says whether the cards you marked are one. A wrong card cannot be played.',
   difficultyLearnHint:
     'Learning: the app guides you. It finds your declarations, never lets a wrong card go, and advises when to call, what to play and how to reach štiglja.',
   deckStyleLabel: 'Cards',
