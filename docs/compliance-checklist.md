@@ -55,6 +55,11 @@ keep it that way.
 
 ## Handling a report
 
+Reports arrive at **prijave@belastih.com**: Porkbun's free email forwarding
+for belastih.com (MX fwd1/fwd2.porkbun.com, set up 2026-09-23) delivers them
+to the owner's Gmail. Porkbun → Domain Management → belastih.com → Email is
+where the forward is changed.
+
 1. Reply within 7 days (the rules page promises it).
 2. If the nickname breaks the rules, add its offending word (not the whole
    name, and in both scripts where it matters) to `BLOCKED_NAME_PARTS` in

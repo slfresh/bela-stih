@@ -8,11 +8,12 @@
  */
 
 /**
- * Where reports go. The player has not chosen the address yet: while this is
- * the placeholder, scripts/build-android.sh and scripts/build-web.sh refuse to
- * build a release (set ALLOW_UNSET_REPORT_ADDRESS=1 for a test build).
+ * Where reports go: Porkbun's free forwarding for belastih.com (MX
+ * fwd1/fwd2.porkbun.com) delivers them to the owner's inbox, set up on
+ * 2026-09-23. Were this ever the placeholder again, scripts/build-android.sh
+ * and scripts/build-web.sh would refuse to build a release.
  */
-export const REPORT_EMAIL = 'REPORT-ADDRESS-NOT-SET@belastih.invalid';
+export const REPORT_EMAIL = 'prijave@belastih.com';
 
 export interface ReportFacts {
   name: string;

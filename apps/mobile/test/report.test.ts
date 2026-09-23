@@ -90,6 +90,14 @@ describe('showing a hidden player again puts their gift back with its giver', ()
   });
 });
 
+describe('the report address', () => {
+  it("is the real one, on the game's own domain", () => {
+    // prijave@belastih.com forwards to the owner (Porkbun, 2026-09-23).
+    expect(REPORT_EMAIL).toBe('prijave@belastih.com');
+    expect(REPORT_EMAIL).not.toContain('REPORT-ADDRESS-NOT-SET');
+  });
+});
+
 describe('no release carries the placeholder report address', () => {
   it('the web build, the deploy and the Android build all look for it', () => {
     const read = (f: string) => readFileSync(join(here, '../../..', f), 'utf8');
