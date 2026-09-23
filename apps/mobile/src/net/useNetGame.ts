@@ -20,6 +20,7 @@ import { loadProfile, saveProfile, type Settings } from '../storage';
 import { applyGiftEcho, GIFT_COOLDOWN_MS, GIFT_ECHO_WAIT_MS, isGiftMessage, reachOf, recipientsOf } from '../gifts';
 import { useGifts } from '../table/useGifts';
 import { notePeople, standInsOf } from './standIns';
+import { localHold, type TableHold, type WireHold } from './hold';
 
 /**
  * A table driven by the server, presented through the same animation director
@@ -75,11 +76,13 @@ function resolveServerUrl(): string {
 export const SERVER_URL = resolveServerUrl();
 const ROOM_NAME = 'bela';
 /**
- * How long the server holds a dropped seat (BelaRoom's RECONNECT_SECONDS). The
- * retry loop has to cover the whole window: the room locks when the match
- * starts, so the reconnection token is the only way back in.
+ * How long the server holds a dropped seat once a match is under way
+ * (BelaRoom's TABLE_RECONNECT_SECONDS). The retry loop has to cover the whole
+ * window: the room locks when the match starts, so the reconnection token is
+ * the only way back in. It was a minute, and a phone call longer than that
+ * sent the player back to the lobby for good.
  */
-const RECONNECT_HOLD_MS = 60_000;
+const RECONNECT_HOLD_MS = 30 * 60_000;
 /** The server's refusal when a seat here is already held from this connection. */
 const SAME_ORIGIN_CODE = 4300;
 
@@ -116,6 +119,16 @@ interface RoomMessage {
   series: [number, number];
   matchNumber: number;
   rematchVotes?: Seat[];
+  /** The table's turn clock in seconds (a private table's host picks it). */
+  turnSeconds?: number;
+  /** Friends' table, by code: only there does it pause and wait. */
+  private?: true;
+  /** Present while a private table stands still. */
+  hold?: WireHold;
+  /** At DEAL_OVER: time until the next deal starts by itself. */
+  nextMsLeft?: number;
+  /** At DEAL_OVER: who is ready for it. */
+  nextVotes?: Seat[];
 }
 
 export function useNetGame(settings: Settings) {
@@ -174,6 +187,17 @@ export function useNetGame(settings: Settings) {
   const [winnerTeam, setWinnerTeam] = useState<TeamId | null>(null);
   const [turnDeadline, setTurnDeadline] = useState<number | null>(null);
   const [turnTotalMs, setTurnTotalMs] = useState(30_000);
+  // A private table standing still, on this device's clock.
+  const [hold, setHold] = useState<TableHold | null>(null);
+  // The scored deal's countdown, and who is ready for the next one.
+  const [nextDeadline, setNextDeadline] = useState<number | null>(null);
+  const [nextVotes, setNextVotes] = useState<Seat[]>([]);
+  const [turnSeconds, setTurnSeconds] = useState(30);
+  const [isPrivate, setIsPrivate] = useState(false);
+  // Once this room has been a table, a dropped connection keeps the table on
+  // screen while the hook gets back into the seat - not the lobby, which is
+  // where a phone call used to leave the player.
+  const [atTable, setAtTable] = useState(false);
 
   const anchors = useMemo(() => new AnchorMap(), []);
   const fxBus = useMemo(() => new FxBus(), []);
@@ -319,13 +343,25 @@ export function useNetGame(settings: Settings) {
     setLastDealResult(null);
     setWinnerTeam(null);
     setTurnDeadline(null);
+    setHold(null);
+    setNextDeadline(null);
+    setNextVotes([]);
+    setTurnSeconds(30);
+    setIsPrivate(false);
+    setAtTable(false);
     giftsRef.current.reset();
   }, []);
 
   // Sockets and directors never outlive the screen; background fast-forwards.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => {
-      if (s !== 'active') directorRef.current?.fastForward();
+      if (s !== 'active') {
+        directorRef.current?.fastForward();
+        return;
+      }
+      // Back from a phone call: if the connection died meanwhile, try the
+      // seat again now rather than after whatever the retry loop is sleeping.
+      if (roomRef.current === null && reconnectTokenRef.current !== null) reconnectRef.current();
     });
     return () => {
       sub.remove();
@@ -423,6 +459,13 @@ export function useNetGame(settings: Settings) {
       setMatchNumber(msg.matchNumber ?? 0);
       setRematchVotes(msg.rematchVotes ?? []);
       setStatus(msg.status);
+      if (msg.status !== 'waiting') setAtTable(true);
+      const now = Date.now();
+      setHold(localHold(msg.hold, now));
+      setNextDeadline(msg.nextMsLeft != null ? now + msg.nextMsLeft : null);
+      setNextVotes(msg.nextVotes ?? []);
+      setTurnSeconds(msg.turnSeconds ?? 30);
+      setIsPrivate(msg.private === true);
       // A stale-tap refusal is stale itself the moment the game moves on.
       if (msg.events.length > 0) setError(null);
       if (msg.turnTotalMs) setTurnTotalMs(msg.turnTotalMs);
@@ -572,6 +615,7 @@ export function useNetGame(settings: Settings) {
       }
       // The hold really has lapsed: the seat is a bot and the room is locked.
       reconnectTokenRef.current = null;
+      setAtTable(false);
       setStatus('disconnected');
     } finally {
       reconnectingRef.current = false;
@@ -626,9 +670,17 @@ export function useNetGame(settings: Settings) {
 
   // Only asks: the sheet stays up, result and all, until the next deal
   // actually starts. Clearing it here blanked the sheet for a round trip.
+  /** Ready for the next deal: it starts when everyone is, or when the countdown ends. */
   const next = useCallback(() => {
     roomRef.current?.send('next', {});
   }, []);
+  /** Private tables: stop the table for everyone, and carry on. */
+  const pause = useCallback(() => roomRef.current?.send('pause', {}), []);
+  const resume = useCallback(() => roomRef.current?.send('resume', {}), []);
+  /** Stop waiting for a dropped player: a bot holds their cards until they are back. */
+  const playOn = useCallback(() => roomRef.current?.send('playOn', {}), []);
+  /** Host, before the start: the turn clock. */
+  const setClock = useCallback((seconds: number) => roomRef.current?.send('clock', { seconds }), []);
 
   // The server validates, rate-limits and echoes it back; the bubble spawns
   // from the broadcast, so what I see is exactly what the table saw.
@@ -724,6 +776,17 @@ export function useNetGame(settings: Settings) {
     motion,
     matchOver: view?.phase === 'MATCH_OVER',
     retry,
+    hold,
+    nextDeadline,
+    nextVotes,
+    turnSeconds,
+    isPrivate,
+    // Getting back into a seat after a drop: the table stays up meanwhile.
+    reconnecting: atTable && (status === 'disconnected' || status === 'connecting'),
+    pause,
+    resume,
+    playOn,
+    setClock,
     // The matchOver event says who won, but a client that reconnected into a
     // finished match never heard it. The view still knows: at MATCH_OVER the
     // higher score has won - the engine's own rule (matchWinner,

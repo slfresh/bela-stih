@@ -167,6 +167,29 @@ export interface UiStrings {
   playerHint: string;
   /** The sheet for a deal whose score this client never saw (after a reconnect). */
   resultMissed: string;
+  /** Private tables: the button that stops the table for everyone, and its spoken name. */
+  pause: string;
+  pauseLabel: string;
+  pausedTitle: string;
+  /** Who paused it. */
+  pausedBy: (name: string) => string;
+  resume: string;
+  /** A friend's connection dropped and the table waits for them. */
+  waitingFor: (names: string) => string;
+  waitingLine: (n: number) => string;
+  /** Stop waiting: a bot holds their cards until they are back. */
+  playOn: (n: number) => string;
+  /** "još 7:42" - how long the wait or the pause has left. */
+  holdLeft: (clock: string) => string;
+  /** This device lost the connection and is getting back into its seat. */
+  reconnectingTitle: string;
+  reconnectingLine: string;
+  /** The result sheet, online: pressed, and waiting for the rest. */
+  nextReady: string;
+  nextWaitingFor: (names: string) => string;
+  /** The private-table lobby: the host's choice of turn clock. */
+  turnClock: string;
+  seconds: (n: number) => string;
   /** Under the nickname field: who sees it, and the rules its owner accepts. */
   nicknameRules: string;
   /** That line is a link: a screen reader says this instead of the whole sentence. */
@@ -322,6 +345,8 @@ interface Strings {
   /** Mark the cards, then confirm. */
   markZvanjaHint: string;
   markingOk: string;
+  /** More than one zvanje marked at once - also fine, the engine takes them all. */
+  markingOkMany: string;
   markingNotZvanje: string;
   declareMarked: string;
   /** Difficulty setting. */
@@ -510,6 +535,7 @@ const hr: Strings = {
   noneToDeclare: 'Nemam',
   markZvanjaHint: 'Označi karte koje čine zvanje',
   markingOk: 'To je zvanje — pritisni Prijavi',
+  markingOkMany: 'To su tvoja zvanja — pritisni Prijavi',
   markingNotZvanje: 'Označene karte nisu zvanje',
   declareMarked: 'Prijavi',
   difficulty: 'Težina',
@@ -625,6 +651,22 @@ const hr: Strings = {
       `Prijavljujem igrača s nadimkom: „${p.name}”\nKod stola: ${p.code}\nVrijeme: ${p.at}\nVerzija igre: ${p.version}\n\nŠto je bilo neprimjereno (nije obavezno):\n`,
     playerHint: 'Dodirni za dar ili prijavu',
     resultMissed: 'Veza se prekinula, pa brojke ovog dijeljenja nisu stigle.',
+    pause: 'Pauza',
+    pauseLabel: 'Pauziraj stol',
+    pausedTitle: 'Stol je na pauzi',
+    pausedBy: (name) => `Pauza: ${name}`,
+    resume: 'Nastavi',
+    waitingFor: (names) => `Čekamo: ${names}`,
+    waitingLine: (n) =>
+      n > 1 ? 'Veza je prekinuta — stol stoji dok se ne vrate.' : 'Veza je prekinuta — stol stoji dok se ne vrati.',
+    playOn: (n) => (n > 1 ? 'Nastavi s botovima' : 'Nastavi s botom'),
+    holdLeft: (clock) => `još ${clock}`,
+    reconnectingTitle: 'Veza je prekinuta',
+    reconnectingLine: 'Vraćamo te na tvoje mjesto…',
+    nextReady: 'Čekamo ostale',
+    nextWaitingFor: (names) => `Čeka se: ${names}`,
+    turnClock: 'Vrijeme za potez',
+    seconds: (n) => `${n} s`,
     nicknameRules: 'Ime vide drugi igrači. Upisom prihvaćaš pravila ponašanja: bez uvreda, mržnje i tuđih osobnih podataka.',
     nicknameRulesLabel: 'Pravila ponašanja, otvara web stranicu',
     rulesAnchor: 'pravila',
@@ -809,6 +851,7 @@ const srCyrl: Strings = {
   noneToDeclare: 'Немам',
   markZvanjaHint: 'Означи карте које чине звање',
   markingOk: 'То је звање — притисни Пријави',
+  markingOkMany: 'То су твоја звања — притисни Пријави',
   markingNotZvanje: 'Означене карте нису звање',
   declareMarked: 'Пријави',
   difficulty: 'Тежина',
@@ -924,6 +967,22 @@ const srCyrl: Strings = {
       `Пријављујем играча са надимком: „${p.name}”\nКод стола: ${p.code}\nВреме: ${p.at}\nВерзија игре: ${p.version}\n\nШта је било неприкладно (није обавезно):\n`,
     playerHint: 'Додирни за поклон или пријаву',
     resultMissed: 'Веза се прекинула, па бројке овог дељења нису стигле.',
+    pause: 'Пауза',
+    pauseLabel: 'Паузирај сто',
+    pausedTitle: 'Сто је на паузи',
+    pausedBy: (name) => `Пауза: ${name}`,
+    resume: 'Настави',
+    waitingFor: (names) => `Чекамо: ${names}`,
+    waitingLine: (n) =>
+      n > 1 ? 'Веза је прекинута — сто стоји док се не врате.' : 'Веза је прекинута — сто стоји док се не врати.',
+    playOn: (n) => (n > 1 ? 'Настави са ботовима' : 'Настави са ботом'),
+    holdLeft: (clock) => `још ${clock}`,
+    reconnectingTitle: 'Веза је прекинута',
+    reconnectingLine: 'Враћамо те на твоје место…',
+    nextReady: 'Чекамо остале',
+    nextWaitingFor: (names) => `Чека се: ${names}`,
+    turnClock: 'Време за потез',
+    seconds: (n) => `${n} с`,
     nicknameRules: 'Име виде други играчи. Уписом прихваташ правила понашања: без увреда, мржње и туђих личних података.',
     nicknameRulesLabel: 'Правила понашања, отвара веб страницу',
     rulesAnchor: 'pravila',
@@ -1104,6 +1163,7 @@ const en: Strings = {
   noneToDeclare: 'Nothing',
   markZvanjaHint: 'Mark the cards that make up your declaration',
   markingOk: 'That is a declaration — press Declare',
+  markingOkMany: 'Those are your declarations — press Declare',
   markingNotZvanje: 'Those cards are not a declaration',
   declareMarked: 'Declare',
   difficulty: 'Difficulty',
@@ -1219,6 +1279,21 @@ const en: Strings = {
       `Reporting the player with the nickname: "${p.name}"\nTable code: ${p.code}\nTime: ${p.at}\nApp version: ${p.version}\n\nWhat was wrong (optional):\n`,
     playerHint: 'Tap to send a gift or report',
     resultMissed: "The connection dropped, so this deal's numbers are missing.",
+    pause: 'Pause',
+    pauseLabel: 'Pause the table',
+    pausedTitle: 'The table is paused',
+    pausedBy: (name) => `Paused by ${name}`,
+    resume: 'Resume',
+    waitingFor: (names) => `Waiting for ${names}`,
+    waitingLine: () => 'Their connection dropped — the table waits until they are back.',
+    playOn: (n) => (n > 1 ? 'Continue with bots' : 'Continue with a bot'),
+    holdLeft: (clock) => `${clock} left`,
+    reconnectingTitle: 'Connection lost',
+    reconnectingLine: 'Getting you back to your seat…',
+    nextReady: 'Waiting for the others',
+    nextWaitingFor: (names) => `Waiting for: ${names}`,
+    turnClock: 'Time per move',
+    seconds: (n) => `${n} s`,
     nicknameRules: "Other players see this name. By entering one you accept the rules of conduct: no insults, hate or other people's personal details.",
     nicknameRulesLabel: 'Rules of conduct, opens a web page',
     rulesAnchor: 'conduct',

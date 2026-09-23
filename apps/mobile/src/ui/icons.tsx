@@ -124,6 +124,15 @@ export function Close({ size = 16, colour = ink.hi }: IconProps) {
   );
 }
 
+/** Pause: two upright bars, rounded like the rest of the set. */
+export function Pause({ size = 16, colour = ink.hi }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Path d="M8 5v14M16 5v14" stroke={colour} strokeWidth={3.4} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 /** Report: a flag on its pole. */
 export function Flag({ size = 16, colour = ink.hi }: IconProps) {
   return (

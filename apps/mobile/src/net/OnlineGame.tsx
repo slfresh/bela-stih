@@ -21,10 +21,13 @@ import { playSfx } from '../audio';
 import { pattern } from '../haptics';
 import { TableScreen, type SeatMeta } from '../TableScreen';
 import { Button } from '../ui/Button';
-import { font, ink, space, theme, type } from '../theme';
+import { font, ink, radius, space, surface, theme, type } from '../theme';
 import { Panel } from '../ui/Panel';
 import { SEAT_MAP_ASPECT, SeatMap } from './SeatMap';
 import { seatName } from './seatName';
+import { stillReading } from './hold';
+import { PressScale } from '../ui/PressScale';
+import { TURN_CHOICES_S } from './clock';
 import { reportMailto, reportStamp } from '../report';
 import { APP_VERSION } from '../screens/common';
 import type { Settings } from '../storage';
@@ -145,8 +148,12 @@ export function OnlineGame({
   };
 
   // 'finished' keeps the table mounted: the result sheet, winner banner and
-  // confetti all live inside TableScreen.
-  if (net.seat === null || net.view === null || (status !== 'playing' && status !== 'finished')) {
+  // confetti all live inside TableScreen. So does a dropped connection once the
+  // match is under way: the table stays, with "getting you back" over it, while
+  // the hook reconnects to the seat - it used to swap to the lobby, which is
+  // where a phone call left the player.
+  const atTable = status === 'playing' || status === 'finished' || net.reconnecting;
+  if (net.seat === null || net.view === null || !atTable) {
     return <Waiting net={net} onExit={leaveAndExit} />;
   }
 
@@ -182,7 +189,26 @@ export function OnlineGame({
       waitingFor={waitingForRematch}
       onRematch={net.rematch}
       onForceRematch={net.seat === net.hostSeat ? net.rematchStart : undefined}
-      options={settled || !net.idle ? [] : net.view.legalActions}
+      // A private table can stand still; quick play never does.
+      hold={net.hold}
+      onPause={net.isPrivate ? net.pause : undefined}
+      onResume={net.isPrivate ? net.resume : undefined}
+      onPlayOn={net.isPrivate ? net.playOn : undefined}
+      reconnecting={net.reconnecting}
+      nextDeal={
+        net.view.phase === 'DEAL_OVER'
+          ? {
+              deadline: net.nextDeadline,
+              ready: net.nextVotes.includes(net.seat),
+              waitingFor: stillReading(net.seats, net.nextVotes, net.seat).map((s) =>
+                seatName(net.lang, net.seats.find((x) => x.seat === s)!),
+              ),
+            }
+          : undefined
+      }
+      // Nothing can be played while the table stands still or this device is
+      // off the line: the server would only refuse it.
+      options={settled || !net.idle || net.hold !== null || net.reconnecting ? [] : net.view.legalActions}
       myTurn={net.idle && net.view.toAct === net.seat}
       settled={settled}
       matchOver={net.matchOver}
@@ -194,11 +220,14 @@ export function OnlineGame({
       seatMeta={seatMeta}
       // A refused move outranks the bot line: it is about the tap just made,
       // and the table's next move clears it.
+      // While this device gets back into its seat the panel over the table
+      // says so; the raw "veza prekinuta (1005)" above the score would only
+      // say it again, with a socket code nobody needs.
       status={
-        net.error ??
+        (net.reconnecting ? null : net.error) ??
         (away.length > 0 ? net.lang.s.ui.botPlaysFor(away.map((s) => seatName(net.lang, s)).join(', ')) : null)
       }
-      statusIsError={net.error !== null}
+      statusIsError={!net.reconnecting && net.error !== null}
       anchors={net.anchors}
       fxBus={net.fxBus}
       turnDeadline={net.turnDeadline}
@@ -346,6 +375,33 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
       </Panel>
     ) : null;
 
+  // A private table's turn clock: the host picks, everyone sees it. Quick
+  // play keeps 30 s for strangers and shows nothing here.
+  const isHost = net.seat !== null && net.seat === net.hostSeat;
+  const clock =
+    net.isPrivate && net.status === 'waiting' && columnW > 0 ? (
+      <View style={[styles.clock, { width: columnW }]}>
+        <Text style={styles.clockLabel}>{ui.turnClock}</Text>
+        <View style={styles.clockRow} accessibilityRole="radiogroup">
+          {TURN_CHOICES_S.map((sec) => {
+            const on = net.turnSeconds === sec;
+            return (
+              <PressScale
+                key={sec}
+                disabled={!isHost}
+                onPress={() => net.setClock(sec)}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: on, disabled: !isHost }}
+                style={[styles.clockChip, on && styles.clockChipOn, !isHost && !on && styles.clockChipIdle]}
+              >
+                <Text style={[styles.clockText, on && styles.clockTextOn]}>{ui.seconds(sec)}</Text>
+              </PressScale>
+            );
+          })}
+        </View>
+      </View>
+    ) : null;
+
   const back = <Button label={ui.back} tone="plain" onPress={onExit} />;
 
   return (
@@ -360,6 +416,7 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
             <View style={[styles.column, { width: columnW }]}>
               {status}
               {invitation}
+              {clock}
               {back}
             </View>
           </>
@@ -368,6 +425,7 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
             {status}
             {map}
             {invitation}
+            {clock}
             {back}
           </>
         )}
@@ -397,4 +455,20 @@ const styles = StyleSheet.create({
   code: { color: theme.accent, ...type.h1, letterSpacing: 2, textAlign: 'center' },
   hint: { color: ink.mid, ...type.sub, textAlign: 'center', marginTop: space.xs },
   copied: { color: theme.okInk, ...type.sub, textAlign: 'center' },
+  clock: { alignItems: 'center', gap: space.xs },
+  clockLabel: { color: ink.mid, ...type.caption },
+  clockRow: { flexDirection: 'row', gap: space.sm, alignSelf: 'stretch' },
+  clockChip: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: space.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: theme.line,
+    backgroundColor: surface.chip,
+  },
+  clockChipOn: { borderColor: theme.accent },
+  clockChipIdle: { opacity: 0.55 },
+  clockText: { color: ink.mid, fontFamily: font.medium, fontSize: 14 },
+  clockTextOn: { color: theme.accent },
 });

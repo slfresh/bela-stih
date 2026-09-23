@@ -65,6 +65,7 @@ import { useTableMetrics } from './table/useTableMetrics';
 import { EMOTE_TOGGLE, FAN_REST_SHORT, LAND_GAP, LAND_TRAY_H, SELF_NESTLE, SELF_PUCK_GAP } from './table/metrics';
 import { useHandOrder, type HandSort } from './table/useHandOrder';
 import { callsOnTable } from './table/calls';
+import { pickAnnouncement } from './table/zvanja';
 import type { ConfirmPlay } from './storage';
 import { cosmetics, room, roomStyle, type DeckStyle } from './cosmetics';
 import { PerfProbe } from './dev/PerfProbe';
@@ -72,6 +73,8 @@ import { EmoteStrip } from './table/EmoteStrip';
 import { GiftPicker } from './table/GiftPicker';
 import { useTurnCues } from './table/useTurnCues';
 import { ConfirmDialog } from './ui/ConfirmDialog';
+import { HoldPanel, useNow } from './table/HoldPanel';
+import type { TableHold } from './net/hold';
 import { setBackGuard } from './ui/backGuard';
 import { FeltArt, RIM_W } from './table/FeltArt';
 import { garb } from './deck/palette';
@@ -83,7 +86,7 @@ import { CardBackFace, SuitPip } from './deck';
 import { playSfx } from './audio';
 import { pattern } from './haptics';
 import { Button } from './ui/Button';
-import { Coin, Crown, Star } from './ui/icons';
+import { Check, Coin, Crown, Pause, Star } from './ui/icons';
 import { EmoteFace } from './emoteArt';
 import { PressScale } from './ui/PressScale';
 import { font, ink, num, radius, space, stroke, surface, team, theme, type } from './theme';
@@ -163,6 +166,22 @@ export interface TableScreenProps {
   rematchLabel?: string;
   onForceRematch?: () => void;
   /**
+   * Online, at a scored deal: when the next deal starts by itself, whether I
+   * have said I am ready, and who is still reading. Absent offline, where the
+   * one player at the table deals when they like.
+   */
+  nextDeal?: NextDealInfo;
+  /**
+   * A private table standing still (online): paused, or waiting for a friend
+   * whose connection dropped. With the handlers only where they are allowed.
+   */
+  hold?: TableHold | null;
+  onPause?: () => void;
+  onResume?: () => void;
+  onPlayOn?: () => void;
+  /** Online: this device is off the line and getting back into its seat. */
+  reconnecting?: boolean;
+  /**
    * "Prava bela": no card assist — every card is tappable, and an illegal one
    * is a renons the engine punishes. The claim/bela buttons stay unassisted too.
    */
@@ -199,6 +218,7 @@ export function TableScreen(props: TableScreenProps) {
     dealerHop = false,
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
     hardMode = false, series, askedRematch, waitingFor, onRematch, onForceRematch, rematchLabel,
+    nextDeal, hold: tableHold = null, onPause, onResume, onPlayOn, reconnecting = false,
     handSort = 'auto', onHandSortChange, confirmPlay = 'ambiguous',
     gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift, giftReach, hidden, onHide, onReport,
   } = props;
@@ -273,17 +293,23 @@ export function TableScreen(props: TableScreenProps) {
   // announces nothing, so this can never claim more than the hand holds.
   const [marked, setMarked] = useState<string[]>([]);
   const declaring = !settled && view.declareTurn === mySeat;
-  // Does the marking actually form one of the zvanja this hand holds? In normal
-  // play the app already knows them, so it arms the button only on a real
-  // combination rather than letting the engine bounce a mistake back as an
-  // error. In blind mode it stays armed regardless — the app refuses to spot
-  // them for you there, so an honest miss is the whole point.
-  const markedKey = [...marked].sort().join('|');
-  const markingIsZvanje =
-    hardMode ||
-    view.myDeclarations.some(
-      (d) => d.cards.map((c) => cardId(c)).sort().join('|') === markedKey,
-    );
+  // Is the marking made of zvanja this hand holds - one, or all of them at
+  // once? In normal play the app already knows them, so it arms the button
+  // only on real combinations rather than letting the engine bounce a mistake
+  // back as an error, and sends ONE of them: the engine announces the whole
+  // holding from any one (table/zvanja.ts). In blind mode it stays armed
+  // regardless - the app refuses to spot them for you there, so an honest miss
+  // is the whole point.
+  const announcement = pickAnnouncement(
+    view.hand.filter((c) => marked.includes(cardId(c))),
+    hardMode ? null : view.myDeclarations,
+    mySeat,
+  );
+  const markingIsZvanje = hardMode || announcement !== null;
+  // Two marked at once read as two: the hint says so rather than "that is a zvanje".
+  const markedWhole = hardMode
+    ? 0
+    : view.myDeclarations.filter((d) => d.cards.every((c) => marked.includes(cardId(c)))).length;
   const toggleMark = useCallback(
     (id: string) =>
       setMarked((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id])),
@@ -914,7 +940,9 @@ export function TableScreen(props: TableScreenProps) {
           {marked.length === 0
             ? lang.s.markZvanjaHint
             : markingIsZvanje
-              ? lang.s.markingOk
+              ? markedWhole > 1
+                ? lang.s.markingOkMany
+                : lang.s.markingOk
               : lang.s.markingNotZvanje}
         </Text>
       </View>
@@ -1056,9 +1084,8 @@ export function TableScreen(props: TableScreenProps) {
         tone={marked.length >= 3 && markingIsZvanje ? 'strong' : 'plain'}
         compact={land}
         onPress={() => {
-          if (marked.length < 3 || !markingIsZvanje) return;
-          const cards = hand.cards.filter((c) => marked.includes(cardId(c)));
-          answer({ type: 'DECLARE_ANNOUNCE', seat: mySeat, cards });
+          if (marked.length < 3 || !markingIsZvanje || announcement === null) return;
+          answer({ type: 'DECLARE_ANNOUNCE', seat: mySeat, cards: announcement });
         }}
       />
       <Button
@@ -1099,6 +1126,20 @@ export function TableScreen(props: TableScreenProps) {
   const leaveButton = !matchOver ? (
     <Button label={finishLabel} tone="plain" compact style={short ? styles.leaveSlim : undefined} onPress={requestLeave} />
   ) : null;
+  // Private tables only, and only while there is a match to stop: a phone
+  // rings, one tap, and the table waits for everyone.
+  const pauseButton =
+    onPause && !matchOver && tableHold === null && !reconnecting ? (
+      <PressScale
+        onPress={onPause}
+        accessibilityRole="button"
+        accessibilityLabel={lang.s.ui.pauseLabel}
+        hitSlop={6}
+        style={[styles.pauseButton, short && styles.pauseButtonSlim]}
+      >
+        <Pause size={short ? 14 : 16} />
+      </PressScale>
+    ) : null;
 
   // Every row that comes and goes around the felt — status line, zvanja
   // chips, a prompt — moves the pucks, slots and hand
@@ -1150,6 +1191,7 @@ export function TableScreen(props: TableScreenProps) {
         onRematch={onRematch}
         rematchLabel={rematchLabel}
         onForceRematch={onForceRematch}
+        nextDeal={nextDeal}
         onNext={onNext}
         onFinish={requestLeave}
         finishLabel={finishLabel}
@@ -1177,6 +1219,7 @@ export function TableScreen(props: TableScreenProps) {
                   vertical
                   reduced={reduced}
                   winner={matchOver ? winnerTeam : null}
+                  series={series}
                 />
                 {plaque}
                 {calls}
@@ -1196,6 +1239,7 @@ export function TableScreen(props: TableScreenProps) {
               </View>
 
               <View style={[styles.rail, styles.railRight, { width: m.railW }]}>
+                {pauseButton}
                 {leaveButton}
                 {/* The emote box, in the rail's free gap under the leave
                     button: never over the table. (A float here once put the
@@ -1229,6 +1273,7 @@ export function TableScreen(props: TableScreenProps) {
                 <View style={styles.topRowGrow}>
                   <ProfileBar profile={profile} slim={short} holdMs={awardHold} reduced={reduced} onLongPress={toggleProbe} />
                 </View>
+                {pauseButton}
                 {leaveButton}
               </View>
               {status && !shed ? <Text style={[styles.status, statusIsError && styles.statusError]} role={statusIsError ? 'alert' : undefined} accessibilityLiveRegion={statusIsError ? 'assertive' : 'none'}>{status}</Text> : null}
@@ -1242,6 +1287,7 @@ export function TableScreen(props: TableScreenProps) {
                 slim={short}
                 reduced={reduced}
                 winner={matchOver ? winnerTeam : null}
+                series={series}
               />
 
               {felt}
@@ -1335,6 +1381,22 @@ export function TableScreen(props: TableScreenProps) {
 
           {/* Not once the match is over: offline the same button then means a
               new match, and "Napusti" must never start one. */}
+          {/* The table standing still: above the sheet and the pickers, because
+              nothing under it can be played until it ends. */}
+          {(reconnecting || tableHold !== null) && (
+            <HoldPanel
+              lang={lang}
+              hold={tableHold}
+              reconnecting={reconnecting}
+              nameOf={(s) => meta(s).name}
+              onResume={onResume}
+              onPlayOn={onPlayOn}
+              onLeave={onFinish}
+              leaveLabel={finishLabel}
+              ground={baize.page}
+              reduced={reduced}
+            />
+          )}
           {leaving && !matchOver && (
             <ConfirmDialog
               title={lang.s.ui.leaveConfirm}
@@ -1373,11 +1435,18 @@ const TableHeader = memo(function TableHeader({
   slim = false,
   reduced = false,
   winner = null,
+  series = null,
 }: {
   lang: Lang;
   mySeat: Seat;
   matchScores: readonly [number, number];
   progress: DealProgress | null;
+  /**
+   * Matches won per side since these four sat down (online; absolute team
+   * ids like matchScores). Between the pills once a match has been won, so the
+   * first match looks exactly as it always did.
+   */
+  series?: readonly [number, number] | null;
   /** Landscape puts the whole strip in the left rail, stacked. */
   vertical?: boolean;
   /** Portrait's short column: the strip on pinned lines, without its breathing room. */
@@ -1392,6 +1461,7 @@ const TableHeader = memo(function TableHeader({
   const usScore = useCountUp(matchScores[us], 500, { reduced });
   const themScore = useCountUp(matchScores[them], 500, { reduced });
   const usRun = useCountUp(progress?.running[us] ?? 0, 350, { reduced });
+  const seriesShown = series !== null && series[0] + series[1] > 0;
   const themRun = useCountUp(progress?.running[them] ?? 0, 350, { reduced });
   const swell = useSharedValue(1);
   // Only a win that arrives AFTER this header mounted swells: a rotation
@@ -1427,6 +1497,19 @@ const TableHeader = memo(function TableHeader({
           <Text style={styles.pillLabel}>{lang.team(us, mySeat)}</Text>
           <Text style={[styles.pillValue, slim && styles.pillValueSlim, { color: team.usInk }]}>{usScore}</Text>
         </Animated.View>
+        {seriesShown && (
+          // Ours first, like the pills either side of it.
+          <View
+            style={styles.seriesChip}
+            accessible
+            accessibilityLabel={`${lang.s.ui.seriesScore} ${series![us]} : ${series![them]}`}
+          >
+            <Crown size={11} />
+            <Text style={styles.seriesChipText}>
+              {series![us]}:{series![them]}
+            </Text>
+          </View>
+        )}
         <Animated.View
           style={[styles.teamPill, slim && styles.teamPillSlim, { backgroundColor: team.themDim, borderColor: team.themEdge }, swellThem]}
         >
@@ -1466,6 +1549,8 @@ const TableHeader = memo(function TableHeader({
   a.slim === b.slim &&
   a.reduced === b.reduced &&
   a.winner === b.winner &&
+  (a.series?.[0] ?? -1) === (b.series?.[0] ?? -1) &&
+  (a.series?.[1] ?? -1) === (b.series?.[1] ?? -1) &&
   a.matchScores[0] === b.matchScores[0] &&
   a.matchScores[1] === b.matchScores[1] &&
   (a.progress === null) === (b.progress === null) &&
@@ -2093,6 +2178,7 @@ function DealResult({
   onRematch,
   rematchLabel,
   onForceRematch,
+  nextDeal,
   onNext,
   onFinish,
   finishLabel,
@@ -2119,6 +2205,7 @@ function DealResult({
   onRematch?: () => void;
   rematchLabel?: string;
   onForceRematch?: () => void;
+  nextDeal?: NextDealInfo;
   onNext: () => void;
   onFinish: () => void;
   finishLabel: string;
@@ -2156,6 +2243,7 @@ function DealResult({
       onRematch={onRematch}
       rematchLabel={rematchLabel}
       onForceRematch={onForceRematch}
+      nextDeal={nextDeal}
       onNext={onNext}
       onFinish={onFinish}
       finishLabel={finishLabel}
@@ -2300,6 +2388,7 @@ function ResultFoot({
   onRematch,
   rematchLabel,
   onForceRematch,
+  nextDeal,
   onNext,
   onFinish,
   finishLabel,
@@ -2312,6 +2401,7 @@ function ResultFoot({
   onRematch?: () => void;
   rematchLabel?: string;
   onForceRematch?: () => void;
+  nextDeal?: NextDealInfo;
   onNext: () => void;
   onFinish: () => void;
   finishLabel: string;
@@ -2346,12 +2436,56 @@ function ResultFoot({
         </View>
       ) : (
         <View style={styles.resultButtons}>
-          <Button label={lang.s.nextDeal} tone="strong" onPress={onNext} />
+          {nextDeal ? (
+            <NextDealButton lang={lang} next={nextDeal} onNext={onNext} />
+          ) : (
+            <Button label={lang.s.nextDeal} tone="strong" onPress={onNext} />
+          )}
           <Button label={finishLabel} tone="plain" onPress={onFinish} />
         </View>
       )}
     </>
   );
+}
+
+/** Online, at a scored deal: the countdown to the next one, and who is still reading. */
+export interface NextDealInfo {
+  /** When it starts by itself, on this device's clock; null while the table stands still. */
+  deadline: number | null;
+  /** I have said I am ready. */
+  ready: boolean;
+  /** The people still reading the sheet (names). */
+  waitingFor: readonly string[];
+}
+
+/**
+ * The next deal starts when everyone has pressed, or by itself when the
+ * countdown runs out - never on one player's press, which used to take the
+ * sheet away from three people still reading it.
+ */
+function NextDealButton({ lang, next, onNext }: { lang: Lang; next: NextDealInfo; onNext: () => void }) {
+  const now = useNow(500);
+  const left = next.deadline === null ? null : Math.max(0, Math.ceil((next.deadline - now) / 1000));
+  const count = left === null ? '' : ` · ${left}`;
+  if (next.ready) {
+    return (
+      <View style={styles.nextReady} accessibilityLiveRegion="polite">
+        <View style={styles.nextReadyRow}>
+          <Check size={14} />
+          <Text style={styles.nextReadyText}>
+            {lang.s.ui.nextReady}
+            {count}
+          </Text>
+        </View>
+        {next.waitingFor.length > 0 && (
+          <Text style={styles.subDim} numberOfLines={1}>
+            {lang.s.ui.nextWaitingFor(next.waitingFor.join(', '))}
+          </Text>
+        )}
+      </View>
+    );
+  }
+  return <Button label={`${lang.s.nextDeal}${count}`} tone="strong" onPress={onNext} />;
 }
 
 /**
@@ -2453,6 +2587,37 @@ const styles = StyleSheet.create({
   subDim: { color: theme.textDim, fontSize: 12 },
   seriesLine: { color: theme.textDim, fontSize: 13, textAlign: 'center' },
   pillRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  // The Pauza button: a compact square beside the leave button.
+  pauseButton: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: surface.chip,
+    borderWidth: 1,
+    borderColor: theme.line,
+    alignSelf: 'center',
+  },
+  pauseButtonSlim: { width: 30, height: 30 },
+  // "Ready, waiting for the others", where the next-deal button was.
+  nextReady: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 2, minHeight: 44 },
+  nextReadyRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  nextReadyText: { color: theme.accent, fontSize: 14, fontFamily: font.medium },
+  // The series between the pills: small, so a 320 dp strip keeps its one line.
+  seriesChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 3,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    backgroundColor: surface.sunk,
+    borderWidth: 1,
+    borderColor: theme.line,
+  },
+  seriesChipText: { color: theme.accent, fontSize: 12, fontFamily: font.bold, fontVariant: ['tabular-nums'] },
   pillCol: { flexDirection: 'column', gap: 4, alignSelf: 'stretch' },
   teamPill: {
     flexDirection: 'row',

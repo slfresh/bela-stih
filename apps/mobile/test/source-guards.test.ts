@@ -435,9 +435,11 @@ describe('the first frame and the last resort', () => {
     expect(hand).toBeGreaterThan(-1);
     expect(puck).toBeGreaterThan(hand);
     expect(faces).toBeGreaterThan(puck);
-    // Leaving: in the top row beside the profile strip, and at the top of the right rail.
-    expect(portrait.slice(0, portrait.indexOf('<TableHeader'))).toMatch(/\{leaveButton\}/);
-    expect(t).toMatch(/<View style=\{\[styles\.rail, styles\.railRight, \{ width: m\.railW \}\]\}>\s*\{leaveButton\}/);
+    // Leaving: in the top row beside the profile strip, and at the top of the right rail -
+    // with the private table's Pauza square right before it in both: the two
+    // corner controls, and neither where a thumb reaches mid-deal.
+    expect(portrait.slice(0, portrait.indexOf('<TableHeader'))).toMatch(/\{pauseButton\}\s*\{leaveButton\}/);
+    expect(t).toMatch(/<View style=\{\[styles\.rail, styles\.railRight, \{ width: m\.railW \}\]\}>\s*\{pauseButton\}\s*\{leaveButton\}/);
     // …and nowhere in the actions row a thumb reaches for mid-deal.
     const rowAt = portrait.indexOf('<View style={styles.actionsRow}>');
     expect(rowAt).toBeGreaterThan(-1);
@@ -759,8 +761,9 @@ describe('table gifts', () => {
     expect(h).toMatch(/setError\(langRef\.current\.s\.ui\.moveRefused\)/);
     expect(h).not.toMatch(/msg\.reason|setError\(msg/);
     const o = src('net/OnlineGame.tsx');
-    expect(o).toMatch(/net\.error \?\?\s*\(away\.length > 0 \?/);
-    expect(o).toMatch(/statusIsError=\{net\.error !== null\}/);
+    // ...except while reconnecting, when the panel over the table says it better.
+    expect(o).toMatch(/\(net\.reconnecting \? null : net\.error\) \?\?\s*\(away\.length > 0 \?/);
+    expect(o).toMatch(/statusIsError=\{!net\.reconnecting && net\.error !== null\}/);
     const t = src('TableScreen.tsx');
     // Both lines say it, and say it OUT LOUD: role="alert" is a live region on
     // the web only, so Android needs its own word for the same thing.

@@ -54,6 +54,8 @@ export function PressScale({
   const aria = web
     ? {
         ...(web.selected !== undefined ? { 'aria-pressed': web.selected } : null),
+        // A radio (the lobby's clock) is checked, not pressed.
+        ...(web.checked !== undefined ? { 'aria-checked': web.checked === true } : null),
         ...(web.expanded !== undefined ? { 'aria-expanded': web.expanded } : null),
         ...(web.disabled !== undefined ? { 'aria-disabled': web.disabled } : null),
       }
