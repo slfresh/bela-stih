@@ -87,7 +87,27 @@ before promoting.
 
 ### Release notes
 
-1.3.1 -
+1.4.0 (versionCode 25; carries 1.3.1's notes too, which never shipped on their own) -
+- hr: *Novo: pozovi prijatelje kodom, poveznicom ili QR kodom; povijest
+  partija s prijateljima i statistika; domaćin bira dužinu partije
+  (501/701/1001) i Pravu belu; pauza dok se prijatelj vrati; „Kako se igra”;
+  nove brze poruke; pogled na zadnji štih. Trgovina pita prije kupnje, profil
+  i postavke su pregledniji, karte složiš dugim pritiskom, a online potez ide
+  samo jednom. Igrača možeš sakriti ili prijaviti. I puno sitnih popravaka.*
+- sr: *Ново: позови пријатеље кодом, везом или QR кодом; историја партија са
+  пријатељима и статистика; домаћин бира дужину партије (501/701/1001) и
+  Праву белу; пауза док се пријатељ врати; „Како се игра”; нове брзе поруке;
+  поглед на задњи штих. Продавница пита пре куповине, профил и подешавања су
+  прегледнији, карте сложиш дугим притиском, а онлајн потез иде само једном.
+  Играча можеш да сакријеш или пријавиш. И пуно ситних поправки.*
+- en: *New: invite friends by code, link or QR code; your match history with
+  friends and its statistics; the host picks the match length (501/701/1001)
+  and True bela; a pause while a friend reconnects; "How to play"; new quick
+  phrases; a look at the last trick. The shop asks before you buy, the profile
+  and settings are clearer, hold your cards to arrange them, and an online move
+  is sent exactly once. You can hide or report a player. Plus many small fixes.*
+
+1.3.1 (not shipped on its own; folded into 1.4.0) -
 - hr: *Novo: dodirni igrača za stolom → Prijavi da ga sakriješ do kraja stola
   ili prijaviš neprimjeren nadimak. Popravci: nakon partije uvijek imaš put
   natrag, traka iskustva više ne ide unatrag, oblačići se vide i kad su
