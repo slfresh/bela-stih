@@ -81,6 +81,12 @@ describe('showing a hidden player again puts their gift back with its giver', ()
     expect(src).toMatch(/const \{ back, muted: rest \} = unmutedSeats\(muted\.current, giver\);/);
     // The giver goes back on the seat: without it a second hide finds nothing.
     expect(src).toMatch(/from\[seat\] = giver;/);
+    // EVERY seat unmutedSeats names, including one with a gift in the air. A
+    // seat skipped here loses its giver for good (the landing may be
+    // superseded, and the room's record never says who gave it), which is the
+    // very stranding this restore exists to end.
+    expect(src).toMatch(/const put = back;/);
+    expect(src, 'no seat is filtered out of the restore').not.toMatch(/back\.filter/);
   });
 });
 
