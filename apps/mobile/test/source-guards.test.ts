@@ -1176,3 +1176,12 @@ describe('the rules of conduct', () => {
     expect(t.slice(field, rules)).toMatch(/accessibilityLabel=\{ui\.nicknameRulesLabel\}/);
   });
 });
+
+describe('the version the app shows and reports', () => {
+  it('is the one app.json builds: Settings and every report say what is installed', () => {
+    // A hand-kept copy; the 1.4.3 bump missed it once and the phone said 1.4.2.
+    const app = JSON.parse(readFileSync(join(here, '../app.json'), 'utf8')) as { expo: { version: string } };
+    const common = readFileSync(join(here, '../src/screens/common.tsx'), 'utf8');
+    expect(common).toContain(`export const APP_VERSION = '${app.expo.version}';`);
+  });
+});
