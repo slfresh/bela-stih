@@ -17,7 +17,7 @@ import { useKeepAwake } from 'expo-keep-awake';
 import type { Seat } from '@belot/engine';
 import { teamOf } from '@belot/engine';
 import { anchorId } from '../anim/FxBus';
-import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS, coinDingTimers, coinsLandedMs, MATCH_CASCADE_HOLD_MS } from '../anim/lifetimes';
+import { COIN_CASCADE_DELAY_MS, coinCascadeCount, coinDingTimers, coinsLandedMs, MATCH_CASCADE_HOLD_MS } from '../anim/lifetimes';
 import { isMatchAward } from '../feedback';
 import { playSfx } from '../audio';
 import { pattern } from '../haptics';
@@ -96,6 +96,8 @@ export function OnlineGame({
     timers.current = [];
     const hold = isMatchAward(banner) ? MATCH_CASCADE_HOLD_MS : 0;
     const delay = COIN_CASCADE_DELAY_MS + hold;
+    // More coins fly for more: the wallet's lag counts the same number.
+    const count = coinCascadeCount(banner.coins);
     if (banner.coins > 0) {
       // From the sheet's "Upisano" total once the sheet has slid up and
       // settled; from the felt if there is no sheet.
@@ -108,11 +110,11 @@ export function OnlineGame({
           void net.anchors.refresh().then(() => {
             const from = net.anchors.centre(anchorId.sheetTotal) ?? net.anchors.centre(anchorId.deck);
             const to = net.anchors.centre(anchorId.wallet);
-            if (from && to) net.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
+            if (from && to) net.fxBus.emit({ kind: 'coins', from, to, count });
           });
         }, delay),
         // One ding per coin as it lands.
-        ...coinDingTimers(COIN_CASCADE_COUNT, delay),
+        ...coinDingTimers(count, delay),
       );
     }
     // The level-up: its own moment, when the badge swells — the profile bar
@@ -124,8 +126,13 @@ export function OnlineGame({
           () => {
             playSfx('levelup');
             pattern('levelUp');
+            // Seen as well as heard: a burst where the level badge swells.
+            if (net.motion !== 'reduced') {
+              const at = net.anchors.centre(anchorId.wallet);
+              if (at) net.fxBus.emit({ kind: 'burst', at, count: 24 });
+            }
           },
-          delay + coinsLandedMs(COIN_CASCADE_COUNT),
+          delay + coinsLandedMs(count),
         ),
       );
     }
@@ -279,6 +286,10 @@ export function OnlineGame({
         onSettingsChange?.({ ...settings, arrangeTips: learned ? 2 : settings.arrangeTips + 1 })
       }
       confirmPlay={settings.confirmPlay}
+      // A play waits for the server's echo: the card says it went, and a
+      // second tap in the gap sends nothing.
+      awaitEcho
+      refusedN={net.refusals}
       series={shownSeries}
       askedRematch={net.rematchVotes.includes(net.seat)}
       // The same four again: a return match, not just another one.

@@ -113,6 +113,20 @@ export const COIN_FLY_MS = 550;
 /** How many coins a scored deal sends to the wallet. */
 export const COIN_CASCADE_COUNT = 6;
 
+/**
+ * How many coins fly for an award: more for more, so a match's hundred reads
+ * bigger than a deal's five (4 to 12). With nothing to fly, the six there
+ * always were - that count only times the level-up waiting for them.
+ */
+export function coinCascadeCount(coins: number): number {
+  if (coins <= 0) return COIN_CASCADE_COUNT;
+  if (coins <= 5) return 4;
+  if (coins <= 25) return 6;
+  if (coins <= 60) return 8;
+  if (coins <= 110) return 10;
+  return 12;
+}
+
 /** When the last of `count` coins lands — the moment the wallet may change. */
 export function coinsLandedMs(count: number): number {
   return count * COIN_STAGGER_MS + COIN_FLY_MS;

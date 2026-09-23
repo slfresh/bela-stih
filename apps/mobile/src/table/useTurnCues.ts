@@ -35,6 +35,8 @@ export interface TurnCues {
   /** The cue's visible twin, fired from the very same edge as the sound. */
   onTurnEdge?: () => void;
   onDeclareEdge?: () => void;
+  /** The clock warning's visible twin, fired with its tick; `urgent` at 2 s. */
+  onClockWarn?: (urgent: boolean) => void;
 }
 
 export interface CueState {
@@ -65,6 +67,7 @@ export function useTurnCues({
   settled,
   onTurnEdge,
   onDeclareEdge,
+  onClockWarn,
 }: TurnCues): void {
   const was = useRef<CueState>({ myTurn: false, declaring: false });
   // Fresh callbacks each render; the effect must not re-run for them.
@@ -72,6 +75,8 @@ export function useTurnCues({
   onTurnEdgeRef.current = onTurnEdge;
   const onDeclareEdgeRef = useRef(onDeclareEdge);
   onDeclareEdgeRef.current = onDeclareEdge;
+  const onClockWarnRef = useRef(onClockWarn);
+  onClockWarnRef.current = onClockWarn;
 
   useEffect(() => {
     const now = { myTurn, declaring: mustDeclare || canDeclare };
@@ -102,6 +107,8 @@ export function useTurnCues({
         // gets shorter.
         pattern(before <= 2_000 ? 'clock2' : 'clock5');
         playSfx('tick', { rate: before <= 2_000 ? 1.25 : 1 });
+        // Seen as well as heard: a muted phone, or a player who cannot hear it.
+        onClockWarnRef.current?.(before <= 2_000);
       }, wait);
     }).filter((t): t is ReturnType<typeof setTimeout> => t !== null);
     return () => timers.forEach(clearTimeout);

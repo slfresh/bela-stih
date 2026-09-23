@@ -3,7 +3,7 @@ import { Platform } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
 import { teamOf } from '@belot/engine';
 import { anchorId } from './anim/FxBus';
-import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS, coinDingTimers, coinsLandedMs, MATCH_CASCADE_HOLD_MS } from './anim/lifetimes';
+import { COIN_CASCADE_DELAY_MS, coinCascadeCount, coinDingTimers, coinsLandedMs, MATCH_CASCADE_HOLD_MS } from './anim/lifetimes';
 import { isMatchAward } from './feedback';
 import { playSfx } from './audio';
 import { pattern } from './haptics';
@@ -88,6 +88,8 @@ function OfflineMatch({
     timers.current = [];
     const hold = isMatchAward(banner) ? MATCH_CASCADE_HOLD_MS : 0;
     const delay = COIN_CASCADE_DELAY_MS + hold;
+    // More coins fly for more: the wallet's lag counts the same number.
+    const count = coinCascadeCount(banner.coins);
     if (banner.coins > 0) {
       // From the sheet's "Upisano" total once the sheet has slid up and
       // settled; from the felt if there is no sheet.
@@ -100,11 +102,11 @@ function OfflineMatch({
           void g.anchors.refresh().then(() => {
             const from = g.anchors.centre(anchorId.sheetTotal) ?? g.anchors.centre(anchorId.deck);
             const to = g.anchors.centre(anchorId.wallet);
-            if (from && to) g.fxBus.emit({ kind: 'coins', from, to, count: COIN_CASCADE_COUNT });
+            if (from && to) g.fxBus.emit({ kind: 'coins', from, to, count });
           });
         }, delay),
         // One ding per coin as it lands.
-        ...coinDingTimers(COIN_CASCADE_COUNT, delay),
+        ...coinDingTimers(count, delay),
       );
     }
     // The level-up: its own moment, when the badge swells — the profile bar
@@ -116,8 +118,13 @@ function OfflineMatch({
           () => {
             playSfx('levelup');
             pattern('levelUp');
+            // Seen as well as heard: a burst where the level badge swells.
+            if (g.motion !== 'reduced') {
+              const at = g.anchors.centre(anchorId.wallet);
+              if (at) g.fxBus.emit({ kind: 'burst', at, count: 24 });
+            }
           },
-          delay + coinsLandedMs(COIN_CASCADE_COUNT),
+          delay + coinsLandedMs(count),
         ),
       );
     }

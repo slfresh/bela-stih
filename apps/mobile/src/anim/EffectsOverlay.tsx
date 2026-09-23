@@ -152,7 +152,7 @@ function Sprite({ fx, origin, box }: { fx: FxWithId; origin: XY; box: { w: numbe
     case 'stamp':
       return <Stamp at={local(fx.at)} pip={fx.pip} text={fx.text} tone={fx.tone} speed={fx.speed} fade={fx.fade} />;
     case 'pulse':
-      return <Pulse at={local(fx.at)} speed={fx.speed} />;
+      return <Pulse at={local(fx.at)} speed={fx.speed} warn={fx.tone === 'warn'} />;
     case 'badge':
       return (
         <Badge
@@ -452,7 +452,7 @@ function SweptCard({
 const PULSE_SIZE = 56;
 
 /** A cream ring that grows from the hand and is gone: "now", said with light. */
-function Pulse({ at, speed }: { at: XY; speed: number }) {
+function Pulse({ at, speed, warn = false }: { at: XY; speed: number; warn?: boolean }) {
   const p = useSharedValue(0);
   useEffect(() => {
     p.value = withTiming(1, { duration: PULSE_MS * speed, easing: Easing.out(Easing.cubic) });
@@ -465,7 +465,8 @@ function Pulse({ at, speed }: { at: XY; speed: number }) {
       { scale: 1 + 0.6 * p.value },
     ],
   }));
-  return <Animated.View style={[styles.sprite, styles.pulse, style]} />;
+  // Named for the web checks (a testID is an id, never a picture).
+  return <Animated.View testID={warn ? 'fx-pulse-warn' : 'fx-pulse'} style={[styles.sprite, styles.pulse, warn && styles.pulseWarn, style]} />;
 }
 
 // --- the dealer's button -------------------------------------------------------
@@ -501,7 +502,7 @@ function Badge({
     };
   });
   return (
-    <Animated.View style={[styles.sprite, styles.badge, tone === 'points' && styles.badgePoints, style]}>
+    <Animated.View testID="fx-badge" style={[styles.sprite, styles.badge, tone === 'points' && styles.badgePoints, style]}>
       <Text style={[styles.badgeText, tone === 'points' && styles.badgePointsText]}>{text}</Text>
     </Animated.View>
   );
@@ -606,7 +607,7 @@ function BurstPiece({
       ],
     };
   });
-  return <Animated.View style={[styles.sprite, styles.confetto, { backgroundColor: colour }, style]} />;
+  return <Animated.View testID="fx-burst" style={[styles.sprite, styles.confetto, { backgroundColor: colour }, style]} />;
 }
 
 // --- the stamp -----------------------------------------------------------------
@@ -846,7 +847,7 @@ function Coin({ from, to, delay, wobble }: { from: XY; to: XY; delay: number; wo
     };
   });
 
-  return <Animated.View style={[styles.sprite, styles.coin, style]} />;
+  return <Animated.View testID="fx-coin" style={[styles.sprite, styles.coin, style]} />;
 }
 
 // --- confetti ----------------------------------------------------------------
@@ -936,6 +937,8 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: signal.turn,
   },
+  // The clock's warning: the ring's own low red.
+  pulseWarn: { borderColor: signal.clockLow, borderWidth: 4 },
   // The card that took the trick, marked while the four hold on the felt.
   sweptRing: {
     position: 'absolute',

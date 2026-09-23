@@ -202,7 +202,8 @@ describe('anchors measure on demand', () => {
     expect(t).not.toMatch(/callChipGold/);
     expect(t).not.toMatch(/belaAnnouncedBy/);
     expect(t).not.toMatch(/revealedSeats/);
-    expect(src('table/fx.ts')).toMatch(/case 'belaCalled':\s*bubble\(/);
+    // (Its twenty fly to the running count as a points chip since phase C: not a call chip.)
+    expect(src('table/fx.ts')).toMatch(/case 'belaCalled': \{\s*bubble\(/);
   });
 
   it("a card's place is React's; one animated view carries its arc, tilt and lift", () => {
@@ -212,7 +213,9 @@ describe('anchors measure on demand', () => {
     // separate plain view for the tilt made the table lag a whole orientation
     // behind over quick rotations.
     const fan = src('TableScreen.tsx');
-    expect(fan).toMatch(/<View style=\{\[styles\.fanCard, \{ marginLeft, zIndex \}\]\}>\s*<Animated\.View style=\{motion\}>\s*<Pressable/);
+    // (The plain view may fade a sent card - a static opacity, never a place.)
+    expect(fan).toMatch(/<View style=\{\[styles\.fanCard, \{ marginLeft, zIndex \}, sent && styles\.fanCardSent\]\}>\s*<Animated\.View style=\{motion\}>\s*<Pressable/);
+    expect(fan).toMatch(/fanCardSent: \{ opacity: 0\.55 \},/);
     // A refused tap's shake rides the same view: an offset that always comes
     // back to 0, never the card's place.
     expect(fan).toMatch(/transform: \[\{ translateX: shakeX\.value \}, \{ translateY: baseY \+ liftV\.value \}, \{ rotateZ: `\$\{rotate\}deg` \}\],/);
@@ -523,7 +526,7 @@ describe('the first frame and the last resort', () => {
     expect(t).toMatch(/disabled=\{!trayShown\}/);
     // A tap meant for a face cannot land on the bid that took its place.
     expect(t).toMatch(/useLayoutEffect\(\(\) => \{\s*if \(land && boxWasUp\.current && !boxUp && !settled\) railQuietUntil\.current = Date\.now\(\) \+ 300;/);
-    expect(t).toMatch(/if \(Date\.now\(\) >= railQuietUntil\.current\) onAction\(a\);/);
+    expect(t).toMatch(/if \(Date\.now\(\) >= railQuietUntil\.current\) send\(a\);/);
     expect(rail).toMatch(/<NonCardActions options=\{options\} lang=\{lang\} onChoose=\{answer\} compact \/>/);
     expect(t).toMatch(/answer\(\{ type: 'DECLARE_SKIP', seat: mySeat \}\)/);
     // Never an open tray behind a resting toggle; every landscape entry measures afresh.
@@ -537,9 +540,10 @@ describe('the first frame and the last resort', () => {
     expect(t).toMatch(/const sendEmote = \(id: string\) => \{\s*\/\/[^\n]*\n\s*if \(Date\.now\(\) < faceQuietUntil\.current\) return;/);
     // A press that outlives its control's enabling neither clicks nor acts.
     expect(src('ui/PressScale.tsx')).toMatch(/onPress=\{\(e\) => \{[\s\S]*?if \(rest\.disabled\) return;\s*if \(sound\) playSfx\(sound\);/);
-    // Portrait keeps answering at once: its guard never arms.
+    // Portrait keeps answering at once: the rail's quiet window never arms
+    // there (only the one-answer-per-question guard every answer shares).
     const portrait = t.slice(t.indexOf('{/* wallet / level strip'));
-    expect(portrait).toMatch(/<NonCardActions options=\{options\} lang=\{lang\} onChoose=\{onAction\} short=\{short\} \/>/);
+    expect(portrait).toMatch(/<NonCardActions options=\{options\} lang=\{lang\} onChoose=\{send\} short=\{short\} \/>/);
   });
 
   it('a short column is built from the numbers its budget counts, and only there', () => {

@@ -49,7 +49,7 @@ import { REVEAL_MS } from './anim/director';
 import { RevealRow } from './table/RevealRow';
 import { xpFillSteps, type XpFillStep, type XpShown } from './table/xpFill';
 import { REVEAL_EXIT_MS, type RevealPhase } from './table/revealTiming';
-import { COIN_CASCADE_COUNT, COIN_CASCADE_DELAY_MS, coinsLandedMs, MATCH_CASCADE_HOLD_MS } from './anim/lifetimes';
+import { COIN_CASCADE_DELAY_MS, coinCascadeCount, coinsLandedMs, MATCH_CASCADE_HOLD_MS } from './anim/lifetimes';
 import { isMatchAward } from './feedback';
 import { useLaggedNumber } from './ui/useLaggedNumber';
 import { anchorId, metaId, type FxBus } from './anim/FxBus';
@@ -87,6 +87,10 @@ import { garb } from './deck/palette';
 
 /** `styles.felt` padding: the cloth's margin inside the rim. Pinned with the border and margin. */
 const FELT_PAD = 5;
+/** A refused tap's "no" (a forbidden card, an emote too soon): a whisper of the server's. */
+const DENIED_SOFT = 0.45;
+/** How long a sent play may go unanswered before the hand takes taps again. */
+const SENT_MAX_MS = 6000;
 import { PlayingCard } from './PlayingCard';
 import { CardBackFace, SuitPip } from './deck';
 import { playSfx } from './audio';
@@ -171,6 +175,13 @@ export interface TableScreenProps {
   onArrangeTip?: (learned: boolean) => void;
   /** Misclick guard; 'ambiguous' (default) only asks when the card is a choice. */
   confirmPlay?: ConfirmPlay;
+  /**
+   * Online: a play is answered by the server's echo, a round trip later. The
+   * tapped card acknowledges the tap at once and holds until the echo (or a
+   * refusal, counted in `refusedN`), so a second tap sends nothing.
+   */
+  awaitEcho?: boolean;
+  refusedN?: number;
   series?: readonly [number, number] | null;
   askedRematch?: boolean;
   waitingFor?: number;
@@ -240,7 +251,7 @@ export function TableScreen(props: TableScreenProps) {
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
     hardMode = false, matchTarget = 1001, matchLog, series, askedRematch, waitingFor, onRematch, onForceRematch, rematchLabel,
     nextDeal, hold: tableHold = null, onPause, onResume, onPlayOn, reconnecting = false,
-    handSort = 'auto', arrangeTip = false, onArrangeTip, confirmPlay = 'ambiguous',
+    handSort = 'auto', arrangeTip = false, onArrangeTip, confirmPlay = 'ambiguous', awaitEcho = false, refusedN = 0,
     gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift, giftReach, hidden, onHide, onReport,
   } = props;
 
@@ -252,6 +263,8 @@ export function TableScreen(props: TableScreenProps) {
   const reduced = reducedMotion;
   // A match's award waits for the fanfare (see the screens' cascade timers).
   const awardHold = banner && isMatchAward(banner) ? MATCH_CASCADE_HOLD_MS : 0;
+  // As many coins as the game sends flying for this award: the wallet waits for the last.
+  const awardCoins = coinCascadeCount(banner?.coins ?? 0);
   // The fan swells a hair over a long press, so the hold reads as "something
   // is about to happen" rather than as a dead tap.
   const hold = useSharedValue(1);
@@ -445,11 +458,33 @@ export function TableScreen(props: TableScreenProps) {
     if (land && !boxWasUp.current && boxUp && !settled) faceQuietUntil.current = Date.now() + 300;
     boxWasUp.current = boxUp;
   }, [land, boxUp, settled]);
+  // Online, one answer per question. A play or a bid is answered by the
+  // server's echo a round trip later, and a second tap in that gap sent a
+  // second answer the server refused - the "denied" sound and a red line for
+  // a tap that had worked. The echo (the options moving on) or a refusal
+  // opens the question again.
+  const onActionRef = useRef(onAction);
+  onActionRef.current = onAction;
+  const optionsKey = JSON.stringify(options);
+  const answered = useRef(false);
+  useEffect(() => {
+    answered.current = false;
+  }, [optionsKey, refusedN]);
+  const send = useCallback(
+    (a: Action) => {
+      if (awaitEcho) {
+        if (answered.current) return;
+        answered.current = true;
+      }
+      onActionRef.current(a);
+    },
+    [awaitEcho],
+  );
   const answer = useCallback(
     (a: Action) => {
-      if (Date.now() >= railQuietUntil.current) onAction(a);
+      if (Date.now() >= railQuietUntil.current) send(a);
     },
-    [onAction],
+    [send],
   );
 
   // Normal play asks no question with only one answer. The app knows the
@@ -459,8 +494,6 @@ export function TableScreen(props: TableScreenProps) {
   // Prava bela asks exactly as before: spotting them yourself is the point.
   // Nine deals of nine asked "Imaš li zvanja?" of a hand with nothing in it.
   const autoSkipping = declaring && !hardMode && view.myDeclarations.length === 0;
-  const onActionRef = useRef(onAction);
-  onActionRef.current = onAction;
   const askedFor = useRef<string | null>(null);
   const autoSkip = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
@@ -597,11 +630,22 @@ export function TableScreen(props: TableScreenProps) {
     return () => setBackGuard(null);
   }, []);
   const emoteReadyAt = useRef(0);
+  // A tap inside the cooldown, counted, so the strip can shake for it.
+  const [emoteShake, setEmoteShake] = useState(0);
   const sendEmote = (id: string) => {
     // The second tap of a bid, landing on the face that just came back.
     if (Date.now() < faceQuietUntil.current) return;
+    if (!onEmote) return;
+    // Too soon after the last one: it used to shut the tray and send nothing,
+    // which read as sent. Now the strip shakes, the phone buzzes, and the
+    // tray stays open for the retry.
+    if (Date.now() < emoteReadyAt.current) {
+      playSfx('denied', { gain: DENIED_SOFT });
+      pattern('error');
+      setEmoteShake((n) => n + 1);
+      return;
+    }
     setTrayOpen(false);
-    if (!onEmote || Date.now() < emoteReadyAt.current) return;
     emoteReadyAt.current = Date.now() + 2500;
     // No sound here: the pop belongs to the bubble, which follows the echo.
     onEmote(id);
@@ -716,6 +760,7 @@ export function TableScreen(props: TableScreenProps) {
     (card: Card, legal: Card[]) => {
       const why = illegalReason(card, legal, trickRef.current, trumpRef.current);
       if (why === null) return;
+      playSfx('denied', { gain: DENIED_SOFT });
       pattern('error');
       const ui = lang.s.ui;
       const text =
@@ -802,6 +847,18 @@ export function TableScreen(props: TableScreenProps) {
     const at = anchors.centre(anchorId.seat(mySeat));
     if (at) fxBus.emit({ kind: 'pulse', at, speed: 1 });
   }, [anchors, fxBus, mySeat]);
+  // The clock's two ticks, 5 s and 2 s before it plays for me: the same ring
+  // in the countdown's red, twice at the last warning.
+  const warnHand = useCallback(
+    (urgent: boolean) => {
+      if (reducedRef.current) return;
+      const at = anchors.centre(anchorId.seat(mySeat));
+      if (!at) return;
+      fxBus.emit({ kind: 'pulse', at, speed: 1, tone: 'warn' });
+      if (urgent) setTimeout(() => fxBus.emit({ kind: 'pulse', at, speed: 1, tone: 'warn' }), 260);
+    },
+    [anchors, fxBus, mySeat],
+  );
 
   // Your turn, your call, your clock running out.
   useTurnCues({
@@ -812,6 +869,7 @@ export function TableScreen(props: TableScreenProps) {
     settled,
     onTurnEdge: pulseHand,
     onDeclareEdge: pulseHand,
+    onClockWarn: warnHand,
   });
 
   const trump = view.context.trumpSuit;
@@ -1228,7 +1286,7 @@ export function TableScreen(props: TableScreenProps) {
           cards={hand.cards}
           options={options}
           enabled={myTurn}
-          onPlay={onAction}
+          onPlay={send}
           freePlay={hardMode}
           width={m.handWidth}
           maxCardW={m.handCardMax}
@@ -1241,6 +1299,8 @@ export function TableScreen(props: TableScreenProps) {
           marked={marked}
           onToggleMark={toggleMark}
           confirmPlay={confirmPlay}
+          awaitEcho={awaitEcho}
+          refusedN={refusedN}
           deckStyle={deck}
           locale={lang.id}
           reduced={reduced}
@@ -1292,7 +1352,7 @@ export function TableScreen(props: TableScreenProps) {
   // opening or shutting it never reflows the felt.
   const emotes =
     !settled && onEmote ? (
-      <EmoteStrip lang={lang} open={trayOpenShown} dimmed={myTurn} vertical={land} onSend={sendEmote} />
+      <EmoteStrip lang={lang} open={trayOpenShown} dimmed={myTurn} vertical={land} onSend={sendEmote} shakeN={emoteShake} />
     ) : null;
 
   // "Prijavi" / "Nemam" — the two answers, and nothing else while the table is
@@ -1442,7 +1502,7 @@ export function TableScreen(props: TableScreenProps) {
             // moves into the two rails and the middle keeps its full height.
             <>
               <View style={[styles.rail, { width: m.railW }]}>
-                <ProfileBar profile={profile} vertical holdMs={awardHold} reduced={reduced} onLongPress={toggleProbe} />
+                <ProfileBar profile={profile} vertical holdMs={awardHold} coinCount={awardCoins} reduced={reduced} onLongPress={toggleProbe} />
                 <TableHeader
                   lang={lang}
                   mySeat={mySeat}
@@ -1507,7 +1567,7 @@ export function TableScreen(props: TableScreenProps) {
               {/* wallet / level strip, and leaving in the top corner */}
               <View style={styles.topRow}>
                 <View style={styles.topRowGrow}>
-                  <ProfileBar profile={profile} slim={short} holdMs={awardHold} reduced={reduced} onLongPress={toggleProbe} />
+                  <ProfileBar profile={profile} slim={short} holdMs={awardHold} coinCount={awardCoins} reduced={reduced} onLongPress={toggleProbe} />
                 </View>
                 {pauseButton}
                 {leaveButton}
@@ -1554,7 +1614,7 @@ export function TableScreen(props: TableScreenProps) {
                 <View style={styles.actionsRow}>
                   {emoteToggle}
                   {autoSkipping ? null : declareButtons ?? (
-                    <NonCardActions options={options} lang={lang} onChoose={onAction} short={short} />
+                    <NonCardActions options={options} lang={lang} onChoose={send} short={short} />
                   )}
                 </View>
               )}
@@ -1818,6 +1878,7 @@ const ProfileBar = memo(
     vertical = false,
     slim = false,
     holdMs = 0,
+    coinCount = coinCascadeCount(0),
     reduced = false,
     onLongPress,
   }: {
@@ -1827,6 +1888,8 @@ const ProfileBar = memo(
     slim?: boolean;
     /** Extra wait before the wallet and the level move: a match's fanfare plays first. */
     holdMs?: number;
+    /** How many coins are flying in: the wallet moves as the last one lands. */
+    coinCount?: number;
     /** The motion policy: the bar snaps and the badge stays still instead. */
     reduced?: boolean;
     /** Dev builds: toggles the frame/render probe. */
@@ -1834,7 +1897,7 @@ const ProfileBar = memo(
   }) {
     // The level (its badge swell, its bar) lands with the level-up sound —
     // after the coins, not at the moment the deal was scored.
-    const lag = COIN_CASCADE_DELAY_MS + coinsLandedMs(COIN_CASCADE_COUNT) + holdMs;
+    const lag = COIN_CASCADE_DELAY_MS + coinsLandedMs(coinCount) + holdMs;
     const xp = useLaggedNumber(profile.xp, lag, 1);
     const p = levelProgress(xp);
     // The total changes when the last coin lands on it, not when the deal is
@@ -1919,6 +1982,8 @@ function Hand({
   onSwap,
   onHold,
   confirmPlay = 'ambiguous',
+  awaitEcho = false,
+  refusedN = 0,
   deckStyle,
   locale,
   reduced = false,
@@ -1952,6 +2017,9 @@ function Hand({
   marked?: string[];
   onToggleMark?: (id: string) => void;
   confirmPlay?: ConfirmPlay;
+  /** Online: plays wait for the server's echo (see TableScreenProps). */
+  awaitEcho?: boolean;
+  refusedN?: number;
   deckStyle: DeckStyle;
   locale?: string;
   /** Reduce-motion: the cards step up instead of springing. */
@@ -2020,6 +2088,25 @@ function Hand({
       lastTap.current = null;
     }
   }, [cardsKey, anchors]);
+  // A play sent and not yet answered. Online the card waits a round trip for
+  // the server's echo, and a second tap in that gap sent a second play the
+  // server refused, with the "denied" sound. One play at a time: the answer
+  // (the card leaving, the turn moving on) or a refusal frees the hand, and
+  // so does silence, after SENT_MAX_MS.
+  const [sent, setSent] = useState<string | null>(null);
+  const sentRef = useRef<string | null>(null);
+  useEffect(() => {
+    sentRef.current = null;
+    setSent(null);
+  }, [decision, cardsKey, refusedN]);
+  useEffect(() => {
+    if (sent === null) return;
+    const t = setTimeout(() => {
+      sentRef.current = null;
+      setSent(null);
+    }, SENT_MAX_MS);
+    return () => clearTimeout(t);
+  }, [sent]);
   // ...and when the fan itself goes: a rotation remounts it, and a rect
   // measured in the other orientation would send that card's server-driven
   // play off from where it no longer is.
@@ -2072,6 +2159,8 @@ function Hand({
       }
       return;
     }
+    // A play is on its way: nothing else goes until it is answered.
+    if (sentRef.current !== null) return;
     const card = cards.find((c) => cardId(c) === id);
     const chosen = card ? chosenFor(card) : undefined;
     if (!chosen) {
@@ -2092,6 +2181,10 @@ function Hand({
       return;
     }
     setArmed(null);
+    sentRef.current = id;
+    setSent(id);
+    // Online the card's own sound comes with the echo; the finger hears now.
+    if (awaitEcho) pattern('press');
     onPlay(chosen);
   };
   // One identity for the life of the hand, so a memoised card is not
@@ -2140,6 +2233,7 @@ function Hand({
             glowN={glow && glow.cardIds.includes(id) ? glow.n : 0}
             onPress={onPressCard}
             onLongPress={onHoldCard}
+            sent={sent === id}
           />
         );
       })}
@@ -2177,6 +2271,7 @@ const FanCard = memo(
     shakeN = 0,
     onPress,
     onLongPress,
+    sent = false,
   }: {
     id: string;
     card: Card;
@@ -2206,6 +2301,8 @@ const FanCard = memo(
     onPress: (id: string) => void;
     /** Held: never a tap once it fires, so a held card is not played. */
     onLongPress: () => void;
+    /** Played, and waiting for the server's echo: it stays put, and fades. */
+    sent?: boolean;
   }) {
     // A card has no entrance of its own: the dealt back flies to the very spot
     // it takes (table/fx.ts), and the face is simply there when it lands. Its
@@ -2298,7 +2395,7 @@ const FanCard = memo(
       // at once: no layout transition. Reanimated 4.5.1's could drop its last
       // frames under a rotation's re-render and leave a card standing behind
       // its neighbour, a gap where it belonged.
-      <View style={[styles.fanCard, { marginLeft, zIndex }]}>
+      <View style={[styles.fanCard, { marginLeft, zIndex }, sent && styles.fanCardSent]}>
        <Animated.View style={motion}>
         <Pressable
           ref={ref}
@@ -2351,7 +2448,8 @@ const FanCard = memo(
     a.shakeN === b.shakeN &&
     // `enter` is read once, at mount: its later flips need no render.
     a.onPress === b.onPress &&
-    a.onLongPress === b.onLongPress,
+    a.onLongPress === b.onLongPress &&
+    a.sent === b.sent,
 );
 
 /**
@@ -3224,6 +3322,8 @@ const styles = StyleSheet.create({
     paddingTop: FAN_PAD,
   },
   fanCard: {},
+  // Sent, waiting for the server: where it was, a step back.
+  fanCardSent: { opacity: 0.55 },
   // Bela: the king and queen of trumps light up gold for a moment.
   cardGlow: {
     position: 'absolute',

@@ -343,9 +343,25 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
         );
         break;
 
-      case 'belaCalled':
+      case 'belaCalled': {
         bubble(e.seat, `${lang.s.bela.toUpperCase()}! (20)`, 'gold', 1000, speed);
+        // Bela always counts (even when the contract fails), and the running
+        // count takes it at once: its twenty fly there, as the last trick's
+        // ten do. Not for zvanja, which a better one can still cancel.
+        const r = puckRect(anchors, e.seat, mySeatOf());
+        const chipTo = anchors.centre(anchorId.running);
+        if (r && chipTo && !reduced) {
+          bus.emit({
+            kind: 'badge',
+            from: { x: r.x + r.w / 2, y: r.y + r.h / 2 },
+            to: chipTo,
+            duration: LAST_TRICK_CHIP_MS * speed,
+            text: '+20',
+            tone: 'points',
+          });
+        }
         break;
+      }
 
       case 'dealScored': {
         // The dealer's button passes to the right as the deal is scored: the
@@ -388,6 +404,13 @@ export function makeFxSpawner(opts: FxSpawnerOptions) {
   const end = (e: TableEvent, speed = 1): void => {
     if (isReduced()) return;
     switch (e.kind) {
+      case 'trickWon': {
+        // The pile has landed: the winner's puck flares, so whose trick it
+        // was reads even when the sweep went by unwatched.
+        const r = puckRect(anchors, e.seat, mySeatOf());
+        if (r) bus.emit({ kind: 'pulse', at: { x: r.x + r.w / 2, y: r.y + r.h / 2 }, speed });
+        break;
+      }
       case 'bidCalled': {
         const at = anchors.centre(anchorId.plaque);
         if (at) bus.emit({ kind: 'stamp', at, pip: e.suit, tone: 'gold', speed });

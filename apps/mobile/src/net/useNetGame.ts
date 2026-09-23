@@ -158,6 +158,8 @@ export function useNetGame(settings: Settings) {
 
   const [status, setStatus] = useState<NetStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  // Every refused move, counted: the hand frees a play it was holding for.
+  const [refusals, setRefusals] = useState(0);
   // Why the last attempt to reach a table failed, in the player's terms.
   const [trouble, setTrouble] = useState<Trouble | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
@@ -532,6 +534,7 @@ export function useNetGame(settings: Settings) {
       playSfx('denied');
       pattern('error');
       setError(langRef.current.s.ui.moveRefused);
+      setRefusals((n) => n + 1);
     });
 
     room.onMessage('gift', (msg: unknown) => {
@@ -801,6 +804,7 @@ export function useNetGame(settings: Settings) {
 
   return {
     status,
+    refusals,
     error,
     trouble,
     roomId,

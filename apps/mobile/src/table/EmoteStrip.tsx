@@ -1,5 +1,6 @@
 import { Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PressScale } from '../ui/PressScale';
+import { Shake } from '../ui/Shake';
 import type { Lang } from '@belot/i18n';
 import { EMOTES, emoteText } from '../emotes';
 import { EmoteFace, hasEmoteFace } from '../emoteArt';
@@ -30,6 +31,7 @@ export function EmoteStrip({
   dimmed,
   vertical = false,
   onSend,
+  shakeN = 0,
 }: {
   lang: Lang;
   /** Phrases showing? They take the glyphs' place, in either orientation. */
@@ -39,9 +41,11 @@ export function EmoteStrip({
   /** Landscape: the box in the right rail, under the leave button. */
   vertical?: boolean;
   onSend: (id: string) => void;
+  /** A tap inside the cooldown, counted: the strip shakes, nothing is sent. */
+  shakeN?: number;
 }) {
   return (
-    <View style={[styles.wrap, vertical && styles.wrapRail]} pointerEvents="box-none">
+    <Shake n={shakeN} style={[styles.wrap, vertical && styles.wrapRail]} pointerEvents="box-none">
       {open && (
         <View style={vertical ? styles.phraseBox : styles.phraseRow}>
           <ScrollView
@@ -87,7 +91,7 @@ export function EmoteStrip({
           ))}
         </View>
       )}
-    </View>
+    </Shake>
   );
 }
 

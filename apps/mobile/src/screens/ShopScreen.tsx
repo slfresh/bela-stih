@@ -25,10 +25,13 @@ import { font, radius, space, stroke, surface, theme } from '../theme';
 import { room } from '../cosmetics';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { useBackCloses } from '../ui/backGuard';
+import { Shake } from '../ui/Shake';
 import { Panel, ScreenShell } from './common';
 
 /** How long a "why not" stays under the wallet. */
 const WHY_MS = 3500;
+/** A refused tap's "no", a whisper of the server's refusal. */
+const DENIED_SOFT = 0.45;
 
 /**
  * The only coin sink: cosmetics. Deliberately no bundles, no timers, no
@@ -55,10 +58,13 @@ export function ShopScreen({
   // Why a tile cannot be had, when it is tapped anyway.
   const [why, setWhy] = useState<string | null>(null);
   const whyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The tile a refused tap shook, and a count so the same one can shake again.
+  const [shake, setShake] = useState<{ id: string | null; n: number }>({ id: null, n: 0 });
   useEffect(() => () => {
     if (whyTimer.current) clearTimeout(whyTimer.current);
   }, []);
   const sayWhy = (text: string) => {
+    playSfx('denied', { gain: DENIED_SOFT });
     pattern('error');
     setWhy(text);
     if (whyTimer.current) clearTimeout(whyTimer.current);
@@ -72,8 +78,10 @@ export function ShopScreen({
         onProfileChange(selectCosmetic(profile, c));
       }
     } else if (level < c.requiredLevel) {
+      setShake((s) => ({ id: c.id, n: s.n + 1 }));
       sayWhy(ui.shopWhyLocked(c.requiredLevel, level));
     } else if (!canBuy(profile, c)) {
+      setShake((s) => ({ id: c.id, n: s.n + 1 }));
       sayWhy(ui.shopWhyCoins(c.price - profile.coins));
     } else {
       playSfx('tap');
@@ -100,8 +108,8 @@ export function ShopScreen({
             const affordable = canBuy(profile, c);
             const locked = !owned && level < c.requiredLevel;
             return (
+              <Shake key={c.id} n={shake.id === c.id ? shake.n : 0} style={styles.slot}>
               <PressScale
-                key={c.id}
                 onPress={() => act(c)}
                 // Locked and unaffordable tiles still answer, to say why.
                 disabled={selected}
@@ -153,6 +161,7 @@ export function ShopScreen({
                   </View>
                 )}
               </PressScale>
+              </Shake>
             );
           })}
         </View>
@@ -210,8 +219,10 @@ const styles = StyleSheet.create({
   why: { color: theme.accent, fontSize: 13, fontFamily: font.medium, textAlign: 'center', marginTop: space.xs },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  // The tile's place in the grid; the tile fills it, and a refusal shakes it.
+  slot: { width: '30.5%', height: 122 },
   item: {
-    width: '30.5%',
+    width: '100%',
     // A fixed height: a row of tiles is a row, whatever each one has to say.
     height: 122,
     backgroundColor: surface.raised,

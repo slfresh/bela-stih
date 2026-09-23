@@ -93,8 +93,11 @@ export type Fx =
       /** Reduce-motion: a plain fade in and out, no drop and no ring. */
       fade?: boolean;
     }
-  /** A ring of light bursting from a point — the "your turn" cue's visible twin. */
-  | { kind: 'pulse'; at: XY; speed: number }
+  /**
+   * A ring of light bursting from a point — the "your turn" cue's visible
+   * twin; `warn` draws it in the clock's low red, for the time running out.
+   */
+  | { kind: 'pulse'; at: XY; speed: number; tone?: 'warn' }
   /** A small chip flying from one place to another: the dealer's button, the last trick's +10. */
   | { kind: 'badge'; from: XY; to: XY; duration: number; text?: string; tone?: 'dealer' | 'points' }
   /** A radial burst of confetti from a point, then the pieces fall. */
