@@ -11,6 +11,7 @@ import { AnchorMap } from '../anim/AnchorRegistry';
 import { Director, timingsFor, type MotionPolicy } from '../anim/director';
 import { botThinkMs } from '../anim/think';
 import { EMPTY_LOG, logEvent } from '../matchLog';
+import { troubleOf, type Trouble } from './trouble';
 import { FxBus } from '../anim/FxBus';
 import { makeFxSpawner, spawnEmote } from '../table/fx';
 import { useMotionPolicy } from '../anim/useMotionPolicy';
@@ -157,6 +158,8 @@ export function useNetGame(settings: Settings) {
 
   const [status, setStatus] = useState<NetStatus>('idle');
   const [error, setError] = useState<string | null>(null);
+  // Why the last attempt to reach a table failed, in the player's terms.
+  const [trouble, setTrouble] = useState<Trouble | null>(null);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [seat, setSeat] = useState<Seat | null>(null);
   const [view, setView] = useState<PublicView | null>(null);
@@ -593,6 +596,7 @@ export function useNetGame(settings: Settings) {
       leave();
       setStatus('connecting');
       setError(null);
+      setTrouble(null);
       try {
         const client = new Client(SERVER_URL);
         const room = await make(client);
@@ -600,7 +604,9 @@ export function useNetGame(settings: Settings) {
         setStatus('waiting');
       } catch (err) {
         setStatus('error');
+        // The library's words ("room \"X\" is locked") are for the log.
         setError((err as Error).message || langRef.current.s.ui.cannotConnect(SERVER_URL));
+        setTrouble(troubleOf(err));
       }
     },
     [attach, leave],
@@ -796,6 +802,7 @@ export function useNetGame(settings: Settings) {
   return {
     status,
     error,
+    trouble,
     roomId,
     seat,
     view,

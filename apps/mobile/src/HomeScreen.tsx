@@ -58,6 +58,7 @@ export function HomeScreen({
   onOpenSettings,
   onOpenProfile,
   onOpenRules,
+  onOpenHistory,
 }: {
   lang: Lang;
   profile: PlayerProfile;
@@ -70,6 +71,8 @@ export function HomeScreen({
   onOpenProfile: () => void;
   /** "Kako se igra". */
   onOpenRules: () => void;
+  /** The matches with friends and their statistics. */
+  onOpenHistory: () => void;
 }) {
   const ui = lang.s.ui;
   const [code, setCode] = useState('');
@@ -287,8 +290,16 @@ export function HomeScreen({
               ))}
             </Panel>
 
-            {/* For whoever has never played bela, or plays it differently at home. */}
-            <Button label={lang.s.rules.title} tone="plain" onPress={onOpenRules} />
+            {/* For whoever has never played bela, or plays it differently at
+                home; and the evenings with friends, match by match. */}
+            <View style={styles.modeRow}>
+              <View style={styles.fill}>
+                <Button label={lang.s.rules.title} tone="plain" onPress={onOpenRules} />
+              </View>
+              <View style={styles.fill}>
+                <Button label={ui.historyOpen} tone="plain" onPress={onOpenHistory} />
+              </View>
+            </View>
 
             <Text style={styles.disclaimer}>{ui.coinsDisclaimer}</Text>
           </ScrollView>

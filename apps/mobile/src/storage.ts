@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { emptyProfile, ensureQuests, isoDay, type PlayerProfile } from '@belot/progression';
 import { localeFor } from './locale';
+import type { MatchRecord } from './net/history';
 
 /**
  * Local persistence.
@@ -46,6 +47,7 @@ const KEY = {
   profile: 'profile.v1',
   settings: 'settings.v1',
   series: 'series.v1',
+  history: 'history.v1',
 } as const;
 
 export type ConfirmPlay = 'off' | 'ambiguous' | 'always';
@@ -177,6 +179,26 @@ export function loadSeries(): SeriesBook {
 
 export function saveSeries(book: SeriesBook): void {
   write(KEY.series, book);
+}
+
+/**
+ * The matches played with friends, newest first (net/history.ts), on this
+ * device only. A list, so it is not merged over a default like the others:
+ * anything that is not a list reads as none.
+ */
+export function loadHistory(): MatchRecord[] {
+  try {
+    const raw = store.getString(KEY.history);
+    if (!raw) return [];
+    const list = JSON.parse(raw) as unknown;
+    return Array.isArray(list) ? (list as MatchRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveHistory(list: readonly MatchRecord[]): void {
+  write(KEY.history, list);
 }
 
 /** Wipes local progress. Exposed in settings so testers can start clean. */

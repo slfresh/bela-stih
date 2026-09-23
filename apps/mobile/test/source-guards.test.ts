@@ -327,7 +327,8 @@ describe('anchors measure on demand', () => {
     const online = src('net/OnlineGame.tsx');
     const waiting = online.slice(online.indexOf('function Waiting'));
     expect(waiting).toMatch(/<Panel[\s\S]*\{net\.roomId\}[\s\S]*label=\{ui\.invite\}/);
-    expect(waiting).toMatch(/clipboard\?\.writeText\?\.\(text\)/);
+    // ...to the clipboard, through expo-clipboard (which the phone has too).
+    expect(waiting).toMatch(/void copyText\(text\)\.then\(\(ok\) => \{\s*if \(ok\) flashCopied\('invite'\);/);
     // Only the web falls back, and a cancelled share sheet is not a failure.
     expect(waiting).toMatch(/if \(Platform\.OS !== 'web' \|\| \(err as \{ name\?: string \} \| null\)\?\.name === 'AbortError'\) return;/);
     expect(waiting).toMatch(/ui\.inviteCopied/);

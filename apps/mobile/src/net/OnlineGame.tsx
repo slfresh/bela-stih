@@ -32,12 +32,17 @@ import { stillReading } from './hold';
 import { PressScale } from '../ui/PressScale';
 import { MATCH_TARGETS_P, TURN_CHOICES_S } from './clock';
 import { QrCode } from './QrCode';
+import { copyText } from './clipboard';
+import { Copy } from '../ui/icons';
 import { reportMailto, reportStamp } from '../report';
 import { APP_VERSION } from '../screens/common';
-import { loadSeries, saveSeries, type SeriesEntry, type Settings } from '../storage';
+import { loadHistory, loadSeries, saveHistory, saveSeries, type SeriesEntry, type Settings } from '../storage';
 import { groupKey, recordMatch } from './series';
+import { addRecord } from './history';
+import { summarize } from '../matchLog';
 import { isoDay } from '@belot/progression';
-import { SERVER_URL, useNetGame, type NetGame } from './useNetGame';
+import { useNetGame, type NetGame } from './useNetGame';
+import { retryHelps } from './trouble';
 
 /**
  * An online game. Everything about the rules comes from the server; this only
@@ -156,6 +161,42 @@ export function OnlineGame({
     saveSeries(book);
     setSeriesEntry(book[group] ?? null);
   }, [group, mine, net.matchOver, net.winnerTeam, net.roomId, net.matchNumber]);
+
+  // The history of matches with friends (net/history.ts): every finished match
+  // at a private table where at least one other chair had a person in it. A
+  // seat that a bot held from the start is written as nobody; a friend whose
+  // phone dropped keeps their name. Counted once, by the series' own id.
+  useEffect(() => {
+    if (mine === null || !net.isPrivate || !net.matchOver || net.winnerTeam === null || !net.roomId) return;
+    const person = (s: Seat) => {
+      const info = net.seats.find((x) => x.seat === s);
+      return info && info.name !== SERVER_FALLBACK(s) ? net.realName(s) : '';
+    };
+    const partner = person(((mine + 2) % 4) as Seat);
+    const opponents: [string, string] = [person(((mine + 1) % 4) as Seat), person(((mine + 3) % 4) as Seat)];
+    if (!partner && !opponents[0] && !opponents[1]) return;
+    const us = teamOf(mine);
+    const them = (1 - us) as 0 | 1;
+    const scores = net.view?.matchScores ?? [0, 0];
+    const sum = summarize(net.matchLog, scores, us);
+    saveHistory(
+      addRecord(loadHistory(), {
+        id: `${isoDay(new Date())}:${net.roomId}:${net.matchNumber}`,
+        at: new Date().toISOString(),
+        code: net.roomId,
+        partner,
+        opponents,
+        target: net.target,
+        hard: net.hard,
+        won: net.winnerTeam === us,
+        score: [scores[us], scores[them]],
+        deals: sum ? [sum.won[us], sum.won[them]] : null,
+        best: sum?.best?.points ?? null,
+      }),
+    );
+    // Recorded as the match ends: its id is final then, and a rematch's is new.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mine, net.isPrivate, net.matchOver, net.winnerTeam, net.roomId, net.matchNumber]);
   // The series as the table shows it, by team id: the long one when there is
   // one, tonight's otherwise (a table with a bot, or before four sat down).
   const shownSeries: [number, number] =
@@ -318,7 +359,8 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
   // a phone held upright, beside it on a phone on its side, where stacked they
   // pushed both buttons under the fold.
   const [box, setBox] = useState({ w: 0, h: 0 });
-  const [copied, setCopied] = useState(false);
+  // What was just put on the clipboard: the code alone, or the whole invitation.
+  const [copied, setCopied] = useState<'code' | 'invite' | null>(null);
   const copiedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // The invite as a QR code, for friends at the same table: one scan instead
   // of reading a code out. Over everything, so the lobby does not reflow.
@@ -346,16 +388,32 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
     return () => clearTimeout(t);
   }, [quick, net.status, seated]);
 
+  // A failure says what happened in the player's terms - a code nobody has
+  // open, a table already playing, no connection - never the server's address
+  // and the library's words, which is what it used to show.
   const message =
     net.status === 'connecting'
       ? ui.connecting
       : net.status === 'error'
-        ? ui.cannotConnect(SERVER_URL)
+        ? ui.joinFailed
         : net.status === 'disconnected'
           ? ui.connectionLost
           : quick
             ? ui.searchingPlayers(seated)
             : ui.waitingForPlayers(seated);
+  const why =
+    net.status === 'error'
+      ? net.trouble === 'noSuchTable'
+        ? ui.troubleNoSuchTable
+        : net.trouble === 'tableClosed'
+          ? ui.troubleTableClosed
+          : net.trouble === 'offline'
+            ? ui.troubleOffline
+            : ui.troubleServer
+      : net.status === 'disconnected'
+        ? ui.troubleDropped
+        : null;
+  const canRetry = (net.status === 'error' && retryHelps(net.trouble)) || net.status === 'disconnected';
 
   // Side by side whenever the screen is wider than tall and short enough that
   // the stacked lobby (about 610 dp with the bots button) would scroll.
@@ -376,25 +434,34 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
   // app it lands on a page showing the code, with the browser game and the
   // store a tap away. The QR code carries the same link.
   const link = `https://belastih.com/join/${net.roomId}`;
+  const flashCopied = (what: 'code' | 'invite') => {
+    if (!mounted.current) return;
+    setCopied(what);
+    if (copiedTimer.current) clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(null), COPIED_MS);
+  };
+  // The code alone, to paste into a chat that is already open.
+  const copyCode = () => {
+    const code = net.roomId;
+    if (!code) return;
+    void copyText(code).then((ok) => {
+      if (ok) flashCopied('code');
+    });
+  };
+  // The phone's share sheet: WhatsApp, Viber, Messenger - whatever is on it.
+  // The invitation carries the code as well as the link, so a friend without
+  // the app, or on the web, can still type it in.
   const invite = () => {
-    const text = ui.inviteText(link);
+    const text = ui.inviteText(net.roomId ?? '', link);
     Share.share({ message: text }).catch((err: unknown) => {
       // A browser with no share sheet (most desktops) refuses at once, and the
       // button used to do nothing at all there: the invitation goes to the
       // clipboard instead, and the panel says so. A share the player
       // cancelled is not a failure, and a phone always has its share sheet.
       if (Platform.OS !== 'web' || (err as { name?: string } | null)?.name === 'AbortError') return;
-      const clipboard = (globalThis.navigator as { clipboard?: { writeText?: (t: string) => Promise<void> } } | undefined)
-        ?.clipboard;
-      clipboard?.writeText?.(text).then(
-        () => {
-          if (!mounted.current) return;
-          setCopied(true);
-          if (copiedTimer.current) clearTimeout(copiedTimer.current);
-          copiedTimer.current = setTimeout(() => setCopied(false), COPIED_MS);
-        },
-        () => {},
-      );
+      void copyText(text).then((ok) => {
+        if (ok) flashCopied('invite');
+      });
     });
   };
 
@@ -402,8 +469,8 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
     <View style={styles.status}>
       {net.status === 'connecting' ? <ActivityIndicator color={theme.accent} size="large" /> : null}
       <Text style={styles.title}>{message}</Text>
-      {net.error && net.status !== 'waiting' && <Text style={styles.error}>{net.error}</Text>}
-      {net.status === 'error' && <Button label={ui.retry} tone="strong" onPress={net.retry} />}
+      {why && <Text style={styles.why}>{why}</Text>}
+      {canRetry && <Button label={ui.retry} tone="strong" onPress={net.retry} />}
       {offerBots && (
         <>
           <Text style={styles.hint}>{ui.nobodyYet}</Text>
@@ -431,14 +498,28 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
   // The code sits with the words that say what to do with it and the button
   // that sends it — not under the pucks in the middle of the felt, where a
   // phone narrower than the table's plate hid it behind two of them.
+  // Only while the table is there to be joined: a failed or dropped one's code
+  // and invitation lead nowhere.
   const invitation =
-    net.roomId && columnW > 0 ? (
+    net.roomId && columnW > 0 && (net.status === 'waiting' || net.status === 'connecting') ? (
       <Panel style={[styles.invite, { width: columnW }]}>
         <View style={styles.codeBlock}>
           <Text style={styles.codeLabel}>{ui.tableCode}</Text>
-          <Text selectable style={styles.code} numberOfLines={1} adjustsFontSizeToFit>
-            {net.roomId}
-          </Text>
+          {/* The code copies itself: tap it, or the chip beside it. */}
+          <PressScale
+            onPress={copyCode}
+            accessibilityRole="button"
+            accessibilityLabel={ui.copyCodeLabel(net.roomId)}
+            style={styles.codeRow}
+          >
+            <Text style={styles.code} numberOfLines={1} adjustsFontSizeToFit>
+              {net.roomId}
+            </Text>
+            <View style={styles.copyChip}>
+              <Copy size={15} colour={ink.mid} />
+              <Text style={styles.copyText}>{ui.copy}</Text>
+            </View>
+          </PressScale>
           <Text style={styles.hint}>{ui.shareCode}</Text>
         </View>
         <View style={styles.inviteRow}>
@@ -448,9 +529,9 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
           <Button label={ui.showQr} tone="plain" onPress={() => setQrOpen(true)} />
         </View>
         {/* An alert, so a screen reader says it the moment it appears. */}
-        {copied && (
+        {copied !== null && (
           <Text style={styles.copied} role="alert">
-            {ui.inviteCopied}
+            {copied === 'code' ? ui.codeCopied : ui.inviteCopied}
           </Text>
         )}
         {canStart && !offerBots && <Button label={ui.startWithBots} onPress={net.startWithBots} />}
@@ -595,7 +676,7 @@ const styles = StyleSheet.create({
   column: { alignItems: 'center', gap: space.md },
   status: { alignItems: 'center', gap: space.sm + 2 },
   title: { color: theme.text, fontSize: 20, fontFamily: font.bold, textAlign: 'center' },
-  error: { color: theme.dangerInk, fontSize: 13, textAlign: 'center' },
+  why: { color: ink.mid, ...type.sub, textAlign: 'center', maxWidth: 320 },
   invite: { gap: space.sm + 2 },
   inviteRow: { flexDirection: 'row', gap: space.sm, alignItems: 'center' },
   inviteMain: { flex: 1 },
@@ -614,6 +695,19 @@ const styles = StyleSheet.create({
   codeBlock: { alignItems: 'center', gap: 2 },
   codeLabel: { color: ink.mid, ...type.caption },
   code: { color: theme.accent, ...type.h1, letterSpacing: 2, textAlign: 'center' },
+  codeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: space.sm },
+  copyChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: space.sm,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: theme.line,
+    backgroundColor: surface.chip,
+  },
+  copyText: { color: ink.mid, ...type.caption, fontFamily: font.medium },
   hint: { color: ink.mid, ...type.sub, textAlign: 'center', marginTop: space.xs },
   copied: { color: theme.okInk, ...type.sub, textAlign: 'center' },
   rules: { gap: space.sm },

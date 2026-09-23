@@ -13,12 +13,15 @@ export function ProfileScreen({
   profile,
   settings,
   onOpenShop,
+  onOpenHistory,
   onBack,
 }: {
   lang: Lang;
   profile: PlayerProfile;
   settings: Settings;
   onOpenShop: () => void;
+  /** The matches with friends and their statistics. */
+  onOpenHistory: () => void;
   onBack: () => void;
 }) {
   const ui = lang.s.ui;
@@ -78,6 +81,7 @@ export function ProfileScreen({
           </View>
         ))}
       </Panel>
+      <Button label={ui.historyOpen} tone="plain" onPress={onOpenHistory} />
     </ScreenShell>
   );
 }

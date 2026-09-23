@@ -124,6 +124,22 @@ export function Close({ size = 16, colour = ink.hi }: IconProps) {
   );
 }
 
+/** Copy: two sheets, one over the other - a table's code to the clipboard. */
+export function Copy({ size = 16, colour = ink.hi }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Rect x={8.5} y={8.5} width={11.5} height={12.5} rx={2.5} fill="none" stroke={colour} strokeWidth={2.2} />
+      <Path
+        d="M5.5 15.5h-.8A1.7 1.7 0 0 1 3 13.8V4.7A1.7 1.7 0 0 1 4.7 3h8.6A1.7 1.7 0 0 1 15 4.7v.8"
+        fill="none"
+        stroke={colour}
+        strokeWidth={2.2}
+        strokeLinecap="round"
+      />
+    </Svg>
+  );
+}
+
 /** Look: an open eye - the last trick, where there is no room for its name. */
 export function Eye({ size = 16, colour = ink.hi }: IconProps) {
   return (

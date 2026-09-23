@@ -136,6 +136,14 @@ export interface UiStrings {
   connecting: string;
   cannotConnect: (server: string) => string;
   connectionLost: string;
+  /** A failed attempt to reach a table, and why (net/trouble.ts). */
+  joinFailed: string;
+  troubleNoSuchTable: string;
+  troubleTableClosed: string;
+  troubleOffline: string;
+  troubleServer: string;
+  /** The lobby's connection dropped, and the seat was not got back. */
+  troubleDropped: string;
   disconnectedWithCode: (code: number) => string;
   waitingForPlayers: (seated: number) => string;
   /** Quick play's lobby: strangers are being looked for. */
@@ -264,7 +272,38 @@ export interface UiStrings {
   showQr: string;
   qrLabel: (code: string) => string;
   qrHint: string;
-  inviteText: (url: string) => string;
+  /**
+   * "Povijest i statistika": the matches played with friends at private
+   * tables, on this device. Numbers stand after a word ("Niz pobjeda: 3"), so
+   * no count has to agree with a noun's plural.
+   */
+  historyTitle: string;
+  historyOpen: string;
+  historyEmpty: string;
+  historyLocal: string;
+  historyTotals: string;
+  histPlayed: string;
+  histWon: string;
+  histLost: string;
+  histRate: string;
+  streakWon: (n: number) => string;
+  streakLost: (n: number) => string;
+  bestStreak: (n: number) => string;
+  peopleTitle: string;
+  withLine: (played: number, won: number) => string;
+  againstLine: (played: number, won: number) => string;
+  matchesTitle: string;
+  resultWon: string;
+  resultLost: string;
+  botWord: string;
+  recordPeople: (partner: string, opponents: string[]) => string;
+  recordMeta: (target: number, hard: boolean, deals: [number, number] | null, best: number | null) => string;
+  /** The shared invitation: the code as well as the link, for anyone who has to type it. */
+  inviteText: (code: string, url: string) => string;
+  /** The lobby's copy chip beside the code, its screen-reader name, and what it says once done. */
+  copy: string;
+  copyCodeLabel: (code: string) => string;
+  codeCopied: string;
   /** A browser with no share sheet: the invitation went to the clipboard instead. */
   inviteCopied: string;
 
@@ -768,12 +807,18 @@ const hr: Strings = {
     connecting: 'Spajanje…',
     cannotConnect: (server) => `Ne mogu se spojiti na ${server}`,
     connectionLost: 'Veza je prekinuta.',
+    joinFailed: 'Spajanje nije uspjelo',
+    troubleNoSuchTable: 'Nema otvorenog stola s tom šifrom. Provjeri šifru, ili zamoli prijatelja da je pošalje ponovno.',
+    troubleTableClosed: 'Za tim stolom se već igra, ili je pun.',
+    troubleOffline: 'Nema veze. Provjeri internet pa pokušaj ponovno.',
+    troubleServer: 'Poslužitelj se trenutno ne javlja kako treba. Pokušaj ponovno za koji trenutak.',
+    troubleDropped: 'Stol više ne čeka. Pokušaj ponovno ili se vrati na početak.',
     disconnectedWithCode: (code) => `veza prekinuta (${code})`,
     waitingForPlayers: (seated) => `Čekamo igrače… ${seated}/4`,
     searchingPlayers: (seated) => `Tražimo igrače… ${seated}/4`,
     nobodyYet: 'Još nitko nije došao — ne moraš čekati.',
     playOnlineSub: 'Brza igra online, s pravim igračima',
-    shareCode: 'Pošalji je prijateljima da ti se pridruže.',
+    shareCode: 'Kopiraj je, ili je pošalji preko WhatsAppa, Vibera ili Messengera.',
     leaveTable: 'Napusti stol',
     leaveConfirm: 'Želiš li stvarno napustiti stol?',
     leaveConfirmYes: 'Napusti',
@@ -859,7 +904,40 @@ const hr: Strings = {
     showQr: 'QR kod',
     qrLabel: (code) => `QR kod stola ${code}`,
     qrHint: 'Neka ga prijatelj skenira kamerom mobitela.',
-    inviteText: (url) => `Zaigraj belu sa mnom! Pridruži se mom stolu: ${url}`,
+    inviteText: (code, url) => `Zaigraj belu sa mnom! Šifra stola: ${code}\n${url}`,
+    historyTitle: 'Povijest i statistika',
+    historyOpen: 'Povijest partija',
+    historyEmpty:
+      'Još nema partija s prijateljima. Napravi privatni stol i pozovi ih: ovdje će se skupljati sve partije s njima, tko je s kim u paru i tko vodi.',
+    historyLocal: 'Povijest se čuva samo na ovom uređaju.',
+    historyTotals: 'S prijateljima',
+    histPlayed: 'Odigrano',
+    histWon: 'Pobjede',
+    histLost: 'Porazi',
+    histRate: 'Uspjeh',
+    streakWon: (n) => `Niz pobjeda: ${n}`,
+    streakLost: (n) => `Niz poraza: ${n}`,
+    bestStreak: (n) => `najduži niz pobjeda: ${n}`,
+    peopleTitle: 'S kim igraš',
+    withLine: (p, w) => `zajedno: ${p} · pobjede: ${w}`,
+    againstLine: (p, w) => `protiv: ${p} · pobjede: ${w}`,
+    matchesTitle: 'Partije',
+    resultWon: 'Pobjeda',
+    resultLost: 'Poraz',
+    botWord: 'bot',
+    recordPeople: (partner, opponents) => `partner: ${partner} · protiv: ${opponents.join(', ')}`,
+    recordMeta: (target, hard, deals, best) =>
+      [
+        `igra do ${target}`,
+        hard ? 'Prava bela' : null,
+        deals ? `dijeljenja ${deals[0]}:${deals[1]}` : null,
+        best !== null ? `najbolje ${best}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    copy: 'Kopiraj',
+    copyCodeLabel: (code) => `Kopiraj šifru ${code}`,
+    codeCopied: 'Šifra je kopirana — zalijepi je prijateljima.',
     inviteCopied: 'Pozivnica je kopirana — zalijepi je prijateljima.',
     giftName: (id) => HR_GIFTS[id] ?? id,
     giftSend: 'Pošalji dar',
@@ -1184,12 +1262,18 @@ const srCyrl: Strings = {
     connecting: 'Повезивање…',
     cannotConnect: (server) => `Не могу да се повежем на ${server}`,
     connectionLost: 'Веза је прекинута.',
+    joinFailed: 'Повезивање није успело',
+    troubleNoSuchTable: 'Нема отвореног стола са том шифром. Провери шифру, или замоли пријатеља да је пошаље поново.',
+    troubleTableClosed: 'За тим столом се већ игра, или је пун.',
+    troubleOffline: 'Нема везе. Провери интернет па покушај поново.',
+    troubleServer: 'Сервер се тренутно не јавља како треба. Покушај поново за који тренутак.',
+    troubleDropped: 'Сто више не чека. Покушај поново или се врати на почетак.',
     disconnectedWithCode: (code) => `веза прекинута (${code})`,
     waitingForPlayers: (seated) => `Чекамо играче… ${seated}/4`,
     searchingPlayers: (seated) => `Тражимо играче… ${seated}/4`,
     nobodyYet: 'Још нико није дошао — не мораш да чекаш.',
     playOnlineSub: 'Брза игра онлајн, са правим играчима',
-    shareCode: 'Пошаљи је пријатељима да ти се придруже.',
+    shareCode: 'Копирај је, или је пошаљи преко Вотсапа, Вајбера или Месинџера.',
     leaveTable: 'Напусти сто',
     leaveConfirm: 'Желиш ли стварно да напустиш сто?',
     leaveConfirmYes: 'Напусти',
@@ -1275,7 +1359,40 @@ const srCyrl: Strings = {
     showQr: 'QR код',
     qrLabel: (code) => `QR код стола ${code}`,
     qrHint: 'Нека га пријатељ скенира камером телефона.',
-    inviteText: (url) => `Заиграј белу са мном! Придружи се мом столу: ${url}`,
+    inviteText: (code, url) => `Заиграј белу са мном! Шифра стола: ${code}\n${url}`,
+    historyTitle: 'Историја и статистика',
+    historyOpen: 'Историја партија',
+    historyEmpty:
+      'Још нема партија са пријатељима. Направи приватни сто и позови их: овде ће се скупљати све партије с њима, ко је с ким у пару и ко води.',
+    historyLocal: 'Историја се чува само на овом уређају.',
+    historyTotals: 'Са пријатељима',
+    histPlayed: 'Одиграно',
+    histWon: 'Победе',
+    histLost: 'Порази',
+    histRate: 'Успех',
+    streakWon: (n) => `Низ победа: ${n}`,
+    streakLost: (n) => `Низ пораза: ${n}`,
+    bestStreak: (n) => `најдужи низ победа: ${n}`,
+    peopleTitle: 'С ким играш',
+    withLine: (p, w) => `заједно: ${p} · победе: ${w}`,
+    againstLine: (p, w) => `против: ${p} · победе: ${w}`,
+    matchesTitle: 'Партије',
+    resultWon: 'Победа',
+    resultLost: 'Пораз',
+    botWord: 'бот',
+    recordPeople: (partner, opponents) => `партнер: ${partner} · против: ${opponents.join(', ')}`,
+    recordMeta: (target, hard, deals, best) =>
+      [
+        `игра до ${target}`,
+        hard ? 'Права бела' : null,
+        deals ? `дељења ${deals[0]}:${deals[1]}` : null,
+        best !== null ? `најбоље ${best}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    copy: 'Копирај',
+    copyCodeLabel: (code) => `Копирај шифру ${code}`,
+    codeCopied: 'Шифра је копирана — налепи је пријатељима.',
     inviteCopied: 'Позивница је копирана — налепи је пријатељима.',
     giftName: (id) => SR_GIFTS[id] ?? id,
     giftSend: 'Пошаљи поклон',
@@ -1597,12 +1714,18 @@ const en: Strings = {
     connecting: 'Connecting…',
     cannotConnect: (server) => `Cannot reach ${server}`,
     connectionLost: 'Connection lost.',
+    joinFailed: "Couldn't join",
+    troubleNoSuchTable: 'No open table has that code. Check it, or ask your friend to send it again.',
+    troubleTableClosed: 'That table is already playing, or full.',
+    troubleOffline: 'No connection. Check your internet and try again.',
+    troubleServer: "The server isn't answering properly right now. Try again in a moment.",
+    troubleDropped: 'The table is no longer waiting. Try again, or go back to the start.',
     disconnectedWithCode: (code) => `connection lost (${code})`,
     waitingForPlayers: (seated) => `Waiting for players… ${seated}/4`,
     searchingPlayers: (seated) => `Looking for players… ${seated}/4`,
     nobodyYet: 'Nobody has joined yet — no need to wait.',
     playOnlineSub: 'Quick play online, with real people',
-    shareCode: 'Send it to friends so they can join you.',
+    shareCode: 'Copy it, or send it by WhatsApp, Viber or Messenger.',
     leaveTable: 'Leave table',
     leaveConfirm: 'Do you really want to leave the table?',
     leaveConfirmYes: 'Leave',
@@ -1688,7 +1811,40 @@ const en: Strings = {
     showQr: 'QR code',
     qrLabel: (code) => `QR code for table ${code}`,
     qrHint: 'Let a friend scan it with their phone camera.',
-    inviteText: (url) => `Come play Bela with me! Join my table: ${url}`,
+    inviteText: (code, url) => `Come play Bela with me! Table code: ${code}\n${url}`,
+    historyTitle: 'History and statistics',
+    historyOpen: 'Match history',
+    historyEmpty:
+      'No matches with friends yet. Create a private table and invite them: every match with them, who partners whom and who leads, will gather here.',
+    historyLocal: 'The history is kept on this device only.',
+    historyTotals: 'With friends',
+    histPlayed: 'Played',
+    histWon: 'Won',
+    histLost: 'Lost',
+    histRate: 'Win rate',
+    streakWon: (n) => `Winning run: ${n}`,
+    streakLost: (n) => `Losing run: ${n}`,
+    bestStreak: (n) => `longest winning run: ${n}`,
+    peopleTitle: 'Who you play with',
+    withLine: (p, w) => `together: ${p} · won: ${w}`,
+    againstLine: (p, w) => `against: ${p} · won: ${w}`,
+    matchesTitle: 'Matches',
+    resultWon: 'Won',
+    resultLost: 'Lost',
+    botWord: 'bot',
+    recordPeople: (partner, opponents) => `partner: ${partner} · against: ${opponents.join(', ')}`,
+    recordMeta: (target, hard, deals, best) =>
+      [
+        `game to ${target}`,
+        hard ? 'Prava bela' : null,
+        deals ? `deals ${deals[0]}:${deals[1]}` : null,
+        best !== null ? `best ${best}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    copy: 'Copy',
+    copyCodeLabel: (code) => `Copy the code ${code}`,
+    codeCopied: 'Code copied — paste it to your friends.',
     inviteCopied: 'Invite copied — paste it to your friends.',
     giftName: (id) => EN_GIFTS[id] ?? id,
     giftSend: 'Send a gift',
