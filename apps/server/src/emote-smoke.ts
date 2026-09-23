@@ -62,16 +62,21 @@ async function main(): Promise<void> {
   b.send('emote', { id: 'idemo' });
   await wait(400);
 
+  // Two players' emotes sent in the same instant have no order: over the
+  // internet either may reach the server first, so each pair is a set.
+  const pair = (seen: EmoteMessage[], i: number) => [seen[i]?.id, seen[i + 1]?.id].sort().join(',');
+  const fromBoth = (seen: EmoteMessage[], i: number) => new Set([seen[i]?.seat, seen[i + 1]?.seat]).size === 2;
   const ok =
     afterBurst === 1 &&
     seenByB.length === 5 &&
     seenByA.length === 5 &&
     seenByB[0]!.id === 'laugh' &&
-    seenByB[1]!.id === 'bravo' &&
-    seenByB[2]!.id === 'hvala' &&
-    seenByB[3]!.id === 'dobro' &&
-    seenByB[4]!.id === 'idemo' &&
-    seenByA[2]!.seat !== seenByA[0]!.seat;
+    pair(seenByB, 1) === 'bravo,hvala' &&
+    pair(seenByB, 3) === 'dobro,idemo' &&
+    pair(seenByA, 1) === 'bravo,hvala' &&
+    pair(seenByA, 3) === 'dobro,idemo' &&
+    fromBoth(seenByA, 1) &&
+    fromBoth(seenByA, 3);
 
   console.log(`[emote-smoke] A saw: ${seenByA.map((m) => `${m.seat}:${m.id}`).join(' ')}`);
   console.log(`[emote-smoke] B saw: ${seenByB.map((m) => `${m.seat}:${m.id}`).join(' ')}`);
