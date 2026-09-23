@@ -10,7 +10,12 @@ import {
   GIFT_GAP_MS,
   GIFT_IDS,
   MSG,
+  NEXT_DEAL_MS,
+  PAUSE_MAX_MS,
+  TURN_CHOICES,
+  WAIT_FOR_DROPPED_MS,
   type ClientMessage,
+  type HoldInfo,
   type EmoteMessage,
   type GiftMessage,
   type JoinGifts,
@@ -113,10 +118,19 @@ function cleanAction(raw: unknown, seat: Seat): Action | null {
   }
 }
 
-const TURN_MS = 30_000;
+/** Quick play's turn clock, and a private table's until its host picks another. */
+const TURN_MS = TURN_CHOICES[0]! * 1000;
 /** Shortest gap between two accepted seat changes from one connection. */
 const SIT_GAP_MS = 250;
-const RECONNECT_SECONDS = 60;
+/**
+ * How long a dropped player's seat is kept for them. In the lobby, briefly: a
+ * held chair nobody is behind blocks the table from filling. Once the match
+ * is under way nothing waits on a held seat (a bot or the private table's wait
+ * covers it), so it is kept for as long as a phone call could plausibly last -
+ * coming back to your own seat instead of the lobby.
+ */
+const LOBBY_RECONNECT_SECONDS = 60;
+const TABLE_RECONNECT_SECONDS = 30 * 60;
 
 interface Occupant {
   sessionId: string | null;
@@ -164,6 +178,32 @@ export class BelaRoom extends Room {
   /** Seats that have asked for another match; cleared on each restart. */
   private readonly rematchVotes = new Set<Seat>();
   private occupants: Occupant[] = [];
+  /** This table's turn clock: quick play's, or what a private table's host chose. */
+  private turnMs = TURN_MS;
+  /**
+   * A private table standing still. Two reasons, which can overlap: a player
+   * paused it, or a player's connection dropped and the table waits for them.
+   * Nothing moves while either holds - no turn clock, no bots, no next deal -
+   * because the Table only ever moves inside submit(), setSeatHuman(false),
+   * startNextDeal() and the timers, and a hold refuses or stops all four.
+   */
+  private paused: { by: Seat; until: number } | null = null;
+  /** Dropped players still waited for, each until its own give-up time. */
+  private readonly waiting = new Map<Seat, number>();
+  /**
+   * Seats whose wait ended without them (it ran out, or someone chose to play
+   * on) while the table still could not move. A bot takes them the moment it
+   * can: handing a seat to a bot runs the bots at once, which must never
+   * happen while anybody is still waited for or the table is paused.
+   */
+  private readonly gaveUp = new Set<Seat>();
+  private holdTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The scored deal's countdown, and who has said they are ready. */
+  private readonly nextVotes = new Set<Seat>();
+  private nextTimer: ReturnType<typeof setTimeout> | null = null;
+  private nextEndsAt = 0;
+  /** Which scored deal the countdown belongs to (afterMove runs on every publish). */
+  private nextFor = -1;
   private turnTimer: ReturnType<typeof setTimeout> | null = null;
   private turnEndsAt = 0;
   /** The seat the running timer was armed for, so a stale fire is detectable. */
@@ -319,10 +359,16 @@ export class BelaRoom extends Room {
     if (seat === null) return;
 
     this.occupants[seat]!.connected = false;
-    if (this.started) {
+    if (this.started && consented !== true && this.waitsFor(seat)) {
+      // A private table stands still for a friend whose phone rang: nobody
+      // plays their cards for them, and the others see who they are waiting
+      // for and can choose to play on.
+      this.waiting.set(seat, Date.now() + WAIT_FOR_DROPPED_MS);
+      this.holdChanged();
+    } else if (this.started) {
       // The seat keeps playing as a bot while we wait for them back. The bot
       // may move immediately, so re-arm the clock for whoever is on turn now.
-      this.table.setSeatHuman(seat, false);
+      this.handToBot(seat);
       this.afterMove();
     } else {
       // Pre-start, nothing may move: handing a lobby seat to its bot used to
@@ -345,13 +391,23 @@ export class BelaRoom extends Room {
     this.maybeRematch();
 
     try {
-      await this.allowReconnection(client, RECONNECT_SECONDS);
+      await this.allowReconnection(client, this.started ? TABLE_RECONNECT_SECONDS : LOBBY_RECONNECT_SECONDS);
       this.occupants[seat]!.connected = true;
       this.occupants[seat]!.sessionId = client.sessionId;
       this.table.setSeatHuman(seat, true);
+      // Back before anyone gave up on them: nothing was played for them, and
+      // the table carries on if they were the last thing it waited for.
+      const wasWaited = this.waiting.delete(seat);
+      const hadGivenUp = this.gaveUp.delete(seat);
+      if (wasWaited || hadGivenUp) {
+        this.holdChanged();
+        return;
+      }
       // Coming back changes the connected-human set exactly as leaving did, so
-      // a vote that was waiting on somebody else can now be complete.
-      if (!this.maybeRematch()) this.publish();
+      // a vote that was waiting on somebody else can now be complete. And the
+      // clocks re-arm: a table that sat at a scored deal with nobody on the line
+      // armed no countdown, and would otherwise wait for a press for ever.
+      if (!this.maybeRematch()) this.afterMove();
     } catch {
       this.release(seat);
     }
@@ -364,11 +420,18 @@ export class BelaRoom extends Room {
     this.gifts[seat] = null;
     // A seat nobody is sitting in cannot be waited on for a rematch vote.
     this.rematchVotes.delete(seat);
-    if (this.started) this.table.setSeatHuman(seat, false);
+    this.nextVotes.delete(seat);
+    // Whoever left is no longer waited for - but while the table stands still
+    // their bot must not move yet either: it takes the seat when the hold ends.
+    this.waiting.delete(seat);
+    this.gaveUp.delete(seat);
+    if (this.started) this.handToBot(seat);
     // The crown passes to whoever is still seated.
     if (wasHost) this.hostId = this.occupants.find((o) => o.sessionId !== null)?.sessionId ?? null;
     if (this.maybeRematch()) return;
-    if (this.started) this.afterMove();
+    // holdChanged, not afterMove: it is the one place that reschedules the
+    // hold and hands over any seat that was waiting for the table to move.
+    if (this.started) this.holdChanged();
     else this.publish();
   }
 
@@ -439,6 +502,12 @@ export class BelaRoom extends Room {
       // third joiner can bid before the fourth player exists, and the fourth
       // arrives bound to a contract they never saw.
       if (!this.started) return;
+      // A table standing still takes no moves: the player who paused it is on
+      // the phone, or a friend is being waited for.
+      if (this.isHeld()) {
+        client.send(MSG.error, { reason: 'paused' });
+        return;
+      }
       const raw = (packet.message as { action?: unknown } | undefined)?.action;
       // Rebuilt field by field from primitives, so no object a client sent can
       // reach the engine or the authoritative state by reference. A well-typed
@@ -484,11 +553,48 @@ export class BelaRoom extends Room {
       return;
     }
 
+    if (packet.type === 'clock') {
+      // Only before the start, only at a private table, only the host, and
+      // only one of the offered lengths: quick play stays the same for everyone.
+      const seconds = (packet.message as { seconds?: unknown } | undefined)?.seconds;
+      if (this.started || this.isPublic || seat !== this.actingHostSeat()) return;
+      if (typeof seconds !== 'number' || !TURN_CHOICES.includes(seconds)) return;
+      this.turnMs = seconds * 1000;
+      this.publish();
+      return;
+    }
+
+    if (packet.type === 'pause') {
+      if (!this.canHold() || this.paused !== null) return;
+      this.paused = { by: seat, until: Date.now() + PAUSE_MAX_MS };
+      this.holdChanged();
+      return;
+    }
+
+    if (packet.type === 'resume') {
+      if (this.paused === null) return;
+      this.paused = null;
+      this.holdChanged();
+      return;
+    }
+
+    if (packet.type === 'playOn') {
+      // Stop waiting for everyone who dropped: their bots take the cards
+      // (the moment the table may move) until they are back.
+      if (this.waiting.size === 0) return;
+      for (const s of this.waiting.keys()) this.gaveUp.add(s);
+      this.waiting.clear();
+      this.holdChanged();
+      return;
+    }
+
     if (packet.type === 'start') {
       // The host (the table's creator) may start early; every empty seat
       // plays as a bot from here on. The table locks exactly as it does when
-      // a fourth human sits down.
-      if (client.sessionId !== this.hostId || this.started) return;
+      // a fourth human sits down. While the host's phone is off the line,
+      // whoever sits next in order may do it: a held lobby seat must not lock
+      // everyone else out of starting.
+      if (seat !== this.actingHostSeat() || this.started) return;
       this.lockTable();
       this.afterMove();
       return;
@@ -509,16 +615,18 @@ export class BelaRoom extends Room {
 
     if (packet.type === 'rematchStart') {
       // The host can start without a full house; anyone who left is botted.
-      if (client.sessionId !== this.hostId || this.table.phase !== 'MATCH_OVER') return;
+      if (seat !== this.actingHostSeat() || this.table.phase !== 'MATCH_OVER') return;
       this.beginRematch();
       return;
     }
 
     if (packet.type === 'next') {
-      if (this.table.phase === 'DEAL_OVER') {
-        this.table.startNextDeal();
-        this.afterMove();
-      }
+      // A vote, not a start: the first player to press used to deal again for
+      // all four, yanking the result sheet away from three people reading it.
+      if (this.table.phase !== 'DEAL_OVER') return;
+      this.nextVotes.add(seat);
+      if (!this.isHeld() && this.everyoneReady()) this.startNextDeal();
+      else this.publish();
       return;
     }
 
@@ -578,9 +686,157 @@ export class BelaRoom extends Room {
       this.lastRecordedMatch = this.matchNumber;
       this.series[this.table.winner()!] += 1;
     }
-    if (this.table.phase === 'MATCH_OVER') this.stopTimer();
+    if (this.isHeld() || this.table.phase === 'MATCH_OVER') this.stopTimer();
     else this.armTimer();
+    if (this.table.phase === 'DEAL_OVER' && !this.isHeld()) {
+      // Everyone said they were ready while the table stood still: go now.
+      if (this.everyoneReady()) {
+        this.startNextDeal();
+        return;
+      }
+      this.armNext();
+    } else {
+      this.stopNext();
+    }
     this.publish();
+  }
+
+  // --- the next deal ---------------------------------------------------------
+
+  /** Every player at the table who is on the line has said they are ready. */
+  private everyoneReady(): boolean {
+    const humans = SEATS.filter(
+      (s) => this.occupants[s]!.sessionId !== null && this.occupants[s]!.connected && this.table.humanSeats.has(s),
+    );
+    return humans.length > 0 && humans.every((s) => this.nextVotes.has(s));
+  }
+
+  /** The scored deal's countdown: armed once per deal, however many publishes follow. */
+  private armNext(): void {
+    const deal = this.table.state.dealNumber;
+    if (this.nextTimer !== null && this.nextFor === deal) return;
+    // Nobody on the line: nothing to count down for, and no reason for bots
+    // to play whole deals to an empty room.
+    const anyone = SEATS.some((s) => this.occupants[s]!.sessionId !== null && this.occupants[s]!.connected);
+    if (!anyone) {
+      this.stopNext();
+      return;
+    }
+    if (this.nextTimer !== null) clearTimeout(this.nextTimer);
+    this.nextFor = deal;
+    this.nextEndsAt = Date.now() + NEXT_DEAL_MS;
+    this.nextTimer = setTimeout(() => {
+      this.nextTimer = null;
+      try {
+        if (this.table.phase === 'DEAL_OVER' && !this.isHeld()) this.startNextDeal();
+      } catch (err) {
+        console.error('[bela] next-deal timer failed:', err);
+      }
+    }, NEXT_DEAL_MS);
+  }
+
+  private stopNext(): void {
+    if (this.nextTimer !== null) clearTimeout(this.nextTimer);
+    this.nextTimer = null;
+    this.nextEndsAt = 0;
+    this.nextFor = -1;
+    if (this.table.phase !== 'DEAL_OVER') this.nextVotes.clear();
+  }
+
+  private startNextDeal(): void {
+    this.stopNext();
+    this.nextVotes.clear();
+    this.table.startNextDeal();
+    this.afterMove();
+  }
+
+  // --- pausing and waiting -----------------------------------------------------
+
+  /** Pausing and waiting are for friends: a private table, mid-match. */
+  private canHold(): boolean {
+    return !this.isPublic && this.started && this.table.phase !== 'MATCH_OVER';
+  }
+
+  /** Does the table stand still for this seat's dropped connection? */
+  private waitsFor(seat: Seat): boolean {
+    return this.canHold() && this.table.humanSeats.has(seat);
+  }
+
+  private isHeld(): boolean {
+    return this.paused !== null || this.waiting.size > 0;
+  }
+
+  /**
+   * Hand a seat to its bot - now, or the moment the table may move again.
+   * setSeatHuman(false) runs the bots at once, so doing it during a hold would
+   * play cards while everyone was told the table was standing still.
+   */
+  private handToBot(seat: Seat): void {
+    if (this.isHeld()) this.gaveUp.add(seat);
+    else this.table.setSeatHuman(seat, false);
+  }
+
+  /** Something about the hold changed: reschedule it, and let the table move if it may. */
+  private holdChanged(): void {
+    this.scheduleHold();
+    if (!this.isHeld() && this.gaveUp.size > 0) {
+      const seats = [...this.gaveUp];
+      this.gaveUp.clear();
+      for (const s of seats) this.table.setSeatHuman(s, false);
+    }
+    this.afterMove();
+  }
+
+  /**
+   * One timer for whatever ends first: the pause running out, or a wait. Waits
+   * do not run out during a pause - they are checked again when it ends.
+   */
+  private scheduleHold(): void {
+    if (this.holdTimer !== null) clearTimeout(this.holdTimer);
+    this.holdTimer = null;
+    const ends = this.paused !== null ? [this.paused.until] : [...this.waiting.values()];
+    if (ends.length === 0) return;
+    const at = Math.min(...ends);
+    this.holdTimer = setTimeout(() => {
+      this.holdTimer = null;
+      try {
+        const now = Date.now();
+        if (this.paused !== null && this.paused.until <= now) this.paused = null;
+        if (this.paused === null) {
+          for (const [s, until] of [...this.waiting]) {
+            if (until <= now) {
+              this.waiting.delete(s);
+              this.gaveUp.add(s);
+            }
+          }
+        }
+        this.holdChanged();
+      } catch (err) {
+        console.error('[bela] hold timer failed:', err);
+      }
+    }, Math.max(0, at - Date.now()));
+  }
+
+  private holdInfo(): HoldInfo | undefined {
+    if (!this.isHeld()) return undefined;
+    const now = Date.now();
+    return {
+      ...(this.paused !== null ? { paused: { by: this.paused.by, msLeft: Math.max(0, this.paused.until - now) } } : {}),
+      waiting: [...this.waiting].map(([seat, until]) => ({ seat, msLeft: Math.max(0, until - now) })),
+    };
+  }
+
+  /**
+   * Who may do the host's things right now: the host, or - while the host's
+   * connection is down - whoever is connected, in seat order. Their seat is
+   * held for them now for a long time, and nobody else must be locked out of
+   * starting, rematching or picking the clock meanwhile.
+   */
+  private actingHostSeat(): Seat | null {
+    const host = this.hostId === null ? null : this.seatOf(this.hostId);
+    if (host !== null && this.occupants[host]!.connected) return host;
+    const next = SEATS.find((s) => this.occupants[s]!.sessionId !== null && this.occupants[s]!.connected);
+    return next ?? host;
   }
 
   /** Nobody waits forever: a seat that stalls is played by its bot. */
@@ -608,7 +864,7 @@ export class BelaRoom extends Room {
     if (this.turnTimer !== null && this.turnDecision === decision) return;
     this.stopTimer();
 
-    this.turnEndsAt = Date.now() + TURN_MS;
+    this.turnEndsAt = Date.now() + this.turnMs;
     this.turnSeat = actor;
     this.turnDecision = decision;
     this.turnTimer = setTimeout(() => {
@@ -631,7 +887,7 @@ export class BelaRoom extends Room {
       // Unconditionally: a room must never be left with a human on turn and
       // nothing armed.
       this.afterMove();
-    }, TURN_MS);
+    }, this.turnMs);
   }
 
   private stopTimer(): void {
@@ -686,8 +942,13 @@ export class BelaRoom extends Room {
             : 'waiting',
       events,
       ...(this.turnEndsAt > 0
-        ? { turnMsLeft: Math.max(0, this.turnEndsAt - Date.now()), turnTotalMs: TURN_MS }
+        ? { turnMsLeft: Math.max(0, this.turnEndsAt - Date.now()), turnTotalMs: this.turnMs }
         : {}),
+      turnSeconds: this.turnMs / 1000,
+      ...(this.isPublic ? {} : { private: true as const }),
+      ...(this.isHeld() ? { hold: this.holdInfo()! } : {}),
+      ...(this.nextEndsAt > 0 ? { nextMsLeft: Math.max(0, this.nextEndsAt - Date.now()) } : {}),
+      ...(this.table.phase === 'DEAL_OVER' && this.nextVotes.size > 0 ? { nextVotes: [...this.nextVotes] } : {}),
       ...(this.hard ? { hard: true } : {}),
       series: [this.series[0], this.series[1]],
       matchNumber: this.matchNumber,
@@ -695,9 +956,9 @@ export class BelaRoom extends Room {
       // the client's outstanding count pinned at 0, so it hid both "Play again"
       // and "Start anyway" while a real non-voter was still sitting there.
       ...(votes.length > 0 ? { rematchVotes: votes } : {}),
-      ...(this.hostId !== null && this.seatOf(this.hostId) !== null
-        ? { hostSeat: this.seatOf(this.hostId)! }
-        : {}),
+      // Whoever may do the host's things right now, so the right person sees
+      // "start" and "start anyway" while the host is off the line.
+      ...(this.actingHostSeat() !== null ? { hostSeat: this.actingHostSeat()! } : {}),
     };
     // Views first: a client must know its own seat before the event stream
     // arrives, or the first batch cannot be attributed to anyone.
@@ -719,5 +980,8 @@ export class BelaRoom extends Room {
 
   override onDispose(): void {
     this.stopTimer();
+    this.stopNext();
+    if (this.holdTimer !== null) clearTimeout(this.holdTimer);
+    this.holdTimer = null;
   }
 }

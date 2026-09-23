@@ -20,7 +20,10 @@ export type ClientMessage =
   | { type: 'start' }
   /** Pre-start only: move to a free seat (how friends pick teams). */
   | { type: 'sit'; seat: Seat }
-  /** Advance from a scored deal to the next one. */
+  /**
+   * Ready for the next deal. It starts when every connected player is ready,
+   * or by itself when NEXT_DEAL_MS has run out - never on one player's press.
+   */
   | { type: 'next' }
   /** A quick emote; relayed, rate-limited, never stored. */
   | { type: 'emote'; id: string }
@@ -36,7 +39,39 @@ export type ClientMessage =
   /** Withdraw that ask. */
   | { type: 'rematchCancel' }
   /** Host only, after MATCH_OVER: start now, bots filling anyone who left. */
-  | { type: 'rematchStart' };
+  | { type: 'rematchStart' }
+  /** Private tables, during a match: stop the table for everyone (a call, a break). */
+  | { type: 'pause' }
+  /** Anyone at the table: carry on after a pause. */
+  | { type: 'resume' }
+  /** Stop waiting for a dropped player: a bot holds their cards until they are back. */
+  | { type: 'playOn' }
+  /** Host, private table, before the start: the turn clock in seconds (one of TURN_CHOICES). */
+  | { type: 'clock'; seconds: number };
+
+/** Turn clocks a private table's host may choose, in seconds. Quick play keeps the first. */
+export const TURN_CHOICES: readonly number[] = [30, 60, 90];
+
+/** How long a scored deal's sheet stays up before the next deal starts by itself. */
+export const NEXT_DEAL_MS = 10_000;
+
+/**
+ * How long a private table stands still for a player whose connection dropped
+ * - a phone call, a tunnel - before a bot takes their cards. Anyone at the
+ * table can stop waiting sooner (playOn).
+ */
+export const WAIT_FOR_DROPPED_MS = 10 * 60_000;
+
+/** The longest a pause lasts before the table carries on by itself. */
+export const PAUSE_MAX_MS = 30 * 60_000;
+
+/** A private table standing still, and why. */
+export interface HoldInfo {
+  /** A player paused it; it carries on by itself when msLeft runs out. */
+  paused?: { by: Seat; msLeft: number };
+  /** Players whose connection dropped, each with how long they are still waited for. */
+  waiting: { seat: Seat; msLeft: number }[];
+}
 
 /**
  * The fixed emote vocabulary. Anything else is dropped server-side, so free
@@ -133,6 +168,16 @@ export interface RoomMessage {
   matchNumber: number;
   /** Seats that have asked for another match. Only meaningful at MATCH_OVER. */
   rematchVotes?: Seat[];
+  /** The table's turn clock in seconds; a private table's host may change it before the start. */
+  turnSeconds?: number;
+  /** A private table (friends, by code): only there does it pause and wait. */
+  private?: true;
+  /** Present while the table stands still: paused, or waiting for a dropped player. */
+  hold?: HoldInfo;
+  /** At DEAL_OVER: milliseconds until the next deal starts by itself. */
+  nextMsLeft?: number;
+  /** At DEAL_OVER: the seats that are ready for the next deal. */
+  nextVotes?: Seat[];
 }
 
 export const MSG = {
