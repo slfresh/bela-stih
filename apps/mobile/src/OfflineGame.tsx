@@ -152,7 +152,7 @@ function OfflineMatch({
       cue={g.cue}
       dealerHop={g.dealerHop}
       reducedMotion={g.motion === 'reduced'}
-      hardMode={settings.hardMode}
+      playMode={settings.difficulty}
       handSort={settings.handSort}
       arrangeTip={settings.arrangeTips < 2}
       onArrangeTip={(learned) =>

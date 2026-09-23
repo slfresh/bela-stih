@@ -110,11 +110,14 @@ describe('the history of matches with friends', () => {
   it('reads the same in every language, with no count to agree with', () => {
     for (const id of LOCALE_IDS) {
       const ui = new Lang(id).s.ui;
-      expect(ui.recordMeta(501, true, [5, 3], 182), id).toMatch(/501.*5:3.*182/);
-      expect(ui.recordMeta(1001, false, null, null), id).not.toContain('·');
+      const s = new Lang(id).s;
+      expect(ui.recordMeta(501, s.difficultyHard, [5, 3], 182), id).toMatch(/501.*5:3.*182/);
+      // The version is always named: a match is never read without it.
+      expect(ui.recordMeta(1001, s.difficultyEasy, null, null), id).toContain(s.difficultyEasy);
       expect(ui.streakWon(3)).toMatch(/: 3$/);
       expect(ui.recordPeople('Ivo', ['Marko', 'Petra'])).toContain('Marko, Petra');
     }
-    expect(new Lang('hr').s.ui.recordMeta(501, true, [5, 3], 182)).toBe('igra do 501 · Prava bela · dijeljenja 5:3 · najbolje 182');
+    expect(new Lang('hr').s.ui.recordMeta(501, 'Prava bela', [5, 3], 182)).toBe('igra do 501 · Prava bela · dijeljenja 5:3 · najbolje 182');
+    expect(new Lang('hr').s.ui.recordMeta(1001, 'Lagana', null, null)).toBe('igra do 1001 · Lagana');
   });
 });

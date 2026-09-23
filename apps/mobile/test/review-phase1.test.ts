@@ -111,15 +111,17 @@ describe('the end of a match, from our side', () => {
 describe('zvanja in normal play', () => {
   it('none: the app answers "Nemam" itself, with no buttons to tap twice', () => {
     const t = src('src/TableScreen.tsx');
-    expect(t).toMatch(/const autoSkipping = declaring && !hardMode && view\.myDeclarations\.length === 0;/);
+    // Only where the app finds the zvanja (Učenje): blind versions leave "Nemam" to the player.
+    expect(t).toMatch(/const autoSkipping = declaring && !blind && view\.myDeclarations\.length === 0;/);
+    expect(t).toMatch(/const blind = blindZvanja\(playMode\);/);
     expect(t).toMatch(/onActionRef\.current\(\{ type: 'DECLARE_SKIP', seat: mySeat \}\)/);
     expect(t).toMatch(/const declareButtons = declaring && !autoSkipping \? \(/);
     // ...nor the plain action list, which offered the same skip as "šuti (ne
     // zovi)" in both orientations while the app was answering.
     expect((t.match(/\{autoSkipping \? null : declareButtons \?\? \(/g) ?? []).length).toBe(2);
     expect(t).not.toMatch(/\{declareButtons \?\? \(/);
-    // Prava bela asks as before.
-    expect(t).toMatch(/if \(!declaring \|\| hardMode\) return;/);
+    // Lagana and Prava bela ask as Prava bela always did: nothing comes marked.
+    expect(t).toMatch(/if \(!declaring \|\| blind\) return;/);
   });
 
   it('some: they come marked, one tap on Prijavi', () => {

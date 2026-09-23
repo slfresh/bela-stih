@@ -3,7 +3,7 @@ import express, { type Request, type Response } from 'express';
 import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { BelaRoom } from './BelaRoom';
-import { ROOM_NAME } from './protocol';
+import { ROOM_NAME, ROOM_NAME_MODES } from './protocol';
 
 /**
  * The Bela game server.
@@ -49,6 +49,8 @@ const gameServer = new Server({
 });
 
 gameServer.define(ROOM_NAME, BelaRoom);
+// Tables for apps that know the three versions (protocol.ts): they say so.
+gameServer.define(ROOM_NAME_MODES, BelaRoom, { modes: true });
 
 gameServer
   .listen(PORT)

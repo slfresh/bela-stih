@@ -12,6 +12,7 @@ import { Director, timingsFor, type MotionPolicy } from '../anim/director';
 import { botThinkMs } from '../anim/think';
 import { EMPTY_LOG, logEvent } from '../matchLog';
 import { troubleOf, type Trouble } from './trouble';
+import { isPlayMode, modeFromLegacy, type PlayMode } from '../playMode';
 import { FxBus } from '../anim/FxBus';
 import { makeFxSpawner, spawnEmote } from '../table/fx';
 import { useMotionPolicy } from '../anim/useMotionPolicy';
@@ -78,7 +79,23 @@ function resolveServerUrl(): string {
 }
 
 export const SERVER_URL = resolveServerUrl();
-const ROOM_NAME = 'bela';
+/**
+ * The room this app asks for: the tables of apps that know the three versions
+ * (the server's ROOM_NAME_MODES), so an older app is never matched into one.
+ * A server from before them knows only the old name and says so with
+ * MATCHMAKE_NO_HANDLER: then that one.
+ */
+const ROOM_NAME = 'bela-modes';
+const ROOM_NAME_OLD = 'bela';
+const NO_HANDLER_CODE = 4210;
+async function eitherRoom(ask: (name: string) => Promise<Room>): Promise<Room> {
+  try {
+    return await ask(ROOM_NAME);
+  } catch (err) {
+    if ((err as { code?: number } | null)?.code !== NO_HANDLER_CODE) throw err;
+    return ask(ROOM_NAME_OLD);
+  }
+}
 /**
  * How long the server holds a dropped seat once a match is under way
  * (BelaRoom's TABLE_RECONNECT_SECONDS). The retry loop has to cover the whole
@@ -117,7 +134,8 @@ interface RoomMessage {
   events: TableEvent[];
   turnMsLeft?: number;
   turnTotalMs?: number;
-  /** True on "prava bela" tables. */
+  /** The version played (a server from before the three sends only `hard`). */
+  mode?: unknown;
   hard?: boolean;
   hostSeat?: Seat;
   series: [number, number];
@@ -178,7 +196,7 @@ export function useNetGame(settings: Settings) {
   const [hidden, setHidden] = useState<readonly Seat[]>([]);
   const hiddenRef = useRef<readonly Seat[]>([]);
   const hiddenRoomRef = useRef<string | null>(null);
-  const [hard, setHard] = useState(false);
+  const [mode, setMode] = useState<PlayMode>('easy');
   const [hostSeat, setHostSeat] = useState<Seat | null>(null);
   const [series, setSeries] = useState<[number, number]>([0, 0]);
   const [matchNumber, setMatchNumber] = useState(0);
@@ -497,7 +515,7 @@ export function useNetGame(settings: Settings) {
       seatsRef.current = msg.seats;
       setSeats(msg.seats);
       giftsRef.current.resync(msg.seats.map((x) => x.gift ?? null));
-      setHard(msg.hard === true);
+      setMode(isPlayMode(msg.mode) ? msg.mode : modeFromLegacy(msg.hard));
       setHostSeat(msg.hostSeat ?? null);
       setSeries(msg.series ?? [0, 0]);
       setMatchNumber(msg.matchNumber ?? 0);
@@ -700,7 +718,7 @@ export function useNetGame(settings: Settings) {
     () =>
       connect(async (c) => {
         try {
-          return await c.joinOrCreate(ROOM_NAME, { name, avatar, gifts: true });
+          return await eitherRoom((room) => c.joinOrCreate(room, { name, avatar, gifts: true }));
         } catch (err) {
           // The open table already has somebody playing from this connection.
           // With no accounts the server cannot tell a second player here from
@@ -708,7 +726,7 @@ export function useNetGame(settings: Settings) {
           // player's hand by elimination — so it seats us apart rather than
           // turning us away. A fresh public table, and strangers join us there.
           if ((err as { code?: number } | null)?.code !== SAME_ORIGIN_CODE) throw err;
-          return await c.create(ROOM_NAME, { name, avatar, gifts: true });
+          return await eitherRoom((room) => c.create(room, { name, avatar, gifts: true }));
         }
       }),
     [connect, name, avatar],
@@ -716,10 +734,20 @@ export function useNetGame(settings: Settings) {
   const createPrivate = useCallback(
     () =>
       connect((c) =>
-        // The host's difficulty setting travels with the table it creates.
-        c.create(ROOM_NAME, { name, avatar, gifts: true, private: true, hard: settings.hardMode }),
+        // The host's version travels with the table it creates; `hard` is for a
+        // server from before the three versions.
+        eitherRoom((room) =>
+          c.create(room, {
+          name,
+          avatar,
+          gifts: true,
+          private: true,
+          mode: settings.difficulty,
+          hard: settings.difficulty === 'hard',
+          }),
+        ),
       ),
-    [connect, name, avatar, settings.hardMode],
+    [connect, name, avatar, settings.difficulty],
   );
   const joinById = useCallback(
     (id: string) => connect((c) => c.joinById(normalizeCode(id), { name, avatar, gifts: true })),
@@ -748,7 +776,12 @@ export function useNetGame(settings: Settings) {
   const setClock = useCallback((seconds: number) => roomRef.current?.send('clock', { seconds }), []);
   /** Host, before the start: the match length and Prava bela (either may be left out). */
   const setRules = useCallback(
-    (rules: { target?: number; hard?: boolean }) => roomRef.current?.send('rules', rules),
+    (rules: { target?: number; mode?: PlayMode }) =>
+      roomRef.current?.send('rules', {
+        ...rules,
+        // A server from before the three versions reads only the old switch.
+        ...(rules.mode ? { hard: rules.mode === 'hard' } : {}),
+      }),
     [],
   );
 
@@ -834,7 +867,7 @@ export function useNetGame(settings: Settings) {
     idle,
     // A hidden player shows by their seat's name everywhere these are read.
     seats: shownSeats,
-    hard,
+    mode,
     hostSeat,
     series,
     matchNumber,

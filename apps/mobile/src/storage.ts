@@ -1,3 +1,4 @@
+import { isPlayMode, type PlayMode } from './playMode';
 import { Platform } from 'react-native';
 import { emptyProfile, ensureQuests, isoDay, type PlayerProfile } from '@belot/progression';
 import { localeFor } from './locale';
@@ -68,10 +69,10 @@ export interface Settings {
    */
   nickname: string;
   /**
-   * "Prava bela": renons punishes instead of being blocked, and zvanja must be
-   * spotted by the player. Applies to offline games and private tables you host.
+   * The version played (playMode.ts): Učenje, Lagana or Prava bela. Offline
+   * games, and the private tables this player hosts, start in it.
    */
-  hardMode: boolean;
+  difficulty: PlayMode;
   /** Card face style: mađarice (default), vintage photos, French suits, or big-and-simple. */
   deckStyle: 'madarice' | 'starinske' | 'francuske' | 'simple';
   /** How the hand is laid out. 'manual' keeps whatever the player arranged. */
@@ -93,7 +94,7 @@ export const DEFAULT_SETTINGS: Settings = {
   haptics: true,
   locale: 'hr',
   nickname: '',
-  hardMode: false,
+  difficulty: 'easy',
   deckStyle: 'madarice',
   handSort: 'auto',
   arrangeTips: 0,
@@ -151,14 +152,27 @@ export function loadSettings(): Settings {
     return first;
   }
   let s = read(KEY.settings, DEFAULT_SETTINGS);
+  // Each migration asks what the app that SAVED these settings knew - so all
+  // of them read the stored text before any of them writes: a write merges
+  // the defaults in, and the next one would think a newer app had saved.
+  const raw = store.getString(KEY.settings) ?? '';
+  let changed = false;
+  // Before the three versions there was a switch: Prava bela kept, anything
+  // else is Lagana (the player's choice when the three came in, 2026-09-23).
+  if (!raw.includes('"difficulty"')) {
+    s = { ...s, difficulty: raw.includes('"hardMode":true') ? 'hard' : 'easy' };
+    changed = true;
+  }
+  if (!isPlayMode(s.difficulty)) s = { ...s, difficulty: 'easy' };
   // Before 1.4.0 one swap of two cards switched "Slaganje karata" to Ručno
   // for good, and trump-first sorting never came back. Settings saved by
   // such an app (no arrangeTips yet) go back to the default once; anyone who
   // wants Ručno sets it again, and it stays.
-  if (s.handSort === 'manual' && !(store.getString(KEY.settings) ?? '').includes('"arrangeTips"')) {
+  if (s.handSort === 'manual' && !raw.includes('"arrangeTips"')) {
     s = { ...s, handSort: 'auto' };
-    write(KEY.settings, s);
+    changed = true;
   }
+  if (changed) write(KEY.settings, s);
   // A volume saved by a build with other steps snaps to the nearest chip, or
   // Settings would light none.
   const volume = (VOLUME_OPTIONS as readonly number[]).reduce((best, v) =>

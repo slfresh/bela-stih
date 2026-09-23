@@ -28,6 +28,8 @@ import Animated, {
 import { useCountUp } from './anim/useCountUp';
 import type { TableCue } from './table/cues';
 import { illegalReason } from './table/illegal';
+import { coachTip, stigljaWatch, type CoachTip } from './table/coach';
+import { wrongCardLines, wrongCardOf, type WrongCard } from './table/wrongCard';
 import { summarize, type MatchLog, type MatchSummary } from './matchLog';
 import type {
   Action,
@@ -40,7 +42,7 @@ import type {
   TeamId,
   TrickPlay,
 } from '@belot/engine';
-import { cardId, teamOf } from '@belot/engine';
+import { cardId, detectDeclarations, teamOf } from '@belot/engine';
 import type { Lang } from '@belot/i18n';
 import { levelProgress, type Award, type GiftId, type PlayerProfile } from '@belot/progression';
 import { Anchor, AnchorHost, useAnchors, type AnchorMap } from './anim/AnchorRegistry';
@@ -82,6 +84,7 @@ import { HoldPanel, useNow } from './table/HoldPanel';
 import type { TableHold } from './net/hold';
 import { setBackGuard } from './ui/backGuard';
 import { useLeaveWarning } from './ui/webBack';
+import { blindZvanja, coaches, freePlay, modeName, type PlayMode } from './playMode';
 import { FeltArt, RIM_W } from './table/FeltArt';
 import { garb } from './deck/palette';
 
@@ -206,10 +209,12 @@ export interface TableScreenProps {
   /** Online: this device is off the line and getting back into its seat. */
   reconnecting?: boolean;
   /**
-   * "Prava bela": no card assist — every card is tappable, and an illegal one
-   * is a renons the engine punishes. The claim/bela buttons stay unassisted too.
+   * The version played (playMode.ts). Učenje: the app finds the zvanja and
+   * coaches. Lagana: zvanja and bela are the player's to find, a wrong card is
+   * refused. Prava bela: the same, and every card is tappable - a wrong one is
+   * a renons the engine punishes.
    */
-  hardMode?: boolean;
+  playMode?: PlayMode;
   /** Points the match is played to: 1001, or what a private table's host chose. */
   matchTarget?: number;
   /** The deals of the match so far, for the match-end summary (matchLog.ts). */
@@ -249,7 +254,7 @@ export function TableScreen(props: TableScreenProps) {
     cue = null,
     dealerHop = false,
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
-    hardMode = false, matchTarget = 1001, matchLog, series, askedRematch, waitingFor, onRematch, onForceRematch, rematchLabel,
+    playMode = 'easy', matchTarget = 1001, matchLog, series, askedRematch, waitingFor, onRematch, onForceRematch, rematchLabel,
     nextDeal, hold: tableHold = null, onPause, onResume, onPlayOn, reconnecting = false,
     handSort = 'auto', arrangeTip = false, onArrangeTip, confirmPlay = 'ambiguous', awaitEcho = false, refusedN = 0,
     gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift, giftReach, hidden, onHide, onReport,
@@ -358,6 +363,11 @@ export function TableScreen(props: TableScreenProps) {
   // confirm. The engine is the judge — a marking that is not a real zvanje
   // announces nothing, so this can never claim more than the hand holds.
   const [marked, setMarked] = useState<string[]>([]);
+  // The version's switches: who finds the zvanja and bela, whether any card
+  // may be sent (a wrong one then costs the deal), and whether the coach speaks.
+  const blind = blindZvanja(playMode);
+  const cardsFree = freePlay(playMode);
+  const coach = coaches(playMode);
   const declaring = !settled && view.declareTurn === mySeat;
   // The zvanja question takes the taps (they mark), so arranging is off while
   // it is asked - from its very first frame - and closed by it (see below).
@@ -369,16 +379,26 @@ export function TableScreen(props: TableScreenProps) {
   // holding from any one (table/zvanja.ts). In blind mode it stays armed
   // regardless - the app refuses to spot them for you there, so an honest miss
   // is the whole point.
+  //
+  // What a marking is checked against. Učenje: the zvanja the engine spotted
+  // for this hand. Lagana: the hand's own, worked out here - the player finds
+  // and marks them, and is told when a marking is not one, so an honest slip
+  // does not throw them away. Prava bela: nothing, and a wrong claim forfeits.
+  const checkedAgainst = useMemo(
+    () => (playMode === 'hard' ? null : blind ? detectDeclarations(view.hand, mySeat) : view.myDeclarations),
+    [playMode, blind, view.hand, view.myDeclarations, mySeat],
+  );
   const announcement = pickAnnouncement(
     view.hand.filter((c) => marked.includes(cardId(c))),
-    hardMode ? null : view.myDeclarations,
+    checkedAgainst,
     mySeat,
   );
-  const markingIsZvanje = hardMode || announcement !== null;
+  const markingIsZvanje = checkedAgainst === null || announcement !== null;
   // Two marked at once read as two: the hint says so rather than "that is a zvanje".
-  const markedWhole = hardMode
-    ? 0
-    : view.myDeclarations.filter((d) => d.cards.every((c) => marked.includes(cardId(c)))).length;
+  const markedWhole =
+    checkedAgainst === null
+      ? 0
+      : checkedAgainst.filter((d) => d.cards.every((c) => marked.includes(cardId(c)))).length;
   const toggleMark = useCallback(
     (id: string) =>
       setMarked((m) => (m.includes(id) ? m.filter((x) => x !== id) : [...m, id])),
@@ -406,12 +426,58 @@ export function TableScreen(props: TableScreenProps) {
     declaring ||
     (!settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0) ||
     (!settled && view.canDeclare === true) ||
-    (belaOffered && !hardMode);
+    (belaOffered && !blind);
   const asking = askingBesidesArranging || arranging;
+
+  // Učenje's coach. On my turn: what to do and why - the bots' own choice for
+  // this hand (table/coach.ts). A bid's advice floats over the empty felt,
+  // since the bid's buttons already take the room a row would need. In play
+  // it is a row of its own from the first card to the last, so the felt does
+  // not move under it every turn: my move and why, or between my turns what
+  // to watch - štiglja as it stands, or the trumps. Sideways there is no
+  // height for a row (the felt gave it, and the partner on the far rim sat on
+  // the trick): there the advice floats in play too, on my turn only, over my
+  // own slot, which is empty then.
+  const tip = useMemo(
+    () => (coach && myTurn && !settled ? coachTip(view, mySeat, options) : null),
+    [coach, myTurn, settled, view, mySeat, options],
+  );
+  const tipText = (t: CoachTip): string =>
+    t.kind === 'call'
+      ? lang.s.ui.coachCall(lang.suitName(t.suit), t.count, t.jack, t.nine, t.forced)
+      : t.kind === 'pass'
+        ? lang.s.ui.coachPass
+        : lang.s.ui.coachPlay(t.why, lang.cardName(t.card), t.bela);
+  const coachPlaying = coach && !settled && view.phase === 'PLAY';
+  const watch = coachPlaying ? stigljaWatch(view, mySeat) : null;
+  const floatTip =
+    tip === null
+      ? null
+      : tip.kind !== 'play'
+        ? tipText(tip)
+        : land
+          ? watch !== null
+            ? `${tipText(tip)} ${lang.s.ui.coachStiglja(watch === 'us')}`
+            : tipText(tip)
+          : null;
+  const coachLine = !coachPlaying || land
+    ? null
+    : tip !== null && tip.kind === 'play'
+      ? tipText(tip)
+      : watch !== null
+        ? lang.s.ui.coachStiglja(watch === 'us')
+        : view.context.trumpSuit !== null
+          ? lang.s.ui.coachWatch(lang.suitName(view.context.trumpSuit))
+          : null;
+  // Second to every question: the row steps aside while one is asked, and
+  // while the hand is arranged (whose hint then takes the row's place).
+  const coachRowUp = coachLine !== null && !askingBesidesArranging;
+  const coachShown = coachRowUp && !arranging;
+
   // A short phone sheds the rows that are no use while it asks — or while the
-  // bela buttons are up, hard mode included — so the buttons that answer stay
-  // on the screen (see metrics' shortColumn).
-  const shed = m.shortColumn && (asking || belaOffered);
+  // bela buttons are up, hard mode included, or the coach's row — so the
+  // buttons that answer stay on the screen (see metrics' shortColumn).
+  const shed = m.shortColumn && (asking || belaOffered || coachShown);
   // And portrait's short column is built tighter throughout (metrics'
   // SHORT_CHROME counts every style this switches on).
   const short = !land && m.shortColumn;
@@ -419,7 +485,9 @@ export function TableScreen(props: TableScreenProps) {
   // screen: they give way to it, so nothing moves. When a question had already
   // shed them, a new row under the fan would lift the fan under the finger, so
   // the hint asks above the fan instead, where the felt pays for it.
-  const arrangeInSlot = short && arranging && !askingBesidesArranging && !belaOffered && !settled && !!onEmote;
+  // Nor when the coach's row had shed them: its hint takes that row's place.
+  const arrangeInSlot =
+    short && arranging && !askingBesidesArranging && !belaOffered && !settled && !!onEmote && !coachRowUp;
 
   // The tray closes on send; the cooldown mirrors the server's rate limit so
   // a spammed tap dies here instead of being silently dropped over the wire.
@@ -491,17 +559,40 @@ export function TableScreen(props: TableScreenProps) {
     [send],
   );
 
+  // Prava bela sends a card the rules do not allow, and the deal is lost for
+  // it. What it was, and what could have gone, is remembered as it goes: the
+  // sheet then says so. Only my own - another hand is never seen - and gone
+  // with the next deal.
+  const wrongCard = useRef<WrongCard | null>(null);
+  const playView = useRef({ options, trick: view.currentTrick, trump: view.context.trumpSuit });
+  playView.current = { options, trick: view.currentTrick, trump: view.context.trumpSuit };
+  const play = useCallback(
+    (a: Action): boolean => {
+      if (!send(a)) return false;
+      if (cardsFree) {
+        const { options: now, trick, trump } = playView.current;
+        const wrong = wrongCardOf(a, now, trick, trump);
+        if (wrong) wrongCard.current = wrong;
+      }
+      return true;
+    },
+    [send, cardsFree],
+  );
+  useEffect(() => {
+    if (view.phase === 'BID') wrongCard.current = null;
+  }, [view.phase]);
+
   // Normal play asks no question with only one answer. The app knows the
   // hand's zvanja: with none it says "Nemam" itself, a beat later so the table
   // reads as having asked; with some it marks them ready - one tap on
   // "Prijavi", or unmark to keep them quiet, which is still the player's call.
   // Prava bela asks exactly as before: spotting them yourself is the point.
   // Nine deals of nine asked "Imaš li zvanja?" of a hand with nothing in it.
-  const autoSkipping = declaring && !hardMode && view.myDeclarations.length === 0;
+  const autoSkipping = declaring && !blind && view.myDeclarations.length === 0;
   const askedFor = useRef<string | null>(null);
   const autoSkip = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (!declaring || hardMode) return;
+    if (!declaring || blind) return;
     const key = `${view.dealer}:${view.hand.map(cardId).join(',')}`;
     if (askedFor.current === key) return;
     askedFor.current = key;
@@ -515,7 +606,7 @@ export function TableScreen(props: TableScreenProps) {
       return;
     }
     setMarked([...new Set(view.myDeclarations.flatMap((d) => d.cards.map(cardId)))]);
-  }, [declaring, hardMode, view.dealer, view.hand, view.myDeclarations, mySeat]);
+  }, [declaring, blind, view.dealer, view.hand, view.myDeclarations, mySeat]);
   // The question went away by itself: no late answer.
   useEffect(() => {
     if (declaring || autoSkip.current === null) return;
@@ -1127,7 +1218,25 @@ export function TableScreen(props: TableScreenProps) {
       {revealRow !== null && <View style={styles.revealScrim} pointerEvents="none" />}
       <View style={styles.tableFloat} pointerEvents="box-none">
         {revealRow}
+        {floatTip !== null && revealRow === null && !land && (
+          <View style={styles.coachFloat} pointerEvents="none" accessibilityLiveRegion="polite">
+            <Text style={styles.coachFloatTitle}>{lang.s.ui.coachTitle}</Text>
+            <Text style={styles.coachFloatText}>{floatTip}</Text>
+          </View>
+        )}
       </View>
+      {/* Sideways the felt is short and wide: the advice is one low, wide line
+          (two at most), under the side players' cards, over my empty slot. */}
+      {floatTip !== null && revealRow === null && land && (
+        <View style={styles.coachFloatLandBox} pointerEvents="none">
+          <View style={[styles.coachFloat, styles.coachFloatLand]} accessibilityLiveRegion="polite">
+            <Text style={styles.coachFloatLandText} numberOfLines={2}>
+              <Text style={styles.coachLabel}>{lang.s.ui.coachTitle}: </Text>
+              {floatTip}
+            </Text>
+          </View>
+        </View>
+      )}
     </>
   );
 
@@ -1221,6 +1330,9 @@ export function TableScreen(props: TableScreenProps) {
             ? lang.s.noZvanjaHere
             : marked.length === 0
             ? lang.s.markZvanjaHint
+            : checkedAgainst === null
+            ? // Prava bela checks nothing, so it says nothing about the marking.
+              lang.s.markingUnchecked
             : markingIsZvanje
               ? markedWhole > 1
                 ? lang.s.markingOkMany
@@ -1230,7 +1342,7 @@ export function TableScreen(props: TableScreenProps) {
       </View>
     ),
     short && arranging && !arrangeInSlot && (
-      <View key="arrange" style={[promptRow, short && styles.promptInline]}>
+      <View key="arrange" style={[promptRow, short && styles.promptInline, coachRowUp && styles.coachRowShort]}>
         <Text style={[promptText, short && styles.promptInlineText]} numberOfLines={2}>
           {lang.s.ui.arrangeHint}
         </Text>
@@ -1246,7 +1358,9 @@ export function TableScreen(props: TableScreenProps) {
         {!m.compact && <Text style={promptHint}>{lang.s.declareHint}</Text>}
       </View>
     ),
-    !settled && view.canDeclare === true && (
+    // Asked already by the zvanja question above: the same question twice
+    // took a whole row and pushed Prijavi and Nemam under Android's buttons.
+    !settled && !declaring && view.canDeclare === true && (
       <View key="claim" style={promptRow}>
         <Text style={promptHint}>{lang.s.claimZvanjaHint}</Text>
       </View>
@@ -1257,9 +1371,18 @@ export function TableScreen(props: TableScreenProps) {
         <Button label={lang.s.ui.arrangeDone} tone="strong" onPress={() => setArranging(false)} />
       </View>
     ),
-    !settled && view.canAnnounceBela && !hardMode && (
-      <View key="bela" style={promptRow}>
+    !settled && view.canAnnounceBela && !blind && (
+      <View key="bela" style={[promptRow, coach && !land && (short ? styles.coachRowShort : styles.coachRow)]}>
         <Text style={promptText}>{lang.s.belaHint}</Text>
+      </View>
+    ),
+    // Two lines, always: the row keeps one height whatever it says.
+    coachShown && (
+      <View key="coach" style={[promptRow, short ? styles.coachRowShort : styles.coachRow]}>
+        <Text style={[promptHint, styles.coachText]} numberOfLines={2}>
+          <Text style={styles.coachLabel}>{lang.s.ui.coachTitle}: </Text>
+          {coachLine}
+        </Text>
       </View>
     ),
   ].filter((p): p is ReactElement => Boolean(p));
@@ -1290,8 +1413,8 @@ export function TableScreen(props: TableScreenProps) {
           cards={hand.cards}
           options={options}
           enabled={myTurn}
-          onPlay={send}
-          freePlay={hardMode}
+          onPlay={play}
+          freePlay={cardsFree}
           width={m.handWidth}
           maxCardW={m.handCardMax}
           arranging={arranging}
@@ -1437,7 +1560,7 @@ export function TableScreen(props: TableScreenProps) {
     declaring ? 1 : 0,
     !settled && !declaring && view.mustDeclare && view.myDeclarations.length > 0 ? 1 : 0,
     arranging ? 1 : 0,
-    !settled && view.canAnnounceBela && !hardMode ? 1 : 0,
+    !settled && view.canAnnounceBela && !blind ? 1 : 0,
     // Hard mode's bela buttons shed rows too, with no hint row of their own.
     shed ? 1 : 0,
   ].join('|');
@@ -1467,7 +1590,15 @@ export function TableScreen(props: TableScreenProps) {
           lastDealResult?.renonsSeat != null
             ? lastDealResult.renonsSeat === mySeat
               ? lang.s.renonsByYou
-              : lang.s.renonsBy(meta(lastDealResult.renonsSeat).name)
+              : lang.s.renonsBy(
+                  meta(lastDealResult.renonsSeat).name,
+                  teamOf(lastDealResult.renonsSeat) === teamOf(mySeat),
+                )
+            : null
+        }
+        wrongCard={
+          lastDealResult?.renonsSeat === mySeat && wrongCard.current
+            ? wrongCardLines(lang, wrongCard.current)
             : null
         }
         series={series}
@@ -1517,7 +1648,7 @@ export function TableScreen(props: TableScreenProps) {
                   winner={matchOver ? winnerTeam : null}
                   series={series}
                   target={matchTarget}
-                  hard={hardMode}
+                  mode={playMode}
                 />
                 {plaque}
                 {calls}
@@ -1589,7 +1720,7 @@ export function TableScreen(props: TableScreenProps) {
                 winner={matchOver ? winnerTeam : null}
                 series={series}
                 target={matchTarget}
-                hard={hardMode}
+                mode={playMode}
               />
 
               {felt}
@@ -1739,7 +1870,7 @@ const TableHeader = memo(function TableHeader({
   winner = null,
   series = null,
   target = 1001,
-  hard = false,
+  mode = 'easy',
 }: {
   lang: Lang;
   mySeat: Seat;
@@ -1747,8 +1878,8 @@ const TableHeader = memo(function TableHeader({
   progress: DealProgress | null;
   /** Points the match is played to, shown between deals. */
   target?: number;
-  /** Prava bela: said beside the target, so nobody is caught out by a renons. */
-  hard?: boolean;
+  /** The version, said beside the target: nobody is caught out by what it asks. */
+  mode?: PlayMode;
   /**
    * Matches won per side since these four sat down (online; absolute team
    * ids like matchScores). Between the pills once a match has been won, so the
@@ -1844,8 +1975,7 @@ const TableHeader = memo(function TableHeader({
         </Anchor>
       ) : (
         <Text style={styles.subDim}>
-          {lang.s.gameToTarget(target)}
-          {hard ? ` · ${lang.s.difficultyHard}` : ''}
+          {lang.s.gameToTarget(target)} · {modeName(lang, mode)}
         </Text>
       )}
     </View>
@@ -1861,7 +1991,7 @@ const TableHeader = memo(function TableHeader({
   a.reduced === b.reduced &&
   a.winner === b.winner &&
   a.target === b.target &&
-  a.hard === b.hard &&
+  a.mode === b.mode &&
   (a.series?.[0] ?? -1) === (b.series?.[0] ?? -1) &&
   (a.series?.[1] ?? -1) === (b.series?.[1] ?? -1) &&
   a.matchScores[0] === b.matchScores[0] &&
@@ -2580,6 +2710,7 @@ function DealResult({
   winnerLabel,
   weWon = null,
   renonsText,
+  wrongCard = null,
   series,
   call = null,
   summary = null,
@@ -2607,6 +2738,8 @@ function DealResult({
   /** At the end of a match: was it ours? null while it is not over (or not known). */
   weWon?: boolean | null;
   renonsText?: string | null;
+  /** Prava bela, my own wrong card: which it was, the duty it broke, what could have gone. */
+  wrongCard?: readonly string[] | null;
   /** Matches won per side since this roster sat down; online only. */
   series?: readonly [number, number] | null;
   /** Who called the deal (null name: me), on which trump, at what stake. */
@@ -2789,6 +2922,16 @@ function DealResult({
           </Animated.Text>
         )}
       </View>
+
+      {wrongCard && wrongCard.length > 0 && (
+        <View style={styles.wrongCardBox} accessible>
+          {wrongCard.map((line) => (
+            <Text key={line} style={styles.wrongCardText}>
+              {line}
+            </Text>
+          ))}
+        </View>
+      )}
 
       {/* the columns, ours first */}
       <View style={styles.resultHeads}>
@@ -3312,6 +3455,43 @@ const styles = StyleSheet.create({
   // The zvanja prompt measures 58 on a phone; a shorter reserve still moved the hand.
   promptsReserve: { minHeight: 58, justifyContent: 'flex-end', gap: 8 },
   promptHint: { color: theme.textDim, fontSize: 12 },
+  // The coach's row: two lines of 16, the row's padding and border, and 2
+  // for the bold "Savjet:" sharing the first line (it stood a line 1 taller),
+  // said or not, so it never changes height between turns.
+  coachRow: { minHeight: 2 * 16 + 2 * 8 + 2 + 2, justifyContent: 'center' },
+  coachRowShort: { minHeight: 2 * 16 + 2 * 4 + 2 + 2, justifyContent: 'center' },
+  coachText: { lineHeight: 16 },
+  coachLabel: { color: theme.accent, fontFamily: font.bold, lineHeight: 16 },
+  // A bid's advice, over the felt the bid leaves empty.
+  coachFloat: {
+    // Over the felt, and no further than the side pucks' rings.
+    maxWidth: 220,
+    marginHorizontal: 16,
+    backgroundColor: surface.scrim,
+    borderRadius: radius.panel,
+    borderWidth: 1,
+    borderColor: theme.accent,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 2,
+  },
+  // Sideways the felt is wide and short: one wide line, low on the table.
+  coachFloatLandBox: { position: 'absolute', left: 0, right: 0, bottom: 2, alignItems: 'center' },
+  coachFloatLand: { maxWidth: 520, paddingVertical: 5 },
+  coachFloatLandText: { color: theme.text, fontSize: 12, lineHeight: 16 },
+  coachFloatTitle: { color: theme.accent, fontFamily: font.bold, fontSize: 13 },
+  coachFloatText: { color: theme.text, fontSize: 13, lineHeight: 18 },
+  // The wrong card, said on the sheet under the band.
+  wrongCardBox: {
+    marginTop: 8,
+    padding: 10,
+    borderRadius: radius.panel,
+    borderWidth: 1,
+    borderColor: theme.danger,
+    backgroundColor: surface.well,
+    gap: 3,
+  },
+  wrongCardText: { color: theme.text, fontSize: 13, lineHeight: 18 },
 
   handArea: { justifyContent: 'flex-end' },
   // Landscape: the fan, and my puck beside it on the faces' side.

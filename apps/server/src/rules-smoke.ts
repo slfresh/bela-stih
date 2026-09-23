@@ -1,14 +1,15 @@
 import './ws-polyfill';
 import { Client, type Room } from 'colyseus.js';
 import type { Action, PublicView } from '@belot/engine';
-import { MSG, ROOM_NAME, type RoomMessage } from './protocol';
+import { MSG, ROOM_NAME, ROOM_NAME_MODES, type RoomMessage } from './protocol';
 
 /**
  * End-to-end check of a private table's rules, against a running server:
  *
- *  - the host picks the match length (501 / 701 / 1001) and Prava bela in
- *    the lobby; nobody else can, only what is offered is taken, and quick
- *    play keeps 1001 whatever anyone sends;
+ *  - the host picks the match length (501 / 701 / 1001) and the version
+ *    (Učenje / Lagana / Prava bela) in the lobby; nobody else can, only what is
+ *    offered is taken, an older app's `hard` switch still works, and quick play
+ *    keeps 1001 and Lagana whatever anyone sends;
  *  - the choice is what the game is played to: a 501 match ends at the first
  *    deal a team passes 501 (not at 1001), and a rematch keeps it;
  *  - after the start nothing changes it.
@@ -85,40 +86,79 @@ async function main(): Promise<void> {
 
   // ---- the lobby ----
   const host = side();
-  wire(await client.create(ROOM_NAME, { name: 'Domacin', private: true }), host);
+  wire(await client.create(ROOM_NAME_MODES, { name: 'Domacin', private: true }), host);
   await wait(500);
   check(host.last?.target === 1001, `a new private table plays to 1001 (${host.last?.target})`);
-  check(host.last?.hard !== true, 'and is not Prava bela unless asked');
+  check(host.last?.mode === 'easy', `and is Lagana unless asked (${host.last?.mode})`);
+  check(host.last?.hard === true, 'which older apps are told as blind zvanja');
 
   const guest = side();
   wire(await client.joinById(host.room.roomId, { name: 'Gost' }), guest);
   await wait(500);
 
-  guest.room.send('rules', { target: 501, hard: true });
+  guest.room.send('rules', { target: 501, mode: 'hard' });
   await wait(400);
-  check(host.last?.target === 1001 && host.last?.hard !== true, 'a guest cannot change the rules');
+  check(host.last?.target === 1001 && host.last?.mode === 'easy', 'a guest cannot change the rules');
 
   host.room.send('rules', { target: 777 });
   await wait(400);
   check(host.last?.target === 1001, 'only the offered lengths are taken');
 
-  host.room.send('rules', { target: 501, hard: true });
+  host.room.send('rules', { target: 501, mode: 'hard' });
   await wait(400);
-  check(guest.last?.target === 501 && guest.last?.hard === true, 'the host sets 501 and Prava bela, and the guest sees both');
+  check(guest.last?.target === 501 && guest.last?.mode === 'hard', 'the host sets 501 and Prava bela, and the guest sees both');
 
+  host.room.send('rules', { mode: 'learn' });
+  await wait(400);
+  check(guest.last?.target === 501 && guest.last?.mode === 'learn' && guest.last?.hard !== true, 'one rule at a time: Učenje, 501 kept, no blind zvanja for older apps');
+
+  host.room.send('rules', { mode: 'nonsense' });
+  await wait(400);
+  check(guest.last?.mode === 'learn', 'only the offered versions are taken');
+
+  // An app from before the three versions: its switch still works.
+  host.room.send('rules', { hard: true });
+  await wait(400);
+  check(guest.last?.mode === 'hard' && guest.last?.hard === true, 'an older host\'s `hard: true` is Prava bela');
   host.room.send('rules', { hard: false });
   await wait(400);
-  check(guest.last?.target === 501 && guest.last?.hard !== true, 'one rule at a time: Prava bela off, 501 kept');
+  check(guest.last?.mode === 'learn' && guest.last?.hard !== true, 'and `hard: false` the rules it always meant (zvanja announced)');
+  host.room.send('rules', { mode: 'easy' });
+  await wait(400);
+  check(guest.last?.mode === 'easy', 'Lagana again');
   check((guest.view?.hand.length ?? 0) === 0, 'the lobby still shows nobody a card');
 
   // ---- quick play keeps the full game ----
   const stranger = side();
-  wire(await client.joinOrCreate(ROOM_NAME, { name: 'Stranac' }), stranger);
+  wire(await client.joinOrCreate(ROOM_NAME_MODES, { name: 'Stranac' }), stranger);
   await wait(500);
-  stranger.room.send('rules', { target: 501, hard: true });
+  check(stranger.last?.mode === 'easy', `quick play is Lagana (${stranger.last?.mode})`);
+  stranger.room.send('rules', { target: 501, mode: 'hard' });
   await wait(400);
-  check(stranger.last?.target === 1001 && stranger.last?.hard !== true, 'quick play stays 1001 and plain');
-  await stranger.room.leave(true);
+  check(stranger.last?.target === 1001 && stranger.last?.mode === 'easy', 'and stays 1001 and Lagana whatever anyone sends');
+
+  // ---- an app from before the three versions ----
+  // Its quick play is what it always was (zvanja announced), and never at a
+  // Lagana table it would read as Prava bela.
+  const old = side();
+  wire(await client.joinOrCreate(ROOM_NAME, { name: 'Stari' }), old);
+  await wait(500);
+  check(old.last?.mode === 'learn' && old.last?.hard !== true, `an older app's quick play keeps zvanja announced (${old.last?.mode}, hard ${old.last?.hard})`);
+  check(old.room.roomId !== stranger.room.roomId, 'and is not the newer apps\' table, free seats and all');
+  const oldHost = side();
+  wire(await client.create(ROOM_NAME, { name: 'StariDomacin', private: true, hard: false }), oldHost);
+  await wait(500);
+  check(oldHost.last?.mode === 'learn' && oldHost.last?.hard !== true, `an older host's table with hard: false is what it always was (${oldHost.last?.mode})`);
+  const oldHard = side();
+  wire(await client.create(ROOM_NAME, { name: 'StariTvrdi', private: true, hard: true }), oldHard);
+  await wait(500);
+  check(oldHard.last?.mode === 'hard' && oldHard.last?.hard === true, `and with hard: true, Prava bela (${oldHard.last?.mode})`);
+  // A code reaches a table under either name.
+  const across = side();
+  wire(await client.joinById(oldHost.room.roomId, { name: 'Novi' }), across);
+  await wait(500);
+  check(across.last?.mode === 'learn', 'a newer app joins an older host\'s table by its code');
+  for (const s of [stranger, old, oldHost, oldHard, across]) await s.room.leave(true);
 
   // ---- the game is played to what was chosen ----
   host.room.send('start', {});

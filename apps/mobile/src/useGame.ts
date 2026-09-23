@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { HARD_CONFIG_OVERRIDES, type Action, type PublicView, type Seat } from '@belot/engine';
+import { type Action, type PublicView, type Seat } from '@belot/engine';
+import { MODE_CONFIG } from './playMode';
 import { Table } from '@belot/table';
 import type { BotLevel } from '@belot/bots';
 import { Lang } from '@belot/i18n';
@@ -71,7 +72,7 @@ export function useGame(
     tableRef.current = new Table({
       humanSeats: [HUMAN],
       botLevel: level,
-      config: settings.hardMode ? HARD_CONFIG_OVERRIDES : undefined,
+      config: MODE_CONFIG[settings.difficulty],
     });
   }
   const table = tableRef.current;

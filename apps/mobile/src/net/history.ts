@@ -4,6 +4,8 @@
  * the series), and the statistics drawn from it.
  */
 
+import type { PlayMode } from '../playMode';
+
 export interface MatchRecord {
   /** `${day}:${code}:${matchNumber}` - the id the series counts matches by. */
   id: string;
@@ -18,6 +20,8 @@ export interface MatchRecord {
   /** Points played to (501 / 701 / 1001), and whether it was Prava bela. */
   target: number;
   hard: boolean;
+  /** The version played; absent in records from before the three versions (see recordMode). */
+  mode?: PlayMode;
   won: boolean;
   /** The final match score, ours first. */
   score: [number, number];
@@ -146,4 +150,13 @@ export function recordDate(iso: string): string {
   const hh = String(d.getHours()).padStart(2, '0');
   const mm = String(d.getMinutes()).padStart(2, '0');
   return `${d.getDate()}.${d.getMonth() + 1}.${d.getFullYear()}. ${hh}:${mm}`;
+}
+
+/**
+ * The version a record was played in. One from before the three versions
+ * knew only `hard`, and its other tables were called Lagana then: it keeps
+ * that name, not the rules' new one (they played zvanja announced).
+ */
+export function recordMode(r: Pick<MatchRecord, 'mode' | 'hard'>): PlayMode {
+  return r.mode ?? (r.hard ? 'hard' : 'easy');
 }

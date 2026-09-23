@@ -463,8 +463,9 @@ describe('the first frame and the last resort', () => {
     expect(t).toMatch(/setBackGuard\(/);
     const app = readFileSync(join(here, '../App.tsx'), 'utf8');
     expect(app).toMatch(/if \(runBackGuard\(\)\) return true;/);
-    // A short phone sheds the emote strip and the bot line while a prompt is up.
-    expect(t).toMatch(/const shed = m\.shortColumn && \(asking \|\| belaOffered\);/);
+    // A short phone sheds the emote strip and the bot line while a prompt is
+    // up, the bela buttons are, or Učenje's coach has its row.
+    expect(t).toMatch(/const shed = m\.shortColumn && \(asking \|\| belaOffered \|\| coachShown\);/);
     expect(t).toMatch(/a\.type === 'BID_CALL' \|\| a\.type === 'BID_PASS'/);
     // The dialog never outlives the match it was about.
     expect(t).toMatch(/\{leaving && !matchOver && \(/);
@@ -573,9 +574,10 @@ describe('the first frame and the last resort', () => {
     expect(portrait.indexOf('{arrangeInSlot && (')).toBeGreaterThan(portrait.indexOf('{!shed && emotes}'));
     // …but only when the faces were showing; a question that shed them keeps
     // the hint above the fan, where the felt pays, and the felt has no ceiling.
-    expect(t).toMatch(/const arrangeInSlot = short && arranging && !askingBesidesArranging && !belaOffered && !settled && !!onEmote;/);
+    // ...and not when Učenje's coach row had shed the faces: its hint takes the row's place.
+    expect(t).toMatch(/const arrangeInSlot =\s*short && arranging && !askingBesidesArranging && !belaOffered && !settled && !!onEmote && !coachRowUp;/);
     expect(t).toMatch(/short && arranging && !arrangeInSlot && \(\s*<View key="arrange"/);
-    expect(t).toMatch(/!settled && view\.canAnnounceBela && !hardMode && \(\s*<View key="bela"/);
+    expect(t).toMatch(/!settled && view\.canAnnounceBela && !blind && \(\s*<View key="bela"/);
     expect(src('table/metrics.ts')).toMatch(/: shortColumn\s*\?[\s\S]*?usableH\s*: Math\.round\(usableH \* 0\.48\)/);
     // A small hand rests clear of my tucked puck.
     expect(t).toMatch(/restFloor=\{short \? FAN_REST_SHORT : 0\}/);

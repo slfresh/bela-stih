@@ -329,7 +329,10 @@ describe('the settings', () => {
   });
 
   it('say what each difficulty changes, whichever is chosen', () => {
-    expect(s).toMatch(/settings\.hardMode \? lang\.s\.difficultyHardHint : lang\.s\.difficultyEasyHint/);
+    expect(s).toMatch(/settings\.difficulty === 'learn'\s*\? lang\.s\.difficultyLearnHint\s*: settings\.difficulty === 'hard'\s*\? lang\.s\.difficultyHardHint\s*: lang\.s\.difficultyEasyHint/);
+    // Three chips, one per version, named as the app names them everywhere.
+    expect(s).toMatch(/\{PLAY_MODES\.map\(\(d\) => \(/);
+    expect(s).toMatch(/\{modeName\(lang, d\)\}/);
   });
 });
 

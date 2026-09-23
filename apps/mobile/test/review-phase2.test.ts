@@ -45,7 +45,7 @@ describe('a private table-s rules, in one place', () => {
     expect(rules).toMatch(/MATCH_TARGETS\.includes\(m\.target\)/);
     expect(rules).toMatch(/this\.buildTable\(\);/);
     // The table is built with them (the smoke plays a 501 match to its end).
-    expect(room).toMatch(/config: \{ \.\.\.\(this\.hard \? HARD_CONFIG_OVERRIDES : \{\}\), matchTarget: this\.target \}/);
+    expect(room).toMatch(/config: \{ \.\.\.MODE_CONFIG\[this\.mode\], matchTarget: this\.target \}/);
     expect(room).toMatch(/target: this\.target,/);
   });
 
@@ -56,9 +56,9 @@ describe('a private table-s rules, in one place', () => {
     expect(o).toMatch(/label=\{ui\.turnClock\}/);
     expect(o).toMatch(/disabled=\{!host\}/);
     expect(o).toMatch(/accessibilityState=\{\{ checked: o\.on, disabled: !host \}\}/);
-    // And the table says them: the length, and Prava bela beside it.
+    // And the table says them: the length, and the version beside it, always.
     const t = src('src/TableScreen.tsx');
-    expect(t).toMatch(/\{lang\.s\.gameToTarget\(target\)\}\s*\{hard \? ` · \$\{lang\.s\.difficultyHard\}` : ''\}/);
+    expect(t).toMatch(/\{lang\.s\.gameToTarget\(target\)\} · \{modeName\(lang, mode\)\}/);
     expect(o).toMatch(/matchTarget=\{net\.target\}/);
   });
 });

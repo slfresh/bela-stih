@@ -289,6 +289,36 @@ export interface UiStrings {
   mustFollow: string;
   mustTrump: string;
   mustBeat: string;
+  /**
+   * Učenje's coach (apps/mobile/src/table/coach.ts): a title, what to call
+   * and why, what to play and why, and štiglja as it stands. Cards and suits
+   * come in as their names ("A srce"), never declined.
+   */
+  coachTitle: string;
+  coachCall: (suit: string, count: number, jack: boolean, nine: boolean, forced: boolean) => string;
+  coachPass: string;
+  coachPlay: (
+    why:
+      | 'leadTrump'
+      | 'leadAce'
+      | 'leadLow'
+      | 'lead'
+      | 'win'
+      | 'givePoints'
+      | 'duck'
+      | 'mustTrump'
+      | 'discard'
+      | 'only'
+      | 'play',
+    card: string,
+    bela: boolean,
+  ) => string;
+  coachStiglja: (ours: boolean) => string;
+  /** Between my turns, when nothing else is worth saying: the trumps to watch. */
+  coachWatch: (trump: string) => string;
+  /** Prava bela, after a wrong card: which went, the rule it broke, what could have gone. */
+  wrongCardWas: (card: string) => string;
+  wrongCardShould: (cards: readonly string[]) => string;
   /** The table: a look at the last trick, on my turn. */
   lastTrick: string;
   peekLastTrick: string;
@@ -323,7 +353,8 @@ export interface UiStrings {
   /** A person at a friends' table who never set a name. */
   unnamedPlayer: string;
   recordPeople: (partner: string, opponents: string[]) => string;
-  recordMeta: (target: number, hard: boolean, deals: [number, number] | null, best: number | null) => string;
+  /** A match in the history: its length, the version played (its name), deals, best deal. */
+  recordMeta: (target: number, mode: string, deals: [number, number] | null, best: number | null) => string;
   /** The shared invitation: the code as well as the link, for anyone who has to type it. */
   inviteText: (code: string, url: string) => string;
   /** The lobby's copy chip beside the code, its screen-reader name, and what it says once done. */
@@ -374,6 +405,12 @@ interface Strings {
   rankShort: Record<Rank, string>;
   /** Spoken name, for declarations: "terca do dečka". */
   rankName: Record<Rank, string>;
+  /** The card's rank said on its own, for the coach: "dečko", "as". */
+  rankWord: Record<Rank, string>;
+  /** A card by name, from its rank word and suit: "dečko srce", "jack of hearts". */
+  cardOf: (rank: string, suit: string) => string;
+  /** "a, b ili c": the last two joined by the language's "or". */
+  orList: (items: readonly string[]) => string;
 
   /**
    * Relative seat names, indexed by offset in PLAY order from the viewer:
@@ -427,9 +464,13 @@ interface Strings {
   /** The "do" in "dvadeset do kralja". */
   declTo: string;
   carre: (rank: string) => string;
-  /** Renons/auzmeš — the hard-mode misplay call. */
+  /** A wrong card (renons) in Prava bela: the misplay that ends the deal. */
   renonsTitle: string;
-  renonsBy: (who: string) => string;
+  /**
+   * Who played it, and so who gets the deal: my partner's wrong card gives it
+   * to the opponents, an opponent's to my pair. No gendered verb or noun.
+   */
+  renonsBy: (who: string, withYou: boolean) => string;
   /** The same, when the offender is the viewer, without a gendered verb. */
   renonsByYou: string;
   /** Hard-mode blind claim button + empty-claim toast. */
@@ -452,13 +493,18 @@ interface Strings {
   /** More than one zvanje marked at once - also fine, the engine takes them all. */
   markingOkMany: string;
   markingNotZvanje: string;
+  /** Prava bela checks no marking: what to do, and nothing about whether it is one. */
+  markingUnchecked: string;
   declareMarked: string;
   /** Difficulty setting. */
   difficulty: string;
+  /** The three versions (apps/mobile/src/playMode.ts): Učenje, Lagana, Prava bela. */
+  difficultyLearn: string;
   difficultyEasy: string;
   difficultyHard: string;
   difficultyHardHint: string;
   difficultyEasyHint: string;
+  difficultyLearnHint: string;
   /** Card-face style chooser. */
   deckStyleLabel: string;
   deckMadarice: string;
@@ -614,6 +660,18 @@ const hr: Strings = {
     K: 'kralja',
     A: 'asa',
   },
+  rankWord: {
+    '7': 'sedmica',
+    '8': 'osmica',
+    '9': 'devetka',
+    '10': 'desetka',
+    J: 'dečko',
+    Q: 'baba',
+    K: 'kralj',
+    A: 'as',
+  },
+  cardOf: (rank, suit) => `${rank} ${suit}`,
+  orList: (items) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} ili ${items[items.length - 1]}`),
 
   seat: ['Ti', 'Desni', 'Partner', 'Lijevi'],
   seatAbsolute: (seat) => `Igrač ${seat}`,
@@ -653,9 +711,10 @@ const hr: Strings = {
     String(value),
   declTo: 'do',
   carre: (rank) => `četiri ${rank}`,
-  renonsTitle: 'Auzmeš!',
-  renonsBy: (who) => `${who} je pogriješio — cijelo dijeljenje ide protivnicima`,
-  renonsByYou: 'Tvoj auzmeš — cijelo dijeljenje ide protivnicima',
+  renonsTitle: 'Kriva karta!',
+  renonsBy: (who, withYou) =>
+    `${who} igra kartu koja nije dopuštena — cijelo dijeljenje ide ${withYou ? 'protivnicima' : 'tvom paru'}.`,
+  renonsByYou: 'Tvoja karta nije dopuštena — cijelo dijeljenje ide protivnicima.',
   claimZvanja: 'Zovem zvanje',
   claimZvanjaHint: 'Imaš li zvanje? Pazi — tko ne zove, propada mu.',
   noZvanja: 'Nemaš ništa za zvati',
@@ -668,14 +727,18 @@ const hr: Strings = {
   markingOk: 'To je zvanje — pritisni Prijavi',
   markingOkMany: 'To su tvoja zvanja — pritisni Prijavi',
   markingNotZvanje: 'Označene karte nisu zvanje',
+  markingUnchecked: 'Kad označiš cijelo zvanje, pritisni Prijavi',
   declareMarked: 'Prijavi',
-  difficulty: 'Težina',
+  difficulty: 'Verzija igre',
+  difficultyLearn: 'Učenje',
   difficultyEasy: 'Lagana',
   difficultyHard: 'Prava bela',
   difficultyHardHint:
-    'Prava bela: aplikacija ne čuva pravila umjesto tebe. Zvanja tražiš bez pomoći, a kriva karta je auzmeš — protivnici pišu sve.',
+    'Prava bela: bez ikakve pomoći. Zvanja i belu nalaziš kao za pravim stolom, a kriva karta košta cijelo dijeljenje: protivnici pišu sve. Poslije ti aplikacija pokaže koja je karta trebala ići.',
   difficultyEasyHint:
-    'Lagana: aplikacija pazi na pravila. Kriva karta se ne može odigrati, a zvanja koja imaš ponudi ti sama.',
+    'Lagana: zvanja i belu nalaziš i prijavljuješ ti, kao za pravim stolom; aplikacija samo kaže jesu li označene karte zvanje. Kriva karta se ne može odigrati, a aplikacija kaže zašto.',
+  difficultyLearnHint:
+    'Učenje: aplikacija te vodi. Pronalazi tvoja zvanja, ne pušta krivu kartu i savjetuje kad zvati, što igrati i kako do štiglje.',
   deckStyleLabel: 'Karte',
   deckMadarice: 'Mađarice',
   deckStarinske: 'Starinske',
@@ -748,9 +811,12 @@ const hr: Strings = {
         ],
       },
       {
-        title: 'Prava bela',
+        title: 'Tri verzije',
         lines: [
-          'Za privatnim stolom ili u postavkama (Težina) možeš igrati bez pomoći: aplikacija ne traži zvanja umjesto tebe, a kriva karta je auzmeš. Dijeljenje tada staje i protivnici pišu sve.',
+          'Učenje: aplikacija pronalazi tvoja zvanja, ne pušta krivu kartu i savjetuje što igrati.',
+          'Lagana: zvanja i belu nalaziš i prijavljuješ ti (aplikacija samo kaže jesu li označene karte zvanje); kriva karta se ne može odigrati.',
+          'Prava bela: bez pomoći, a kriva karta košta cijelo dijeljenje: protivnici pišu sve.',
+          'Verziju biraš u postavkama (Verzija igre), a za privatnim stolom bira je onaj tko ga je napravio. Brza igra s nepoznatima uvijek je Lagana.',
         ],
       },
     ],
@@ -772,7 +838,7 @@ const hr: Strings = {
       ['bela', 'kralj i baba aduta, 20 bodova'],
       ['pad', 'par koji je zvao nije skupio dovoljno; sve ide protivnicima'],
       ['štiglja', 'svih osam štihova; još 90 bodova'],
-      ['auzmeš', 'kriva karta u pravoj beli; dijeljenje ide protivnicima'],
+      ['kriva karta', 'karta koju pravila ne dopuštaju; u pravoj beli dijeljenje ide protivnicima'],
     ],
   },
 
@@ -947,6 +1013,33 @@ const hr: Strings = {
     mustFollow: 'Moraš odgovoriti na boju',
     mustTrump: 'Nemaš boju — moraš rezati',
     mustBeat: 'Moraš prebiti — imaš jaču',
+    coachTitle: 'Savjet',
+    coachCall: (suit, count, jack, nine, forced) =>
+      forced
+        ? `Moraš zvati (muss). Najbolji adut: ${suit}.`
+        : `Zovi ${suit}. Karata te boje: ${count}${jack && nine ? ', uz dečka i devetku' : jack ? ', uz dečka' : nine ? ', uz devetku' : ''}.${jack || nine ? ' Dečko i devetka najjači su aduti.' : ''}`,
+    coachPass: 'Reci dalje: nijedna boja nije jaka za adut. Za adut treba dečko ili devetka i još koja karta te boje.',
+    coachPlay: (why, card, bela) =>
+      ({
+        leadTrump: `Kreni adutom: ${card}. Tako izvlačiš adute protivnicima.`,
+        leadAce: `Kreni: ${card}. As je najjača karta u boji i vjerojatno nosi štih.`,
+        leadLow: `Kreni: ${card}. Slaba karta čuva jake za kasnije.`,
+        lead: `Kreni: ${card}.`,
+        win: `Uzmi štih: ${card}.`,
+        givePoints: `Štih ide tvom paru — daj bodove: ${card}.`,
+        duck: `Partner nosi štih — ne troši jaku kartu: ${card}.`,
+        mustTrump: `Nemaš tu boju, pa moraš rezati adutom: ${card}.`,
+        discard: `Ovaj štih ne možeš uzeti — baci slabu kartu: ${card}.`,
+        only: `Smiješ igrati samo jednu kartu: ${card}.`,
+        play: `Igraj: ${card}.`,
+      })[why] + (bela ? ' Reci i BELA: +20.' : ''),
+    coachStiglja: (ours) =>
+      ours
+        ? 'Tvoj par ima sve štihove: uzme li i ostale, to je štiglja, +90.'
+        : 'Protivnici imaju sve štihove: jedan štih za tvoj par i nema štiglje.',
+    coachWatch: (trump) => `Adut: ${trump}. Prati koji su aduti izašli: tko ih nema, ne može rezati.`,
+    wrongCardWas: (card) => `Odigrana karta: ${card}.`,
+    wrongCardShould: (cards) => `Trebalo je igrati: ${hr.orList(cards)}.`,
     lastTrick: 'zadnji štih',
     peekLastTrick: 'Pogledaj zadnji štih',
     showQr: 'QR kod',
@@ -975,10 +1068,10 @@ const hr: Strings = {
     botWord: 'bot',
     unnamedPlayer: 'igrač bez imena',
     recordPeople: (partner, opponents) => `partner: ${partner} · protiv: ${opponents.join(', ')}`,
-    recordMeta: (target, hard, deals, best) =>
+    recordMeta: (target, mode, deals, best) =>
       [
         `igra do ${target}`,
-        hard ? 'Prava bela' : null,
+        mode,
         deals ? `dijeljenja ${deals[0]}:${deals[1]}` : null,
         best !== null ? `najbolje ${best}` : null,
       ]
@@ -1081,6 +1174,18 @@ const srCyrl: Strings = {
   suit: { clubs: 'жир', spades: 'лист', hearts: 'срце', diamonds: 'бундева' },
   season: { hearts: 'Пролеће', diamonds: 'Лето', spades: 'Јесен', clubs: 'Зима' },
   rankShort: { ...ROMAN, J: 'Д', Q: 'Б', K: 'К', A: 'А' },
+  rankWord: {
+    '7': 'седмица',
+    '8': 'осмица',
+    '9': 'деветка',
+    '10': 'десетка',
+    J: 'дечко',
+    Q: 'баба',
+    K: 'краљ',
+    A: 'ас',
+  },
+  cardOf: (rank, suit) => `${rank} ${suit}`,
+  orList: (items) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} или ${items[items.length - 1]}`),
   rankName: {
     '7': 'седмице',
     '8': 'осмице',
@@ -1130,9 +1235,10 @@ const srCyrl: Strings = {
     String(value),
   declTo: 'до',
   carre: (rank) => `четири ${rank}`,
-  renonsTitle: 'Аузмеш!',
-  renonsBy: (who) => `${who} је погрешио — цело дељење иде противницима`,
-  renonsByYou: 'Твој аузмеш — цело дељење иде противницима',
+  renonsTitle: 'Погрешна карта!',
+  renonsBy: (who, withYou) =>
+    `${who} игра карту која није дозвољена — цело дељење иде ${withYou ? 'противницима' : 'твом пару'}.`,
+  renonsByYou: 'Твоја карта није дозвољена — цело дељење иде противницима.',
   claimZvanja: 'Зовем звање',
   claimZvanjaHint: 'Имаш ли звање? Пази — ко не зове, пропада му.',
   noZvanja: 'Немаш ништа за звати',
@@ -1145,14 +1251,18 @@ const srCyrl: Strings = {
   markingOk: 'То је звање — притисни Пријави',
   markingOkMany: 'То су твоја звања — притисни Пријави',
   markingNotZvanje: 'Означене карте нису звање',
+  markingUnchecked: 'Кад означиш цело звање, притисни Пријави',
   declareMarked: 'Пријави',
-  difficulty: 'Тежина',
+  difficulty: 'Верзија игре',
+  difficultyLearn: 'Учење',
   difficultyEasy: 'Лагана',
   difficultyHard: 'Права бела',
   difficultyHardHint:
-    'Права бела: апликација не чува правила уместо тебе. Звања тражиш без помоћи, а крива карта је аузмеш — противници пишу све.',
+    'Права бела: без икакве помоћи. Звања и белу налазиш као за правим столом, а погрешна карта кошта цело дељење: противници пишу све. После ти апликација покаже која је карта требало да иде.',
   difficultyEasyHint:
-    'Лагана: апликација пази на правила. Крива карта не може да се одигра, а звања која имаш понуди ти сама.',
+    'Лагана: звања и белу налазиш и пријављујеш ти, као за правим столом; апликација само каже да ли су означене карте звање. Погрешна карта не може да се одигра, а апликација каже зашто.',
+  difficultyLearnHint:
+    'Учење: апликација те води. Проналази твоја звања, не пушта погрешну карту и саветује кад да зовеш, шта да играш и како до штигље.',
   deckStyleLabel: 'Карте',
   deckMadarice: 'Мађарице',
   deckStarinske: 'Старинске',
@@ -1225,9 +1335,12 @@ const srCyrl: Strings = {
         ],
       },
       {
-        title: 'Права бела',
+        title: 'Три верзије',
         lines: [
-          'За приватним столом или у подешавањима (Тежина) можеш да играш без помоћи: апликација не тражи звања уместо тебе, а погрешна карта је аузмеш. Дељење тада стаје и противници пишу све.',
+          'Учење: апликација проналази твоја звања, не пушта погрешну карту и саветује шта да играш.',
+          'Лагана: звања и белу налазиш и пријављујеш ти (апликација само каже да ли су означене карте звање); погрешна карта не може да се одигра.',
+          'Права бела: без помоћи, а погрешна карта кошта цело дељење: противници пишу све.',
+          'Верзију бираш у подешавањима (Верзија игре), а за приватним столом бира је онај ко га је направио. Брза игра са непознатима је увек Лагана.',
         ],
       },
     ],
@@ -1249,7 +1362,7 @@ const srCyrl: Strings = {
       ['бела', 'краљ и баба адута, 20 бодова'],
       ['пад', 'пар који је звао није скупио довољно; све иде противницима'],
       ['штигља', 'свих осам штихова; још 90 бодова'],
-      ['аузмеш', 'погрешна карта у правој бели; дељење иде противницима'],
+      ['погрешна карта', 'карта коју правила не дозвољавају; у правој бели дељење иде противницима'],
     ],
   },
 
@@ -1424,6 +1537,33 @@ const srCyrl: Strings = {
     mustFollow: 'Мораш да одговориш на боју',
     mustTrump: 'Немаш боју — мораш да сечеш',
     mustBeat: 'Мораш да пребијеш — имаш јачу',
+    coachTitle: 'Савет',
+    coachCall: (suit, count, jack, nine, forced) =>
+      forced
+        ? `Мораш да зовеш (мус). Најбољи адут: ${suit}.`
+        : `Зови ${suit}. Карата те боје: ${count}${jack && nine ? ', уз дечка и деветку' : jack ? ', уз дечка' : nine ? ', уз деветку' : ''}.${jack || nine ? ' Дечко и деветка су најјачи адути.' : ''}`,
+    coachPass: 'Реци даље: ниједна боја није јака за адут. За адут треба дечко или деветка и још која карта те боје.',
+    coachPlay: (why, card, bela) =>
+      ({
+        leadTrump: `Крени адутом: ${card}. Тако извлачиш адуте противницима.`,
+        leadAce: `Крени: ${card}. Ас је најјача карта у боји и вероватно носи штих.`,
+        leadLow: `Крени: ${card}. Слаба карта чува јаке за касније.`,
+        lead: `Крени: ${card}.`,
+        win: `Узми штих: ${card}.`,
+        givePoints: `Штих иде твом пару — дај бодове: ${card}.`,
+        duck: `Партнер носи штих — не троши јаку карту: ${card}.`,
+        mustTrump: `Немаш ту боју, па мораш да сечеш адутом: ${card}.`,
+        discard: `Овај штих не можеш да узмеш — баци слабу карту: ${card}.`,
+        only: `Смеш да играш само једну карту: ${card}.`,
+        play: `Играј: ${card}.`,
+      })[why] + (bela ? ' Реци и БЕЛА: +20.' : ''),
+    coachStiglja: (ours) =>
+      ours
+        ? 'Твој пар има све штихове: узме ли и остале, то је штигља, +90.'
+        : 'Противници имају све штихове: један штих за твој пар и нема штигље.',
+    coachWatch: (trump) => `Адут: ${trump}. Прати који су адути изашли: ко их нема, не може да сече.`,
+    wrongCardWas: (card) => `Одиграна карта: ${card}.`,
+    wrongCardShould: (cards) => `Требало је играти: ${srCyrl.orList(cards)}.`,
     lastTrick: 'задњи штих',
     peekLastTrick: 'Погледај задњи штих',
     showQr: 'QR код',
@@ -1452,10 +1592,10 @@ const srCyrl: Strings = {
     botWord: 'бот',
     unnamedPlayer: 'играч без имена',
     recordPeople: (partner, opponents) => `партнер: ${partner} · против: ${opponents.join(', ')}`,
-    recordMeta: (target, hard, deals, best) =>
+    recordMeta: (target, mode, deals, best) =>
       [
         `игра до ${target}`,
-        hard ? 'Права бела' : null,
+        mode,
         deals ? `дељења ${deals[0]}:${deals[1]}` : null,
         best !== null ? `најбоље ${best}` : null,
       ]
@@ -1558,6 +1698,18 @@ const en: Strings = {
   suit: { clubs: 'acorns', spades: 'leaves', hearts: 'hearts', diamonds: 'bells' },
   season: { hearts: 'Spring', diamonds: 'Summer', spades: 'Autumn', clubs: 'Winter' },
   rankShort: { ...ROMAN, J: 'J', Q: 'Q', K: 'K', A: 'A' },
+  rankWord: {
+    '7': 'seven',
+    '8': 'eight',
+    '9': 'nine',
+    '10': 'ten',
+    J: 'jack',
+    Q: 'queen',
+    K: 'king',
+    A: 'ace',
+  },
+  cardOf: (rank, suit) => `${rank} of ${suit}`,
+  orList: (items) => (items.length < 2 ? items.join('') : `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`),
   rankName: {
     '7': 'seven',
     '8': 'eight',
@@ -1604,9 +1756,10 @@ const en: Strings = {
     String(value),
   declTo: 'to the',
   carre: (rank) => `four ${rank}s`,
-  renonsTitle: 'Renons!',
-  renonsBy: (who) => `${who} broke the rules of play — the whole deal goes to the opponents`,
-  renonsByYou: 'Your renons — the whole deal goes to the opponents',
+  renonsTitle: 'Wrong card!',
+  renonsBy: (who, withYou) =>
+    `${who} played a card that was not allowed — the whole deal goes to ${withYou ? 'the opponents' : 'your pair'}.`,
+  renonsByYou: 'Your card was not allowed — the whole deal goes to the opponents.',
   claimZvanja: 'Declare',
   claimZvanjaHint: 'Got a declaration? Spot it yourself — unclaimed is forfeited.',
   noZvanja: 'Nothing to declare',
@@ -1619,14 +1772,18 @@ const en: Strings = {
   markingOk: 'That is a declaration — press Declare',
   markingOkMany: 'Those are your declarations — press Declare',
   markingNotZvanje: 'Those cards are not a declaration',
+  markingUnchecked: 'Mark the whole declaration, then press Declare',
   declareMarked: 'Declare',
-  difficulty: 'Difficulty',
+  difficulty: 'Game version',
+  difficultyLearn: 'Learning',
   difficultyEasy: 'Casual',
   difficultyHard: 'True bela',
   difficultyHardHint:
-    'True bela: the app stops policing for you. Find your own declarations, and an illegal card is renons — the opponents write everything.',
+    'True bela: no help at all. Your declarations and bela are yours to find, and a wrong card costs the whole deal: the opponents write everything. Afterwards the app shows which card should have gone.',
   difficultyEasyHint:
-    'Casual: the app keeps the rules for you. An illegal card cannot be played, and it offers you the declarations you hold.',
+    'Casual: you find and call your own declarations and bela, as at a real table; the app only says whether the cards you marked are one. A wrong card cannot be played, and the app says why.',
+  difficultyLearnHint:
+    'Learning: the app guides you. It finds your declarations, never lets a wrong card go, and advises when to call, what to play and how to reach štiglja.',
   deckStyleLabel: 'Cards',
   deckMadarice: 'Hungarian',
   deckStarinske: 'Vintage',
@@ -1699,9 +1856,12 @@ const en: Strings = {
         ],
       },
       {
-        title: 'Prava bela',
+        title: 'Three versions',
         lines: [
-          'At a private table, or in Settings (Difficulty), you can play without help: the app does not find your declarations, and a wrong card is a renons (auzmeš). The deal then stops and the other pair takes everything.',
+          'Learning: the app finds your declarations, never lets a wrong card go, and advises what to play.',
+          'Casual: you find and call your own declarations and bela (the app only says whether the cards you marked are one); a wrong card cannot be played.',
+          'True bela: no help, and a wrong card costs the whole deal: the others write everything.',
+          'You pick the version in Settings (Game version); at a private table, whoever made it picks. Quick play with strangers is always Casual.',
         ],
       },
     ],
@@ -1723,7 +1883,7 @@ const en: Strings = {
       ['bela', 'the king and queen of trumps, 20 points'],
       ['down (pad)', 'the callers fell short; everything goes to the others'],
       ['štiglja', 'all eight tricks; 90 more points'],
-      ['renons (auzmeš)', 'a wrong card in Prava bela; the deal goes to the others'],
+      ['wrong card (renons)', 'a card the rules do not allow; in True bela the deal goes to the others'],
     ],
   },
 
@@ -1898,6 +2058,33 @@ const en: Strings = {
     mustFollow: 'Follow suit',
     mustTrump: 'None of that suit — you must trump',
     mustBeat: 'Beat it — you hold a higher card',
+    coachTitle: 'Tip',
+    coachCall: (suit, count, jack, nine, forced) =>
+      forced
+        ? `You must call (muss). Best trump: ${suit}.`
+        : `Call ${suit}. Cards of that suit: ${count}${jack && nine ? ', with the jack and the nine' : jack ? ', with the jack' : nine ? ', with the nine' : ''}.${jack || nine ? ' The jack and the nine are the strongest trumps.' : ''}`,
+    coachPass: 'Pass: no suit is strong enough for trump. It wants the jack or the nine and another card of that suit.',
+    coachPlay: (why, card, bela) =>
+      ({
+        leadTrump: `Lead a trump: ${card}. It draws the others' trumps out.`,
+        leadAce: `Lead: ${card}. An ace is the strongest of its suit and likely takes the trick.`,
+        leadLow: `Lead: ${card}. A low card keeps the strong ones for later.`,
+        lead: `Lead: ${card}.`,
+        win: `Take the trick: ${card}.`,
+        givePoints: `The trick is your pair's — give it points: ${card}.`,
+        duck: `Your partner holds the trick — save your strong cards: ${card}.`,
+        mustTrump: `None of that suit, so you must trump: ${card}.`,
+        discard: `You can't take this trick — throw a low card: ${card}.`,
+        only: `Only one card may go: ${card}.`,
+        play: `Play: ${card}.`,
+      })[why] + (bela ? ' Call BELA too: +20.' : ''),
+    coachStiglja: (ours) =>
+      ours
+        ? 'Your pair holds every trick: take the rest too and it is štiglja, +90.'
+        : 'The others hold every trick: one trick for your pair and there is no štiglja.',
+    coachWatch: (trump) => `Trump: ${trump}. Watch which trumps are out: whoever has none cannot trump.`,
+    wrongCardWas: (card) => `The card played: ${card}.`,
+    wrongCardShould: (cards) => `It should have been: ${en.orList(cards)}.`,
     lastTrick: 'last trick',
     peekLastTrick: 'Show the last trick',
     showQr: 'QR code',
@@ -1926,10 +2113,10 @@ const en: Strings = {
     botWord: 'bot',
     unnamedPlayer: 'unnamed player',
     recordPeople: (partner, opponents) => `partner: ${partner} · against: ${opponents.join(', ')}`,
-    recordMeta: (target, hard, deals, best) =>
+    recordMeta: (target, mode, deals, best) =>
       [
         `game to ${target}`,
-        hard ? 'True bela' : null,
+        mode,
         deals ? `deals ${deals[0]}:${deals[1]}` : null,
         best !== null ? `best ${best}` : null,
       ]
@@ -2000,6 +2187,11 @@ export class Lang {
 
   rankName(rank: Rank): string {
     return this.t.rankName[rank];
+  }
+
+  /** A card said in words, as the language says it: "dečko srce", "jack of hearts". */
+  cardName(card: { rank: Rank; suit: Suit }): string {
+    return this.t.cardOf(this.t.rankWord[card.rank], this.t.suit[card.suit]);
   }
 
   /** Seats read relative to the person; absolute when nobody is seated. */

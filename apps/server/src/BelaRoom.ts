@@ -1,28 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import { Room, ServerError, type AuthContext, type Client } from '@colyseus/core';
 import type { Action, Seat } from '@belot/engine';
-import { DEFAULT_CONFIG, HARD_CONFIG_OVERRIDES, RANKS, SEATS, SUITS } from '@belot/engine';
+import { DEFAULT_CONFIG, HARD_CONFIG_OVERRIDES, RANKS, SEATS, SUITS, type EngineConfig } from '@belot/engine';
 import type { Card, Rank, Rng, Suit } from '@belot/engine';
 import { Table } from '@belot/table';
-import {
-  EMOTE_GAP_MS,
-  EMOTE_IDS,
-  GIFT_GAP_MS,
-  GIFT_IDS,
-  MATCH_TARGETS,
-  MSG,
-  NEXT_DEAL_MS,
-  PAUSE_MAX_MS,
-  TURN_CHOICES,
-  WAIT_FOR_DROPPED_MS,
-  type ClientMessage,
-  type HoldInfo,
-  type EmoteMessage,
-  type GiftMessage,
-  type JoinGifts,
-  type RoomMessage,
-  type SeatInfo,
-} from './protocol';
+import { EMOTE_GAP_MS, EMOTE_IDS, GIFT_GAP_MS, GIFT_IDS, MATCH_TARGETS, MSG, NEXT_DEAL_MS, PAUSE_MAX_MS, TURN_CHOICES, WAIT_FOR_DROPPED_MS, type ClientMessage, type HoldInfo, type EmoteMessage, type GiftMessage, type JoinGifts, type RoomMessage, type SeatInfo, isPlayMode, modeFromLegacy, type PlayMode } from './protocol';
 import { cleanName } from './names';
 import { tableCode } from './codes';
 
@@ -166,11 +148,19 @@ function originOf(context: AuthContext): string {
   return String(first ?? '').split(',')[0]!.trim();
 }
 
+/** Each version as the engine's own switches (the rules themselves are untouched). */
+const MODE_CONFIG: Record<PlayMode, Partial<EngineConfig>> = {
+  learn: {},
+  easy: { declarationMode: 'blind' },
+  hard: HARD_CONFIG_OVERRIDES,
+};
+
 export class BelaRoom extends Room {
   override maxClients = 4;
 
   private table!: Table;
-  private hard = false;
+  /** The version played: quick play is Lagana; a private table's host picks. */
+  private mode: PlayMode = 'easy';
   /** Points the match is played to: quick play's 1001, or what a private table's host chose. */
   private target = DEFAULT_CONFIG.matchTarget;
   /** Public tables are the ones strangers are matched into. */
@@ -234,12 +224,24 @@ export class BelaRoom extends Room {
    */
   private gifts: (string | null)[] = [null, null, null, null];
 
-  override onCreate(options: { private?: boolean; hard?: boolean; target?: number } = {}): void {
+  override onCreate(
+    options: { private?: boolean; mode?: unknown; hard?: boolean; target?: number; modes?: boolean } = {},
+  ): void {
     this.occupants = SEATS.map(vacant);
-    // "Prava bela" and a shorter match are the host's choice, and only on
-    // private tables — quick play must stay predictable for strangers. The
-    // host may change both in the lobby, until the start.
-    this.hard = options.private === true && options.hard === true;
+    // The version and a shorter match are the host's choice, and only on
+    // private tables - quick play must stay predictable for strangers. The
+    // host may change both in the lobby, until the start. A table asked for
+    // under ROOM_NAME_MODES (`modes`) is Lagana unless its host says
+    // otherwise; one asked for by an app from before the three versions plays
+    // what that app always played - zvanja announced - unless its `hard` says
+    // Prava bela.
+    const standard: PlayMode = options.modes === true ? 'easy' : 'learn';
+    this.mode =
+      options.private === true
+        ? isPlayMode(options.mode)
+          ? options.mode
+          : (modeFromLegacy(options.hard) ?? standard)
+        : standard;
     if (options.private === true && typeof options.target === 'number' && MATCH_TARGETS.includes(options.target)) {
       this.target = options.target;
     }
@@ -465,7 +467,7 @@ export class BelaRoom extends Room {
   private buildTable(): void {
     this.table = new Table({
       humanSeats: [...SEATS],
-      config: { ...(this.hard ? HARD_CONFIG_OVERRIDES : {}), matchTarget: this.target },
+      config: { ...MODE_CONFIG[this.mode], matchTarget: this.target },
       // No seed at all. Table's default is `Date.now()`, which is fine for the
       // CLI and offline play (dealer and player are the same device) and
       // catastrophic here — but so is any 32-bit seed, crypto or not, because
@@ -602,15 +604,17 @@ export class BelaRoom extends Room {
     if (packet.type === 'rules') {
       // The same four conditions as the clock: before the start, a private
       // table, its host, and only what is offered.
-      const m = packet.message as { target?: unknown; hard?: unknown } | undefined;
+      const m = packet.message as { target?: unknown; mode?: unknown; hard?: unknown } | undefined;
       if (this.started || this.isPublic || seat !== this.actingHostSeat()) return;
       let changed = false;
       if (typeof m?.target === 'number' && MATCH_TARGETS.includes(m.target) && m.target !== this.target) {
         this.target = m.target;
         changed = true;
       }
-      if (typeof m?.hard === 'boolean' && m.hard !== this.hard) {
-        this.hard = m.hard;
+      // The version by name, or an older app's `hard` switch.
+      const mode = isPlayMode(m?.mode) ? m.mode : modeFromLegacy(m?.hard);
+      if (mode !== null && mode !== this.mode) {
+        this.mode = mode;
         changed = true;
       }
       if (!changed) return;
@@ -1019,7 +1023,9 @@ export class BelaRoom extends Room {
       ...(this.isHeld() ? { hold: this.holdInfo()! } : {}),
       ...(this.nextEndsAt > 0 ? { nextMsLeft: Math.max(0, this.nextEndsAt - Date.now()) } : {}),
       ...(this.table.phase === 'DEAL_OVER' && this.nextVotes.size > 0 ? { nextVotes: [...this.nextVotes] } : {}),
-      ...(this.hard ? { hard: true } : {}),
+      mode: this.mode,
+      // Older apps read only this: blind zvanja for them too.
+      ...(this.mode !== 'learn' ? { hard: true } : {}),
       series: [this.series[0], this.series[1]],
       matchNumber: this.matchNumber,
       // Only votes from people still on the line: a dropped player's vote left

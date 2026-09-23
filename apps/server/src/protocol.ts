@@ -12,6 +12,15 @@ import type { TableEvent } from '@belot/table';
  */
 
 export const ROOM_NAME = 'bela';
+/**
+ * The room apps that know the three versions ask for (1.4.3 on). Quick play
+ * matches by room name, so an older app - which knows only `hard`, and would
+ * read a Lagana table's `hard: true` as Prava bela, free taps and all - never
+ * sits down at a newer app's quick-play table, and keeps the quick play it
+ * always had: zvanja announced (`learn`). A code reaches a table under
+ * either name.
+ */
+export const ROOM_NAME_MODES = 'bela-modes';
 
 /** Client -> server. */
 export type ClientMessage =
@@ -52,7 +61,7 @@ export type ClientMessage =
    * Host, private table, before the start: how long the match runs (one of
    * MATCH_TARGETS) and whether it is Prava bela. Either may be left out.
    */
-  | { type: 'rules'; target?: number; hard?: boolean }
+  | { type: 'rules'; target?: number; mode?: PlayMode; hard?: boolean }
   /**
    * Private tables: this player's app went to the background - a phone call
    * that did not drop the connection. The table waits for them exactly as for
@@ -70,6 +79,30 @@ export const TURN_CHOICES: readonly number[] = [30, 60, 90];
  * 1001, the full game, the same for every stranger.
  */
 export const MATCH_TARGETS: readonly number[] = [501, 701, 1001];
+
+/**
+ * The three versions of the game (the app's playMode.ts keeps the same list,
+ * cross-checked by a test). Each is a set of the engine's own switches:
+ *  - learn (Učenje): zvanja announced to their holder, a wrong card refused;
+ *  - easy (Lagana): zvanja blind - the player finds them - a wrong card refused;
+ *  - hard (Prava bela): zvanja blind, and a wrong card is a renons.
+ * Quick play is always `easy`; a private table's host picks.
+ */
+export type PlayMode = 'learn' | 'easy' | 'hard';
+export const PLAY_MODES: readonly PlayMode[] = ['learn', 'easy', 'hard'];
+
+export function isPlayMode(x: unknown): x is PlayMode {
+  return x === 'learn' || x === 'easy' || x === 'hard';
+}
+
+/**
+ * An app from before the three versions sends and reads only `hard`. Its
+ * not-hard tables were the rules `learn` keeps (zvanja announced), so that is
+ * what `hard: false` means from it.
+ */
+export function modeFromLegacy(hard: unknown): PlayMode | null {
+  return hard === true ? 'hard' : hard === false ? 'learn' : null;
+}
 
 /**
  * How long a scored deal's sheet stays up before the next deal starts by
@@ -184,7 +217,13 @@ export interface RoomMessage {
   turnMsLeft?: number;
   /** Full length of a turn, so the client's ring scales correctly. */
   turnTotalMs?: number;
-  /** True on "prava bela" tables: renons punishes and zvanja are blind. */
+  /** The version played: Učenje, Lagana or Prava bela. */
+  mode?: PlayMode;
+  /**
+   * For apps from before the three versions: true whenever zvanja are blind
+   * (Lagana and Prava bela), so such an app asks its player to find them
+   * instead of answering "Nemam" for them.
+   */
   hard?: boolean;
   /** Seat of the table's creator — the one who may start with bots. */
   hostSeat?: Seat;

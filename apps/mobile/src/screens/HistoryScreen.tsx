@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { Lang } from '@belot/i18n';
-import { people, recordDate, totals, UNNAMED, type MatchRecord } from '../net/history';
+import { people, recordDate, recordMode, totals, UNNAMED, type MatchRecord } from '../net/history';
+import { modeName } from '../playMode';
 import { Button } from '../ui/Button';
 import { font, ink, num, radius, space, stroke, surface, team, theme, type } from '../theme';
 import { Panel, ScreenShell } from './common';
@@ -91,7 +92,7 @@ export function HistoryScreen({
                   </Text>
                 </View>
                 <Text style={styles.meta} numberOfLines={2}>
-                  {ui.recordMeta(r.target, r.hard, r.deals, r.best)}
+                  {ui.recordMeta(r.target, modeName(lang, recordMode(r)), r.deals, r.best)}
                 </Text>
               </View>
             ))}

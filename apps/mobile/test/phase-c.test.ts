@@ -20,7 +20,9 @@ describe('one answer per question online', () => {
     expect(t).toMatch(/const optionsKey = JSON\.stringify\(options\);/);
     expect(t).toMatch(/useEffect\(\(\) => \{\s*answeredAt\.current = 0;\s*\}, \[optionsKey, refusedN\]\);/);
     // Cards, the portrait's answers and the rail's (through its quiet window) all go through it.
-    expect(t).toMatch(/onPlay=\{send\}/);
+    // A card goes through it too, by way of Prava bela's wrong-card note.
+    expect(t).toMatch(/onPlay=\{play\}/);
+    expect(t).toMatch(/const play = useCallback\(\s*\(a: Action\): boolean => \{\s*if \(!send\(a\)\) return false;/);
     expect(t).toMatch(/<NonCardActions options=\{options\} lang=\{lang\} onChoose=\{send\} short=\{short\} \/>/);
     expect(t).toMatch(/if \(Date\.now\(\) >= railQuietUntil\.current\) send\(a\);/);
     expect(t).not.toMatch(/onPlay=\{onAction\}|onChoose=\{onAction\}/);

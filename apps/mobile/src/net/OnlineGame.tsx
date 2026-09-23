@@ -40,6 +40,7 @@ import { APP_VERSION } from '../screens/common';
 import { loadHistory, loadSeries, saveHistory, saveSeries, type SeriesEntry, type Settings } from '../storage';
 import { groupKey, recordMatch } from './series';
 import { addRecord, UNNAMED } from './history';
+import { isPlayMode, modeName, PLAY_MODES } from '../playMode';
 import { summarize } from '../matchLog';
 import { isoDay } from '@belot/progression';
 import { useNetGame, type NetGame } from './useNetGame';
@@ -201,7 +202,8 @@ export function OnlineGame({
         partner,
         opponents,
         target: net.target,
-        hard: net.hard,
+        hard: net.mode === 'hard',
+        mode: net.mode,
         won: net.winnerTeam === us,
         score: [scores[us], scores[them]],
         deals: sum ? [sum.won[us], sum.won[them]] : null,
@@ -284,7 +286,7 @@ export function OnlineGame({
       cue={net.cue}
       dealerHop={net.dealerHop}
       reducedMotion={net.motion === 'reduced'}
-      hardMode={net.hard}
+      playMode={net.mode}
       matchTarget={net.target}
       handSort={settings.handSort}
       arrangeTip={settings.arrangeTips < 2}
@@ -563,11 +565,11 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
       </Panel>
     ) : null;
 
-  // A private table's rules in one place: how long the match runs, Lagana or
-  // Prava bela, and the turn clock. The host picks, everyone sees them before
-  // sitting down to play - friends were punished for a renons nobody had said
-  // was on. Quick play keeps 1001, Lagana and 30 s for strangers, and shows
-  // nothing here.
+  // A private table's rules in one place: how long the match runs, the
+  // version (Učenje, Lagana or Prava bela) and the turn clock. The host picks,
+  // everyone sees them before sitting down to play - friends were punished for
+  // a wrong card nobody had said would cost the deal. Quick play keeps 1001,
+  // Lagana and 30 s for strangers, and shows nothing here.
   const isHost = net.seat !== null && net.seat === net.hostSeat;
   const rules =
     net.isPrivate && net.status === 'waiting' && columnW > 0 ? (
@@ -581,11 +583,10 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
         <Choice
           label={net.lang.s.difficulty}
           host={isHost}
-          options={[
-            { key: 'easy', text: net.lang.s.difficultyEasy, on: !net.hard },
-            { key: 'hard', text: net.lang.s.difficultyHard, on: net.hard },
-          ]}
-          onPick={(k) => net.setRules({ hard: k === 'hard' })}
+          options={PLAY_MODES.map((m) => ({ key: m, text: modeName(net.lang, m), on: net.mode === m }))}
+          onPick={(k) => {
+            if (isPlayMode(k)) net.setRules({ mode: k });
+          }}
         />
         <Choice
           label={ui.turnClock}
@@ -739,12 +740,17 @@ const styles = StyleSheet.create({
   // Label left, chips right: three rules in the height the clock alone took.
   choice: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   choiceLabel: { color: ink.mid, ...type.caption, width: 96 },
-  choiceRow: { flex: 1, flexDirection: 'row', gap: space.xs + 2 },
+  // The chips take their names' width and share what is left; three versions
+  // do not fit beside the label on a phone, so a chip that would be cut short
+  // ("Prava b…") goes to a second line instead, and fills it.
+  choiceRow: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: space.xs + 2 },
   choiceChip: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 0,
+    flexBasis: 'auto',
+    paddingHorizontal: space.sm + 2,
     alignItems: 'center',
     paddingVertical: space.sm - 1,
-    paddingHorizontal: space.xs,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: theme.line,

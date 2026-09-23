@@ -12,6 +12,7 @@ import { PlayingCard } from '../PlayingCard';
 import { playSfx, setMasterVolume, setSoundEnabled } from '../audio';
 import { font, ink, radius, space, surface, theme, type } from '../theme';
 import { APP_VERSION, Panel, ScreenShell } from './common';
+import { modeName, PLAY_MODES } from '../playMode';
 
 const LOCALES: ReadonlyArray<{ id: Settings['locale']; label: string }> = [
   { id: 'hr', label: 'Hrvatski' },
@@ -144,31 +145,30 @@ export function SettingsScreen({
       <Button label={lang.s.rules.title} tone="plain" onPress={onOpenRules} />
       <Panel label={lang.s.difficulty}>
         <View style={styles.localeRow}>
-          {(
-            [
-              { hard: false, label: lang.s.difficultyEasy },
-              { hard: true, label: lang.s.difficultyHard },
-            ] as const
-          ).map((d) => (
+          {PLAY_MODES.map((d) => (
             <PressScale
-              key={String(d.hard)}
+              key={d}
               onPress={() => {
-                onSettingsChange({ ...settings, hardMode: d.hard });
+                onSettingsChange({ ...settings, difficulty: d });
               }}
-              accessibilityState={{ selected: settings.hardMode === d.hard }}
-              style={[styles.localeChip, settings.hardMode === d.hard && styles.localeChipOn]}
+              accessibilityState={{ selected: settings.difficulty === d }}
+              style={[styles.localeChip, settings.difficulty === d && styles.localeChipOn]}
             >
               <Text
-                style={[styles.localeText, settings.hardMode === d.hard && styles.localeTextOn]}
+                style={[styles.localeText, settings.difficulty === d && styles.localeTextOn]}
               >
-                {d.label}
+                {modeName(lang, d)}
               </Text>
             </PressScale>
           ))}
         </View>
         {/* What the chosen one changes, whichever it is. */}
         <Text style={styles.hint}>
-          {settings.hardMode ? lang.s.difficultyHardHint : lang.s.difficultyEasyHint}
+          {settings.difficulty === 'learn'
+            ? lang.s.difficultyLearnHint
+            : settings.difficulty === 'hard'
+              ? lang.s.difficultyHardHint
+              : lang.s.difficultyEasyHint}
         </Text>
       </Panel>
 

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Lang } from '@belot/i18n';
-import { people, totals, UNNAMED, type MatchRecord } from '../src/net/history';
+import { people, recordMode, totals, UNNAMED, type MatchRecord } from '../src/net/history';
 
 /**
  * What an independent review of phases A-C found, each held to its fix:
@@ -90,7 +90,8 @@ describe("the shop's why-not", () => {
 describe('the Ručno an older app set by itself', () => {
   it('goes back to the default once, for settings saved before arrangeTips existed', () => {
     const st = src('src/storage.ts');
-    expect(st).toMatch(/if \(s\.handSort === 'manual' && !\(store\.getString\(KEY\.settings\) \?\? ''\)\.includes\('"arrangeTips"'\)\) \{\s*s = \{ \.\.\.s, handSort: 'auto' \};\s*write\(KEY\.settings, s\);/);
+    // Read from the text stored before any migration wrote (settings-migration.test.ts runs it).
+    expect(st).toMatch(/if \(s\.handSort === 'manual' && !raw\.includes\('"arrangeTips"'\)\) \{\s*s = \{ \.\.\.s, handSort: 'auto' \};\s*changed = true;/);
     // Saved again with arrangeTips in it, a Ručno chosen from now on stays.
     expect(st).toMatch(/arrangeTips: 0,/);
   });
@@ -99,7 +100,13 @@ describe('the Ručno an older app set by itself', () => {
 describe('the English history line', () => {
   it('names the mode as the English settings do', () => {
     const en = new Lang('en').s;
-    expect(en.ui.recordMeta(1001, true, null, null)).toContain(en.difficultyHard);
-    expect(en.ui.recordMeta(1001, true, null, null)).not.toContain('Prava');
+    // The screen passes the version's name in the reader's language (playMode.modeName).
+    expect(en.ui.recordMeta(1001, en.difficultyHard, null, null)).toContain('True bela');
+    expect(en.difficultyHard).not.toContain('Prava');
+    expect(src('src/screens/HistoryScreen.tsx')).toMatch(/ui\.recordMeta\(r\.target, modeName\(lang, recordMode\(r\)\), r\.deals, r\.best\)/);
+    // A record from before the three versions keeps the name it was played under.
+    expect(recordMode({ hard: false })).toBe('easy');
+    expect(recordMode({ hard: true })).toBe('hard');
+    expect(recordMode({ hard: false, mode: 'learn' })).toBe('learn');
   });
 });
