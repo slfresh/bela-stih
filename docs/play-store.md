@@ -87,7 +87,7 @@ before promoting.
 
 ### Release notes
 
-1.4.0 (versionCode 25; carries 1.3.1's notes too, which never shipped on their own) -
+1.4.1 (versionCode 26; the notes stand for 1.4.0 too - 25 went to internal testing only, 26 adds the review's fixes; both carry 1.3.1, which never shipped on its own) -
 - hr: *Novo: pozovi prijatelje kodom, poveznicom ili QR kodom; povijest
   partija s prijateljima i statistika; domaćin bira dužinu partije
   (501/701/1001) i Pravu belu; pauza dok se prijatelj vrati; „Kako se igra”;
