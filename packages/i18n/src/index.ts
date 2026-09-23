@@ -164,6 +164,8 @@ export interface UiStrings {
   troubleServer: string;
   /** The lobby's connection dropped, and the seat was not got back. */
   troubleDropped: string;
+  /** A public table refuses a second player from the same network (code 4300). */
+  troubleSameNetwork: string;
   disconnectedWithCode: (code: number) => string;
   waitingForPlayers: (seated: number) => string;
   /** Quick play's lobby: strangers are being looked for. */
@@ -318,6 +320,8 @@ export interface UiStrings {
   resultWon: string;
   resultLost: string;
   botWord: string;
+  /** A person at a friends' table who never set a name. */
+  unnamedPlayer: string;
   recordPeople: (partner: string, opponents: string[]) => string;
   recordMeta: (target: number, hard: boolean, deals: [number, number] | null, best: number | null) => string;
   /** The shared invitation: the code as well as the link, for anyone who has to type it. */
@@ -854,6 +858,8 @@ const hr: Strings = {
     troubleOffline: 'Nema veze. Provjeri internet pa pokušaj ponovno.',
     troubleServer: 'Poslužitelj se trenutno ne javlja kako treba. Pokušaj ponovno za koji trenutak.',
     troubleDropped: 'Stol više ne čeka. Pokušaj ponovno ili se vrati na početak.',
+    troubleSameNetwork:
+      'Za ovim javnim stolom već sjedi netko s iste mreže kao ti, a javni stol ne prima dvoje s iste mreže. Za igru zajedno napravi privatni stol.',
     disconnectedWithCode: (code) => `veza prekinuta (${code})`,
     waitingForPlayers: (seated) => `Čekamo igrače… ${seated}/4`,
     searchingPlayers: (seated) => `Tražimo igrače… ${seated}/4`,
@@ -967,6 +973,7 @@ const hr: Strings = {
     resultWon: 'Pobjeda',
     resultLost: 'Poraz',
     botWord: 'bot',
+    unnamedPlayer: 'igrač bez imena',
     recordPeople: (partner, opponents) => `partner: ${partner} · protiv: ${opponents.join(', ')}`,
     recordMeta: (target, hard, deals, best) =>
       [
@@ -1328,6 +1335,8 @@ const srCyrl: Strings = {
     troubleOffline: 'Нема везе. Провери интернет па покушај поново.',
     troubleServer: 'Сервер се тренутно не јавља како треба. Покушај поново за који тренутак.',
     troubleDropped: 'Сто више не чека. Покушај поново или се врати на почетак.',
+    troubleSameNetwork:
+      'За овим јавним столом већ седи неко са исте мреже као ти, а јавни сто не прима двоје са исте мреже. За игру заједно направи приватни сто.',
     disconnectedWithCode: (code) => `веза прекинута (${code})`,
     waitingForPlayers: (seated) => `Чекамо играче… ${seated}/4`,
     searchingPlayers: (seated) => `Тражимо играче… ${seated}/4`,
@@ -1441,6 +1450,7 @@ const srCyrl: Strings = {
     resultWon: 'Победа',
     resultLost: 'Пораз',
     botWord: 'бот',
+    unnamedPlayer: 'играч без имена',
     recordPeople: (partner, opponents) => `партнер: ${partner} · против: ${opponents.join(', ')}`,
     recordMeta: (target, hard, deals, best) =>
       [
@@ -1799,6 +1809,8 @@ const en: Strings = {
     troubleOffline: 'No connection. Check your internet and try again.',
     troubleServer: "The server isn't answering properly right now. Try again in a moment.",
     troubleDropped: 'The table is no longer waiting. Try again, or go back to the start.',
+    troubleSameNetwork:
+      'Someone on the same network as you already sits at this public table, and a public table takes one player per network. To play together, open a private table.',
     disconnectedWithCode: (code) => `connection lost (${code})`,
     waitingForPlayers: (seated) => `Waiting for players… ${seated}/4`,
     searchingPlayers: (seated) => `Looking for players… ${seated}/4`,
@@ -1912,11 +1924,12 @@ const en: Strings = {
     resultWon: 'Won',
     resultLost: 'Lost',
     botWord: 'bot',
+    unnamedPlayer: 'unnamed player',
     recordPeople: (partner, opponents) => `partner: ${partner} · against: ${opponents.join(', ')}`,
     recordMeta: (target, hard, deals, best) =>
       [
         `game to ${target}`,
-        hard ? 'Prava bela' : null,
+        hard ? 'True bela' : null,
         deals ? `deals ${deals[0]}:${deals[1]}` : null,
         best !== null ? `best ${best}` : null,
       ]

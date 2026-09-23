@@ -11,9 +11,9 @@ export interface MatchRecord {
   at: string;
   /** The table's code. */
   code: string;
-  /** The partner's name; '' when a bot sat there. */
+  /** The partner's name; '' when a bot sat there, UNNAMED for a person with no name. */
   partner: string;
-  /** The two opponents' names; '' for a bot. */
+  /** The two opponents' names; '' for a bot, UNNAMED for a person with no name. */
   opponents: [string, string];
   /** Points played to (501 / 701 / 1001), and whether it was Prava bela. */
   target: number;
@@ -26,6 +26,14 @@ export interface MatchRecord {
   /** Our best deal's points; null when missed, or when we never scored. */
   best: number | null;
 }
+
+/**
+ * A person at the table who never set a name: counted as a person (the match
+ * is a match with friends), shown as "igrač bez imena", and never taken for
+ * anyone else. A character no nickname can hold: the server strips control
+ * characters from every name (apps/server/src/names.ts, cleanName).
+ */
+export const UNNAMED = '\u0001';
 
 /** How many matches are kept: enough for years of evenings, small on disk. */
 export const HISTORY_KEEP = 200;
@@ -100,6 +108,8 @@ export interface PersonStats {
 export function people(list: readonly MatchRecord[]): PersonStats[] {
   const byKey = new Map<string, PersonStats>();
   const seen = (name: string, at: string): PersonStats | null => {
+    // Nobody to count: a bot, or a person whose name we never knew.
+    if (name === UNNAMED) return null;
     const key = nameKey(name);
     if (!key) return null;
     let p = byKey.get(key);

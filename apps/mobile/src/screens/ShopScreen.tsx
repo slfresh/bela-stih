@@ -175,7 +175,7 @@ export function ShopScreen({
       onBack={onBack}
       backLabel={ui.back}
       overlay={
-        confirming && (
+        confirming ? (
           <ConfirmDialog
             title={ui.shopBuyTitle(ui.cosmeticName(confirming.id), confirming.price)}
             confirmLabel={ui.shopBuy}
@@ -184,7 +184,15 @@ export function ShopScreen({
             onCancel={() => setConfirming(null)}
             ground={room().page}
           />
-        )
+        ) : why ? (
+          // Over the screen, at its foot: in view whichever tile was tapped,
+          // and the grid never moves under the next tap.
+          <View style={styles.whyToast} pointerEvents="none">
+            <Text style={styles.why} role="alert">
+              {why}
+            </Text>
+          </View>
+        ) : null
       }
     >
       <View style={styles.walletRow}>
@@ -196,11 +204,6 @@ export function ShopScreen({
           <Coin size={20} />
         </View>
         <Text style={styles.walletHint}>{ui.coinsDisclaimer}</Text>
-        {why && (
-          <Text style={styles.why} role="alert">
-            {why}
-          </Text>
-        )}
       </View>
       {section('avatar', ui.sectionAvatars)}
       {section('cardBack', ui.sectionCardBacks)}
@@ -216,7 +219,19 @@ const styles = StyleSheet.create({
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 3, flexWrap: 'wrap', justifyContent: 'center' },
   walletHint: { color: theme.textDim, fontSize: 11, textAlign: 'center' },
   levelChip: { color: theme.text, fontSize: 14, fontFamily: font.bold, marginRight: space.sm },
-  why: { color: theme.accent, fontSize: 13, fontFamily: font.medium, textAlign: 'center', marginTop: space.xs },
+  whyToast: {
+    position: 'absolute',
+    left: space.lg,
+    right: space.lg,
+    bottom: space.xl,
+    backgroundColor: surface.raised,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: theme.accent,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+  },
+  why: { color: theme.accent, fontSize: 13, fontFamily: font.medium, textAlign: 'center' },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   // The tile's place in the grid; the tile fills it, and a refusal shakes it.

@@ -257,7 +257,8 @@ describe('anchors measure on demand', () => {
     expect(options).toContain(dflt);
     // colyseus fires onLeave for a consented leave too: the refs go first, or
     // the drop handler buzzes and reconnects for a minute on the home screen.
-    expect(src('net/useNetGame.ts')).toMatch(/roomRef\.current = null;\s*reconnectTokenRef\.current = null;\s*void room\?\.leave\(true\)/);
+    // (A join still in flight is let go the same way: its count moves on too.)
+    expect(src('net/useNetGame.ts')).toMatch(/roomRef\.current = null;\s*reconnectTokenRef\.current = null;\s*connGenRef\.current \+= 1;[^\n]*\n\s*void room\?\.leave\(true\)/);
     // A banner change never clears the previous banner's timers.
     for (const f of ['OfflineGame.tsx', 'net/OnlineGame.tsx']) {
       expect(src(f), f).toMatch(/useEffect\(\(\) => \(\) => timers\.current\.forEach\(clearTimeout\), \[\]\)/);

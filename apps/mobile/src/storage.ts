@@ -150,7 +150,15 @@ export function loadSettings(): Settings {
     write(KEY.settings, first);
     return first;
   }
-  const s = read(KEY.settings, DEFAULT_SETTINGS);
+  let s = read(KEY.settings, DEFAULT_SETTINGS);
+  // Before 1.4.0 one swap of two cards switched "Slaganje karata" to Ručno
+  // for good, and trump-first sorting never came back. Settings saved by
+  // such an app (no arrangeTips yet) go back to the default once; anyone who
+  // wants Ručno sets it again, and it stays.
+  if (s.handSort === 'manual' && !(store.getString(KEY.settings) ?? '').includes('"arrangeTips"')) {
+    s = { ...s, handSort: 'auto' };
+    write(KEY.settings, s);
+  }
   // A volume saved by a build with other steps snaps to the nearest chip, or
   // Settings would light none.
   const volume = (VOLUME_OPTIONS as readonly number[]).reduce((best, v) =>

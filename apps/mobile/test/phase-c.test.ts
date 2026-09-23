@@ -15,9 +15,10 @@ const t = src('src/TableScreen.tsx');
 
 describe('one answer per question online', () => {
   it('lets every answer through one guard, opened again by the echo or a refusal', () => {
-    expect(t).toMatch(/const send = useCallback\(\s*\(a: Action\) => \{\s*if \(awaitEcho\) \{\s*if \(answered\.current\) return;\s*answered\.current = true;\s*\}\s*onActionRef\.current\(a\);/);
+    // It says whether it sent, and lets go after the hand's own silence (SENT_MAX_MS).
+    expect(t).toMatch(/const send = useCallback\(\s*\(a: Action\): boolean => \{\s*if \(awaitEcho\) \{\s*if \(answeredAt\.current !== 0 && Date\.now\(\) - answeredAt\.current < SENT_MAX_MS\) return false;\s*answeredAt\.current = Date\.now\(\);\s*\}\s*onActionRef\.current\(a\);\s*return true;/);
     expect(t).toMatch(/const optionsKey = JSON\.stringify\(options\);/);
-    expect(t).toMatch(/useEffect\(\(\) => \{\s*answered\.current = false;\s*\}, \[optionsKey, refusedN\]\);/);
+    expect(t).toMatch(/useEffect\(\(\) => \{\s*answeredAt\.current = 0;\s*\}, \[optionsKey, refusedN\]\);/);
     // Cards, the portrait's answers and the rail's (through its quiet window) all go through it.
     expect(t).toMatch(/onPlay=\{send\}/);
     expect(t).toMatch(/<NonCardActions options=\{options\} lang=\{lang\} onChoose=\{send\} short=\{short\} \/>/);
@@ -30,7 +31,9 @@ describe('one answer per question online', () => {
     expect(hand).toMatch(/if \(sentRef\.current !== null\) return;\s*const card = cards\.find/);
     expect(hand).toMatch(/useEffect\(\(\) => \{\s*sentRef\.current = null;\s*setSent\(null\);\s*\}, \[decision, cardsKey, refusedN\]\);/);
     expect(hand).toMatch(/setTimeout\(\(\) => \{\s*sentRef\.current = null;\s*setSent\(null\);\s*\}, SENT_MAX_MS\);/);
-    expect(hand).toMatch(/sentRef\.current = id;\s*setSent\(id\);\s*\/\/[^\n]*\n\s*if \(awaitEcho\) pattern\('press'\);\s*onPlay\(chosen\);/);
+    // Faded only when the table really sent it: one truth, the table's.
+    expect(hand).toMatch(/if \(onPlay\(chosen\) === false\) return;\s*sentRef\.current = id;\s*setSent\(id\);\s*\/\/[^\n]*\n\s*if \(awaitEcho\) pattern\('press'\);/);
+    expect(hand).toMatch(/onPlay: \(a: Action\) => boolean \| void;/);
     expect(hand).toMatch(/sent=\{sent === id\}/);
     const card = t.slice(t.indexOf('const FanCard = memo('));
     expect(card).toMatch(/a\.sent === b\.sent/);

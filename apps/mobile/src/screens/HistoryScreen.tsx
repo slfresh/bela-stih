@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { Lang } from '@belot/i18n';
-import { people, recordDate, totals, type MatchRecord } from '../net/history';
+import { people, recordDate, totals, UNNAMED, type MatchRecord } from '../net/history';
 import { Button } from '../ui/Button';
 import { font, ink, num, radius, space, stroke, surface, team, theme, type } from '../theme';
 import { Panel, ScreenShell } from './common';
@@ -29,7 +29,7 @@ export function HistoryScreen({
   const ui = lang.s.ui;
   const t = useMemo(() => totals(history), [history]);
   const who = useMemo(() => people(history).slice(0, SHOW_PEOPLE), [history]);
-  const name = (n: string) => n || ui.botWord;
+  const name = (n: string) => (n === UNNAMED ? ui.unnamedPlayer : n || ui.botWord);
 
   return (
     <ScreenShell title={ui.historyTitle} onBack={onBack} backLabel={ui.back}>

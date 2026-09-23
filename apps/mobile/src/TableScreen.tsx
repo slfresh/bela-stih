@@ -466,17 +466,21 @@ export function TableScreen(props: TableScreenProps) {
   const onActionRef = useRef(onAction);
   onActionRef.current = onAction;
   const optionsKey = JSON.stringify(options);
-  const answered = useRef(false);
+  // When the answer on its way went (0: none). It says whether a tap was
+  // sent, so the hand fades a card only for a play that really went, and it
+  // lets go after the same silence the hand does (SENT_MAX_MS).
+  const answeredAt = useRef(0);
   useEffect(() => {
-    answered.current = false;
+    answeredAt.current = 0;
   }, [optionsKey, refusedN]);
   const send = useCallback(
-    (a: Action) => {
+    (a: Action): boolean => {
       if (awaitEcho) {
-        if (answered.current) return;
-        answered.current = true;
+        if (answeredAt.current !== 0 && Date.now() - answeredAt.current < SENT_MAX_MS) return false;
+        answeredAt.current = Date.now();
       }
       onActionRef.current(a);
+      return true;
     },
     [awaitEcho],
   );
@@ -1995,7 +1999,8 @@ function Hand({
   cards: Card[];
   options: Action[];
   enabled: boolean;
-  onPlay: (a: Action) => void;
+  /** False when the table did not send it (an answer already on its way). */
+  onPlay: (a: Action) => boolean | void;
   /**
    * A tap on a card the engine does not allow now (never in hard mode, where
    * every card goes): the card shakes, and this says why.
@@ -2181,11 +2186,13 @@ function Hand({
       return;
     }
     setArmed(null);
+    // An answer already on its way (a bela button just pressed): this tap
+    // sent nothing, and the card must not look as if it went.
+    if (onPlay(chosen) === false) return;
     sentRef.current = id;
     setSent(id);
     // Online the card's own sound comes with the echo; the finger hears now.
     if (awaitEcho) pattern('press');
-    onPlay(chosen);
   };
   // One identity for the life of the hand, so a memoised card is not
   // re-rendered just because its handler closed over a new render.
@@ -2232,7 +2239,8 @@ function Hand({
             shakeN={shake.id === id ? shake.n : 0}
             glowN={glow && glow.cardIds.includes(id) ? glow.n : 0}
             onPress={onPressCard}
-            onLongPress={onHoldCard}
+            // Marking zvanja, a slow tap still marks: no hold to swallow it.
+            onLongPress={marking ? undefined : onHoldCard}
             sent={sent === id}
           />
         );
@@ -2299,8 +2307,8 @@ const FanCard = memo(
     /** Non-zero, and new: a short shake - this card was tapped and may not go. */
     shakeN?: number;
     onPress: (id: string) => void;
-    /** Held: never a tap once it fires, so a held card is not played. */
-    onLongPress: () => void;
+    /** Held: never a tap once it fires, so a held card is not played. None while marking. */
+    onLongPress?: () => void;
     /** Played, and waiting for the server's echo: it stays put, and fades. */
     sent?: boolean;
   }) {

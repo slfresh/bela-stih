@@ -90,7 +90,9 @@ describe('the history of matches with friends', () => {
     const o = src('src/net/OnlineGame.tsx');
     expect(o).toMatch(/if \(mine === null \|\| !net\.isPrivate \|\| !net\.matchOver \|\| net\.winnerTeam === null \|\| !net\.roomId\) return;/);
     expect(o).toMatch(/if \(!partner && !opponents\[0\] && !opponents\[1\]\) return;/);
-    expect(o).toMatch(/return info && info\.name !== SERVER_FALLBACK\(s\) \? net\.realName\(s\) : '';/);
+    // A bot from the start is nobody; a person without a name is still a person.
+    expect(o).toMatch(/if \(info\.bot && fallback\) return '';\s*return fallback \? UNNAMED : net\.realName\(s\);/);
+    expect(o).toMatch(/const fallback = info\.name === SERVER_FALLBACK\(s\);/);
     expect(o).toMatch(/saveHistory\(\s*addRecord\(loadHistory\(\), \{\s*id: `\$\{isoDay\(new Date\(\)\)\}:\$\{net\.roomId\}:\$\{net\.matchNumber\}`,/);
     // A list, never merged over a default object.
     expect(src('src/storage.ts')).toMatch(/return Array\.isArray\(list\) \? \(list as MatchRecord\[\]\) : \[\];/);

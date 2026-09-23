@@ -175,8 +175,15 @@ describe("the browser's Back", () => {
           pending.push(() => listeners.forEach((l) => l()));
         },
       },
+      sessionStorage: {
+        getItem: (k: string) => session.get(k) ?? null,
+        setItem: (k: string, v: string) => void session.set(k, v),
+        removeItem: (k: string) => void session.delete(k),
+      },
     };
   });
+  const session = new Map<string, string>();
+  beforeEach(() => session.clear());
 
   const flush = () => {
     const run = pending;
@@ -235,6 +242,33 @@ describe("the browser's Back", () => {
     expect(onBack).not.toHaveBeenCalled(); // its own popstate is not a Back
     press();
     expect(left).toBe(true);
+  });
+
+  it('takes a step left by a reload off once, so the first Back leaves', () => {
+    // Reloaded while our step was on top: the state survives, the app starts at home.
+    entries = [{ state: null }, { state: { belotBack: true } }];
+    index = 1;
+    const onBack = vi.fn();
+    rt.render(() => useWebBack(true, onBack));
+    expect(index).toBe(0);
+    flush(); // its own popstate, not a Back
+    expect(onBack).not.toHaveBeenCalled();
+    // The entry below loads the app afresh: nothing more is taken off.
+    rt.reset();
+    rt.render(() => useWebBack(true, onBack));
+    expect(index).toBe(0);
+    press();
+    expect(left).toBe(true);
+  });
+
+  it('takes it off only once, even when the entry below is a stale step too', () => {
+    entries = [{ state: null }, { state: { belotBack: true } }, { state: { belotBack: true } }];
+    index = 2;
+    rt.render(() => useWebBack(true, vi.fn()));
+    expect(index).toBe(1);
+    rt.reset(); // the page below loads
+    rt.render(() => useWebBack(true, vi.fn()));
+    expect(index).toBe(1); // the flag stops a second pass
   });
 
   it('is what App hands the popstate to: the back guard first', () => {
@@ -364,7 +398,8 @@ describe('a held card', () => {
     // The playable cards take the touch on my turn, so the fan's own hold never fired there.
     expect(t).toMatch(/onHold=\{toggleArranging\}/);
     expect(t).toMatch(/const onHoldCard = useCallback\(\(\) => holdRef\.current\?\.\(\), \[\]\);/);
-    expect(t).toMatch(/onPress=\{onPressCard\}\s+onLongPress=\{onHoldCard\}/);
+    // Not while marking zvanja: there a slow tap is still a tap, and marks.
+    expect(t).toMatch(/onPress=\{onPressCard\}\s*\/\/[^\n]*\n\s*onLongPress=\{marking \? undefined : onHoldCard\}/);
     const card = t.slice(t.indexOf('const FanCard = memo('));
     expect(card).toMatch(/onPress=\{press\}\s+onLongPress=\{onLongPress\}\s+delayLongPress=\{500\}/);
     // A memoised card must see its hold handler as a prop like any other.

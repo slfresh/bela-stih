@@ -148,6 +148,8 @@ export function useNetGame(settings: Settings) {
    * and Wi-Fi handover permanently turned a player into a bot.
    */
   const reconnectTokenRef = useRef<string | null>(null);
+  // Which connection attempt is current: leaving moves it on (see connect).
+  const connGenRef = useRef(0);
   const reconnectRef = useRef<() => void>(() => {});
   const reconnectingRef = useRef(false);
   const directorRef = useRef<Director | null>(null);
@@ -337,8 +339,10 @@ export function useNetGame(settings: Settings) {
     const room = roomRef.current;
     roomRef.current = null;
     // Dropping the token both stops any reconnect in flight and marks this as
-    // a departure rather than a drop.
+    // a departure rather than a drop; the count does the same for a join
+    // still on its way (see connect).
     reconnectTokenRef.current = null;
+    connGenRef.current += 1;
     if (room) void room.leave(true).catch(() => {});
     directorRef.current?.dispose();
     directorRef.current = null;
@@ -400,6 +404,7 @@ export function useNetGame(settings: Settings) {
       const room = roomRef.current;
       roomRef.current = null;
       reconnectTokenRef.current = null;
+      connGenRef.current += 1; // and a join still in flight lands on nobody
       void room?.leave(true).catch(() => {});
       directorRef.current?.dispose();
     };
@@ -597,15 +602,26 @@ export function useNetGame(settings: Settings) {
     async (make: (client: Client) => Promise<Room>) => {
       lastMakeRef.current = make;
       leave();
+      // This attempt's number: leaving (or a newer attempt) moves it on.
+      const gen = connGenRef.current;
       setStatus('connecting');
       setError(null);
       setTrouble(null);
       try {
         const client = new Client(SERVER_URL);
         const room = await make(client);
+        // The player left while this join was in flight - Natrag, Android's
+        // back, the browser's Back on "Spajanje…". Seated now, the room would
+        // hold a live person nobody is behind: the server never bots such a
+        // seat, and every one of its turns costs the other three the full clock.
+        if (gen !== connGenRef.current) {
+          void room.leave(true).catch(() => {});
+          return;
+        }
         attach(room);
         setStatus('waiting');
       } catch (err) {
+        if (gen !== connGenRef.current) return;
         setStatus('error');
         // The library's words ("room \"X\" is locked") are for the log.
         setError((err as Error).message || langRef.current.s.ui.cannotConnect(SERVER_URL));
@@ -625,6 +641,11 @@ export function useNetGame(settings: Settings) {
     const token = reconnectTokenRef.current;
     if (!token || reconnectingRef.current) return;
     reconnectingRef.current = true;
+    // Reconnecting, from the first attempt: while this loop runs the lobby
+    // offers no Retry, which would leave the table (a host's Retry opens a
+    // new one) and strand the friends at the old code. "disconnected" comes
+    // back only when the loop gives up.
+    setStatus('connecting');
     // Keep trying for as long as the server actually holds the seat. Giving up
     // early and dropping the token stranded anyone whose link came back inside
     // the window: the room locks on start, so this token is the only way in.

@@ -39,7 +39,7 @@ import { reportMailto, reportStamp } from '../report';
 import { APP_VERSION } from '../screens/common';
 import { loadHistory, loadSeries, saveHistory, saveSeries, type SeriesEntry, type Settings } from '../storage';
 import { groupKey, recordMatch } from './series';
-import { addRecord } from './history';
+import { addRecord, UNNAMED } from './history';
 import { summarize } from '../matchLog';
 import { isoDay } from '@belot/progression';
 import { useNetGame, type NetGame } from './useNetGame';
@@ -176,9 +176,15 @@ export function OnlineGame({
   // phone dropped keeps their name. Counted once, by the series' own id.
   useEffect(() => {
     if (mine === null || !net.isPrivate || !net.matchOver || net.winnerTeam === null || !net.roomId) return;
+    // A bot from the start is nobody (bot, and still the server's fallback
+    // name - as pureBot below); a person who never set a name is still a
+    // person, kept as UNNAMED so they are never taken for somebody else.
     const person = (s: Seat) => {
       const info = net.seats.find((x) => x.seat === s);
-      return info && info.name !== SERVER_FALLBACK(s) ? net.realName(s) : '';
+      if (!info) return '';
+      const fallback = info.name === SERVER_FALLBACK(s);
+      if (info.bot && fallback) return '';
+      return fallback ? UNNAMED : net.realName(s);
     };
     const partner = person(((mine + 2) % 4) as Seat);
     const opponents: [string, string] = [person(((mine + 1) % 4) as Seat), person(((mine + 3) % 4) as Seat)];
@@ -424,7 +430,9 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
         ? ui.troubleNoSuchTable
         : net.trouble === 'tableClosed'
           ? ui.troubleTableClosed
-          : net.trouble === 'offline'
+          : net.trouble === 'sameNetwork'
+            ? ui.troubleSameNetwork
+            : net.trouble === 'offline'
             ? ui.troubleOffline
             : ui.troubleServer
       : net.status === 'disconnected'

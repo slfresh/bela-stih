@@ -13,6 +13,9 @@ import { Platform } from 'react-native';
  * again. Back at home, the step is taken off the history, so the next Back
  * leaves the page at once rather than on the second press.
  */
+/** Set while a stale step is being taken off, so it happens once. */
+const STALE_DROP = 'belot.backDrop';
+
 export function useWebBack(atRoot: boolean, onBack: () => void): void {
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
@@ -20,6 +23,30 @@ export function useWebBack(atRoot: boolean, onBack: () => void): void {
   const step = useRef({ armed: false, ignore: false });
   // A Back that left the app where it was still needs its step laid again.
   const [pops, setPops] = useState(0);
+
+  // A reload keeps an entry's state. A page reloaded while our step was on
+  // top starts at home with the step still there, over an entry that belongs
+  // to the page before the reload - so the first Back only reloaded the app
+  // and the second left. Take the stale step off once, at start. (The flag
+  // stops a second pass if the entry below is a stale step too.)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    let dropped = false;
+    try {
+      dropped = window.sessionStorage.getItem(STALE_DROP) === '1';
+      window.sessionStorage.removeItem(STALE_DROP);
+    } catch {
+      // No session storage: at worst, one extra Back.
+    }
+    if (dropped || !(window.history.state as { belotBack?: boolean } | null)?.belotBack) return;
+    try {
+      window.sessionStorage.setItem(STALE_DROP, '1');
+    } catch {
+      return; // without the flag a stale step below could be dropped again and again
+    }
+    step.current.ignore = true;
+    window.history.back();
+  }, []);
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;

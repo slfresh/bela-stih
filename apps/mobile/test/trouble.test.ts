@@ -16,6 +16,8 @@ describe('a failed way to a table, in the player-s words', () => {
     expect(troubleOf(new TypeError('Failed to fetch'))).toBe('offline');
     expect(troubleOf(new TypeError('Network request failed'))).toBe('offline');
     expect(troubleOf({ code: 4216, message: 'application error' })).toBe('server');
+    // A public table refusing a second seat from one network (BelaRoom.onAuth).
+    expect(troubleOf({ name: 'ServerError', code: 4300, message: 'seat already held from here' })).toBe('sameNetwork');
     expect(troubleOf(null)).toBe('offline');
   });
 
@@ -24,6 +26,9 @@ describe('a failed way to a table, in the player-s words', () => {
     expect(retryHelps('server')).toBe(true);
     expect(retryHelps('noSuchTable')).toBe(false);
     expect(retryHelps('tableClosed')).toBe(false);
+    // The same rule meets every retry: it says so instead, with no button.
+    expect(retryHelps('sameNetwork')).toBe(false);
+    expect(src('src/net/OnlineGame.tsx')).toMatch(/net\.trouble === 'sameNetwork'\s*\? ui\.troubleSameNetwork/);
     const o = src('src/net/OnlineGame.tsx');
     // ...and after a dropped lobby, which it never did.
     expect(o).toMatch(/const canRetry = \(net\.status === 'error' && retryHelps\(net\.trouble\)\) \|\| net\.status === 'disconnected';/);

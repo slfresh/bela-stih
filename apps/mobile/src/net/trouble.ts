@@ -4,8 +4,14 @@
  * `room "X" not found`; a table that has started, or is full (a full table
  * starts), is 4212 `room "X" is locked`; no server at all is an error with no
  * code ("connect ECONNREFUSED", "Failed to fetch", "Network request failed").
+ * A public table that has not started refuses a second seat from a network
+ * already sitting there (4300, BelaRoom.onAuth) - joined by its code, say,
+ * from the same home Wi-Fi. Trying again meets the same rule.
  */
-export type Trouble = 'noSuchTable' | 'tableClosed' | 'offline' | 'server';
+export type Trouble = 'noSuchTable' | 'tableClosed' | 'sameNetwork' | 'offline' | 'server';
+
+/** The server's code for a second seat from one network at a public table. */
+export const SAME_NETWORK_CODE = 4300;
 
 export function troubleOf(err: unknown): Trouble {
   const e = err as { code?: unknown; message?: unknown } | null;
@@ -13,6 +19,7 @@ export function troubleOf(err: unknown): Trouble {
   const message = typeof e?.message === 'string' ? e.message : '';
   if (code === 4212 && /not found/i.test(message)) return 'noSuchTable';
   if (code === 4212) return 'tableClosed';
+  if (code === SAME_NETWORK_CODE) return 'sameNetwork';
   if (code === null) return 'offline';
   return 'server';
 }
