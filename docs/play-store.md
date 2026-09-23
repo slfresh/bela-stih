@@ -87,6 +87,28 @@ before promoting.
 
 ### Release notes
 
+1.4.3 (versionCode 28: three versions of the game - Učenje, Lagana, Prava bela) -
+- hr: *Novo: tri verzije igre. Učenje te vodi kroz partiju: savjet za svaki
+  potez i zašto, i pazi na štiglju. U Laganoj zvanja tražiš i prijavljuješ bez
+  pomoći, a kriva karta se ne može odigrati. U Pravoj beli kriva karta gubi
+  dijeljenje, a aplikacija pokaže koja je karta odigrana i koja je trebala ići.
+  Na privatnom stolu verziju bira domaćin i svi vide koja se igra; brza igra je
+  uvijek Lagana. Popravak: Prijavi i Nemam više nisu ispod Androidovih tipki.*
+- sr: *Ново: три верзије игре. Учење те води кроз партију: савет за сваки
+  потез и зашто, и пази на штигљу. У Лаганој звања тражиш и пријављујеш без
+  помоћи, а погрешна карта не може да се одигра. У Правој бели погрешна карта
+  губи дељење, а апликација покаже која је карта одиграна и која је требало да
+  иде. За приватним столом верзију бира домаћин и сви виде која се игра; брза
+  игра је увек Лагана. Поправка: Пријави и Немам више нису испод Андроидових
+  тастера.*
+- en: *New: three versions of the game. Learning guides you through the match:
+  a tip for every move and why, and a watch on štiglja. In Casual you find and
+  call your declarations without help, and a wrong card cannot be played. In
+  True bela a wrong card loses the deal, and the app shows which card went and
+  which should have. At a private table the host picks the version and
+  everyone sees it; quick play is always Casual. Fix: Declare and Nothing no
+  longer sit under Android's buttons.*
+
 1.4.2 (versionCode 27: the first 1.4 build whose reports reach someone - prijave@belastih.com. 25 and 26 carried the placeholder; all three carry 1.3.1, which never shipped on its own) -
 - hr: *Novo: pozovi prijatelje kodom, poveznicom ili QR kodom; povijest
   partija s prijateljima i statistika; domaćin bira dužinu partije
