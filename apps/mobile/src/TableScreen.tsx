@@ -81,6 +81,7 @@ import { ConfirmDialog } from './ui/ConfirmDialog';
 import { HoldPanel, useNow } from './table/HoldPanel';
 import type { TableHold } from './net/hold';
 import { setBackGuard } from './ui/backGuard';
+import { useLeaveWarning } from './ui/webBack';
 import { FeltArt, RIM_W } from './table/FeltArt';
 import { garb } from './deck/palette';
 
@@ -162,7 +163,12 @@ export interface TableScreenProps {
   /** Rematch flow (online): the series score and the accept controls. */
   /** How the player wants the hand laid out; persisted in Settings. */
   handSort?: HandSort;
-  onHandSortChange?: (m: HandSort) => void;
+  /**
+   * Show the arranging tip at the first quiet moment of this match. The
+   * callback hears when it was shown (false) or the long-press was found (true).
+   */
+  arrangeTip?: boolean;
+  onArrangeTip?: (learned: boolean) => void;
   /** Misclick guard; 'ambiguous' (default) only asks when the card is a choice. */
   confirmPlay?: ConfirmPlay;
   series?: readonly [number, number] | null;
@@ -234,7 +240,7 @@ export function TableScreen(props: TableScreenProps) {
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
     hardMode = false, matchTarget = 1001, matchLog, series, askedRematch, waitingFor, onRematch, onForceRematch, rematchLabel,
     nextDeal, hold: tableHold = null, onPause, onResume, onPlayOn, reconnecting = false,
-    handSort = 'auto', onHandSortChange, confirmPlay = 'ambiguous',
+    handSort = 'auto', arrangeTip = false, onArrangeTip, confirmPlay = 'ambiguous',
     gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift, giftReach, hidden, onHide, onReport,
   } = props;
 
@@ -334,12 +340,15 @@ export function TableScreen(props: TableScreenProps) {
   // took it is ringed: whoever took it leads the trick now in play.
   const shownTrick = peeking && peekable ? lastTrick.current!.plays : view.currentTrick;
 
-  const [arranging, setArranging] = useState(false);
+  const [arrangingOn, setArranging] = useState(false);
   // The zvanja round: you mark the cards that make up your combination, then
   // confirm. The engine is the judge — a marking that is not a real zvanje
   // announces nothing, so this can never claim more than the hand holds.
   const [marked, setMarked] = useState<string[]>([]);
   const declaring = !settled && view.declareTurn === mySeat;
+  // The zvanja question takes the taps (they mark), so arranging is off while
+  // it is asked - from its very first frame - and closed by it (see below).
+  const arranging = arrangingOn && !declaring;
   // Is the marking made of zvanja this hand holds - one, or all of them at
   // once? In normal play the app already knows them, so it arms the button
   // only on real combinations rather than letting the engine bounce a mistake
@@ -366,7 +375,7 @@ export function TableScreen(props: TableScreenProps) {
   useEffect(() => {
     if (!declaring) setMarked([]);
   }, [declaring, view.dealer, view.declareTurn]);
-  const hand = useHandOrder(view.hand, view.context.trumpSuit, handSort, onHandSortChange ?? (() => {}));
+  const hand = useHandOrder(view.hand, view.context.trumpSuit, handSort, view.dealer);
   // A rotation remounts the fan (the two orientations place it in different
   // rows); the hold's swell lives here and must not outlast the pressed view,
   // whose press-out never comes once it is gone.
@@ -561,6 +570,8 @@ export function TableScreen(props: TableScreenProps) {
   );
   const matchOverRef = useRef(matchOver);
   matchOverRef.current = matchOver;
+  // On the web, closing the tab or reloading mid-match asks first.
+  useLeaveWarning(!matchOver);
   const onFinishRef = useRef(onFinish);
   onFinishRef.current = onFinish;
   useEffect(() => {
@@ -733,6 +744,56 @@ export function TableScreen(props: TableScreenProps) {
     },
     [anchors, fxBus, lang, mySeat],
   );
+
+  // The long-press that arranges the hand is found by accident or never: say
+  // it once a match, over the hand, at the first moment nothing is asked of
+  // me and the cards are all in. Offered in two matches at most, and not at
+  // all once the player has done it (App keeps the count in Settings).
+  const arrangeTipRef = useRef(arrangeTip);
+  arrangeTipRef.current = arrangeTip;
+  const onArrangeTipRef = useRef(onArrangeTip);
+  onArrangeTipRef.current = onArrangeTip;
+  const tipSaid = useRef(false);
+  // The hold that starts (or ends) arranging, on the fan or on a card of it.
+  // Not while the zvanja are asked: there a tap marks, and the two prompts
+  // would each say something different about the same tap.
+  const declaringRef = useRef(declaring);
+  declaringRef.current = declaring;
+  const toggleArranging = useCallback(() => {
+    if (declaringRef.current) return;
+    playSfx('hold');
+    pattern('longPress');
+    setArranging((a) => !a);
+    // Found: the tip has nothing left to teach.
+    if (arrangeTipRef.current) onArrangeTipRef.current?.(true);
+  }, []);
+  // A question arriving mid-arrangement closes it: a hold that began just
+  // before the zvanja were asked used to leave both open.
+  useEffect(() => {
+    if (declaring) setArranging(false);
+  }, [declaring]);
+  const tipMoment =
+    arrangeTip && !tipSaid.current && !settled && !asking && !myTurn && hand.cards.length >= 6 && giftTarget === null && !leaving;
+  useEffect(() => {
+    if (!tipMoment) return;
+    // Held a moment, so a deal still landing or a turn about to come skips it.
+    const t = setTimeout(() => {
+      const at = anchors.centre(anchorId.seat(mySeat));
+      if (!at || tipSaid.current) return;
+      tipSaid.current = true;
+      fxBus.emit({
+        kind: 'bubble',
+        at,
+        text: lang.s.ui.arrangeTip,
+        tone: 'plain',
+        duration: 4200,
+        speed: 1,
+        fade: reducedRef.current,
+      });
+      onArrangeTipRef.current?.(false);
+    }, 1500);
+    return () => clearTimeout(t);
+  }, [tipMoment, anchors, fxBus, lang, mySeat]);
 
   // A ring of light bursts from the hand as a cue lands — the sound's
   // visible twin, fired from the very same edge so it can never be held on.
@@ -1153,11 +1214,7 @@ export function TableScreen(props: TableScreenProps) {
         // The hand, named: a screen reader says what the block is, and the
         // device harness finds the fan by it wherever the layout moves it.
         accessibilityLabel={lang.s.yourCards}
-        onLongPress={() => {
-          playSfx('hold');
-          pattern('longPress');
-          setArranging((a) => !a);
-        }}
+        onLongPress={toggleArranging}
         delayLongPress={500}
         onPressIn={() => {
           hold.value = withTiming(reduced ? 1 : 1.02, { duration: 500 });
@@ -1177,6 +1234,9 @@ export function TableScreen(props: TableScreenProps) {
           maxCardW={m.handCardMax}
           arranging={arranging}
           onSwap={hand.swap}
+          // On my turn the cards take the touch, so the hold has to be theirs
+          // too: it used to end as a tap, and a tap plays.
+          onHold={toggleArranging}
           marking={declaring}
           marked={marked}
           onToggleMark={toggleMark}
@@ -1857,6 +1917,7 @@ function Hand({
   marked = [],
   onToggleMark,
   onSwap,
+  onHold,
   confirmPlay = 'ambiguous',
   deckStyle,
   locale,
@@ -1884,6 +1945,8 @@ function Hand({
   /** Arrange mode: taps swap cards and can never play one. */
   arranging?: boolean;
   onSwap?: (idA: string, idB: string) => void;
+  /** A card held down: arranging starts or ends, and the card is not tapped. */
+  onHold?: () => void;
   /** Zvanja round: taps mark cards for a declaration and can never play one. */
   marking?: boolean;
   marked?: string[];
@@ -2036,6 +2099,9 @@ function Hand({
   const pressRef = useRef(press);
   pressRef.current = press;
   const onPressCard = useCallback((id: string) => pressRef.current(id), []);
+  const holdRef = useRef(onHold);
+  holdRef.current = onHold;
+  const onHoldCard = useCallback(() => holdRef.current?.(), []);
 
   return (
     <View style={[styles.fan, { paddingBottom: Math.max(drop, restFloor) }]}>
@@ -2073,6 +2139,7 @@ function Hand({
             shakeN={shake.id === id ? shake.n : 0}
             glowN={glow && glow.cardIds.includes(id) ? glow.n : 0}
             onPress={onPressCard}
+            onLongPress={onHoldCard}
           />
         );
       })}
@@ -2109,6 +2176,7 @@ const FanCard = memo(
     glowN,
     shakeN = 0,
     onPress,
+    onLongPress,
   }: {
     id: string;
     card: Card;
@@ -2136,6 +2204,8 @@ const FanCard = memo(
     /** Non-zero, and new: a short shake - this card was tapped and may not go. */
     shakeN?: number;
     onPress: (id: string) => void;
+    /** Held: never a tap once it fires, so a held card is not played. */
+    onLongPress: () => void;
   }) {
     // A card has no entrance of its own: the dealt back flies to the very spot
     // it takes (table/fx.ts), and the face is simply there when it lands. Its
@@ -2234,6 +2304,8 @@ const FanCard = memo(
           ref={ref}
           disabled={disabled}
           onPress={press}
+          onLongPress={onLongPress}
+          delayLongPress={500}
           // Vertical only: horizontal slop would overlap the neighbouring
           // card in touch space and make mis-taps MORE likely, not less.
           hitSlop={{ top: 12, bottom: 8 }}
@@ -2278,7 +2350,8 @@ const FanCard = memo(
     a.glowN === b.glowN &&
     a.shakeN === b.shakeN &&
     // `enter` is read once, at mount: its later flips need no render.
-    a.onPress === b.onPress,
+    a.onPress === b.onPress &&
+    a.onLongPress === b.onLongPress,
 );
 
 /**

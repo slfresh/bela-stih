@@ -20,12 +20,15 @@ export function ScreenShell({
   onBack,
   backLabel,
   children,
+  overlay,
 }: {
   title: string;
   onBack: () => void;
   /** The chevron is only a picture: a screen reader needs its word. */
   backLabel: string;
   children: ReactNode;
+  /** Drawn over the whole screen, outside the scroll: a dialog. */
+  overlay?: ReactNode;
 }) {
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: room().page }]}>
@@ -37,6 +40,7 @@ export function ScreenShell({
         <View style={styles.backButton} />
       </View>
       <ScrollView contentContainerStyle={styles.scroll}>{children}</ScrollView>
+      {overlay}
     </SafeAreaView>
   );
 }

@@ -12,6 +12,11 @@ import { cardId } from '@belot/engine';
  *  - `suits` — a fixed suit order, so a card never moves for the whole match.
  *  - `manual` — whatever the player arranged, kept until the hand is played out.
  *
+ * Arranging (a swap) makes the hand in front of you manual until its cards
+ * are played out; the next deal comes back in the saved order. It used to
+ * switch the saved setting to `manual` for good, so one swap quietly ended
+ * trump-first sorting for every deal after it.
+ *
  * Order is tracked by CARD ID, never by array identity: `view.hand` is a fresh
  * array on every director tick, so anything keyed on the array itself would be
  * rebuilt constantly and a manual arrangement would not survive one animation.
@@ -37,7 +42,7 @@ function comparator(trump: Suit | null) {
 export interface HandOrder {
   cards: Card[];
   mode: HandSort;
-  /** Swap two cards; switches to `manual` and remembers the arrangement. */
+  /** Swap two cards: this hand keeps the arrangement until it is played out. */
   swap: (idA: string, idB: string) => void;
 }
 
@@ -45,15 +50,19 @@ export function useHandOrder(
   hand: Card[],
   trump: Suit | null,
   mode: HandSort,
-  onModeChange: (m: HandSort) => void,
+  /** Anything that changes with every deal (the dealer): a new deal is a new hand. */
+  deal: unknown = null,
 ): HandOrder {
   // The arrangement, as card ids. Survives every re-render and every deal.
   const manual = useRef<string[]>([]);
+  // This hand was arranged by the player: manual until its cards are gone.
+  const arranged = useRef(false);
+  const dealWas = useRef(deal);
   // A nonce, not just a re-render: `cards` is a useMemo, so bumping state
   // without touching its deps returns the cached array and the swap is
-  // invisible. The first swap only ever appeared because switching to 'manual'
-  // changed a dep — and that same switch is persisted, so the feature bricked
-  // itself after one use.
+  // invisible. The first swap once only appeared because switching to
+  // 'manual' changed a dep — and that switch was persisted, so the feature
+  // bricked itself after one use.
   const [nonce, forceRender] = useState(0);
 
   const ids = hand.map(cardId).join(',');
@@ -62,7 +71,13 @@ export function useHandOrder(
     const byId = new Map(hand.map((c) => [cardId(c), c]));
     const sorted = [...hand].sort(comparator(trump));
 
-    if (mode !== 'manual') {
+    // A new hand - another deal, or none of the arranged cards left (a deal
+    // cut short by a renons leaves some) - and the saved order is back.
+    if (deal !== dealWas.current || (arranged.current && !manual.current.some((id) => byId.has(id)))) {
+      dealWas.current = deal;
+      arranged.current = false;
+    }
+    if (mode !== 'manual' && !arranged.current) {
       manual.current = [];
       return sorted;
     }
@@ -86,7 +101,7 @@ export function useHandOrder(
     // `ids` is the real dependency: re-sorting on every tick would fight the
     // director, and the hand only changes when a card leaves or arrives.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ids, trump, mode, nonce]);
+  }, [ids, trump, mode, nonce, deal]);
 
   const swap = (idA: string, idB: string) => {
     const order = manual.current.length > 0 ? [...manual.current] : cards.map(cardId);
@@ -95,9 +110,9 @@ export function useHandOrder(
     if (i < 0 || j < 0 || i === j) return;
     [order[i], order[j]] = [order[j]!, order[i]!];
     manual.current = order;
+    arranged.current = true;
     forceRender((n) => n + 1);
-    if (mode !== 'manual') onModeChange('manual');
   };
 
-  return { cards, mode, swap };
+  return { cards, mode: arranged.current ? 'manual' : mode, swap };
 }

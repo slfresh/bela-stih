@@ -147,7 +147,10 @@ function OfflineMatch({
       reducedMotion={g.motion === 'reduced'}
       hardMode={settings.hardMode}
       handSort={settings.handSort}
-      onHandSortChange={(m) => onSettingsChange?.({ ...settings, handSort: m })}
+      arrangeTip={settings.arrangeTips < 2}
+      onArrangeTip={(learned) =>
+        onSettingsChange?.({ ...settings, arrangeTips: learned ? 2 : settings.arrangeTips + 1 })
+      }
       confirmPlay={settings.confirmPlay}
       options={settled || !g.idle ? [] : g.view.legalActions}
       myTurn={g.myTurn}

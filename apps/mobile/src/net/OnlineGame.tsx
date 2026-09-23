@@ -34,6 +34,7 @@ import { MATCH_TARGETS_P, TURN_CHOICES_S } from './clock';
 import { QrCode } from './QrCode';
 import { copyText } from './clipboard';
 import { Copy } from '../ui/icons';
+import { useBackCloses } from '../ui/backGuard';
 import { reportMailto, reportStamp } from '../report';
 import { APP_VERSION } from '../screens/common';
 import { loadHistory, loadSeries, saveHistory, saveSeries, type SeriesEntry, type Settings } from '../storage';
@@ -273,7 +274,10 @@ export function OnlineGame({
       hardMode={net.hard}
       matchTarget={net.target}
       handSort={settings.handSort}
-      onHandSortChange={(m) => onSettingsChange?.({ ...settings, handSort: m })}
+      arrangeTip={settings.arrangeTips < 2}
+      onArrangeTip={(learned) =>
+        onSettingsChange?.({ ...settings, arrangeTips: learned ? 2 : settings.arrangeTips + 1 })
+      }
       confirmPlay={settings.confirmPlay}
       series={shownSeries}
       askedRematch={net.rematchVotes.includes(net.seat)}
@@ -365,6 +369,8 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
   // The invite as a QR code, for friends at the same table: one scan instead
   // of reading a code out. Over everything, so the lobby does not reflow.
   const [qrOpen, setQrOpen] = useState(false);
+  // Back - Android's, or the browser's - closes the code's picture, not the lobby.
+  useBackCloses(qrOpen, () => setQrOpen(false));
   // The clipboard answers asynchronously; the game may have started by then.
   const mounted = useRef(true);
   useEffect(

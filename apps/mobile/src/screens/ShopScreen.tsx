@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { PressScale } from '../ui/PressScale';
 import { Check, Coin, Lock } from '../ui/icons';
@@ -21,7 +22,13 @@ import { CardBackFace } from '../deck';
 import { playSfx } from '../audio';
 import { pattern } from '../haptics';
 import { font, radius, space, stroke, surface, theme } from '../theme';
+import { room } from '../cosmetics';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { useBackCloses } from '../ui/backGuard';
 import { Panel, ScreenShell } from './common';
+
+/** How long a "why not" stays under the wallet. */
+const WHY_MS = 3500;
 
 /**
  * The only coin sink: cosmetics. Deliberately no bundles, no timers, no
@@ -41,6 +48,22 @@ export function ShopScreen({
 }) {
   const ui = lang.s.ui;
   const level = levelFromXp(profile.xp);
+  // A purchase asks first: coins are earned slowly, and a tile is easy to brush.
+  const [confirming, setConfirming] = useState<Cosmetic | null>(null);
+  // Back answers the question safely rather than leaving the shop under it.
+  useBackCloses(confirming !== null, () => setConfirming(null));
+  // Why a tile cannot be had, when it is tapped anyway.
+  const [why, setWhy] = useState<string | null>(null);
+  const whyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (whyTimer.current) clearTimeout(whyTimer.current);
+  }, []);
+  const sayWhy = (text: string) => {
+    pattern('error');
+    setWhy(text);
+    if (whyTimer.current) clearTimeout(whyTimer.current);
+    whyTimer.current = setTimeout(() => setWhy(null), WHY_MS);
+  };
 
   const act = (c: Cosmetic) => {
     if (isOwned(profile, c)) {
@@ -48,11 +71,22 @@ export function ShopScreen({
         playSfx('tap');
         onProfileChange(selectCosmetic(profile, c));
       }
-    } else if (canBuy(profile, c)) {
-      playSfx('purchase');
-      pattern('purchase');
-      onProfileChange(buy(profile, c));
+    } else if (level < c.requiredLevel) {
+      sayWhy(ui.shopWhyLocked(c.requiredLevel, level));
+    } else if (!canBuy(profile, c)) {
+      sayWhy(ui.shopWhyCoins(c.price - profile.coins));
+    } else {
+      playSfx('tap');
+      setConfirming(c);
     }
+  };
+  const confirmBuy = () => {
+    const c = confirming;
+    setConfirming(null);
+    if (!c || !canBuy(profile, c)) return;
+    playSfx('purchase');
+    pattern('purchase');
+    onProfileChange(buy(profile, c));
   };
 
   const section = (kind: Cosmetic['kind'], label: string) => {
@@ -69,7 +103,8 @@ export function ShopScreen({
               <PressScale
                 key={c.id}
                 onPress={() => act(c)}
-                disabled={selected || (!owned && !affordable)}
+                // Locked and unaffordable tiles still answer, to say why.
+                disabled={selected}
                 style={[styles.item, selected && styles.itemSelected]}
                 sound={null}
                 scaleTo={0.98}
@@ -93,9 +128,13 @@ export function ShopScreen({
                 ) : owned ? (
                   <Text style={styles.select}>{ui.select}</Text>
                 ) : locked ? (
-                  <Text style={styles.locked} numberOfLines={1}>
-                    {ui.needsLevel(c.requiredLevel)}
-                  </Text>
+                  // The price too, so a player can save up while levelling.
+                  <View style={styles.priceRow}>
+                    <Text style={styles.locked} numberOfLines={1}>
+                      {ui.needsLevel(c.requiredLevel)} · {c.price}
+                    </Text>
+                    <Coin size={11} />
+                  </View>
                 ) : (
                   <View style={styles.priceRow}>
                     <Text style={[styles.price, !affordable && styles.locked]}>{c.price}</Text>
@@ -122,13 +161,37 @@ export function ShopScreen({
   };
 
   return (
-    <ScreenShell title={ui.shop} onBack={onBack} backLabel={ui.back}>
+    <ScreenShell
+      title={ui.shop}
+      onBack={onBack}
+      backLabel={ui.back}
+      overlay={
+        confirming && (
+          <ConfirmDialog
+            title={ui.shopBuyTitle(ui.cosmeticName(confirming.id), confirming.price)}
+            confirmLabel={ui.shopBuy}
+            cancelLabel={ui.shopCancel}
+            onConfirm={confirmBuy}
+            onCancel={() => setConfirming(null)}
+            ground={room().page}
+          />
+        )
+      }
+    >
       <View style={styles.walletRow}>
         <View style={styles.walletCoins}>
+          <Text style={styles.levelChip}>
+            {ui.level} {level}
+          </Text>
           <Text style={styles.wallet}>{profile.coins}</Text>
           <Coin size={20} />
         </View>
         <Text style={styles.walletHint}>{ui.coinsDisclaimer}</Text>
+        {why && (
+          <Text style={styles.why} role="alert">
+            {why}
+          </Text>
+        )}
       </View>
       {section('avatar', ui.sectionAvatars)}
       {section('cardBack', ui.sectionCardBacks)}
@@ -143,6 +206,8 @@ const styles = StyleSheet.create({
   wallet: { color: theme.accent, fontSize: 24, fontFamily: font.bold },
   priceRow: { flexDirection: 'row', alignItems: 'center', gap: 3, flexWrap: 'wrap', justifyContent: 'center' },
   walletHint: { color: theme.textDim, fontSize: 11, textAlign: 'center' },
+  levelChip: { color: theme.text, fontSize: 14, fontFamily: font.bold, marginRight: space.sm },
+  why: { color: theme.accent, fontSize: 13, fontFamily: font.medium, textAlign: 'center', marginTop: space.xs },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   item: {

@@ -1032,7 +1032,7 @@ describe('a screen reader can name every control', () => {
     expect(home).toMatch(/onPress=\{onOpenSettings\}[^>]*accessibilityLabel=\{ui\.settings\}/);
     expect(src('screens/common.tsx')).toMatch(/onPress=\{onBack\}[^>]*accessibilityLabel=\{backLabel\}/);
     for (const f of ['screens/SettingsScreen.tsx', 'screens/ShopScreen.tsx', 'screens/ProfileScreen.tsx']) {
-      expect(src(f), f).toMatch(/<ScreenShell [^>]*backLabel=\{ui\.back\}/);
+      expect(src(f), f).toMatch(/<ScreenShell\s[^>]*backLabel=\{ui\.back\}/);
     }
     const strip = src('table/EmoteStrip.tsx');
     expect(strip).not.toMatch(/accessibilityLabel=\{e\.id\}/);

@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { Linking, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { PressScale } from '../ui/PressScale';
 import { Button } from '../ui/Button';
+import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { useBackCloses } from '../ui/backGuard';
 import type { Lang } from '@belot/i18n';
 import type { PlayerProfile } from '@belot/progression';
 import { resetProfile, type Settings, VOLUME_OPTIONS } from '../storage';
-import { setDeckStyle } from '../cosmetics';
+import { room, setDeckStyle } from '../cosmetics';
 import { PlayingCard } from '../PlayingCard';
 import { playSfx, setMasterVolume, setSoundEnabled } from '../audio';
-import { garb } from '../deck/palette';
 import { font, ink, radius, space, surface, theme, type } from '../theme';
 import { APP_VERSION, Panel, ScreenShell } from './common';
 
@@ -18,6 +19,11 @@ const LOCALES: ReadonlyArray<{ id: Settings['locale']; label: string }> = [
   { id: 'en', label: 'English' },
 ];
 
+/**
+ * Every preference, in four sections a player can scan: who you are and
+ * which language, how the game is played, how it looks and sounds, and the
+ * data. Erasing the progress asks first and says what goes and what stays.
+ */
 export function SettingsScreen({
   lang,
   settings,
@@ -35,9 +41,15 @@ export function SettingsScreen({
   onOpenRules: () => void;
 }) {
   const ui = lang.s.ui;
-  // Reset arms on the first tap and fires on the second — a dialog would be
-  // heavier machinery than one destructive dev-facing action deserves.
-  const [armed, setArmed] = useState(false);
+  const [asking, setAsking] = useState(false);
+  // Back answers the question safely rather than leaving the settings under it.
+  useBackCloses(asking, () => setAsking(false));
+
+  const section = (title: string) => (
+    <Text style={styles.section} accessibilityRole="header">
+      {title}
+    </Text>
+  );
 
   const toggleRow = (label: string, value: boolean, set: (v: boolean) => void) => (
     <View style={styles.row}>
@@ -59,8 +71,28 @@ export function SettingsScreen({
   );
 
   return (
-    <ScreenShell title={ui.settings} onBack={onBack} backLabel={ui.back}>
-      <Button label={lang.s.rules.title} tone="plain" onPress={onOpenRules} />
+    <ScreenShell
+      title={ui.settings}
+      onBack={onBack}
+      backLabel={ui.back}
+      overlay={
+        asking && (
+          <ConfirmDialog
+            title={ui.resetTitle}
+            body={ui.resetBody}
+            confirmLabel={ui.resetYes}
+            cancelLabel={ui.shopCancel}
+            onConfirm={() => {
+              setAsking(false);
+              onProfileChange(resetProfile());
+            }}
+            onCancel={() => setAsking(false)}
+            ground={room().page}
+          />
+        )
+      }
+    >
+      {section(ui.setGeneral)}
       <Panel label={ui.nicknameLabel}>
         <TextInput
           value={settings.nickname}
@@ -69,6 +101,7 @@ export function SettingsScreen({
           placeholderTextColor={ink.lo}
           maxLength={20}
           autoCorrect={false}
+          accessibilityLabel={ui.nicknameLabel}
           style={styles.input}
         />
         {/* Play's user-content policy: the rules, accepted where the name is made. */}
@@ -85,13 +118,120 @@ export function SettingsScreen({
           <Text style={styles.hint}>{ui.nicknameRules} ↗</Text>
         </PressScale>
       </Panel>
+
+      <Panel label={ui.language}>
+        <View style={styles.localeRow}>
+          {LOCALES.map((l) => (
+            <PressScale
+              key={l.id}
+              onPress={() => {
+                onSettingsChange({ ...settings, locale: l.id });
+              }}
+              accessibilityState={{ selected: settings.locale === l.id }}
+              style={[styles.localeChip, settings.locale === l.id && styles.localeChipOn]}
+            >
+              <Text
+                style={[styles.localeText, settings.locale === l.id && styles.localeTextOn]}
+              >
+                {l.label}
+              </Text>
+            </PressScale>
+          ))}
+        </View>
+      </Panel>
+
+      {section(ui.setGame)}
+      <Button label={lang.s.rules.title} tone="plain" onPress={onOpenRules} />
+      <Panel label={lang.s.difficulty}>
+        <View style={styles.localeRow}>
+          {(
+            [
+              { hard: false, label: lang.s.difficultyEasy },
+              { hard: true, label: lang.s.difficultyHard },
+            ] as const
+          ).map((d) => (
+            <PressScale
+              key={String(d.hard)}
+              onPress={() => {
+                onSettingsChange({ ...settings, hardMode: d.hard });
+              }}
+              accessibilityState={{ selected: settings.hardMode === d.hard }}
+              style={[styles.localeChip, settings.hardMode === d.hard && styles.localeChipOn]}
+            >
+              <Text
+                style={[styles.localeText, settings.hardMode === d.hard && styles.localeTextOn]}
+              >
+                {d.label}
+              </Text>
+            </PressScale>
+          ))}
+        </View>
+        {/* What the chosen one changes, whichever it is. */}
+        <Text style={styles.hint}>
+          {settings.hardMode ? lang.s.difficultyHardHint : lang.s.difficultyEasyHint}
+        </Text>
+      </Panel>
+
+      <Panel label={ui.confirmPlayLabel}>
+        <View style={styles.localeRow}>
+          {(
+            [
+              { id: 'off', label: ui.confirmOff },
+              { id: 'ambiguous', label: ui.confirmAmbiguous },
+              { id: 'always', label: ui.confirmAlways },
+            ] as const
+          ).map((o) => (
+            <PressScale
+              key={o.id}
+              onPress={() => {
+                onSettingsChange({ ...settings, confirmPlay: o.id });
+              }}
+              accessibilityState={{ selected: settings.confirmPlay === o.id }}
+              style={[styles.localeChip, settings.confirmPlay === o.id && styles.localeChipOn]}
+            >
+              <Text style={[styles.localeText, settings.confirmPlay === o.id && styles.localeTextOn]}>
+                {o.label}
+              </Text>
+            </PressScale>
+          ))}
+        </View>
+      </Panel>
+
+      <Panel label={ui.sortHand}>
+        <View style={styles.localeRow}>
+          {(
+            [
+              { id: 'auto', label: ui.sortAuto },
+              { id: 'suits', label: ui.sortSuits },
+              { id: 'manual', label: ui.sortManual },
+            ] as const
+          ).map((o) => (
+            <PressScale
+              key={o.id}
+              onPress={() => {
+                onSettingsChange({ ...settings, handSort: o.id });
+              }}
+              accessibilityState={{ selected: settings.handSort === o.id }}
+              style={[styles.localeChip, settings.handSort === o.id && styles.localeChipOn]}
+            >
+              <Text style={[styles.localeText, settings.handSort === o.id && styles.localeTextOn]}>
+                {o.label}
+              </Text>
+            </PressScale>
+          ))}
+        </View>
+        <Text style={styles.hint}>{ui.arrangeHint}</Text>
+      </Panel>
+
+      {section(ui.setLook)}
       <Panel>
         {toggleRow(ui.sound, settings.sound, (sound) => onSettingsChange({ ...settings, sound }))}
         {toggleRow(ui.haptics, settings.haptics, (haptics) =>
           onSettingsChange({ ...settings, haptics }),
         )}
-        <Text style={styles.rowLabel}>{ui.volumeLabel}</Text>
-        <View style={styles.localeRow}>
+        {/* Loudness means nothing while the sound is off: shown, but asleep. */}
+        <Text style={[styles.rowLabel, !settings.sound && styles.asleep]}>{ui.volumeLabel}</Text>
+        <View style={[styles.localeRow, !settings.sound && styles.asleep]}>
           {(
             [
               { v: VOLUME_OPTIONS[0], label: ui.volumeQuiet },
@@ -101,6 +241,7 @@ export function SettingsScreen({
           ).map((o) => (
             <PressScale
               key={o.v}
+              disabled={!settings.sound}
               // Its own click already plays at the new level.
               onPressIn={() => setMasterVolume(o.v)}
               onPress={() => onSettingsChange({ ...settings, volume: o.v })}
@@ -150,57 +291,6 @@ export function SettingsScreen({
         </View>
       </Panel>
 
-      <Panel label={ui.sortHand}>
-        <View style={styles.localeRow}>
-          {(
-            [
-              { id: 'auto', label: ui.sortAuto },
-              { id: 'suits', label: ui.sortSuits },
-              { id: 'manual', label: ui.sortManual },
-            ] as const
-          ).map((o) => (
-            <PressScale
-              key={o.id}
-              onPress={() => {
-                onSettingsChange({ ...settings, handSort: o.id });
-              }}
-              accessibilityState={{ selected: settings.handSort === o.id }}
-              style={[styles.localeChip, settings.handSort === o.id && styles.localeChipOn]}
-            >
-              <Text style={[styles.localeText, settings.handSort === o.id && styles.localeTextOn]}>
-                {o.label}
-              </Text>
-            </PressScale>
-          ))}
-        </View>
-        <Text style={styles.hint}>{ui.arrangeHint}</Text>
-      </Panel>
-
-      <Panel label={ui.confirmPlayLabel}>
-        <View style={styles.localeRow}>
-          {(
-            [
-              { id: 'off', label: ui.confirmOff },
-              { id: 'ambiguous', label: ui.confirmAmbiguous },
-              { id: 'always', label: ui.confirmAlways },
-            ] as const
-          ).map((o) => (
-            <PressScale
-              key={o.id}
-              onPress={() => {
-                onSettingsChange({ ...settings, confirmPlay: o.id });
-              }}
-              accessibilityState={{ selected: settings.confirmPlay === o.id }}
-              style={[styles.localeChip, settings.confirmPlay === o.id && styles.localeChipOn]}
-            >
-              <Text style={[styles.localeText, settings.confirmPlay === o.id && styles.localeTextOn]}>
-                {o.label}
-              </Text>
-            </PressScale>
-          ))}
-        </View>
-      </Panel>
-
       <Panel label={ui.motionLabel}>
         <View style={styles.localeRow}>
           {(
@@ -226,67 +316,10 @@ export function SettingsScreen({
         </View>
       </Panel>
 
-      <Panel label={lang.s.difficulty}>
-        <View style={styles.localeRow}>
-          {(
-            [
-              { hard: false, label: lang.s.difficultyEasy },
-              { hard: true, label: lang.s.difficultyHard },
-            ] as const
-          ).map((d) => (
-            <PressScale
-              key={String(d.hard)}
-              onPress={() => {
-                onSettingsChange({ ...settings, hardMode: d.hard });
-              }}
-              accessibilityState={{ selected: settings.hardMode === d.hard }}
-              style={[styles.localeChip, settings.hardMode === d.hard && styles.localeChipOn]}
-            >
-              <Text
-                style={[styles.localeText, settings.hardMode === d.hard && styles.localeTextOn]}
-              >
-                {d.label}
-              </Text>
-            </PressScale>
-          ))}
-        </View>
-        {settings.hardMode && <Text style={styles.hint}>{lang.s.difficultyHardHint}</Text>}
-      </Panel>
-
-      <Panel label={ui.language}>
-        <View style={styles.localeRow}>
-          {LOCALES.map((l) => (
-            <PressScale
-              key={l.id}
-              onPress={() => {
-                onSettingsChange({ ...settings, locale: l.id });
-              }}
-              accessibilityState={{ selected: settings.locale === l.id }}
-              style={[styles.localeChip, settings.locale === l.id && styles.localeChipOn]}
-            >
-              <Text
-                style={[styles.localeText, settings.locale === l.id && styles.localeTextOn]}
-              >
-                {l.label}
-              </Text>
-            </PressScale>
-          ))}
-        </View>
-      </Panel>
-
+      {section(ui.setData)}
       <Panel>
-        <PressScale
-          onPress={() => {
-            if (!armed) {
-              setArmed(true);
-              return;
-            }
-            setArmed(false);
-            onProfileChange(resetProfile());
-          }}
-          style={[styles.resetButton, armed && styles.resetArmed]}
-        >
-          <Text style={styles.resetText}>{armed ? ui.resetConfirm : ui.resetProgress}</Text>
+        <PressScale onPress={() => setAsking(true)} style={styles.resetButton}>
+          <Text style={styles.resetText}>{ui.resetProgress}</Text>
         </PressScale>
       </Panel>
 
@@ -312,6 +345,8 @@ export function SettingsScreen({
 }
 
 const styles = StyleSheet.create({
+  // A section's name: above its panels, a step louder than a panel's label.
+  section: { color: theme.accent, ...type.h3, marginTop: space.sm },
   input: {
     color: ink.hi,
     backgroundColor: surface.chip,
@@ -322,6 +357,7 @@ const styles = StyleSheet.create({
   },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   rowLabel: { color: theme.text, fontSize: 15 },
+  asleep: { opacity: 0.4 },
 
   // The chips share the row equally, but never below the width their own
   // words need: four of them in a 320 dp column gave each 72 dp, which turned
@@ -348,8 +384,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
   },
-  // The deep red: cream on the outcome red is 4.4:1, a hair under body text's bar.
-  resetArmed: { backgroundColor: garb.redDark, borderColor: garb.redDark },
   resetText: { color: theme.text, fontSize: 14, fontFamily: font.bold },
 
   hint: { color: theme.textDim, fontSize: 12, lineHeight: 17, marginTop: 10 },

@@ -2,6 +2,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeIn, ZoomIn } from 'react-native-reanimated';
 import { ink, radius, space, stroke, surface, type } from '../theme';
 import { Button } from './Button';
+import { useMotionHere } from '../anim/MotionHere';
 
 /**
  * A question that has to be answered before something irreversible happens —
@@ -13,14 +14,17 @@ import { Button } from './Button';
  */
 export function ConfirmDialog({
   title,
+  body,
   confirmLabel,
   cancelLabel,
   onConfirm,
   onCancel,
   ground,
-  reduced = false,
+  reduced,
 }: {
   title: string;
+  /** What a yes costs, said under the question. */
+  body?: string;
   /** The irreversible answer. */
   confirmLabel: string;
   /** The safe one, drawn as the call to action. */
@@ -29,18 +33,24 @@ export function ConfirmDialog({
   onCancel: () => void;
   /** The panel's ground: the room's page colour, so it reads as part of the table. */
   ground: string;
+  /** Defaults to the app's motion policy where the dialog stands. */
   reduced?: boolean;
 }) {
+  const here = useMotionHere() === 'reduced';
+  const still = reduced ?? here;
   return (
-    <Animated.View entering={reduced ? undefined : FadeIn.duration(140)} style={styles.backdrop} accessibilityViewIsModal>
+    <Animated.View entering={still ? undefined : FadeIn.duration(140)} style={styles.backdrop} accessibilityViewIsModal>
       {/* A tap beside the panel is the safe answer too. */}
       <Pressable style={StyleSheet.absoluteFill} onPress={onCancel} accessibilityLabel={cancelLabel} />
       <Animated.View
-        entering={reduced ? undefined : ZoomIn.duration(160)}
+        entering={still ? undefined : ZoomIn.duration(160)}
         style={[styles.panel, { backgroundColor: ground }]}
         accessibilityRole="alert"
       >
-        <Text style={styles.title}>{title}</Text>
+        <View style={styles.words}>
+          <Text style={styles.title}>{title}</Text>
+          {body ? <Text style={styles.body}>{body}</Text> : null}
+        </View>
         <View style={styles.buttons}>
           <Button label={cancelLabel} tone="strong" onPress={onCancel} style={styles.button} />
           <Button label={confirmLabel} tone="plain" onPress={onConfirm} style={styles.button} />
@@ -71,7 +81,9 @@ const styles = StyleSheet.create({
     padding: space.xl,
     gap: space.xl,
   },
+  words: { gap: space.sm },
   title: { color: ink.hi, ...type.h3, textAlign: 'center' },
+  body: { color: ink.mid, ...type.sub, textAlign: 'center' },
   buttons: { flexDirection: 'row', gap: space.md },
   button: { flex: 1 },
 });

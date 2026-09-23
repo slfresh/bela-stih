@@ -100,13 +100,33 @@ export interface UiStrings {
   cosmeticName: (id: string) => string;
   buy: (price: number) => string;
   needsLevel: (level: number) => string;
+  /** The profile: how far to the next level, what it opens, the first-time line, the friends line. */
+  xpToNext: (into: number, span: number, next: number) => string;
+  xpMax: string;
+  nextUnlock: (level: number, name: string) => string;
+  profileEmpty: string;
+  friendsLine: (played: number, rate: number) => string;
+  /** The shop: the question before a purchase, and why a tile cannot be had. */
+  shopBuyTitle: (name: string, price: number) => string;
+  shopBuy: string;
+  shopCancel: string;
+  shopWhyLocked: (need: number, now: number) => string;
+  shopWhyCoins: (missing: number) => string;
   select: string;
   selected: string;
   sound: string;
   haptics: string;
   language: string;
   resetProgress: string;
-  resetConfirm: string;
+  /** The question before the progress is erased, what goes and what stays, the answer. */
+  resetTitle: string;
+  resetBody: string;
+  resetYes: string;
+  /** The settings' sections. */
+  setGeneral: string;
+  setGame: string;
+  setLook: string;
+  setData: string;
   version: string;
   statMatches: string;
   statWinRate: string;
@@ -233,6 +253,8 @@ export interface UiStrings {
   /** Hand arranging + sorting. */
   arrangeHint: string;
   arrangeDone: string;
+  /** The once-a-match tip over the hand: the long-press that starts arranging. */
+  arrangeTip: string;
   sortHand: string;
   sortAuto: string;
   sortSuits: string;
@@ -432,6 +454,7 @@ interface Strings {
   difficultyEasy: string;
   difficultyHard: string;
   difficultyHardHint: string;
+  difficultyEasyHint: string;
   /** Card-face style chooser. */
   deckStyleLabel: string;
   deckMadarice: string;
@@ -647,6 +670,8 @@ const hr: Strings = {
   difficultyHard: 'Prava bela',
   difficultyHardHint:
     'Prava bela: aplikacija ne čuva pravila umjesto tebe. Zvanja tražiš bez pomoći, a kriva karta je auzmeš — protivnici pišu sve.',
+  difficultyEasyHint:
+    'Lagana: aplikacija pazi na pravila. Kriva karta se ne može odigrati, a zvanja koja imaš ponudi ti sama.',
   deckStyleLabel: 'Karte',
   deckMadarice: 'Mađarice',
   deckStarinske: 'Starinske',
@@ -778,13 +803,29 @@ const hr: Strings = {
     cosmeticName: (id) => HR_COSMETICS[id] ?? id,
     buy: (price) => `Kupi · ${price}`,
     needsLevel: (level) => `Nivo ${level}`,
+    xpToNext: (into, span, next) => `${into} / ${span} XP do nivoa ${next}`,
+    xpMax: 'Najviši nivo!',
+    nextUnlock: (level, name) => `Nivo ${level} otključava: ${name}`,
+    profileEmpty: 'Odigraj prvu partiju: ovdje će se skupljati tvoja statistika.',
+    friendsLine: (played, rate) => `S prijateljima: odigrano ${played}, uspjeh ${rate}%`,
+    shopBuyTitle: (name, price) => `Kupi „${name}” za ${price} novčića?`,
+    shopBuy: 'Kupi',
+    shopCancel: 'Odustani',
+    shopWhyLocked: (need, now) => `Otključava se na nivou ${need}. Sad si na nivou ${now}.`,
+    shopWhyCoins: (missing) => `Nedostaje ti još novčića: ${missing}. Skupljaj ih partijama i dnevnim bonusom.`,
     select: 'Odaberi',
     selected: 'Odabrano',
     sound: 'Zvuk',
     haptics: 'Vibracija',
     language: 'Jezik',
     resetProgress: 'Izbriši napredak',
-    resetConfirm: 'Sigurno? Pritisni opet',
+    resetTitle: 'Izbrisati napredak?',
+    resetBody: 'Nivo, novčići, kupljeni izgledi i statistika kreću ispočetka. Povijest partija s prijateljima ostaje.',
+    resetYes: 'Izbriši',
+    setGeneral: 'Općenito',
+    setGame: 'Igra',
+    setLook: 'Izgled i zvuk',
+    setData: 'Podaci',
     version: 'Verzija',
     statMatches: 'Partije',
     statWinRate: 'Postotak pobjeda',
@@ -874,6 +915,7 @@ const hr: Strings = {
     seriesScore: 'Partije',
     arrangeHint: 'Dodirni dvije karte da ih zamijeniš.',
     arrangeDone: 'Gotovo',
+    arrangeTip: 'Pritisni i drži karte da ih složiš',
     sortHand: 'Slaganje karata',
     sortAuto: 'Adut prvi',
     sortSuits: 'Po bojama',
@@ -1102,6 +1144,8 @@ const srCyrl: Strings = {
   difficultyHard: 'Права бела',
   difficultyHardHint:
     'Права бела: апликација не чува правила уместо тебе. Звања тражиш без помоћи, а крива карта је аузмеш — противници пишу све.',
+  difficultyEasyHint:
+    'Лагана: апликација пази на правила. Крива карта не може да се одигра, а звања која имаш понуди ти сама.',
   deckStyleLabel: 'Карте',
   deckMadarice: 'Мађарице',
   deckStarinske: 'Старинске',
@@ -1233,13 +1277,29 @@ const srCyrl: Strings = {
     cosmeticName: (id) => SR_COSMETICS[id] ?? id,
     buy: (price) => `Купи · ${price}`,
     needsLevel: (level) => `Ниво ${level}`,
+    xpToNext: (into, span, next) => `${into} / ${span} XP до нивоа ${next}`,
+    xpMax: 'Највиши ниво!',
+    nextUnlock: (level, name) => `Ниво ${level} откључава: ${name}`,
+    profileEmpty: 'Одиграј прву партију: овде ће се скупљати твоја статистика.',
+    friendsLine: (played, rate) => `Са пријатељима: одиграно ${played}, успех ${rate}%`,
+    shopBuyTitle: (name, price) => `Купи „${name}” за ${price} новчића?`,
+    shopBuy: 'Купи',
+    shopCancel: 'Одустани',
+    shopWhyLocked: (need, now) => `Откључава се на нивоу ${need}. Сад си на нивоу ${now}.`,
+    shopWhyCoins: (missing) => `Недостаје ти још новчића: ${missing}. Скупљај их партијама и дневним бонусом.`,
     select: 'Изабери',
     selected: 'Изабрано',
     sound: 'Звук',
     haptics: 'Вибрација',
     language: 'Језик',
     resetProgress: 'Избриши напредак',
-    resetConfirm: 'Сигурно? Притисни поново',
+    resetTitle: 'Избрисати напредак?',
+    resetBody: 'Ниво, новчићи, купљени изгледи и статистика крећу испочетка. Историја партија са пријатељима остаје.',
+    resetYes: 'Избриши',
+    setGeneral: 'Опште',
+    setGame: 'Игра',
+    setLook: 'Изглед и звук',
+    setData: 'Подаци',
     version: 'Верзија',
     statMatches: 'Партије',
     statWinRate: 'Проценат победа',
@@ -1329,6 +1389,7 @@ const srCyrl: Strings = {
     seriesScore: 'Партије',
     arrangeHint: 'Додирни две карте да их замениш.',
     arrangeDone: 'Готово',
+    arrangeTip: 'Притисни и држи карте да их сложиш',
     sortHand: 'Слагање карата',
     sortAuto: 'Адут први',
     sortSuits: 'По бојама',
@@ -1554,6 +1615,8 @@ const en: Strings = {
   difficultyHard: 'True bela',
   difficultyHardHint:
     'True bela: the app stops policing for you. Find your own declarations, and an illegal card is renons — the opponents write everything.',
+  difficultyEasyHint:
+    'Casual: the app keeps the rules for you. An illegal card cannot be played, and it offers you the declarations you hold.',
   deckStyleLabel: 'Cards',
   deckMadarice: 'Hungarian',
   deckStarinske: 'Vintage',
@@ -1685,13 +1748,29 @@ const en: Strings = {
     cosmeticName: (id) => EN_COSMETICS[id] ?? id,
     buy: (price) => `Buy · ${price}`,
     needsLevel: (level) => `Level ${level}`,
+    xpToNext: (into, span, next) => `${into} / ${span} XP to level ${next}`,
+    xpMax: 'Top level!',
+    nextUnlock: (level, name) => `Level ${level} unlocks: ${name}`,
+    profileEmpty: 'Play your first match: your statistics will gather here.',
+    friendsLine: (played, rate) => `With friends: ${played} played, ${rate}% won`,
+    shopBuyTitle: (name, price) => `Buy "${name}" for ${price} coins?`,
+    shopBuy: 'Buy',
+    shopCancel: 'Cancel',
+    shopWhyLocked: (need, now) => `Unlocks at level ${need}. You are level ${now}.`,
+    shopWhyCoins: (missing) => `You need ${missing} more coins. Earn them with matches and the daily bonus.`,
     select: 'Select',
     selected: 'Selected',
     sound: 'Sound',
     haptics: 'Haptics',
     language: 'Language',
     resetProgress: 'Erase progress',
-    resetConfirm: 'Sure? Tap again',
+    resetTitle: 'Erase your progress?',
+    resetBody: 'Level, coins, bought looks and statistics start over. The history of matches with friends stays.',
+    resetYes: 'Erase',
+    setGeneral: 'General',
+    setGame: 'Game',
+    setLook: 'Look and sound',
+    setData: 'Data',
     version: 'Version',
     statMatches: 'Matches',
     statWinRate: 'Win rate',
@@ -1781,6 +1860,7 @@ const en: Strings = {
     seriesScore: 'Matches',
     arrangeHint: 'Tap two cards to swap them.',
     arrangeDone: 'Done',
+    arrangeTip: 'Press and hold your cards to arrange them',
     sortHand: 'Card order',
     sortAuto: 'Trump first',
     sortSuits: 'By suit',

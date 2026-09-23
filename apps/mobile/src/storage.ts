@@ -76,6 +76,8 @@ export interface Settings {
   deckStyle: 'madarice' | 'starinske' | 'francuske' | 'simple';
   /** How the hand is laid out. 'manual' keeps whatever the player arranged. */
   handSort: 'auto' | 'suits' | 'manual';
+  /** How many matches have shown the arranging tip; 2 once it is learned or said twice. */
+  arrangeTips: number;
   /**
    * Misclick guard. 'ambiguous' (default) arms a card on the first tap only
    * when there is a genuine choice — a forced card still plays on one tap.
@@ -94,6 +96,7 @@ export const DEFAULT_SETTINGS: Settings = {
   hardMode: false,
   deckStyle: 'madarice',
   handSort: 'auto',
+  arrangeTips: 0,
   confirmPlay: 'ambiguous',
   motion: 'system',
   volume: 0.7,

@@ -26,6 +26,7 @@ import {
 import { preloadSfx, setMasterVolume, setSoundEnabled } from './src/audio';
 import { AudioUnlockChip } from './src/ui/AudioUnlockChip';
 import { runBackGuard } from './src/ui/backGuard';
+import { useWebBack } from './src/ui/webBack';
 import { setAndroidHaptics, setHapticsEnabled } from './src/haptics';
 import { useFonts } from 'expo-font';
 
@@ -134,6 +135,12 @@ export default function App() {
     });
     return () => sub.remove();
   }, [launch, menu, exitToHome]);
+  // The browser's Back does the same on the web, instead of leaving the page.
+  useWebBack(launch === null && menu === 'home', () => {
+    if (runBackGuard()) return;
+    if (launchRef.current !== null) exitToHome();
+    else setMenu('home');
+  });
 
   const toHome = useCallback(() => setMenu('home'), []);
   // Read afresh each time the history opens: a match may have ended since.
@@ -174,6 +181,8 @@ export default function App() {
             lang={lang}
             profile={profile}
             settings={settings}
+            onSettingsChange={updateSettings}
+            onProfileChange={updateProfile}
             onOpenShop={() => setMenu('shop')}
             onOpenHistory={() => setMenu('history')}
             onBack={toHome}
