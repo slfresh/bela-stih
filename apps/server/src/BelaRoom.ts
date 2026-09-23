@@ -23,6 +23,10 @@ import {
   type SeatInfo,
 } from './protocol';
 import { cleanName } from './names';
+import { tableCode } from './codes';
+
+/** The codes of the private tables open in this process, so a new one is never a duplicate. */
+const liveCodes = new Set<string>();
 
 /**
  * An authoritative Bela table.
@@ -247,6 +251,10 @@ export class BelaRoom extends Room {
     if (options.private) {
       this.isPublic = false;
       this.setPrivate(true);
+      // A code friends can read out and type (codes.ts). Colyseus registers
+      // the room under its id only after onCreate, so this is the id.
+      this.roomId = tableCode((c) => liveCodes.has(c));
+      liveCodes.add(this.roomId);
     }
 
     // Colyseus looks the message type up on a plain object literal, so a client
@@ -497,6 +505,15 @@ export class BelaRoom extends Room {
     const seat = this.seatOf(client.sessionId);
     if (seat === null) return;
 
+    // A player the table waits for who says anything at all is back: their
+    // "back" may have been the message a flaky connection lost, and a table
+    // left waiting on someone who is playing would refuse their every move.
+    if (packet.type !== 'away' && this.waiting.has(seat) && this.occupants[seat]!.connected) {
+      this.waiting.delete(seat);
+      this.holdChanged();
+      if (packet.type === 'back') return;
+    }
+
     if (packet.type === 'action') {
       // Every other branch is gated on `started` or on a phase. Without this a
       // third joiner can bid before the fourth player exists, and the fourth
@@ -574,6 +591,20 @@ export class BelaRoom extends Room {
     if (packet.type === 'resume') {
       if (this.paused === null) return;
       this.paused = null;
+      this.holdChanged();
+      return;
+    }
+
+    if (packet.type === 'away') {
+      // A call that did not drop the connection: wait for them as if it had.
+      if (!this.waitsFor(seat) || this.waiting.has(seat)) return;
+      this.waiting.set(seat, Date.now() + WAIT_FOR_DROPPED_MS);
+      this.holdChanged();
+      return;
+    }
+
+    if (packet.type === 'back') {
+      if (!this.waiting.delete(seat)) return;
       this.holdChanged();
       return;
     }
@@ -979,6 +1010,7 @@ export class BelaRoom extends Room {
   }
 
   override onDispose(): void {
+    liveCodes.delete(this.roomId);
     this.stopTimer();
     this.stopNext();
     if (this.holdTimer !== null) clearTimeout(this.holdTimer);

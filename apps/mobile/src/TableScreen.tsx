@@ -66,6 +66,7 @@ import { EMOTE_TOGGLE, FAN_REST_SHORT, LAND_GAP, LAND_TRAY_H, SELF_NESTLE, SELF_
 import { useHandOrder, type HandSort } from './table/useHandOrder';
 import { callsOnTable } from './table/calls';
 import { pickAnnouncement } from './table/zvanja';
+import { BOT_AVATARS } from './table/bots';
 import type { ConfirmPlay } from './storage';
 import { cosmetics, room, roomStyle, type DeckStyle } from './cosmetics';
 import { PerfProbe } from './dev/PerfProbe';
@@ -110,10 +111,12 @@ export interface SeatMeta {
   avatar?: string | null;
   bot: boolean;
   connected: boolean;
+  /**
+   * A bot and nobody else: no person ever sat here. There is nobody to hide
+   * or report. (A dropped player a bot stands in for is not one of these.)
+   */
+  pureBot?: boolean;
 }
-
-/** Offline bots wear fixed faces so the table feels inhabited. */
-const BOT_AVATARS: readonly string[] = ['djed', 'brko', 'teta', 'kapetan'];
 
 export interface TableScreenProps {
   mySeat: Seat;
@@ -396,6 +399,46 @@ export function TableScreen(props: TableScreenProps) {
     [onAction],
   );
 
+  // Normal play asks no question with only one answer. The app knows the
+  // hand's zvanja: with none it says "Nemam" itself, a beat later so the table
+  // reads as having asked; with some it marks them ready - one tap on
+  // "Prijavi", or unmark to keep them quiet, which is still the player's call.
+  // Prava bela asks exactly as before: spotting them yourself is the point.
+  // Nine deals of nine asked "Imaš li zvanja?" of a hand with nothing in it.
+  const autoSkipping = declaring && !hardMode && view.myDeclarations.length === 0;
+  const onActionRef = useRef(onAction);
+  onActionRef.current = onAction;
+  const askedFor = useRef<string | null>(null);
+  const autoSkip = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!declaring || hardMode) return;
+    const key = `${view.dealer}:${view.hand.map(cardId).join(',')}`;
+    if (askedFor.current === key) return;
+    askedFor.current = key;
+    if (view.myDeclarations.length === 0) {
+      // Not tied to this effect's cleanup: the view changes identity on every
+      // update, and a timer cancelled by a re-run would never fire again.
+      autoSkip.current = setTimeout(() => {
+        autoSkip.current = null;
+        onActionRef.current({ type: 'DECLARE_SKIP', seat: mySeat });
+      }, 650);
+      return;
+    }
+    setMarked([...new Set(view.myDeclarations.flatMap((d) => d.cards.map(cardId)))]);
+  }, [declaring, hardMode, view.dealer, view.hand, view.myDeclarations, mySeat]);
+  // The question went away by itself: no late answer.
+  useEffect(() => {
+    if (declaring || autoSkip.current === null) return;
+    clearTimeout(autoSkip.current);
+    autoSkip.current = null;
+  }, [declaring]);
+  useEffect(
+    () => () => {
+      if (autoSkip.current !== null) clearTimeout(autoSkip.current);
+    },
+    [],
+  );
+
   // Leaving a match in progress asks first — from the leave button in the top
   // corner, from the result sheet between deals, and from Android's back. A
   // finished match leaves at once: there is nothing left to lose.
@@ -586,11 +629,16 @@ export function TableScreen(props: TableScreenProps) {
       isDealer={view.dealer === s && !dealerHop}
       isBot={meta(s).bot}
       connected={meta(s).connected}
-      active={view.toAct === s}
+      // Who is on turn - and while moves are being replayed (the in-between
+      // views carry no actor, by design, so nothing can be played mid-drain),
+      // whoever's move is being shown. Without that, no seat was marked for
+      // most of a deal while the bots played.
+      active={view.toAct === s || (view.toAct === null && spotlightSeat === s)}
       tone={seatTone(s, mySeat)}
       partner={isPartner(s, mySeat)}
       size={m.puck}
-      deadline={turnDeadline}
+      // The clock is the real actor's only - never on a move being replayed.
+      deadline={view.toAct === s ? turnDeadline : null}
       totalMs={turnTotalMs}
       thinking={spotlightSeat === s}
       reduced={reduced}
@@ -937,7 +985,9 @@ export function TableScreen(props: TableScreenProps) {
       <View key="zvanja" style={promptRow}>
         <Text style={promptText}>{lang.s.askZvanja}</Text>
         <Text style={promptHint}>
-          {marked.length === 0
+          {autoSkipping
+            ? lang.s.noZvanjaHere
+            : marked.length === 0
             ? lang.s.markZvanjaHint
             : markingIsZvanje
               ? markedWhole > 1
@@ -1077,7 +1127,7 @@ export function TableScreen(props: TableScreenProps) {
 
   // "Prijavi" / "Nemam" — the two answers, and nothing else while the table is
   // waiting on you.
-  const declareButtons = declaring ? (
+  const declareButtons = declaring && !autoSkipping ? (
     <>
       <Button
         label={lang.s.declareMarked}
@@ -1178,6 +1228,7 @@ export function TableScreen(props: TableScreenProps) {
         matchOver={matchOver}
         award={banner}
         winnerLabel={winnerTeam !== null ? lang.team(winnerTeam, mySeat) : ''}
+        weWon={matchOver && winnerTeam !== null ? winnerTeam === teamOf(mySeat) : null}
         renonsText={
           lastDealResult?.renonsSeat != null
             ? lastDealResult.renonsSeat === mySeat
@@ -1340,7 +1391,7 @@ export function TableScreen(props: TableScreenProps) {
               onModerate={() => setModerating(true)}
               // Online, another player's puck also hides or reports them.
               moderate={
-                onHide && onReport && giftTarget !== 'table'
+                onHide && onReport && giftTarget !== 'table' && !seatMeta?.[giftTarget]?.pureBot
                   ? {
                       hidden: hidden?.includes(giftTarget) ?? false,
                       onHide: () => {
@@ -1530,7 +1581,7 @@ const TableHeader = memo(function TableHeader({
               {vertical ? '\n' : '   '}
               {progress.callerNeeds === 0
                 ? lang.s.contractSafe
-                : lang.s.needsMore(progress.callerNeeds)}
+                : lang.s.needsMore(progress.callerNeeds, progress.callerTeam === us)}
             </Text>
           </Text>
         </Anchor>
@@ -1558,6 +1609,7 @@ const TableHeader = memo(function TableHeader({
     (a.progress.running[0] === b.progress!.running[0] &&
       a.progress.running[1] === b.progress!.running[1] &&
       a.progress.callerNeeds === b.progress!.callerNeeds &&
+      a.progress.callerTeam === b.progress!.callerTeam &&
       a.progress.provisional === b.progress!.provisional &&
       a.progress.belaPending === b.progress!.belaPending)));
 
@@ -2170,6 +2222,7 @@ function DealResult({
   matchScores,
   matchOver,
   winnerLabel,
+  weWon = null,
   renonsText,
   series,
   award = null,
@@ -2193,6 +2246,8 @@ function DealResult({
   matchScores: readonly [number, number];
   matchOver: boolean;
   winnerLabel: string;
+  /** At the end of a match: was it ours? null while it is not over (or not known). */
+  weWon?: boolean | null;
   renonsText?: string | null;
   /** Matches won per side since this roster sat down; online only. */
   series?: readonly [number, number] | null;
@@ -2218,8 +2273,13 @@ function DealResult({
   const row = (
     label: string,
     v: readonly [number, number],
-    opts: { from?: readonly [number, number]; anchor?: string; hero?: boolean } = {},
-  ) => (
+    opts: { from?: readonly [number, number]; anchor?: string; hero?: boolean; countAfter?: number } = {},
+  ) => {
+    // A tally counts once its row has arrived - plus `countAfter`, so the
+    // match score moves only after this deal's total has settled. Counting
+    // them all at once showed, for a moment, a total bigger than its own sum.
+    const arrives = order * 60 + 220;
+    return (
     <Animated.View style={[styles.resultRow, opts.hero && styles.resultHero]} key={label} entering={enter()}>
       <Text style={[styles.resultLabel, opts.hero && styles.resultLabelHero]}>{label}</Text>
       <Pair
@@ -2229,9 +2289,11 @@ function DealResult({
         reduced={reduced}
         anchor={opts.anchor}
         hero={opts.hero}
+        delay={opts.countAfter === undefined ? 0 : arrives + opts.countAfter}
       />
     </Animated.View>
-  );
+    );
+  };
   const rule = <View style={styles.rule} />;
   const foot = (
     <ResultFoot
@@ -2261,13 +2323,21 @@ function DealResult({
           style={[styles.resultPanel, { maxHeight, backgroundColor: room().page }]}
           contentContainerStyle={styles.resultContent}
         >
-          <View style={[styles.sheetBand, matchOver ? styles.sheetBandMatch : styles.sheetBandPlain]}>
-            {matchOver && <Crown size={26} />}
+          <View style={[styles.sheetBand, matchOver ? (weWon === false ? styles.sheetBandLost : styles.sheetBandMatch) : styles.sheetBandPlain]}>
+            {matchOver && weWon !== false && <Crown size={26} />}
             <View style={styles.sheetBandText}>
               <Text style={styles.sheetTitle} numberOfLines={2}>
                 {/* The winner's name came with an event this client missed
                     too: then the score below is all there is to say. */}
-                {matchOver ? (winnerLabel ? lang.s.winner(winnerLabel) : lang.s.matchScore) : lang.s.dealResult}
+                {matchOver
+                  ? weWon !== null
+                    ? weWon
+                      ? lang.s.ui.matchWon
+                      : lang.s.ui.matchLost
+                    : winnerLabel
+                      ? lang.s.winner(winnerLabel)
+                      : lang.s.matchScore
+                  : lang.s.dealResult}
               </Text>
               <Text style={styles.sheetVerdict} numberOfLines={2}>
                 {lang.s.ui.resultMissed}
@@ -2301,13 +2371,24 @@ function DealResult({
       <View
         style={[
           styles.sheetBand,
-          matchOver ? styles.sheetBandMatch : won ? styles.sheetBandWon : styles.sheetBandLost,
+          // The match's end in the winners' colours: gold with the crown when
+          // it is ours, theirs when it is not - a loss used to wear the same
+          // gold and crown as a win.
+          matchOver ? (weWon === false ? styles.sheetBandLost : styles.sheetBandMatch) : won ? styles.sheetBandWon : styles.sheetBandLost,
         ]}
       >
-        {matchOver && <Crown size={26} />}
+        {matchOver && weWon !== false && <Crown size={26} />}
         <View style={styles.sheetBandText}>
           <Text style={[styles.sheetTitle, stiglja && !matchOver && styles.sheetTitleStiglja]} numberOfLines={2}>
-            {matchOver ? lang.s.winner(winnerLabel) : stiglja ? `${lang.s.valat}!` : lang.s.dealResult}
+            {matchOver
+              ? weWon === null
+                ? lang.s.winner(winnerLabel)
+                : weWon
+                  ? lang.s.ui.matchWon
+                  : lang.s.ui.matchLost
+              : stiglja
+                ? `${lang.s.valat}!`
+                : lang.s.dealResult}
           </Text>
           <Text style={styles.sheetVerdict} numberOfLines={2}>
             {renonsText ? `${lang.s.renonsTitle} ${renonsText}` : made ? lang.s.callerMade : lang.s.callerFailed}
@@ -2344,12 +2425,13 @@ function DealResult({
       {/* The sheet mounts with the final numbers already in the view, so the
           two totals count from where they were: nought, and the match score
           before this deal was added to it. */}
-      {row(lang.s.recorded, result.finalScore, { from: [0, 0], anchor: anchorId.sheetTotal, hero: true })}
+      {row(lang.s.recorded, result.finalScore, { from: [0, 0], anchor: anchorId.sheetTotal, hero: true, countAfter: 0 })}
       {row(lang.s.matchScore, matchScores, {
         from: [
           Math.max(0, matchScores[0] - result.finalScore[0]),
           Math.max(0, matchScores[1] - result.finalScore[1]),
         ],
+        countAfter: 600,
       })}
 
       {award && (award.xp > 0 || award.coins > 0 || award.levelUp !== null) && (
@@ -2499,6 +2581,7 @@ function Pair({
   reduced,
   anchor,
   hero = false,
+  delay = 0,
 }: {
   us: number;
   them: number;
@@ -2506,18 +2589,21 @@ function Pair({
   reduced: boolean;
   anchor?: string;
   hero?: boolean;
+  /** Wait this long before counting, so a sheet's tallies settle one after another. */
+  delay?: number;
 }) {
   const steps = useRef(0);
   const a = useCountUp(us, 600, {
     reduced,
     from: from?.[0] ?? us,
+    delayMs: delay,
     // Every other step ticks, softly: a tally being written, not a rattle.
     onStep: () => {
       // Only the hero row ticks, or two tallies rattle under the stinger.
       if (hero && ++steps.current % 2 === 0) playSfx('tick', { gain: 0.6, rate: 1.4 });
     },
   });
-  const b = useCountUp(them, 600, { reduced, from: from?.[1] ?? them });
+  const b = useCountUp(them, 600, { reduced, from: from?.[1] ?? them, delayMs: delay });
   const pair = (
     <View style={styles.pair}>
       <Text style={[styles.pairValue, styles.pairUs, hero && styles.pairHero]}>{a}</Text>

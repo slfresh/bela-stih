@@ -167,6 +167,9 @@ export interface UiStrings {
   playerHint: string;
   /** The sheet for a deal whose score this client never saw (after a reconnect). */
   resultMissed: string;
+  /** The end of a match, said from our side (plural, so no gender). */
+  matchWon: string;
+  matchLost: string;
   /** Private tables: the button that stops the table for everyone, and its spoken name. */
   pause: string;
   pauseLabel: string;
@@ -344,6 +347,8 @@ interface Strings {
   noneToDeclare: string;
   /** Mark the cards, then confirm. */
   markZvanjaHint: string;
+  /** Normal play, nothing to declare: the app answers for the player, and says so. */
+  noZvanjaHere: string;
   markingOk: string;
   /** More than one zvanje marked at once - also fine, the engine takes them all. */
   markingOkMany: string;
@@ -382,7 +387,8 @@ interface Strings {
   newMatch: string;
   gameToTarget: (target: number) => string;
   /** Live deal counter: how many points the caller still needs. */
-  needsMore: (points: number) => string;
+  /** What the CALLING side still needs - said as ours or theirs, never "treba još 82" to nobody. */
+  needsMore: (points: number, ours: boolean) => string;
   /** The caller is already past the line. */
   contractSafe: string;
 
@@ -534,6 +540,7 @@ const hr: Strings = {
   showsZvanja: 'pokazuje zvanja',
   noneToDeclare: 'Nemam',
   markZvanjaHint: 'Označi karte koje čine zvanje',
+  noZvanjaHere: 'Nemaš zvanja.',
   markingOk: 'To je zvanje — pritisni Prijavi',
   markingOkMany: 'To su tvoja zvanja — pritisni Prijavi',
   markingNotZvanje: 'Označene karte nisu zvanje',
@@ -564,7 +571,7 @@ const hr: Strings = {
   nextDeal: 'Sljedeće dijeljenje',
   newMatch: 'Nova partija',
   gameToTarget: (target) => `igra do ${target}`,
-  needsMore: (points) => `treba još ${points}`,
+  needsMore: (points, ours) => (ours ? `treba nam još ${points}` : `treba im još ${points}`),
   contractSafe: 'prošlo',
 
   ui: {
@@ -651,14 +658,15 @@ const hr: Strings = {
       `Prijavljujem igrača s nadimkom: „${p.name}”\nKod stola: ${p.code}\nVrijeme: ${p.at}\nVerzija igre: ${p.version}\n\nŠto je bilo neprimjereno (nije obavezno):\n`,
     playerHint: 'Dodirni za dar ili prijavu',
     resultMissed: 'Veza se prekinula, pa brojke ovog dijeljenja nisu stigle.',
+    matchWon: 'Pobijedili smo!',
+    matchLost: 'Izgubili smo',
     pause: 'Pauza',
     pauseLabel: 'Pauziraj stol',
     pausedTitle: 'Stol je na pauzi',
     pausedBy: (name) => `Pauza: ${name}`,
     resume: 'Nastavi',
     waitingFor: (names) => `Čekamo: ${names}`,
-    waitingLine: (n) =>
-      n > 1 ? 'Veza je prekinuta — stol stoji dok se ne vrate.' : 'Veza je prekinuta — stol stoji dok se ne vrati.',
+    waitingLine: (n) => (n > 1 ? 'Nisu tu — stol stoji dok se ne vrate.' : 'Nije tu — stol stoji dok se ne vrati.'),
     playOn: (n) => (n > 1 ? 'Nastavi s botovima' : 'Nastavi s botom'),
     holdLeft: (clock) => `još ${clock}`,
     reconnectingTitle: 'Veza je prekinuta',
@@ -850,6 +858,7 @@ const srCyrl: Strings = {
   showsZvanja: 'показује звања',
   noneToDeclare: 'Немам',
   markZvanjaHint: 'Означи карте које чине звање',
+  noZvanjaHere: 'Немаш звања.',
   markingOk: 'То је звање — притисни Пријави',
   markingOkMany: 'То су твоја звања — притисни Пријави',
   markingNotZvanje: 'Означене карте нису звање',
@@ -880,7 +889,7 @@ const srCyrl: Strings = {
   nextDeal: 'Следеће дељење',
   newMatch: 'Нова партија',
   gameToTarget: (target) => `игра до ${target}`,
-  needsMore: (points) => `треба још ${points}`,
+  needsMore: (points, ours) => (ours ? `треба нам још ${points}` : `треба им још ${points}`),
   contractSafe: 'прошло',
 
   ui: {
@@ -967,14 +976,15 @@ const srCyrl: Strings = {
       `Пријављујем играча са надимком: „${p.name}”\nКод стола: ${p.code}\nВреме: ${p.at}\nВерзија игре: ${p.version}\n\nШта је било неприкладно (није обавезно):\n`,
     playerHint: 'Додирни за поклон или пријаву',
     resultMissed: 'Веза се прекинула, па бројке овог дељења нису стигле.',
+    matchWon: 'Победили смо!',
+    matchLost: 'Изгубили смо',
     pause: 'Пауза',
     pauseLabel: 'Паузирај сто',
     pausedTitle: 'Сто је на паузи',
     pausedBy: (name) => `Пауза: ${name}`,
     resume: 'Настави',
     waitingFor: (names) => `Чекамо: ${names}`,
-    waitingLine: (n) =>
-      n > 1 ? 'Веза је прекинута — сто стоји док се не врате.' : 'Веза је прекинута — сто стоји док се не врати.',
+    waitingLine: (n) => (n > 1 ? 'Нису ту — сто стоји док се не врате.' : 'Није ту — сто стоји док се не врати.'),
     playOn: (n) => (n > 1 ? 'Настави са ботовима' : 'Настави са ботом'),
     holdLeft: (clock) => `још ${clock}`,
     reconnectingTitle: 'Веза је прекинута',
@@ -1162,6 +1172,7 @@ const en: Strings = {
   showsZvanja: 'shows declarations',
   noneToDeclare: 'Nothing',
   markZvanjaHint: 'Mark the cards that make up your declaration',
+  noZvanjaHere: 'Nothing to declare in this hand.',
   markingOk: 'That is a declaration — press Declare',
   markingOkMany: 'Those are your declarations — press Declare',
   markingNotZvanje: 'Those cards are not a declaration',
@@ -1192,7 +1203,7 @@ const en: Strings = {
   nextDeal: 'Next deal',
   newMatch: 'New match',
   gameToTarget: (target) => `game to ${target}`,
-  needsMore: (points) => `needs ${points} more`,
+  needsMore: (points, ours) => (ours ? `we need ${points} more` : `they need ${points} more`),
   contractSafe: 'safe',
 
   ui: {
@@ -1279,13 +1290,15 @@ const en: Strings = {
       `Reporting the player with the nickname: "${p.name}"\nTable code: ${p.code}\nTime: ${p.at}\nApp version: ${p.version}\n\nWhat was wrong (optional):\n`,
     playerHint: 'Tap to send a gift or report',
     resultMissed: "The connection dropped, so this deal's numbers are missing.",
+    matchWon: 'We won!',
+    matchLost: 'We lost',
     pause: 'Pause',
     pauseLabel: 'Pause the table',
     pausedTitle: 'The table is paused',
     pausedBy: (name) => `Paused by ${name}`,
     resume: 'Resume',
     waitingFor: (names) => `Waiting for ${names}`,
-    waitingLine: () => 'Their connection dropped — the table waits until they are back.',
+    waitingLine: (n) => (n > 1 ? 'They are away — the table waits until they are back.' : 'Away — the table waits until they are back.'),
     playOn: (n) => (n > 1 ? 'Continue with bots' : 'Continue with a bot'),
     holdLeft: (clock) => `${clock} left`,
     reconnectingTitle: 'Connection lost',

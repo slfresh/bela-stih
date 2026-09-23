@@ -16,6 +16,8 @@ export function useCountUp(
     onStep?: (value: number) => void;
     /** Where to count from on mount; by default the number is simply shown. */
     from?: number;
+    /** Hold the starting number this long before counting (a sheet's rows count one after another). */
+    delayMs?: number;
   } = {},
 ): number {
   // Under reduce-motion there is nothing to count from: the first paint is the number.
@@ -35,17 +37,25 @@ export function useCountUp(
     }
     const steps = Math.min(12, Math.max(1, Math.round(durationMs / 33)));
     let i = 0;
-    const id = setInterval(() => {
-      i += 1;
-      const k = i / steps;
-      const eased = 1 - (1 - k) * (1 - k);
-      const v = i >= steps ? target : Math.round(from + (target - from) * eased);
-      setShown(v);
-      onStepRef.current?.(v);
-      if (i >= steps) clearInterval(id);
-    }, durationMs / steps);
-    return () => clearInterval(id);
-  }, [target, durationMs, opts.reduced]);
+    let id: ReturnType<typeof setInterval> | null = null;
+    const count = () => {
+      id = setInterval(() => {
+        i += 1;
+        const k = i / steps;
+        const eased = 1 - (1 - k) * (1 - k);
+        const v = i >= steps ? target : Math.round(from + (target - from) * eased);
+        setShown(v);
+        onStepRef.current?.(v);
+        if (i >= steps && id !== null) clearInterval(id);
+      }, durationMs / steps);
+    };
+    const wait = opts.delayMs && opts.delayMs > 0 ? setTimeout(count, opts.delayMs) : null;
+    if (wait === null) count();
+    return () => {
+      if (wait !== null) clearTimeout(wait);
+      if (id !== null) clearInterval(id);
+    };
+  }, [target, durationMs, opts.reduced, opts.delayMs]);
 
   return shown;
 }

@@ -47,13 +47,26 @@ export type ClientMessage =
   /** Stop waiting for a dropped player: a bot holds their cards until they are back. */
   | { type: 'playOn' }
   /** Host, private table, before the start: the turn clock in seconds (one of TURN_CHOICES). */
-  | { type: 'clock'; seconds: number };
+  | { type: 'clock'; seconds: number }
+  /**
+   * Private tables: this player's app went to the background - a phone call
+   * that did not drop the connection. The table waits for them exactly as for
+   * a dropped one, instead of letting the turn clock play their cards.
+   */
+  | { type: 'away' }
+  /** ...and is back. */
+  | { type: 'back' };
 
 /** Turn clocks a private table's host may choose, in seconds. Quick play keeps the first. */
 export const TURN_CHOICES: readonly number[] = [30, 60, 90];
 
-/** How long a scored deal's sheet stays up before the next deal starts by itself. */
-export const NEXT_DEAL_MS = 10_000;
+/**
+ * How long a scored deal's sheet stays up before the next deal starts by
+ * itself: ten seconds to read it, plus the three the app spends showing the
+ * last trick land before the sheet appears (the clock starts when the deal is
+ * scored, and players were getting about seven).
+ */
+export const NEXT_DEAL_MS = 13_000;
 
 /**
  * How long a private table stands still for a player whose connection dropped

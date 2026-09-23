@@ -88,6 +88,7 @@ async function main(): Promise<void> {
   await wait(500);
   check(A.last?.turnSeconds === 30, `a new private table starts on 30 s (${A.last?.turnSeconds})`);
   check(A.last?.private === true, 'the room says it is private');
+  check(/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{5}$/.test(A.room.roomId), `its code is five readable capitals (${A.room.roomId})`);
   B.room.send('clock', { seconds: 90 });
   await wait(300);
   check(A.last?.turnSeconds === 30, 'a guest cannot choose the clock');
@@ -157,12 +158,26 @@ async function main(): Promise<void> {
   await wait(800);
   check(A.last?.seats[B.seat]?.bot === false, 'the guest takes the seat back from the bot');
 
+  // ---- away: a call that does NOT drop the connection ----
+  B.room.send('away', {});
+  await wait(400);
+  check(A.last?.hold?.waiting.some((w) => w.seat === B.seat) === true, 'an app gone to the background is waited for, like a drop');
+  B.room.send('back', {});
+  await wait(400);
+  check(A.last?.hold === undefined, '"back" carries on');
+  B.room.send('away', {});
+  await wait(300);
+  B.room.send('emote', { id: 'smile' });
+  await wait(400);
+  check(A.last?.hold === undefined, 'any word from them means back, should "back" be lost');
+
   // ---- the next deal: everyone ready, or the countdown ----------------------------
   const scored = await drive([A, B], () => A.view?.phase === 'DEAL_OVER', 60_000);
   check(scored, 'the deal is played out');
   await wait(300);
   const left = A.last?.nextMsLeft ?? 0;
-  check(left > 8000 && left <= 10_000, `a countdown of about ten seconds starts (${left})`);
+  // Ten seconds to read, plus three for the app to land the last trick.
+  check(left > 11_000 && left <= 13_000, `a countdown of about thirteen seconds starts (${left})`);
   A.room.send('next', {});
   await wait(500);
   check(A.view?.phase === 'DEAL_OVER', 'one player-s press no longer deals for everyone');
@@ -179,9 +194,9 @@ async function main(): Promise<void> {
   check(A.view?.phase === 'DEAL_OVER' && A.last?.nextMsLeft === undefined, 'a pause holds the countdown');
   A.room.send('resume', {});
   const t0 = Date.now();
-  const dealt = await drive([], () => A.view?.phase !== 'DEAL_OVER', 14_000);
+  const dealt = await drive([], () => A.view?.phase !== 'DEAL_OVER', 17_000);
   const took = Date.now() - t0;
-  check(dealt && took > 8000 && took < 13_000, `and after it, nobody pressing, the deal starts by itself (${took} ms)`);
+  check(dealt && took > 11_000 && took < 16_000, `and after it, nobody pressing, the deal starts by itself (${took} ms)`);
 
   // ---- quick play is unchanged ------------------------------------------------------
   // One player: a public table refuses a second seat from the same address
@@ -198,6 +213,9 @@ async function main(): Promise<void> {
   P.room.send('pause', {});
   await wait(400);
   check(P.last?.hold === undefined, 'quick play cannot be paused');
+  P.room.send('away', {});
+  await wait(400);
+  check(P.last?.hold === undefined, 'nor is anyone waited for there when their app goes to the background');
   const pToken = P.room.reconnectionToken;
   const pHand = P.view?.hand.length ?? -1;
   await P.room.leave(false).catch(() => {});

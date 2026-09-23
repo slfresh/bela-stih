@@ -48,7 +48,9 @@ describe('the app and the server agree', () => {
   });
 
   it('on the numbers friends were promised', () => {
-    expect(NEXT_DEAL_MS).toBe(10_000);
+    // Ten seconds of reading, plus the three the app spends landing the last
+    // trick before the sheet appears (players were getting about seven).
+    expect(NEXT_DEAL_MS).toBe(13_000);
     expect(WAIT_FOR_DROPPED_MS).toBe(10 * 60_000);
     expect(PAUSE_MAX_MS).toBeGreaterThanOrEqual(WAIT_FOR_DROPPED_MS);
   });

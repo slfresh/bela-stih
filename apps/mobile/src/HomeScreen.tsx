@@ -189,6 +189,28 @@ export function HomeScreen({
               />
             </View>
 
+            {/* A friend's code, right under the two ways in: it used to sit at
+                the very bottom, below the fold on a phone, and friends told to
+                "type the code" scrolled past the daily bonus looking for it. */}
+            <Panel label={ui.joinByCode}>
+              <View style={styles.joinRow}>
+                <TextInput
+                  value={code}
+                  onChangeText={setCode}
+                  placeholder={ui.tableCode}
+                  placeholderTextColor={ink.mid}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  style={styles.input}
+                />
+                <Button
+                  label={ui.enter}
+                  tone={code.trim() ? 'strong' : 'plain'}
+                  onPress={() => code.trim() && go({ mode: 'join', code: code.trim() })}
+                />
+              </View>
+            </Panel>
+
             {/* the retention loop, in one place: today's bonus, today's quests */}
             <Panel label={ui.daily}>
               <View style={styles.bonusRow}>
@@ -257,25 +279,6 @@ export function HomeScreen({
                   )}
                 </View>
               ))}
-            </Panel>
-
-            <Panel label={ui.joinByCode}>
-              <View style={styles.joinRow}>
-                <TextInput
-                  value={code}
-                  onChangeText={setCode}
-                  placeholder={ui.tableCode}
-                  placeholderTextColor={ink.mid}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={styles.input}
-                />
-                <Button
-                  label={ui.enter}
-                  tone={code.trim() ? 'strong' : 'plain'}
-                  onPress={() => code.trim() && go({ mode: 'join', code: code.trim() })}
-                />
-              </View>
             </Panel>
 
             <Text style={styles.disclaimer}>{ui.coinsDisclaimer}</Text>

@@ -24,7 +24,8 @@ import { Button } from '../ui/Button';
 import { font, ink, radius, space, surface, theme, type } from '../theme';
 import { Panel } from '../ui/Panel';
 import { SEAT_MAP_ASPECT, SeatMap } from './SeatMap';
-import { seatName } from './seatName';
+import { SERVER_FALLBACK, seatName } from './seatName';
+import { botIdentity } from '../table/bots';
 import { stillReading } from './hold';
 import { PressScale } from '../ui/PressScale';
 import { TURN_CHOICES_S } from './clock';
@@ -160,11 +161,17 @@ export function OnlineGame({
   const settled = net.view.phase === 'DEAL_OVER' || net.view.phase === 'MATCH_OVER';
   const seatMeta: (SeatMeta | null)[] = [null, null, null, null];
   for (const s of net.seats) {
+    // A chair nobody ever sat in: the server calls it "Igrač N" and gives it no
+    // face. It gets the bot's character instead, as offline. A dropped player
+    // keeps their own name and face under the bot mark.
+    const pureBot = s.seat !== net.seat && s.bot && s.name === SERVER_FALLBACK(s.seat);
+    const who = pureBot ? botIdentity(net.lang, s.seat) : null;
     seatMeta[s.seat] = {
-      name: s.seat === net.seat ? net.lang.s.seat[0] : seatName(net.lang, s),
-      avatar: s.avatar || null,
+      name: s.seat === net.seat ? net.lang.s.seat[0] : (who?.name ?? seatName(net.lang, s)),
+      avatar: who?.avatar ?? (s.avatar || null),
       bot: s.bot,
       connected: s.connected,
+      pureBot,
     };
   }
 

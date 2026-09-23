@@ -21,6 +21,7 @@ import { applyGiftEcho, GIFT_COOLDOWN_MS, GIFT_ECHO_WAIT_MS, isGiftMessage, reac
 import { useGifts } from '../table/useGifts';
 import { notePeople, standInsOf } from './standIns';
 import { localHold, type TableHold, type WireHold } from './hold';
+import { normalizeCode } from './code';
 
 /**
  * A table driven by the server, presented through the same animation director
@@ -357,8 +358,14 @@ export function useNetGame(settings: Settings) {
     const sub = AppState.addEventListener('change', (s) => {
       if (s !== 'active') {
         directorRef.current?.fastForward();
+        // A call that does NOT drop the connection left the server thinking
+        // the player was there, and the turn clock played their cards. A
+        // private table now waits for them as for a drop; everywhere else the
+        // server ignores this.
+        roomRef.current?.send('away', {});
         return;
       }
+      roomRef.current?.send('back', {});
       // Back from a phone call: if the connection died meanwhile, try the
       // seat again now rather than after whatever the retry loop is sleeping.
       if (roomRef.current === null && reconnectTokenRef.current !== null) reconnectRef.current();
@@ -657,7 +664,7 @@ export function useNetGame(settings: Settings) {
     [connect, name, avatar, settings.hardMode],
   );
   const joinById = useCallback(
-    (id: string) => connect((c) => c.joinById(id.trim(), { name, avatar, gifts: true })),
+    (id: string) => connect((c) => c.joinById(normalizeCode(id), { name, avatar, gifts: true })),
     [connect, name, avatar],
   );
 
