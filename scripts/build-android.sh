@@ -95,7 +95,12 @@ if not manifests:
 service = 'AudioControlsService'
 if any(service.encode() in m or service.encode('utf-16-le') in m for m in manifests):
     sys.exit(f"!! {artifact} still declares expo-audio's media playback service (app.json: enableBackgroundPlayback false) - not shippable")
-print(f"   {artifact}: expo-audio builds no MediaSession per player, and no media service is declared")
+# Voice messages (1.5.0) record while a button is held: without the permission
+# the first press would fail on every phone, silently.
+mic = 'android.permission.RECORD_AUDIO'
+if not any(mic.encode() in m or mic.encode('utf-16-le') in m for m in manifests):
+    sys.exit(f"!! {artifact} does not ask for {mic} (app.json blockedPermissions?) - voice messages cannot record")
+print(f"   {artifact}: expo-audio builds no MediaSession per player, no media service is declared, and the microphone is asked for")
 PY
 }
 

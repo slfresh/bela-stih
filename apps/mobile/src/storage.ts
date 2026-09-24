@@ -87,6 +87,11 @@ export interface Settings {
   motion: MotionSetting;
   /** Master volume, 0–1: one of VOLUME_OPTIONS. */
   volume: number;
+  /**
+   * Voice messages online: the mic button, and others' clips playing by
+   * themselves. Off, there is neither (a table's own switch is its host's).
+   */
+  voice: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -101,6 +106,7 @@ export const DEFAULT_SETTINGS: Settings = {
   confirmPlay: 'ambiguous',
   motion: 'system',
   volume: 0.7,
+  voice: true,
 };
 
 function read<T>(key: string, fallback: T): T {

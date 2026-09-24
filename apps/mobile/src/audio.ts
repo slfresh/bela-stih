@@ -88,6 +88,12 @@ export function setMasterVolume(v: number): void {
   master = Math.max(0, Math.min(1, v));
 }
 
+/** The game's sounds step back while a voice message plays (voice/useVoicePlayback.ts); 1 is not at all. */
+let duck = 1;
+export function setSfxDuck(level: number): void {
+  duck = Math.max(0, Math.min(1, level));
+}
+
 /**
  * Let the game be heard even when the phone is on silent — it is a game, not a
  * notification — and over the player's own music, never instead of it: with
@@ -162,7 +168,7 @@ export function playSfx(name: Sfx, opts: PlayOptions = {}): void {
     const player = pick(name);
     // Rewind first: the same effect often fires again before it has finished.
     void player.seekTo(0);
-    player.volume = Math.max(0, Math.min(1, gain * master * (opts.gain ?? 1)));
+    player.volume = Math.max(0, Math.min(1, gain * master * duck * (opts.gain ?? 1)));
     const vary = varied ? 0.92 + Math.random() * 0.16 : 1;
     player.setPlaybackRate(vary * (opts.rate ?? 1));
     player.play();

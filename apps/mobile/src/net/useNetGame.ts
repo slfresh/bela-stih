@@ -13,6 +13,8 @@ import { botThinkMs } from '../anim/think';
 import { EMPTY_LOG, logEvent } from '../matchLog';
 import { troubleOf, type Trouble } from './trouble';
 import { isPlayMode, modeFromLegacy, type PlayMode } from '../playMode';
+import { sniffMime, type VoiceMime } from '../voice/voice';
+import type { Take } from '../voice/useVoiceRecorder';
 import { FxBus } from '../anim/FxBus';
 import { makeFxSpawner, spawnEmote } from '../table/fx';
 import { useMotionPolicy } from '../anim/useMotionPolicy';
@@ -126,6 +128,17 @@ export interface SeatInfo {
   gift?: string;
   /** This seat can be given a gift (absent: an older app, which never sees one). */
   seesGifts?: true;
+  /** This seat's app plays voice clips (absent: an older app, which is never sent one). */
+  hearsVoice?: true;
+}
+
+/** A voice clip from the table (the room's VoiceMessage); the speaker's own echo has no data. */
+export interface VoiceIn {
+  from: Seat;
+  id: number;
+  ms: number;
+  mime: VoiceMime;
+  data: Uint8Array;
 }
 
 interface RoomMessage {
@@ -147,6 +160,8 @@ interface RoomMessage {
   target?: number;
   /** Friends' table, by code: only there does it pause and wait. */
   private?: true;
+  /** Voice messages are on at this table (absent from an older server: there are none). */
+  voice?: true;
   /** Present while a private table stands still. */
   hold?: WireHold;
   /** At DEAL_OVER: time until the next deal starts by itself. */
@@ -196,6 +211,14 @@ export function useNetGame(settings: Settings) {
   const [hidden, setHidden] = useState<readonly Seat[]>([]);
   const hiddenRef = useRef<readonly Seat[]>([]);
   const hiddenRoomRef = useRef<string | null>(null);
+  // Players whose voice I have muted, at this table, on this device. Hiding a
+  // player mutes them too; this is for one who is fine to see but not to hear.
+  const [muted, setMuted] = useState<readonly Seat[]>([]);
+  const mutedRef = useRef<readonly Seat[]>([]);
+  const [voiceOn, setVoiceOn] = useState(false);
+  // Where clips go: the table's playback (OnlineGame) and my own echo's rings.
+  const voiceInRef = useRef<((clip: VoiceIn) => void) | null>(null);
+  const voiceEchoRef = useRef<((ms: number) => void) | null>(null);
   const [mode, setMode] = useState<PlayMode>('easy');
   const [hostSeat, setHostSeat] = useState<Seat | null>(null);
   const [series, setSeries] = useState<[number, number]>([0, 0]);
@@ -377,6 +400,9 @@ export function useNetGame(settings: Settings) {
     hiddenRef.current = [];
     hiddenRoomRef.current = null;
     setHidden([]);
+    mutedRef.current = [];
+    setMuted([]);
+    setVoiceOn(false);
     setSeries([0, 0]);
     setMatchNumber(0);
     setRematchVotes([]);
@@ -445,6 +471,8 @@ export function useNetGame(settings: Settings) {
       hiddenRoomRef.current = room.roomId;
       hiddenRef.current = [];
       setHidden([]);
+      mutedRef.current = [];
+      setMuted([]);
     }
 
     room.onMessage('view', (msg: { seat: Seat; view: PublicView }) => {
@@ -529,6 +557,7 @@ export function useNetGame(settings: Settings) {
       setTurnSeconds(msg.turnSeconds ?? 30);
       setTarget(msg.target ?? 1001);
       setIsPrivate(msg.private === true);
+      setVoiceOn(msg.voice === true);
       // A stale-tap refusal is stale itself the moment the game moves on.
       if (msg.events.length > 0) setError(null);
       if (msg.turnTotalMs) setTurnTotalMs(msg.turnTotalMs);
@@ -596,6 +625,26 @@ export function useNetGame(settings: Settings) {
         msg.id,
       );
       playSfx('pop');
+    });
+
+    // A clip from the table goes to the playback; nothing is kept. My own
+    // comes back without the audio: the room took it, and the others hear it
+    // now - my puck rings for as long.
+    room.onMessage('voice', (msg: { from?: unknown; id?: unknown; ms?: unknown; data?: unknown } | null) => {
+      const from = msg?.from;
+      const ms = msg?.ms;
+      if (typeof from !== 'number' || from < 0 || from > 3 || typeof ms !== 'number') return;
+      if (msg!.data === undefined) {
+        if (from === mySeatRef.current) voiceEchoRef.current?.(ms);
+        return;
+      }
+      const seat = from as Seat;
+      if (seat === mySeatRef.current || hiddenRef.current.includes(seat) || mutedRef.current.includes(seat)) return;
+      const raw = msg!.data;
+      const data = raw instanceof Uint8Array ? raw : raw instanceof ArrayBuffer ? new Uint8Array(raw) : null;
+      const mime = data ? sniffMime(data) : null;
+      if (!data || !mime) return;
+      voiceInRef.current?.({ from: seat, id: typeof msg!.id === 'number' ? msg!.id : 0, ms, mime, data });
     });
 
     room.onLeave((code) => {
@@ -718,7 +767,7 @@ export function useNetGame(settings: Settings) {
     () =>
       connect(async (c) => {
         try {
-          return await eitherRoom((room) => c.joinOrCreate(room, { name, avatar, gifts: true }));
+          return await eitherRoom((room) => c.joinOrCreate(room, { name, avatar, gifts: true, voice: true }));
         } catch (err) {
           // The open table already has somebody playing from this connection.
           // With no accounts the server cannot tell a second player here from
@@ -726,7 +775,7 @@ export function useNetGame(settings: Settings) {
           // player's hand by elimination — so it seats us apart rather than
           // turning us away. A fresh public table, and strangers join us there.
           if ((err as { code?: number } | null)?.code !== SAME_ORIGIN_CODE) throw err;
-          return await eitherRoom((room) => c.create(room, { name, avatar, gifts: true }));
+          return await eitherRoom((room) => c.create(room, { name, avatar, gifts: true, voice: true }));
         }
       }),
     [connect, name, avatar],
@@ -741,6 +790,7 @@ export function useNetGame(settings: Settings) {
           name,
           avatar,
           gifts: true,
+          voice: true,
           private: true,
           mode: settings.difficulty,
           hard: settings.difficulty === 'hard',
@@ -750,7 +800,7 @@ export function useNetGame(settings: Settings) {
     [connect, name, avatar, settings.difficulty],
   );
   const joinById = useCallback(
-    (id: string) => connect((c) => c.joinById(normalizeCode(id), { name, avatar, gifts: true })),
+    (id: string) => connect((c) => c.joinById(normalizeCode(id), { name, avatar, gifts: true, voice: true })),
     [connect, name, avatar],
   );
 
@@ -776,7 +826,7 @@ export function useNetGame(settings: Settings) {
   const setClock = useCallback((seconds: number) => roomRef.current?.send('clock', { seconds }), []);
   /** Host, before the start: the match length and Prava bela (either may be left out). */
   const setRules = useCallback(
-    (rules: { target?: number; mode?: PlayMode }) =>
+    (rules: { target?: number; mode?: PlayMode; voice?: boolean }) =>
       roomRef.current?.send('rules', {
         ...rules,
         // A server from before the three versions reads only the old switch.
@@ -789,6 +839,24 @@ export function useNetGame(settings: Settings) {
   // from the broadcast, so what I see is exactly what the table saw.
   const sendEmote = useCallback((id: string) => {
     roomRef.current?.send('emote', { id });
+  }, []);
+
+  /** A take, sent whole; the room relays it to the others and echoes it without the audio. */
+  const sendVoice = useCallback((take: Take) => {
+    roomRef.current?.send('voice', { mime: take.mime, ms: take.ms, data: take.data });
+  }, []);
+  /** Where clips from the table go, and my own echo (OnlineGame's playback and rings). */
+  const onVoice = useCallback((hear: ((clip: VoiceIn) => void) | null, echo: ((ms: number) => void) | null) => {
+    voiceInRef.current = hear;
+    voiceEchoRef.current = echo;
+  }, []);
+  /** Mute one player's voice at this table, on this device, or hear them again. */
+  const mute = useCallback((s: Seat, on: boolean) => {
+    if (s === mySeatRef.current) return;
+    const cur = mutedRef.current;
+    const next = on ? (cur.includes(s) ? cur : [...cur, s]) : cur.filter((x) => x !== s);
+    mutedRef.current = next;
+    setMuted(next);
   }, []);
 
   /**
@@ -921,6 +989,11 @@ export function useNetGame(settings: Settings) {
     sendEmote,
     sendGift,
     giftReach,
+    voiceOn,
+    sendVoice,
+    onVoice,
+    muted,
+    mute,
     // The seats a bot stands in for: a person's once, never a bot's from the start.
     standIns: standInsOf(shownSeats, hadPersonRef.current, seat),
     hidden,

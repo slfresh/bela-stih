@@ -70,7 +70,10 @@ describe('expo-audio builds no MediaSession per player', () => {
     const app = JSON.parse(readFileSync(join(here, '../app.json'), 'utf8'));
     const plugins: unknown[] = app.expo.plugins;
     expect(plugins).not.toContain('expo-audio');
-    expect(plugins).toContainEqual(['expo-audio', { enableBackgroundPlayback: false }]);
+    const audio = plugins.find((p) => Array.isArray(p) && p[0] === 'expo-audio') as [string, Record<string, unknown>];
+    expect(audio[1].enableBackgroundPlayback).toBe(false);
+    // Nothing that would bring the services back: background recording or playback.
+    expect(Object.keys(audio[1]).sort()).toEqual(['enableBackgroundPlayback', 'microphonePermission']);
     const build = readFileSync(join(here, '../../../scripts/build-android.sh'), 'utf8');
     expect(build).toMatch(/service = 'AudioControlsService'/);
     expect(build).toMatch(/service\.encode\(\) in m or service\.encode\('utf-16-le'\) in m/);
