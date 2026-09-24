@@ -195,6 +195,22 @@ export interface UiStrings {
   hidePlayerNote: string;
   reportPlayer: string;
   reportPlayerNote: string;
+  /** Push-to-talk (apps/mobile/src/voice): the button, and what a press may end in. */
+  micLabel: string;
+  micHint: string;
+  micTooShort: string;
+  micDenied: string;
+  micFailed: string;
+  /** Voice at a table: the host's rule in the lobby, and each player's own switch in Settings. */
+  voiceRule: string;
+  voiceOn: string;
+  voiceOff: string;
+  voiceSetting: string;
+  voiceSettingHint: string;
+  /** The player view: one player's voice, off on this device. */
+  muteVoice: string;
+  unmuteVoice: string;
+  muteVoiceNote: string;
   /** Shown under the report button: the address, in case no mail app opens. */
   reportFallback: (email: string) => string;
   reportSubject: string;
@@ -944,9 +960,23 @@ const hr: Strings = {
     playerTitle: (name) => `Igrač: ${name}`,
     hidePlayer: 'Sakrij ovog igrača',
     showPlayer: 'Ponovno prikaži igrača',
-    hidePlayerNote: 'Do kraja ovog stola ne vidiš ime, emotikone ni darove ovog igrača.',
+    hidePlayerNote: 'Do kraja ovog stola ovaj igrač ti je skriven: ime, emotikoni, darovi i glasovne poruke.',
     reportPlayer: 'Prijavi igrača',
-    reportPlayerNote: 'Otvara e-poruku razvijatelju s nadimkom i kodom stola. Šalješ je ti; poslužitelj ništa ne sprema.',
+    reportPlayerNote:
+      'Otvara e-poruku razvijatelju s nadimkom i kodom stola. Šalješ je ti; poslužitelj ništa ne sprema, ni glasovne poruke, pa opiši što se dogodilo.',
+    micLabel: 'Glasovna poruka',
+    micHint: 'Drži i govori, pusti za slanje',
+    micTooShort: 'Drži tipku dok govoriš',
+    micDenied: 'Dopusti mikrofon u postavkama telefona',
+    micFailed: 'Snimanje nije uspjelo',
+    voiceRule: 'Glasovne poruke',
+    voiceOn: 'Uključene',
+    voiceOff: 'Isključene',
+    voiceSetting: 'Glasovne poruke',
+    voiceSettingHint: 'Za stolom drži tipku s mikrofonom i govori; poruke drugih čuju se same. Ništa se ne sprema.',
+    muteVoice: 'Utišaj glas',
+    unmuteVoice: 'Uključi glas',
+    muteVoiceNote: 'Samo kod tebe: glasovne poruke ovog igrača više ne čuješ.',
     reportFallback: (email) => `Ako se pošta ne otvori, piši na ${email}`,
     reportSubject: 'Bela Štih: prijava igrača',
     reportBody: (p) =>
@@ -1468,9 +1498,23 @@ const srCyrl: Strings = {
     playerTitle: (name) => `Играч: ${name}`,
     hidePlayer: 'Сакриј овог играча',
     showPlayer: 'Поново прикажи играча',
-    hidePlayerNote: 'До краја овог стола не видиш име, емотиконе ни поклоне овог играча.',
+    hidePlayerNote: 'До краја овог стола овај играч ти је скривен: име, емотикони, поклони и гласовне поруке.',
     reportPlayer: 'Пријави играча',
-    reportPlayerNote: 'Отвара имејл програмеру са надимком и кодом стола. Шаљеш га ти; сервер ништа не чува.',
+    reportPlayerNote:
+      'Отвара имејл програмеру са надимком и кодом стола. Шаљеш га ти; сервер ништа не чува, ни гласовне поруке, па опиши шта се десило.',
+    micLabel: 'Гласовна порука',
+    micHint: 'Држи и говори, пусти за слање',
+    micTooShort: 'Држи тастер док говориш',
+    micDenied: 'Дозволи микрофон у подешавањима телефона',
+    micFailed: 'Снимање није успело',
+    voiceRule: 'Гласовне поруке',
+    voiceOn: 'Укључене',
+    voiceOff: 'Искључене',
+    voiceSetting: 'Гласовне поруке',
+    voiceSettingHint: 'За столом држи тастер са микрофоном и говори; поруке других се чују саме. Ништа се не чува.',
+    muteVoice: 'Утишај глас',
+    unmuteVoice: 'Укључи глас',
+    muteVoiceNote: 'Само код тебе: гласовне поруке овог играча више не чујеш.',
     reportFallback: (email) => `Ако се пошта не отвори, пиши на ${email}`,
     reportSubject: 'Бела Штих: пријава играча',
     reportBody: (p) =>
@@ -1989,9 +2033,23 @@ const en: Strings = {
     playerTitle: (name) => `Player: ${name}`,
     hidePlayer: 'Hide this player',
     showPlayer: 'Show this player again',
-    hidePlayerNote: "For the rest of this table you won't see this player's name, emotes or gifts.",
+    hidePlayerNote: 'For the rest of this table this player is hidden from you: name, emotes, gifts and voice messages.',
     reportPlayer: 'Report this player',
-    reportPlayerNote: 'Opens an email to the developer with the nickname and table code. You send it; the server keeps nothing.',
+    reportPlayerNote:
+      'Opens an email to the developer with the nickname and table code. You send it; the server keeps nothing, voice messages included, so describe what happened.',
+    micLabel: 'Voice message',
+    micHint: 'Hold and speak, let go to send',
+    micTooShort: 'Hold the button while you speak',
+    micDenied: 'Allow the microphone in your phone settings',
+    micFailed: 'Recording failed',
+    voiceRule: 'Voice messages',
+    voiceOn: 'On',
+    voiceOff: 'Off',
+    voiceSetting: 'Voice messages',
+    voiceSettingHint: "At the table, hold the mic button and speak; others' messages play by themselves. Nothing is stored.",
+    muteVoice: 'Mute voice',
+    unmuteVoice: 'Unmute voice',
+    muteVoiceNote: "Only on your phone: you no longer hear this player's voice messages.",
     reportFallback: (email) => `If no mail app opens, write to ${email}`,
     reportSubject: 'Bela Štih: player report',
     reportBody: (p) =>

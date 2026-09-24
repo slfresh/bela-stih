@@ -60,6 +60,7 @@ export const SeatPuck = memo(function SeatPuck({
   anchored = true,
   nameInk,
   yourTurn = false,
+  speaking = false,
   showName = true,
   gift = null,
   giftN = 0,
@@ -106,6 +107,12 @@ export const SeatPuck = memo(function SeatPuck({
    * it stops the moment a drain begins and is never held on.
    */
   yourTurn?: boolean;
+  /**
+   * This player's voice message is playing (my own: while I record, and while
+   * the table hears it): waves go out from the disc. Held still under reduced
+   * motion.
+   */
+  speaking?: boolean;
   /** The name under the disc; the viewer's own puck under the fan goes without. */
   showName?: boolean;
   /** The latest table gift given to this seat, by id; worn beside the ring (giftBadgeBox). */
@@ -199,6 +206,21 @@ export const SeatPuck = memo(function SeatPuck({
             ]}
           />
         )}
+        {/* Speaking: two waves, a beat apart, for as long as the clip plays. */}
+        {speaking &&
+          (reduced ? [0] : [0, VOICE_WAVE_GAP_MS]).map((delay) => (
+            <Animated.View
+              key={delay}
+              pointerEvents="none"
+              importantForAccessibility="no-hide-descendants"
+              accessibilityElementsHidden
+              style={[
+                styles.wave,
+                { width: ringSize, height: ringSize, borderRadius: ringSize / 2 },
+                reduced ? styles.waveStill : { ...voiceWave, animationDelay: delay },
+              ]}
+            />
+          ))}
         <Anchor id={anchored ? anchorId.seat(seat) : anchorId.puck(seat)} style={[StyleSheet.absoluteFill, styles.centre]}>
           <Animated.View
             style={yourTurn && !reduced ? yourTurnBreath : undefined}
@@ -344,8 +366,24 @@ const yourTurnPing: CSSAnimationProperties = {
   animationTimingFunction: 'ease-out',
 };
 
+/** A voice message: waves roll out of the speaker's disc, two at a time. */
+const VOICE_WAVE_MS = 900;
+const VOICE_WAVE_GAP_MS = VOICE_WAVE_MS / 2;
+const voiceWave: CSSAnimationProperties = {
+  animationName: {
+    from: { opacity: 1, transform: [{ scale: 1 }] },
+    to: { opacity: 0, transform: [{ scale: 1.7 }] },
+  },
+  animationDuration: VOICE_WAVE_MS,
+  animationIterationCount: 'infinite',
+  animationTimingFunction: 'ease-out',
+};
+
 const styles = StyleSheet.create({
   root: { alignItems: 'center', gap: 2 },
+  wave: { position: 'absolute', top: 0, left: 0, borderWidth: 3, borderColor: theme.okInk },
+  // Reduce-motion: one ring, held, lit.
+  waveStill: { opacity: 0.9, transform: [{ scale: 1.25 }] },
   ping: { position: 'absolute', top: 0, left: 0, borderWidth: 3, borderColor: signal.turn },
   // Reduce-motion: the ring holds still, lit, instead of pinging — a little
   // outside the team ring and the clock, which are drawn over it and hid it.

@@ -175,6 +175,16 @@ export function Flag({ size = 16, colour = ink.hi }: IconProps) {
   );
 }
 
+/** Hold to talk: a microphone. */
+export function Mic({ size = 18, colour = ink.hi }: IconProps) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24">
+      <Rect x={8.5} y={2.5} width={7} height={12} rx={3.5} fill={colour} />
+      <Path d="M5 11.5a7 7 0 0 0 14 0M12 18.5V21.5M8.5 21.5h7" fill="none" stroke={colour} strokeWidth={2.2} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 /** Not yet: a level to reach first. */
 export function Lock({ size = 16, colour = ink.hi }: IconProps) {
   return (

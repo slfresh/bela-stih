@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { room } from '../cosmetics';
 import {
   ActivityIndicator,
@@ -44,6 +44,7 @@ import { isPlayMode, modeName, PLAY_MODES } from '../playMode';
 import { summarize } from '../matchLog';
 import { isoDay } from '@belot/progression';
 import { useNetGame, type NetGame } from './useNetGame';
+import { useVoicePlayback } from '../voice/useVoicePlayback';
 import { retryHelps } from './trouble';
 
 /**
@@ -71,6 +72,38 @@ export function OnlineGame({
   if (Platform.OS !== 'web') useKeepAwake(); // eslint-disable-line react-hooks/rules-of-hooks
   const net = useNetGame(settings);
   const { status, quickPlay, createPrivate, joinById } = net;
+
+  // Voice messages, where the table has them on and so does this player:
+  // others' clips play by themselves (never a hidden or muted player's), and
+  // my own echo rings my puck for as long as the table hears it. Here rather
+  // than at the table, so a clip that lands in the lobby is heard too.
+  const voiceHere = settings.voice && net.voiceOn;
+  const playback = useVoicePlayback(
+    voiceHere,
+    (s) => net.hidden.includes(s) || net.muted.includes(s),
+    `${net.hidden.join(',')}|${net.muted.join(',')}`,
+  );
+  const [echoing, setEchoing] = useState(false);
+  const echoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { onVoice } = net;
+  useEffect(() => {
+    onVoice(playback.hear, (ms) => {
+      if (echoTimer.current) clearTimeout(echoTimer.current);
+      setEchoing(true);
+      echoTimer.current = setTimeout(() => setEchoing(false), ms);
+    });
+    return () => {
+      onVoice(null, null);
+      if (echoTimer.current) clearTimeout(echoTimer.current);
+    };
+  }, [onVoice, playback.hear]);
+  const speaking = useMemo(
+    () => [
+      ...(playback.speaking !== null ? [playback.speaking] : []),
+      ...(echoing && net.seat !== null ? [net.seat] : []),
+    ],
+    [playback.speaking, echoing, net.seat],
+  );
 
   // Connect once, on the way in.
   useEffect(() => {
@@ -353,6 +386,10 @@ export function OnlineGame({
       onFinish={leaveAndExit}
       finishLabel={net.lang.s.ui.leaveTable}
       onEmote={net.sendEmote}
+      onVoiceTake={voiceHere ? net.sendVoice : undefined}
+      speaking={speaking}
+      muted={net.muted}
+      onMute={net.mute}
       gifts={net.gifts}
       giftLanded={net.giftLanded}
       giftFrom={net.giftFrom}
@@ -593,6 +630,15 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
           host={isHost}
           options={TURN_CHOICES_S.map((sec) => ({ key: String(sec), text: ui.seconds(sec), on: net.turnSeconds === sec }))}
           onPick={(k) => net.setClock(Number(k))}
+        />
+        <Choice
+          label={ui.voiceRule}
+          host={isHost}
+          options={[
+            { key: 'on', text: ui.voiceOn, on: net.voiceOn },
+            { key: 'off', text: ui.voiceOff, on: !net.voiceOn },
+          ]}
+          onPick={(k) => net.setRules({ voice: k === 'on' })}
         />
       </View>
     ) : null;

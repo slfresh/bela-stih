@@ -78,6 +78,8 @@ import { cosmetics, room, roomStyle, type DeckStyle } from './cosmetics';
 import { PerfProbe } from './dev/PerfProbe';
 import { EmoteStrip } from './table/EmoteStrip';
 import { GiftPicker } from './table/GiftPicker';
+import { MicButton } from './table/MicButton';
+import type { Take } from './voice/useVoiceRecorder';
 import { useTurnCues } from './table/useTurnCues';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { HoldPanel, useNow } from './table/HoldPanel';
@@ -239,7 +241,20 @@ export interface TableScreenProps {
   onHide?: (s: Seat, hide: boolean) => void;
   /** Online: report a player (the player's own e-mail). */
   onReport?: (s: Seat) => void;
+  /**
+   * Online, where voice is on (the table's switch and the player's own): the
+   * mic is offered, and a take is sent through here.
+   */
+  onVoiceTake?: (take: Take) => void;
+  /** Seats whose voice message is playing now: their pucks send out waves. */
+  speaking?: readonly Seat[];
+  /** Online: players whose voice is muted on this device, and the switch for it. */
+  muted?: readonly Seat[];
+  onMute?: (s: Seat, mute: boolean) => void;
 }
+
+/** A landscape rail holds the mic beside the faces' 40 dp toggle only at this size (railW is 79 at its narrowest). */
+const RAIL_MIC = 34;
 
 /** How long touches are swallowed after the table shuts the gift picker by itself. */
 export const GIFT_SHIELD_MS = 400;
@@ -260,6 +275,7 @@ export function TableScreen(props: TableScreenProps) {
     nextDeal, hold: tableHold = null, onPause, onResume, onPlayOn, reconnecting = false,
     handSort = 'auto', arrangeTip = false, onArrangeTip, confirmPlay = 'ambiguous', awaitEcho = false, refusedN = 0,
     gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift, giftReach, hidden, onHide, onReport,
+    onVoiceTake, speaking, muted, onMute,
   } = props;
 
   // Every dimension the table draws is derived from the real window, so eight
@@ -844,8 +860,27 @@ export function TableScreen(props: TableScreenProps) {
       tricks={view.dealProgress?.tricksWon[teamOf(s)] ?? 0}
       gift={gifts?.[s] ?? null}
       giftN={giftLanded?.[s] ?? 0}
+      speaking={speakingSeats.has(s)}
     />)}
     </Animated.View>
+  );
+
+  // Who speaks: the clip playing now (online), and me while I record.
+  const [recording, setRecording] = useState(false);
+  const speakingSeats = useMemo(() => {
+    const set = new Set<Seat>(speaking ?? []);
+    if (recording) set.add(mySeat);
+    return set;
+  }, [speaking, recording, mySeat]);
+  // A word about the mic over my hand: held too short, the microphone refused.
+  const sayOverHand = useCallback(
+    (words: string) => {
+      AccessibilityInfo.announceForAccessibility(words);
+      const at = anchors.centre(anchorId.seat(mySeat));
+      if (!at) return;
+      fxBus.emit({ kind: 'bubble', at, text: words, tone: 'plain', duration: 2200, speed: 1, fade: reducedRef.current });
+    },
+    [anchors, fxBus, mySeat],
   );
 
   // A dimmed card, tapped: say which duty rules it out, over my hand, the way
@@ -1486,6 +1521,7 @@ export function TableScreen(props: TableScreenProps) {
       anchored={false}
       gift={gifts?.[mySeat] ?? null}
       giftN={giftLanded?.[mySeat] ?? 0}
+      speaking={speakingSeats.has(mySeat)}
     />,
   );
 
@@ -1516,6 +1552,25 @@ export function TableScreen(props: TableScreenProps) {
         onPress={() => answer({ type: 'DECLARE_SKIP', seat: mySeat })}
       />
     </>
+  ) : null;
+
+  // Push-to-talk, beside the faces' toggle, in the row's spare room: offered
+  // only while the table asks nothing (a bid's or bela's buttons need the
+  // row) and a short column has not shed its strip - so no layout budget
+  // changes. Its hook stays while hidden: a take cut off by a question goes.
+  // Sideways it sits beside the toggle in the rail, where the rail is wide
+  // enough (not on the shortest screens held sideways).
+  const micFits = !land || m.railW >= RAIL_MIC + 4 + EMOTE_TOGGLE;
+  const micShown = !asking && !belaOffered && !shed && micFits;
+  const mic = onVoiceTake ? (
+    <MicButton
+      lang={lang}
+      size={land ? RAIL_MIC : EMOTE_TOGGLE}
+      visible={micShown}
+      onTake={onVoiceTake}
+      onSay={sayOverHand}
+      onRecording={setRecording}
+    />
   ) : null;
 
   const emoteToggle = onEmote ? (
@@ -1706,7 +1761,11 @@ export function TableScreen(props: TableScreenProps) {
                     {autoSkipping ? null : declareButtons ?? (
                       <NonCardActions options={options} lang={lang} onChoose={answer} compact />
                     )}
-                    {emoteToggle}
+                    {/* The mic left of the toggle, which stays the rail's bottom-right. */}
+                    <View style={styles.railToggles}>
+                      {mic}
+                      {emoteToggle}
+                    </View>
                   </View>
                 )}
               </View>
@@ -1761,6 +1820,7 @@ export function TableScreen(props: TableScreenProps) {
               {/* actions: bidding, declaring, bela — leaving is the top corner */}
               {!settled && (
                 <View style={styles.actionsRow}>
+                  {mic}
                   {emoteToggle}
                   {autoSkipping ? null : declareButtons ?? (
                     <NonCardActions options={options} lang={lang} onChoose={send} short={short} />
@@ -1797,6 +1857,15 @@ export function TableScreen(props: TableScreenProps) {
                         onHide(who, !was);
                       },
                       onReport: () => onReport(giftTarget),
+                      ...(onMute && onVoiceTake
+                        ? {
+                            muted: muted?.includes(giftTarget) ?? false,
+                            onMute: () => {
+                              const who = giftTarget;
+                              onMute(who, !(muted?.includes(who) ?? false));
+                            },
+                          }
+                        : {}),
                     }
                   : undefined
               }
@@ -3548,6 +3617,7 @@ const styles = StyleSheet.create({
     paddingBottom: 2,
   },
   actionsCol: { gap: 6, alignItems: 'stretch', alignSelf: 'stretch' },
+  railToggles: { flexDirection: 'row', gap: 4, alignItems: 'center' },
 
   emoteToggle: {
     width: EMOTE_TOGGLE,

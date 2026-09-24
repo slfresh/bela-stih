@@ -17,8 +17,8 @@ export const VOICE_MIN_MS = 400;
 export type VoiceMime = 'audio/mp4' | 'audio/webm';
 
 /**
- * What a recording is, by its first bytes: AAC in MP4 (Android, most
- * browsers: 'ftyp' at byte 4) or Opus in WebM (Firefox: the EBML magic). The
+ * What a recording is, by its first bytes: AAC in MP4 (Android, Safari:
+ * 'ftyp' at byte 4) or Opus in WebM (Chrome, Firefox: the EBML magic). The
  * room checks the same, so a take is named by what it is, not by what a
  * recorder reported.
  */
@@ -28,9 +28,14 @@ export function sniffMime(b: Uint8Array): VoiceMime | null {
   return null;
 }
 
-/** A browser records AAC in MP4 where it can (Chrome, Safari), Opus in WebM where it cannot (Firefox). */
+/**
+ * A browser records Opus in WebM where it can (Chrome, Firefox): that recorder
+ * keeps to the bit rate asked for. Chrome's MP4 recorder ignores it (96 kbps,
+ * so 15 s came to ~165 KB, over the room's limit, and was dropped). MP4 only
+ * where WebM cannot record at all (Safari). Android plays both.
+ */
 export function webRecordingMime(isSupported: (type: string) => boolean): string | undefined {
-  for (const t of ['audio/mp4', 'audio/webm;codecs=opus', 'audio/webm']) {
+  for (const t of ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4']) {
     try {
       if (isSupported(t)) return t;
     } catch {

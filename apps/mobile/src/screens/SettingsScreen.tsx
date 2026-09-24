@@ -229,6 +229,8 @@ export function SettingsScreen({
         {toggleRow(ui.haptics, settings.haptics, (haptics) =>
           onSettingsChange({ ...settings, haptics }),
         )}
+        {toggleRow(ui.voiceSetting, settings.voice, (voice) => onSettingsChange({ ...settings, voice }))}
+        <Text style={styles.hint}>{ui.voiceSettingHint}</Text>
         {/* Loudness means nothing while the sound is off: shown, but asleep. */}
         <Text style={[styles.rowLabel, !settings.sound && styles.asleep]}>{ui.volumeLabel}</Text>
         <View style={[styles.localeRow, !settings.sound && styles.asleep]}>

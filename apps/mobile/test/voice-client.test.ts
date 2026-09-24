@@ -18,6 +18,8 @@ import {
   type HeardClip,
 } from '../src/voice/voice';
 import * as room from '../../server/src/protocol';
+import { computeTableMetrics, EMOTE_TOGGLE, LAND_TRAY_W } from '../src/table/metrics';
+import { Lang, LOCALE_IDS } from '@belot/i18n';
 
 /**
  * The app's side of push-to-talk, without a microphone: what a recording is,
@@ -63,10 +65,10 @@ describe('what the app records', () => {
     expect(o.bitRate).toBe(VOICE_BIT_RATE);
   });
 
-  it('in a browser, AAC in MP4 where it can, else Opus in WebM', () => {
-    expect(webRecordingMime(() => true)).toBe('audio/mp4');
-    expect(webRecordingMime((t) => t.startsWith('audio/webm'))).toBe('audio/webm;codecs=opus');
+  it('in a browser, Opus in WebM (it keeps the bit rate), MP4 only where WebM cannot record', () => {
+    expect(webRecordingMime(() => true)).toBe('audio/webm;codecs=opus');
     expect(webRecordingMime((t) => t === 'audio/webm')).toBe('audio/webm');
+    expect(webRecordingMime((t) => t === 'audio/mp4')).toBe('audio/mp4');
     expect(webRecordingMime(() => false)).toBeUndefined();
     expect(webRecordingMime(() => {
       throw new Error('no');
@@ -147,5 +149,69 @@ describe('the app around it', () => {
     expect(r).toMatch(/if \(!send \|\| ms < VOICE_MIN_MS \|\| !uri\) \{\s*dropTake\(uri\);/);
     expect(r).toMatch(/if \(s !== 'active'\) void finish\(false\);/);
     expect(r).toMatch(/limit\.current = setTimeout\(\(\) => void finish\(true\), VOICE_MAX_MS\);/);
+  });
+});
+
+describe('the table, with voice', () => {
+  const t = src('TableScreen.tsx');
+
+  it('offers the mic only while nothing is asked, so no row grows', () => {
+    expect(t).toMatch(/const micShown = !asking && !belaOffered && !shed && micFits;/);
+    expect(t).toMatch(/const mic = onVoiceTake \? \(/);
+    // Left of the faces' toggle in both rows: the toggle stays the row's right-most button.
+    expect(t).toMatch(/<View style=\{styles\.actionsRow\}>\s*\{mic\}\s*\{emoteToggle\}/);
+    expect(t).toMatch(/<View style=\{styles\.railToggles\}>\s*\{mic\}\s*\{emoteToggle\}\s*<\/View>/);
+  });
+
+  it('fits a landscape rail beside the toggle at the narrowest rail there is', () => {
+    expect(t).toMatch(/const RAIL_MIC = 34;/);
+    for (const [w, h] of [[568, 320], [640, 320], [723, 336], [915, 412]]) {
+      const m = computeTableMetrics(w, h);
+      expect(34 + 4 + EMOTE_TOGGLE, `${w}x${h}`).toBeLessThanOrEqual(m.railW);
+    }
+    // Where a rail is narrower (a very short screen on its side), the mic stands down.
+    expect(computeTableMetrics(500, 270).railW).toBeLessThan(34 + 4 + EMOTE_TOGGLE);
+    expect(t).toMatch(/const micFits = !land \|\| m\.railW >= RAIL_MIC \+ 4 \+ EMOTE_TOGGLE;/);
+    expect(LAND_TRAY_W).toBeGreaterThan(0);
+  });
+
+  it('sends waves from whoever speaks, me while I record', () => {
+    expect(t).toMatch(/if \(recording\) set\.add\(mySeat\);/);
+    expect(t).toMatch(/giftN=\{giftLanded\?\.\[s\] \?\? 0\}\s*speaking=\{speakingSeats\.has\(s\)\}/);
+    expect(t).toMatch(/giftN=\{giftLanded\?\.\[mySeat\] \?\? 0\}\s*speaking=\{speakingSeats\.has\(mySeat\)\}/);
+    const puck = src('table/SeatPuck.tsx');
+    expect(puck).toMatch(/\(reduced \? \[0\] : \[0, VOICE_WAVE_GAP_MS\]\)/);
+    expect(puck).toMatch(/reduced \? styles\.waveStill : \{ \.\.\.voiceWave, animationDelay: delay \}/);
+  });
+
+  it('lets one player be muted in the player view, unless already hidden', () => {
+    const g = src('table/GiftPicker.tsx');
+    expect(g).toMatch(/\{moderate\.onMute && !moderate\.hidden && \(/);
+    expect(t).toMatch(/\.\.\.\(onMute && onVoiceTake\s*\?/);
+  });
+
+  it('hears nothing where voice is off, at the table or in Settings', () => {
+    const o = src('net/OnlineGame.tsx');
+    expect(o).toMatch(/const voiceHere = settings\.voice && net\.voiceOn;/);
+    expect(o).toMatch(/onVoiceTake=\{voiceHere \? net\.sendVoice : undefined\}/);
+    expect(o).toMatch(/\(s\) => net\.hidden\.includes\(s\) \|\| net\.muted\.includes\(s\),/);
+    // The host's switch in the lobby, as the other rules.
+    expect(o).toMatch(/label=\{ui\.voiceRule\}\s*host=\{isHost\}/);
+    expect(o).toMatch(/onPick=\{\(k\) => net\.setRules\(\{ voice: k === 'on' \}\)\}/);
+    expect(src('screens/SettingsScreen.tsx')).toMatch(/toggleRow\(ui\.voiceSetting, settings\.voice,/);
+  });
+
+  it('says it all in every language, without a gendered word about the player', () => {
+    for (const id of LOCALE_IDS) {
+      const ui = new Lang(id).s.ui;
+      for (const k of ['micLabel', 'micHint', 'micTooShort', 'micDenied', 'micFailed', 'voiceRule', 'voiceOn', 'voiceOff', 'voiceSetting', 'voiceSettingHint', 'muteVoice', 'unmuteVoice', 'muteVoiceNote'] as const) {
+        expect(ui[k].length, `${id} ${k}`).toBeGreaterThan(1);
+      }
+      expect(ui.voiceOn).not.toBe(ui.voiceOff);
+      expect(ui.muteVoice).not.toBe(ui.unmuteVoice);
+    }
+    const hr = new Lang('hr').s.ui;
+    expect(`${hr.hidePlayerNote} ${hr.muteVoiceNote}`).not.toMatch(/(njegov\w*|njezin\w*|mu|joj)/);
+    expect(hr.hidePlayerNote).toMatch(/glasovne poruke/);
   });
 });
