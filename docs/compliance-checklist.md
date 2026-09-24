@@ -34,6 +34,16 @@ keep it that way.
   are stated and linked (belastih.com/#pravila) under the nickname field,
   the only place user content is created. Reported nicknames are acted on
   through the server's name filter (apps/server/src/names.ts).
+- Voice messages (1.5.0): push-to-talk clips, at most 15 s, recorded only
+  while the player holds the mic button (RECORD_AUDIO, asked for at the first
+  press). The server relays each clip to the other players at that table
+  whose apps play voice, and drops it: nothing stores, decodes or logs audio
+  (apps/server/src/voice.ts, BelaRoom's 'voice' branch; pinned by
+  voice-server.test.ts and voice-smoke.ts). Receivers play it from a cache
+  file / Blob URL deleted when it ends. On at every table; a private table's
+  host can switch it off; every player can switch it off in Settings, mute
+  one player, or hide them (which silences them too). Reports cannot carry
+  audio - the reporter describes what was said.
 
 ## One-time paperwork (do once, ~30 minutes total)
 
@@ -43,9 +53,11 @@ keep it that way.
 - [ ] **One-page processing record (ROPA, Art. 30)** — save this with the DPA:
       *Controller: [full name], Croatia, slavkogrbic25@gmail.com. Activity:
       hosting online card-game matches. Data: self-chosen nickname, avatar id,
-      game moves, IP address. Subjects: players. Recipients: Hetzner Online
+      game moves, voice messages the player records (1.5.0), IP address.
+      Subjects: players. Recipients: Hetzner Online
       GmbH (processor, Germany). Transfers outside EU: none. Retention: match
-      duration in memory; container logs ≤ a few days by rotation. Security:
+      duration in memory; voice clips (1.5.0) only while relayed, never
+      stored; container logs ≤ a few days by rotation. Security:
       TLS, firewall (22/80/443 only), no persistence, no database.*
       *Second activity (1.3.1): handling player reports received by e-mail.
       Data: reported nickname, table code, time, app version, the reporter's
@@ -74,17 +86,26 @@ where the forward is changed.
   match) → declare the flow inside the form; the public badge honestly shows
   "No data collected". Answer the Data deletion section explicitly: no
   accounts, nothing stored, delete-by-uninstall.
+  **1.5.0 adds Audio → "Voice or sound recordings"**: transmitted off the
+  device (to the server and on to the other players at the table), processed
+  ephemerally (relayed, never stored), optional (the player chooses to hold
+  the button; can be switched off), purpose App functionality, not shared
+  with third parties (a user-initiated transfer to other players). Re-answer
+  the form BEFORE 1.5.0 reaches any track.
 - **Privacy policy URL**: `https://belastih.com`.
 - **Account deletion policy**: N/A — the app has no accounts.
 - **UGC questionnaire**: answer truthfully — users choose a display name shown
-  to 3 other players per match and can send emotes from a fixed 10-item list
-  and gifts from a fixed 15-item list; no free-text chat; content is
+  to 3 other players per match and can send emotes from a fixed list and
+  gifts from a fixed 15-item list; no free-text chat; from 1.5.0 short voice
+  messages (≤ 15 s, push-to-talk) to the other players at the table, relayed
+  and never stored, with per-player mute, hide and report; content is
   ephemeral; players can leave a table at any time. In-app (1.3.1): hide a
   player for the table, report a player by e-mail; the rules of conduct are
   accepted at the nickname field; objectionable nicknames are blocked
   server-side.
 - **IARC content rating**: answer **"users interact" = yes** (nicknames +
-  emotes + gifts with strangers). Answer **no** to every gambling question —
+  emotes + gifts with strangers; from 1.5.0 also voice messages between
+  players, strangers included - re-answer before 1.5.0 ships). Answer **no** to every gambling question —
   nothing is wagered, coins cannot be bought or cashed out. Expected rating:
   low (PEGI 3/7 tier with an "interaction" notice). From 1.3.0 see the
   re-answer below: three gifts are drinks.
@@ -146,8 +167,11 @@ the new certificate before promoting 1.3.0. If the rating would cost the
 3. Nothing of value is staked on a match outcome.
 4. No accounts / no server-side storage of player data (until the sign-in
    phase, which re-opens the data-safety and deletion questions by design).
-5. No free-text channels between players (nicknames stay the only free text,
-   sanitized server-side).
+5. No free-TEXT channels between players (nicknames stay the only free text,
+   sanitized server-side). The one free channel is voice (1.5.0): push-to-talk
+   clips, relayed and never stored, with mute / hide / report and an off
+   switch at the table and in Settings. Anything that would keep audio (a
+   recording, a transcript) re-opens the Data safety form and the privacy page.
 6. Hiding is device-local and a report is the player's own e-mail: neither
    ever reaches the game server. A server-side report endpoint would re-open
    the Data safety form and the privacy page.

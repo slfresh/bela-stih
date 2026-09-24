@@ -87,6 +87,23 @@ before promoting.
 
 ### Release notes
 
+1.5.0 (versionCode 29: voice messages - re-answer Data safety (Audio) and the IARC questionnaire first) -
+- hr: *Novo: glasovne poruke. Za stolom drži tipku s mikrofonom i govori (do
+  15 sekundi), pusti i poruka ode ostalima; njihove čuješ same od sebe, a
+  valovi pokazuju tko govori. Domaćin privatnog stola može ih isključiti, a ti
+  ih možeš isključiti u postavkama ili utišati jednog igrača. Ništa se ne
+  sprema: poslužitelj poruku samo proslijedi.*
+- sr: *Ново: гласовне поруке. За столом држи тастер са микрофоном и говори
+  (до 15 секунди), пусти и порука оде осталима; њихове чујеш саме од себе, а
+  таласи показују ко говори. Домаћин приватног стола може да их искључи, а ти
+  их можеш искључити у подешавањима или утишати једног играча. Ништа се не
+  чува: сервер поруку само проследи.*
+- en: *New: voice messages. At the table, hold the mic button and speak (up to
+  15 seconds), let go and it goes to the others; theirs play by themselves,
+  with waves showing who is talking. The host of a private table can switch
+  them off, and you can switch them off in Settings or mute one player.
+  Nothing is stored: the server only passes a message on.*
+
 1.4.3 (versionCode 28: three versions of the game - Učenje, Lagana, Prava bela) -
 - hr: *Novo: tri verzije igre. Učenje te vodi kroz partiju: savjet za svaki
   potez i zašto, i pazi na štiglju. U Laganoj zvanja tražiš i prijavljuješ bez
