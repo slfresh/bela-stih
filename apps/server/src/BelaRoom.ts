@@ -4,7 +4,8 @@ import type { Action, Seat } from '@belot/engine';
 import { DEFAULT_CONFIG, HARD_CONFIG_OVERRIDES, RANKS, SEATS, SUITS, type EngineConfig } from '@belot/engine';
 import type { Card, Rank, Rng, Suit } from '@belot/engine';
 import { Table } from '@belot/table';
-import { EMOTE_GAP_MS, EMOTE_IDS, GIFT_GAP_MS, GIFT_IDS, MATCH_TARGETS, MSG, NEXT_DEAL_MS, PAUSE_MAX_MS, TURN_CHOICES, WAIT_FOR_DROPPED_MS, type ClientMessage, type HoldInfo, type EmoteMessage, type GiftMessage, type JoinGifts, type RoomMessage, type SeatInfo, isPlayMode, modeFromLegacy, type PlayMode } from './protocol';
+import { EMOTE_GAP_MS, EMOTE_IDS, GIFT_GAP_MS, GIFT_IDS, MATCH_TARGETS, MSG, NEXT_DEAL_MS, PAUSE_MAX_MS, TURN_CHOICES, WAIT_FOR_DROPPED_MS, type ClientMessage, type HoldInfo, type EmoteMessage, type GiftMessage, type JoinGifts, type JoinVoice, type RoomMessage, type SeatInfo, type VoiceMessage, isPlayMode, modeFromLegacy, type PlayMode } from './protocol';
+import { checkClip, VoiceLimiter } from './voice';
 import { cleanName } from './names';
 import { tableCode } from './codes';
 
@@ -131,10 +132,12 @@ interface Occupant {
   origin: string;
   /** This player's app draws table gifts (it joined with `gifts: true`). */
   gifts: boolean;
+  /** This player's app plays and records voice clips (it joined with `voice: true`). */
+  voice: boolean;
 }
 
 /** A chair nobody sits in. */
-const vacant = (): Occupant => ({ sessionId: null, name: '', avatar: '', connected: false, origin: '', gifts: false });
+const vacant = (): Occupant => ({ sessionId: null, name: '', avatar: '', connected: false, origin: '', gifts: false, voice: false });
 
 /** Refused because a seat at THIS table is already held from the same place. */
 export const SAME_ORIGIN_CODE = 4300;
@@ -216,6 +219,11 @@ export class BelaRoom extends Room {
   private lastSitAt = new Map<string, number>();
   private lastVoteAt = new Map<string, number>();
   private lastGiftAt = new Map<string, number>();
+  private voiceLimits = new Map<string, VoiceLimiter>();
+  /** Numbers each relayed clip, so a client can tell its echo from another clip. */
+  private voiceSeq = 0;
+  /** Voice messages at this table: always in quick play; a private table's host may switch them off. */
+  private voiceOn = true;
   /**
    * Each seat's latest gift, by seat rather than by occupant: a seat played by
    * a bot from the start can be given one too. Cleared when the person in the
@@ -324,7 +332,7 @@ export class BelaRoom extends Room {
     return { origin };
   }
 
-  override onJoin(client: Client, options: { name?: string; avatar?: string } & JoinGifts = {}): void {
+  override onJoin(client: Client, options: { name?: string; avatar?: string } & JoinGifts & JoinVoice = {}): void {
     const seat = this.freeSeat();
     if (seat === null) {
       client.leave(4000, 'table full');
@@ -340,6 +348,7 @@ export class BelaRoom extends Room {
       avatar: typeof options.avatar === 'string' ? options.avatar.replace(/[^a-z]/g, '').slice(0, 20) : '',
       connected: true,
       gifts: options.gifts === true,
+      voice: options.voice === true,
     };
     this.table.setSeatHuman(seat, true);
     this.gifts[seat] = null;
@@ -424,6 +433,7 @@ export class BelaRoom extends Room {
 
   private release(seat: Seat): void {
     const wasHost = this.occupants[seat]!.sessionId === this.hostId;
+    this.forget(this.occupants[seat]!.sessionId);
     this.occupants[seat] = vacant();
     // The person has gone for good; their gift goes with them.
     this.gifts[seat] = null;
@@ -604,8 +614,11 @@ export class BelaRoom extends Room {
     if (packet.type === 'rules') {
       // The same four conditions as the clock: before the start, a private
       // table, its host, and only what is offered.
-      const m = packet.message as { target?: unknown; mode?: unknown; hard?: unknown } | undefined;
+      const m = packet.message as { target?: unknown; mode?: unknown; hard?: unknown; voice?: unknown } | undefined;
       if (this.started || this.isPublic || seat !== this.actingHostSeat()) return;
+      // Voice on or off changes nothing on the table itself: no rebuild.
+      const voiceChanged = typeof m?.voice === 'boolean' && m.voice !== this.voiceOn;
+      if (voiceChanged) this.voiceOn = m!.voice as boolean;
       let changed = false;
       if (typeof m?.target === 'number' && MATCH_TARGETS.includes(m.target) && m.target !== this.target) {
         this.target = m.target;
@@ -617,9 +630,8 @@ export class BelaRoom extends Room {
         this.mode = mode;
         changed = true;
       }
-      if (!changed) return;
-      this.buildTable();
-      this.publish();
+      if (changed) this.buildTable();
+      if (changed || voiceChanged) this.publish();
       return;
     }
 
@@ -712,6 +724,32 @@ export class BelaRoom extends Room {
       this.lastEmoteAt.set(client.sessionId, now);
       const msg: EmoteMessage = { seat, id };
       this.broadcast(MSG.emote, msg);
+      return;
+    }
+
+    if (packet.type === 'voice') {
+      // Push-to-talk. Relayed to the others at the table whose apps play
+      // clips, and dropped: never stored, never logged. Only where voice is
+      // on, from an app that records it, and only what checkClip accepts -
+      // anything else is dropped without a word, and costs nothing.
+      if (!this.voiceOn || !this.occupants[seat]!.voice) return;
+      const m = packet.message as { mime?: unknown; data?: unknown; ms?: unknown } | undefined;
+      const clip = checkClip(m?.mime, m?.data, m?.ms);
+      if (clip === null) return;
+      let limiter = this.voiceLimits.get(client.sessionId);
+      if (!limiter) this.voiceLimits.set(client.sessionId, (limiter = new VoiceLimiter()));
+      if (!limiter.take(Date.now(), clip.ms)) return;
+      const id = ++this.voiceSeq;
+      const out: VoiceMessage = { from: seat, id, ms: clip.ms, mime: clip.mime, data: clip.data };
+      for (const other of this.clients) {
+        const s = this.seatOf(other.sessionId);
+        if (s === null || s === seat || !this.hearsVoice(s)) continue;
+        other.send(MSG.voice, out);
+      }
+      // The speaker hears nothing back, only that the room took it (for the
+      // rings on their own puck).
+      const echo: VoiceMessage = { from: seat, id, ms: clip.ms, mime: clip.mime };
+      client.send(MSG.voice, echo);
       return;
     }
 
@@ -973,6 +1011,22 @@ export class BelaRoom extends Room {
 
   // --- publishing ----------------------------------------------------------
 
+  /** A seat a clip goes to: a person on the line whose app plays voice clips. */
+  private hearsVoice(seat: Seat): boolean {
+    const o = this.occupants[seat]!;
+    return o.sessionId !== null && o.connected && o.voice;
+  }
+
+  /** A connection gone for good: its rate limits go with it (they were never pruned). */
+  private forget(sessionId: string | null): void {
+    if (sessionId === null) return;
+    this.lastEmoteAt.delete(sessionId);
+    this.lastSitAt.delete(sessionId);
+    this.lastVoteAt.delete(sessionId);
+    this.lastGiftAt.delete(sessionId);
+    this.voiceLimits.delete(sessionId);
+  }
+
   /** A seat a gift can reach: a person whose app draws gifts, or no person at all. */
   private seesGifts(seat: Seat): boolean {
     const o = this.occupants[seat]!;
@@ -988,6 +1042,7 @@ export class BelaRoom extends Room {
       bot: !this.table.humanSeats.has(i as Seat),
       ...(this.gifts[i] ? { gift: this.gifts[i]! } : {}),
       ...(this.seesGifts(i as Seat) ? { seesGifts: true as const } : {}),
+      ...(o.sessionId !== null && o.voice ? { hearsVoice: true as const } : {}),
     }));
   }
 
@@ -1020,6 +1075,7 @@ export class BelaRoom extends Room {
       turnSeconds: this.turnMs / 1000,
       target: this.target,
       ...(this.isPublic ? {} : { private: true as const }),
+      ...(this.voiceOn ? { voice: true as const } : {}),
       ...(this.isHeld() ? { hold: this.holdInfo()! } : {}),
       ...(this.nextEndsAt > 0 ? { nextMsLeft: Math.max(0, this.nextEndsAt - Date.now()) } : {}),
       ...(this.table.phase === 'DEAL_OVER' && this.nextVotes.size > 0 ? { nextVotes: [...this.nextVotes] } : {}),

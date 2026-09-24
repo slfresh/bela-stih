@@ -3,7 +3,7 @@ import express, { type Request, type Response } from 'express';
 import { Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { BelaRoom } from './BelaRoom';
-import { ROOM_NAME, ROOM_NAME_MODES } from './protocol';
+import { MAX_FRAME_BYTES, ROOM_NAME, ROOM_NAME_MODES } from './protocol';
 
 /**
  * The Bela game server.
@@ -45,7 +45,9 @@ app.get('/health', (_req: Request, res: Response) => {
 
 const httpServer = createServer(app);
 const gameServer = new Server({
-  transport: new WebSocketTransport({ server: httpServer }),
+  // Room for one voice clip in a frame (protocol.ts); the default 4 KB closed
+  // the socket of anyone who sent one.
+  transport: new WebSocketTransport({ server: httpServer, maxPayload: MAX_FRAME_BYTES }),
 });
 
 gameServer.define(ROOM_NAME, BelaRoom);

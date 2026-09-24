@@ -43,6 +43,11 @@ export type ClientMessage =
    * the sender's device pays, and the receiver gains nothing.
    */
   | { type: 'gift'; id: string; to: Seat | 'table' }
+  /**
+   * Push-to-talk: a recorded clip (VOICE_MIMES, at most VOICE_MAX_MS and
+   * VOICE_MAX_BYTES), relayed to the others at the table and never stored.
+   */
+  | { type: 'voice'; ms: number; mime: string; data: Uint8Array }
   /** After MATCH_OVER: this seat wants another match with the same people. */
   | { type: 'rematch' }
   /** Withdraw that ask. */
@@ -61,7 +66,7 @@ export type ClientMessage =
    * Host, private table, before the start: how long the match runs (one of
    * MATCH_TARGETS) and whether it is Prava bela. Either may be left out.
    */
-  | { type: 'rules'; target?: number; mode?: PlayMode; hard?: boolean }
+  | { type: 'rules'; target?: number; mode?: PlayMode; hard?: boolean; voice?: boolean }
   /**
    * Private tables: this player's app went to the background - a phone call
    * that did not drop the connection. The table waits for them exactly as for
@@ -169,6 +174,42 @@ export interface JoinGifts {
   gifts?: boolean;
 }
 
+/**
+ * Push-to-talk voice messages. A clip is recorded on the phone while a button
+ * is held, sent whole, relayed by the room to the others at the table and
+ * dropped: nothing stores, decodes or logs it. On at every table; a private
+ * table's host may switch it off before the start.
+ */
+export const VOICE_MAX_MS = 15_000;
+/** The app records ~24 kbps (15 s is ~45 KB); the rest is room for a browser's recorder. */
+export const VOICE_MAX_BYTES = 64 * 1024;
+/** Less than this is no recording at all (an MP4 header alone is a few hundred bytes). */
+export const VOICE_MIN_BYTES = 256;
+/** What the recorders write: AAC in MP4 (Android, most browsers) and Opus in WebM (Firefox). */
+export const VOICE_MIMES: readonly string[] = ['audio/mp4', 'audio/webm'];
+/**
+ * The transport's frame limit. Everything else a client sends is a few hundred
+ * bytes; the default (4 KB) closed the socket of anyone sending a clip.
+ */
+export const MAX_FRAME_BYTES = 96 * 1024;
+
+/** Client -> server join option: this app plays and records voice clips. Older apps are never sent one. */
+export interface JoinVoice {
+  voice?: boolean;
+}
+
+/**
+ * Server -> the others at the table: a clip, with the seat that spoke. The
+ * sender gets the same message without `data`, when the room has taken it.
+ */
+export interface VoiceMessage {
+  from: Seat;
+  id: number;
+  ms: number;
+  mime: string;
+  data?: Uint8Array;
+}
+
 /** Server -> everyone: a gift was given. A table gift is ONE message. */
 export interface GiftMessage {
   from: Seat;
@@ -199,6 +240,8 @@ export interface SeatInfo {
    * nobody pays for a present its receiver cannot see.
    */
   seesGifts?: true;
+  /** This seat's player has an app that plays voice clips (it joined with `voice: true`). */
+  hearsVoice?: true;
 }
 
 /** Server -> one client: everything that seat is entitled to see. */
@@ -239,6 +282,8 @@ export interface RoomMessage {
   target?: number;
   /** A private table (friends, by code): only there does it pause and wait. */
   private?: true;
+  /** Voice messages are on at this table (quick play always; a private table's host may switch them off). */
+  voice?: true;
   /** Present while the table stands still: paused, or waiting for a dropped player. */
   hold?: HoldInfo;
   /** At DEAL_OVER: milliseconds until the next deal starts by itself. */
@@ -253,4 +298,5 @@ export const MSG = {
   error: 'error',
   emote: 'emote',
   gift: 'gift',
+  voice: 'voice',
 } as const;
