@@ -132,12 +132,18 @@ interface Occupant {
   origin: string;
   /** This player's app draws table gifts (it joined with `gifts: true`). */
   gifts: boolean;
-  /** This player's app plays and records voice clips (it joined with `voice: true`). */
+  /**
+   * This player's app plays and records voice clips now: it joined with
+   * `voice: true`, or said so since ('hears'). Off while its player has
+   * switched voice off in Settings.
+   */
   voice: boolean;
+  /** The app can do voice at all (it sent `voice`, true or false); an older one cannot. */
+  speaksVoice: boolean;
 }
 
 /** A chair nobody sits in. */
-const vacant = (): Occupant => ({ sessionId: null, name: '', avatar: '', connected: false, origin: '', gifts: false, voice: false });
+const vacant = (): Occupant => ({ sessionId: null, name: '', avatar: '', connected: false, origin: '', gifts: false, voice: false, speaksVoice: false });
 
 /** Refused because a seat at THIS table is already held from the same place. */
 export const SAME_ORIGIN_CODE = 4300;
@@ -349,6 +355,7 @@ export class BelaRoom extends Room {
       connected: true,
       gifts: options.gifts === true,
       voice: options.voice === true,
+      speaksVoice: typeof options.voice === 'boolean',
     };
     this.table.setSeatHuman(seat, true);
     this.gifts[seat] = null;
@@ -538,7 +545,8 @@ export class BelaRoom extends Room {
     // A player the table waits for who says anything at all is back: their
     // "back" may have been the message a flaky connection lost, and a table
     // left waiting on someone who is playing would refuse their every move.
-    if (packet.type !== 'away' && this.waiting.has(seat) && this.occupants[seat]!.connected) {
+    // (Not a Settings switch flipped on the way: that is the app, not the player at the table.)
+    if (packet.type !== 'away' && packet.type !== 'hears' && this.waiting.has(seat) && this.occupants[seat]!.connected) {
       this.waiting.delete(seat);
       this.holdChanged();
       if (packet.type === 'back') return;
@@ -750,6 +758,18 @@ export class BelaRoom extends Room {
       // rings on their own puck).
       const echo: VoiceMessage = { from: seat, id, ms: clip.ms, mime: clip.mime };
       client.send(MSG.voice, echo);
+      return;
+    }
+
+    if (packet.type === 'hears') {
+      // Only an app that joined speaking voice may say it hears again: an old
+      // one could not play what it would be sent. Nothing is published - no
+      // one else's view depends on it, and a toggling client costs nothing.
+      const o = this.occupants[seat]!;
+      const on = (packet.message as { on?: unknown } | undefined)?.on;
+      if (typeof on !== 'boolean') return;
+      if (on && !o.speaksVoice) return;
+      o.voice = on;
       return;
     }
 

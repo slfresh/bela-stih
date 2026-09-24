@@ -9,10 +9,13 @@ import { MSG, ROOM_NAME, ROOM_NAME_MODES, VOICE_MAX_BYTES, type RoomMessage, typ
  * (no `voice: true`), sit at a private table. A clip from the host reaches the
  * guest whole, never the older app, and never comes back to the host - who
  * gets an echo without the audio. Garbage (a wrong container, a lying name, too
- * short, too long, too big for the room but inside the frame) is dropped and
- * the socket stays open; clips less than a second apart are refused; a guest
- * cannot switch voice off, the host can, and then nothing goes; quick play has
- * voice on. The room keeps nothing: there is nothing here to read back.
+ * short, too long, too big for the room but inside the frame, bigger than the
+ * length it claims allows) is dropped and the socket stays open; clips less
+ * than a second apart are refused; a guest cannot switch voice off, the host
+ * can, and then nothing goes; a player who switches voice off in Settings
+ * ('hears') gets nothing and sends nothing until they switch it back, an app
+ * that joined with it off likewise, and an older app cannot claim it; quick
+ * play has voice on. The room keeps nothing: there is nothing here to read back.
  *
  *   npm run start --workspace @belot/server        # in one terminal
  *   npx tsx apps/server/src/voice-smoke.ts         # in another
@@ -88,6 +91,8 @@ async function main(): Promise<void> {
   host.room.send('voice', { mime: 'audio/mp4', ms: 16_000, data: mp4(3000) });
   host.room.send('voice', { mime: 'audio/mp4', ms: 3000, data: 'AAAA' });
   host.room.send('voice', { mime: 'audio/mp4', ms: 3000, data: mp4(VOICE_MAX_BYTES + 1000) });
+  // 30 KB is seconds of speech: claiming 0.4 s of it would cheat the limiter.
+  host.room.send('voice', { mime: 'audio/mp4', ms: 400, data: mp4(30_000) });
   await wait(900);
   check(guest.clips.length === before, `garbage is dropped (${guest.clips.length - before} got through)`);
   check(!host.closed && !guest.closed, 'and nobody\'s socket was closed for it');
@@ -126,6 +131,39 @@ async function main(): Promise<void> {
   await wait(500);
   check(guest.last?.voice === true, 'and back on');
 
+  // ---- a player's own switch, in Settings ----
+  guest.room.send('hears', { on: false });
+  await wait(500);
+  const guestHeard = guest.clips.length;
+  host.room.send('voice', { mime: 'audio/mp4', ms: 1500, data: mp4(5000, 6) });
+  await wait(800);
+  check(guest.clips.length === guestHeard, 'a player with voice switched off is sent nothing');
+  const hostBefore = host.clips.filter((c) => c.data !== undefined).length;
+  guest.room.send('voice', { mime: 'audio/mp4', ms: 1500, data: mp4(5000, 7) });
+  await wait(800);
+  check(host.clips.filter((c) => c.data !== undefined).length === hostBefore, 'and what they send is not taken');
+  guest.room.send('hears', { on: true });
+  await wait(1100);
+  host.room.send('voice', { mime: 'audio/mp4', ms: 1500, data: mp4(5000, 8) });
+  await wait(800);
+  check(guest.clips.length === guestHeard + 1, 'switched back on, they hear again');
+  old.room.send('hears', { on: true });
+  await wait(1100);
+  host.room.send('voice', { mime: 'audio/mp4', ms: 1500, data: mp4(5000, 9) });
+  await wait(800);
+  check(old.clips.length === 0, 'an older app cannot claim to hear');
+  // An app whose player had voice off at the door, then switches it on.
+  const quiet = side(await client.joinById(host.room.roomId, { name: 'Tihi', gifts: true, voice: false }));
+  await wait(1100);
+  host.room.send('voice', { mime: 'audio/mp4', ms: 1500, data: mp4(5000, 10) });
+  await wait(800);
+  check(quiet.clips.length === 0, 'an app that joined with voice off is sent nothing');
+  quiet.room.send('hears', { on: true });
+  await wait(1100);
+  host.room.send('voice', { mime: 'audio/mp4', ms: 1500, data: mp4(5000, 11) });
+  await wait(800);
+  check(quiet.clips.length === 1, 'until it says it hears');
+
   // ---- quick play ----
   const stranger = side(await client.joinOrCreate(ROOM_NAME_MODES, { name: 'Stranac', gifts: true, voice: true }));
   await wait(600);
@@ -134,7 +172,7 @@ async function main(): Promise<void> {
   await wait(600);
   check(oldQuick.last !== null, 'an older app\'s quick play still works');
 
-  for (const s of [host, guest, old, stranger, oldQuick]) await s.room.leave(true).catch(() => {});
+  for (const s of [host, guest, old, quiet, stranger, oldQuick]) await s.room.leave(true).catch(() => {});
   await wait(300);
   console.log(failures.length === 0 ? '[voice-smoke] PASS' : `[voice-smoke] FAIL (${failures.length})`);
   process.exit(failures.length === 0 ? 0 : 1);

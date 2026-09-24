@@ -147,7 +147,10 @@ describe('joining by code and being away', () => {
     expect(hook).toMatch(/roomRef\.current\?\.send\('back', \{\}\);/);
     const room = server('BelaRoom.ts');
     expect(room).toMatch(/if \(packet\.type === 'away'\) \{/);
-    // Any word from a waited-for player means back, in case "back" was lost.
-    expect(room).toMatch(/if \(packet\.type !== 'away' && this\.waiting\.has\(seat\) && this\.occupants\[seat\]!\.connected\)/);
+    // Any word from a waited-for player means back, in case "back" was lost -
+    // except the app's own Settings switch, which is not the player at the table.
+    expect(room).toMatch(
+      /if \(packet\.type !== 'away' && packet\.type !== 'hears' && this\.waiting\.has\(seat\) && this\.occupants\[seat\]!\.connected\)/,
+    );
   });
 });

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { checkClip, VOICE_BUDGET_MS, VOICE_GAP_MS, VoiceLimiter } from '../../server/src/voice';
+import { checkClip, VOICE_BUDGET_MS, VOICE_BYTES_PER_MS, VOICE_GAP_MS, VOICE_HEADER_BYTES, VoiceLimiter } from '../../server/src/voice';
 import { MAX_FRAME_BYTES, VOICE_MAX_BYTES, VOICE_MAX_MS, VOICE_MIMES, VOICE_MIN_BYTES } from '../../server/src/protocol';
 
 /**
@@ -39,13 +39,27 @@ describe('a clip the room relays', () => {
     expect(checkClip('audio/mp4', [0, 0, 0, 0, 0x66, 0x74, 0x79, 0x70], 3000)).toBeNull();
     expect(checkClip('audio/mp4', mp4(VOICE_MIN_BYTES - 1), 3000)).toBeNull();
     expect(checkClip('audio/mp4', mp4(VOICE_MAX_BYTES + 1), 3000)).toBeNull();
-    expect(checkClip('audio/mp4', mp4(VOICE_MAX_BYTES), 3000)).not.toBeNull();
+    expect(checkClip('audio/mp4', mp4(VOICE_MAX_BYTES), 4000)).not.toBeNull();
     expect(checkClip('audio/mp4', mp4(), VOICE_MAX_MS + 501)).toBeNull();
     expect(checkClip('audio/mp4', mp4(), VOICE_MAX_MS + 400)?.ms).toBe(VOICE_MAX_MS + 400);
     expect(checkClip('audio/mp4', mp4(), 100)).toBeNull();
     expect(checkClip('audio/mp4', mp4(), Number.NaN)).toBeNull();
     expect(checkClip('audio/mp4', mp4(), '3000')).toBeNull();
     expect([...VOICE_MIMES]).toEqual(['audio/mp4', 'audio/webm']);
+  });
+
+  it('carries no more bytes than the length it claims allows, so the allowance cannot be cheated', () => {
+    // 30 KB is seconds of speech: as "0.4 s" it would slip past the limiter ten times over.
+    expect(checkClip('audio/mp4', mp4(30_000), 400)).toBeNull();
+    const at = (ms: number) => VOICE_HEADER_BYTES + ms * VOICE_BYTES_PER_MS;
+    expect(checkClip('audio/mp4', mp4(at(1000)), 1000)).not.toBeNull();
+    expect(checkClip('audio/mp4', mp4(at(1000) + 1), 1000)).toBeNull();
+    // What the recorders here really make passes with room: 24 kbps asked for
+    // (3 bytes a ms), and a browser's MP4 recorder at 96 kbps (12) that ignores it.
+    expect(checkClip('audio/mp4', mp4(1200 + 400 * 12), 400)).not.toBeNull();
+    expect(checkClip('audio/webm', webm(1200 + 15_000 * 3), 15_000)).not.toBeNull();
+    // The real phone take from the device checks: 10421 bytes for 3 s.
+    expect(checkClip('audio/mp4', mp4(10_421), 3000)).not.toBeNull();
   });
 
   it('fits a frame the transport takes, with room for its envelope', () => {
@@ -99,6 +113,15 @@ describe('the room', () => {
     // Nothing keeps it, nothing prints it.
     expect(relay).not.toMatch(/console\./);
     expect(room).toMatch(/return o\.sessionId !== null && o\.connected && o\.voice;/);
+  });
+
+  it("hears a player's Settings switch, from an app that can do voice, without calling them back", () => {
+    const hears = room.slice(room.indexOf("if (packet.type === 'hears') {"), room.indexOf("if (packet.type === 'gift') {"));
+    expect(hears).toMatch(/if \(typeof on !== 'boolean'\) return;\s*if \(on && !o\.speaksVoice\) return;\s*o\.voice = on;\s*return;/);
+    // Nothing published: a toggling client costs the table nothing.
+    expect(hears).not.toMatch(/this\.(publish|broadcast)\(/);
+    expect(room).toMatch(/speaksVoice: typeof options\.voice === 'boolean',/);
+    expect(room).toMatch(/gifts: false, voice: false, speaksVoice: false \}\);/);
   });
 
   it('lets a private table\'s host switch voice off before the start, and quick play keep it', () => {

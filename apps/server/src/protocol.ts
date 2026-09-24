@@ -48,6 +48,12 @@ export type ClientMessage =
    * VOICE_MAX_BYTES), relayed to the others at the table and never stored.
    */
   | { type: 'voice'; ms: number; mime: string; data: Uint8Array }
+  /**
+   * The player switched voice messages off (or on again) in the app's
+   * Settings while at the table: clips stop coming to this app, and its own
+   * are not taken, until it says otherwise. At a join it is `voice` itself.
+   */
+  | { type: 'hears'; on: boolean }
   /** After MATCH_OVER: this seat wants another match with the same people. */
   | { type: 'rematch' }
   /** Withdraw that ask. */
@@ -193,7 +199,11 @@ export const VOICE_MIMES: readonly string[] = ['audio/mp4', 'audio/webm'];
  */
 export const MAX_FRAME_BYTES = 96 * 1024;
 
-/** Client -> server join option: this app plays and records voice clips. Older apps are never sent one. */
+/**
+ * Client -> server join option: this app can play and record voice clips
+ * (present at all), and its player has them on (true). Older apps send
+ * nothing and are never sent a clip.
+ */
 export interface JoinVoice {
   voice?: boolean;
 }

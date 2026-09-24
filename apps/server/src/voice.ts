@@ -6,6 +6,16 @@ import { VOICE_MAX_BYTES, VOICE_MAX_MS, VOICE_MIMES, VOICE_MIN_BYTES } from './p
  * nothing here keeps, decodes or logs audio.
  */
 
+/**
+ * The most bytes a clip may carry for the length it claims: the limiter
+ * counts claimed milliseconds, so a clip that understates its length must
+ * not pass. 20 bytes a millisecond is 160 kbps, over anything a recorder
+ * here makes (24 kbps asked for, 96 kbps from a browser that ignores it);
+ * the allowance covers the container's header.
+ */
+export const VOICE_BYTES_PER_MS = 20;
+export const VOICE_HEADER_BYTES = 4096;
+
 export interface Clip {
   mime: string;
   data: Uint8Array;
@@ -24,6 +34,7 @@ export function checkClip(mime: unknown, data: unknown, ms: unknown): Clip | nul
   if (data.byteLength < VOICE_MIN_BYTES || data.byteLength > VOICE_MAX_BYTES) return null;
   // A take stops at VOICE_MAX_MS; a little over is the recorder's rounding.
   if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 300 || ms > VOICE_MAX_MS + 500) return null;
+  if (data.byteLength > VOICE_HEADER_BYTES + ms * VOICE_BYTES_PER_MS) return null;
   const mp4 = data[4] === 0x66 && data[5] === 0x74 && data[6] === 0x79 && data[7] === 0x70;
   const webm = data[0] === 0x1a && data[1] === 0x45 && data[2] === 0xdf && data[3] === 0xa3;
   if (mime === 'audio/mp4' ? !mp4 : !webm) return null;
