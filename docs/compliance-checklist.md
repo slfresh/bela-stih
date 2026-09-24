@@ -35,8 +35,9 @@ keep it that way.
   the only place user content is created. Reported nicknames are acted on
   through the server's name filter (apps/server/src/names.ts).
 - Voice messages (1.5.0): push-to-talk clips, at most 15 s, recorded only
-  while the player holds the mic button (RECORD_AUDIO, asked for at the first
-  press). The server relays each clip to the other players at that table
+  while the player holds the mic button - or, from 1.5.1 and only if chosen in
+  Settings, between two taps on it, with a cross to throw a take away
+  (RECORD_AUDIO, asked for at the first press). The server relays each clip to the other players at that table
   whose apps play voice, and drops it: nothing stores, decodes or logs audio
   (apps/server/src/voice.ts, BelaRoom's 'voice' branch; pinned by
   voice-server.test.ts and voice-smoke.ts). Receivers play it from a cache
@@ -44,6 +45,13 @@ keep it that way.
   host can switch it off; every player can switch it off in Settings, mute
   one player, or hide them (which silences them too). Reports cannot carry
   audio - the reporter describes what was said.
+  Receipts (1.5.1): a listener's app says when a clip has started playing
+  ('heard'), and the room tells the speaker which seat - believed only from a
+  seat the clip went to, once, held in memory for a minute
+  (apps/server/src/voice.ts VoiceLedger), never stored or logged. It is the
+  fact of a play inside a match (App interactions, already declared as
+  processed ephemerally): no Data safety or IARC change; the privacy page says
+  so in one clause.
 
 ## One-time paperwork (do once, ~30 minutes total)
 

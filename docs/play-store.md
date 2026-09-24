@@ -87,6 +87,23 @@ before promoting.
 
 ### Release notes
 
+1.5.1 (versionCode 30: no Play form changes - a receipt is the fact of a play, relayed like the clip and never stored) -
+- hr: *Glasovne poruke: vidiš je li poruka stigla - „Poslano”, pa „Čuje te
+  Marko ✓” kad je druga strana pusti. Mikrofon je sada i na obračunu
+  dijeljenja i na kraju partije, a poruka koju govoriš dok dijeljenje
+  završava ide tek kad pustiš tipku. U postavkama biraš: drži tipku dok
+  govoriš ili dodirni za početak i kraj.*
+- sr: *Гласовне поруке: видиш да ли је порука стигла - „Послато”, па „Чује
+  те Марко ✓” кад је друга страна пусти. Микрофон је сада и на обрачуну
+  дељења и на крају партије, а порука коју говориш док дељење завршава иде
+  тек кад пустиш тастер. У подешавањима бираш: држи тастер док говориш или
+  додирни за почетак и крај.*
+- en: *Voice messages: see whether yours arrived - "Sent", then "Marko heard
+  it ✓" once it plays on their side. The mic is now on the results sheet and
+  at the end of a match too, and a message you are speaking as the deal ends
+  goes when you let go. In Settings, choose: hold while speaking, or tap to
+  start and stop.*
+
 1.5.0 (versionCode 29: voice messages - re-answer Data safety (Audio) and the IARC questionnaire first) -
 - hr: *Novo: glasovne poruke. Za stolom drži tipku s mikrofonom i govori (do
   15 sekundi), pusti i poruka ode ostalima; njihove čuješ same od sebe, a
