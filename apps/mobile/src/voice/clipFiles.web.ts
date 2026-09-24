@@ -27,3 +27,6 @@ export function clipSource(data: Uint8Array, mime: VoiceMime, _id: number): { ur
   const uri = URL.createObjectURL(new Blob([data as BlobPart], { type: mime }));
   return { uri, release: () => dropTake(uri) };
 }
+
+/** Blob URLs die with the page: nothing is ever left behind to sweep. */
+export function sweepVoiceFiles(): void {}

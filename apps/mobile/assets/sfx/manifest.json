@@ -2,201 +2,241 @@
   "shuffle": {
     "gain": 0.7,
     "poly": 1,
-    "varied": true
+    "varied": true,
+    "rare": true
   },
   "deal": {
     "gain": 0.8,
     "poly": 2,
-    "varied": true
+    "varied": true,
+    "rare": false
   },
   "fan": {
     "gain": 0.6,
     "poly": 1,
-    "varied": true
+    "varied": true,
+    "rare": false
   },
   "talon": {
     "gain": 0.7,
     "poly": 1,
-    "varied": true
+    "varied": true,
+    "rare": true
   },
   "sort": {
     "gain": 0.5,
     "poly": 1,
-    "varied": true
+    "varied": true,
+    "rare": false
   },
   "play": {
     "gain": 0.9,
-    "poly": 3,
-    "varied": true
+    "poly": 2,
+    "varied": true,
+    "rare": false
   },
   "sweep": {
     "gain": 0.8,
     "poly": 1,
-    "varied": true
+    "varied": true,
+    "rare": false
   },
   "stack": {
     "gain": 0.7,
-    "poly": 2,
-    "varied": true
+    "poly": 1,
+    "varied": true,
+    "rare": false
   },
   "trick": {
     "gain": 0.9,
     "poly": 1,
-    "varied": true
+    "varied": true,
+    "rare": false
   },
   "lastTrick": {
     "gain": 1,
     "poly": 1,
-    "varied": true
+    "varied": true,
+    "rare": true
   },
   "knock": {
     "gain": 0.7,
-    "poly": 2,
-    "varied": true
+    "poly": 1,
+    "varied": true,
+    "rare": false
   },
   "call": {
     "gain": 0.85,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": false
   },
   "stamp": {
     "gain": 0.7,
     "poly": 1,
-    "varied": true
+    "varied": true,
+    "rare": true
   },
   "kontra": {
     "gain": 0.9,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "zvanje": {
     "gain": 0.85,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "reveal": {
     "gain": 0.8,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "revealDown": {
     "gain": 0.6,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "bela": {
     "gain": 0.9,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "stiglja": {
     "gain": 1,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "win": {
     "gain": 1,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "lose": {
     "gain": 0.8,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "matchWon": {
     "gain": 1,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "matchLost": {
     "gain": 0.85,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "tick": {
     "gain": 0.7,
-    "poly": 3,
-    "varied": false
+    "poly": 1,
+    "varied": false,
+    "rare": false
   },
   "coin": {
     "gain": 0.6,
     "poly": 4,
-    "varied": true
+    "varied": true,
+    "rare": false
   },
   "levelup": {
     "gain": 1,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "turn": {
     "gain": 0.9,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": false
   },
   "callPrompt": {
     "gain": 0.9,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "settle": {
     "gain": 0.6,
     "poly": 1,
-    "varied": true
+    "varied": true,
+    "rare": true
   },
   "arm": {
     "gain": 0.6,
-    "poly": 2,
-    "varied": true
+    "poly": 1,
+    "varied": true,
+    "rare": false
   },
   "tap": {
     "gain": 0.5,
-    "poly": 2,
-    "varied": true
+    "poly": 1,
+    "varied": true,
+    "rare": false
   },
   "press": {
     "gain": 0.4,
-    "poly": 2,
-    "varied": true
+    "poly": 1,
+    "varied": true,
+    "rare": false
   },
   "hold": {
     "gain": 0.6,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": false
   },
   "pop": {
     "gain": 0.6,
     "poly": 2,
-    "varied": true
+    "varied": true,
+    "rare": false
   },
   "gift": {
     "gain": 0.7,
-    "poly": 2,
-    "varied": true
+    "poly": 1,
+    "varied": true,
+    "rare": true
   },
   "purchase": {
     "gain": 0.9,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "denied": {
     "gain": 0.7,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": false
   },
   "seatJoin": {
     "gain": 0.7,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "seatLeave": {
     "gain": 0.6,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   },
   "reconnected": {
     "gain": 0.8,
     "poly": 1,
-    "varied": false
+    "varied": false,
+    "rare": true
   }
 }

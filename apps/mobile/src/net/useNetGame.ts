@@ -759,15 +759,18 @@ export function useNetGame(settings: Settings) {
   }, [reconnect]);
 
   // The only things we ever tell the server about the player (and, with
-  // `gifts: true`, that this app draws table gifts).
+  // `gifts: true`, that this app draws table gifts; with `voice`, that it
+  // plays and records voice messages - unless the player switched them off).
   const name = settings.nickname.trim().slice(0, 20);
   const avatar = profileRef.current.selectedAvatar;
+  const voiceRef = useRef(settings.voice);
+  voiceRef.current = settings.voice;
 
   const quickPlay = useCallback(
     () =>
       connect(async (c) => {
         try {
-          return await eitherRoom((room) => c.joinOrCreate(room, { name, avatar, gifts: true, voice: true }));
+          return await eitherRoom((room) => c.joinOrCreate(room, { name, avatar, gifts: true, voice: voiceRef.current }));
         } catch (err) {
           // The open table already has somebody playing from this connection.
           // With no accounts the server cannot tell a second player here from
@@ -775,7 +778,7 @@ export function useNetGame(settings: Settings) {
           // player's hand by elimination — so it seats us apart rather than
           // turning us away. A fresh public table, and strangers join us there.
           if ((err as { code?: number } | null)?.code !== SAME_ORIGIN_CODE) throw err;
-          return await eitherRoom((room) => c.create(room, { name, avatar, gifts: true, voice: true }));
+          return await eitherRoom((room) => c.create(room, { name, avatar, gifts: true, voice: voiceRef.current }));
         }
       }),
     [connect, name, avatar],
@@ -790,7 +793,7 @@ export function useNetGame(settings: Settings) {
           name,
           avatar,
           gifts: true,
-          voice: true,
+          voice: voiceRef.current,
           private: true,
           mode: settings.difficulty,
           hard: settings.difficulty === 'hard',
@@ -800,7 +803,7 @@ export function useNetGame(settings: Settings) {
     [connect, name, avatar, settings.difficulty],
   );
   const joinById = useCallback(
-    (id: string) => connect((c) => c.joinById(normalizeCode(id), { name, avatar, gifts: true, voice: true })),
+    (id: string) => connect((c) => c.joinById(normalizeCode(id), { name, avatar, gifts: true, voice: voiceRef.current })),
     [connect, name, avatar],
   );
 
@@ -840,6 +843,12 @@ export function useNetGame(settings: Settings) {
   const sendEmote = useCallback((id: string) => {
     roomRef.current?.send('emote', { id });
   }, []);
+
+  // Voice switched off or on in Settings while at a table: the room stops or
+  // starts sending this app clips (at a join it is in the options).
+  useEffect(() => {
+    roomRef.current?.send('hears', { on: settings.voice });
+  }, [settings.voice]);
 
   /** A take, sent whole; the room relays it to the others and echoes it without the audio. */
   const sendVoice = useCallback((take: Take) => {

@@ -79,7 +79,7 @@ import { PerfProbe } from './dev/PerfProbe';
 import { EmoteStrip } from './table/EmoteStrip';
 import { GiftPicker } from './table/GiftPicker';
 import { MicButton } from './table/MicButton';
-import type { Take } from './voice/useVoiceRecorder';
+import type { VoiceMic } from './voice/useVoiceRecorder';
 import { useTurnCues } from './table/useTurnCues';
 import { ConfirmDialog } from './ui/ConfirmDialog';
 import { HoldPanel, useNow } from './table/HoldPanel';
@@ -243,9 +243,9 @@ export interface TableScreenProps {
   onReport?: (s: Seat) => void;
   /**
    * Online, where voice is on (the table's switch and the player's own): the
-   * mic is offered, and a take is sent through here.
+   * mic is offered, driving the online screen's recorder.
    */
-  onVoiceTake?: (take: Take) => void;
+  mic?: VoiceMic;
   /** Seats whose voice message is playing now: their pucks send out waves. */
   speaking?: readonly Seat[];
   /** Online: players whose voice is muted on this device, and the switch for it. */
@@ -255,6 +255,9 @@ export interface TableScreenProps {
 
 /** A landscape rail holds the mic beside the faces' 40 dp toggle only at this size (railW is 79 at its narrowest). */
 const RAIL_MIC = 34;
+/** The gaps between the toggle and the mic: the portrait row's and the rail's. */
+const ROW_GAP = 8;
+const RAIL_GAP = 4;
 
 /** How long touches are swallowed after the table shuts the gift picker by itself. */
 export const GIFT_SHIELD_MS = 400;
@@ -275,7 +278,7 @@ export function TableScreen(props: TableScreenProps) {
     nextDeal, hold: tableHold = null, onPause, onResume, onPlayOn, reconnecting = false,
     handSort = 'auto', arrangeTip = false, onArrangeTip, confirmPlay = 'ambiguous', awaitEcho = false, refusedN = 0,
     gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift, giftReach, hidden, onHide, onReport,
-    onVoiceTake, speaking, muted, onMute,
+    mic, speaking, muted, onMute,
   } = props;
 
   // Every dimension the table draws is derived from the real window, so eight
@@ -866,7 +869,7 @@ export function TableScreen(props: TableScreenProps) {
   );
 
   // Who speaks: the clip playing now (online), and me while I record.
-  const [recording, setRecording] = useState(false);
+  const recording = mic?.phase === 'recording';
   const speakingSeats = useMemo(() => {
     const set = new Set<Seat>(speaking ?? []);
     if (recording) set.add(mySeat);
@@ -1562,14 +1565,35 @@ export function TableScreen(props: TableScreenProps) {
   // enough (not on the shortest screens held sideways).
   const micFits = !land || m.railW >= RAIL_MIC + 4 + EMOTE_TOGGLE;
   const micShown = !asking && !belaOffered && !shed && micFits;
-  const mic = onVoiceTake ? (
+  // The button is on the screen: a take in the making goes when it leaves
+  // (what was said, was said) - the recorder is OnlineGame's and outlives it.
+  const micLive = mic !== undefined && micShown && !settled;
+  const finishTake = mic?.finish;
+  useEffect(() => {
+    if (!micLive) void finishTake?.(true);
+  }, [micLive, finishTake]);
+  // A press that sent nothing, said over my hand: too short, refused, failed.
+  const micNote = mic?.note;
+  useEffect(() => {
+    if (!micNote) return;
+    const ui = lang.s.ui;
+    sayOverHand(micNote.why === 'short' ? ui.micTooShort : micNote.why === 'denied' ? ui.micDenied : ui.micFailed);
+    // Only a new note speaks; the language and the anchors are read as they are.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [micNote]);
+  // Where the toggle was before there was a mic, it stays: in portrait the
+  // mic is left of it and a spacer as wide balances the centred row; sideways
+  // it is right of the toggle, which keeps the rail's left edge. Each touch
+  // area reaches the gap's middle and no further.
+  const micButton = micLive ? (
     <MicButton
       lang={lang}
       size={land ? RAIL_MIC : EMOTE_TOGGLE}
-      visible={micShown}
-      onTake={onVoiceTake}
-      onSay={sayOverHand}
-      onRecording={setRecording}
+      phase={mic.phase}
+      startedAt={mic.startedAt}
+      hitSlop={land ? { top: 8, bottom: 8, left: RAIL_GAP / 2, right: 8 } : { top: 8, bottom: 8, left: 8, right: ROW_GAP / 2 }}
+      onStart={() => void mic.start()}
+      onFinish={(send) => void mic.finish(send)}
     />
   ) : null;
 
@@ -1578,7 +1602,9 @@ export function TableScreen(props: TableScreenProps) {
       onPress={() => {
         if (trayShown) setTrayOpen((o) => !o);
       }}
-      hitSlop={8}
+      hitSlop={
+        !micButton ? 8 : land ? { top: 8, bottom: 8, left: 8, right: RAIL_GAP / 2 } : { top: 8, bottom: 8, left: ROW_GAP / 2, right: 8 }
+      }
       // Resting while a question has the box's room: no click, no tray.
       disabled={!trayShown}
       accessibilityLabel={lang.s.ui.emoteToggle}
@@ -1761,10 +1787,10 @@ export function TableScreen(props: TableScreenProps) {
                     {autoSkipping ? null : declareButtons ?? (
                       <NonCardActions options={options} lang={lang} onChoose={answer} compact />
                     )}
-                    {/* The mic left of the toggle, which stays the rail's bottom-right. */}
+                    {/* The toggle keeps the rail's left edge; the mic right of it. */}
                     <View style={styles.railToggles}>
-                      {mic}
                       {emoteToggle}
+                      {micButton}
                     </View>
                   </View>
                 )}
@@ -1820,8 +1846,9 @@ export function TableScreen(props: TableScreenProps) {
               {/* actions: bidding, declaring, bela — leaving is the top corner */}
               {!settled && (
                 <View style={styles.actionsRow}>
-                  {mic}
+                  {micButton}
                   {emoteToggle}
+                  {micButton && <View style={styles.micBalance} />}
                   {autoSkipping ? null : declareButtons ?? (
                     <NonCardActions options={options} lang={lang} onChoose={send} short={short} />
                   )}
@@ -1857,7 +1884,7 @@ export function TableScreen(props: TableScreenProps) {
                         onHide(who, !was);
                       },
                       onReport: () => onReport(giftTarget),
-                      ...(onMute && onVoiceTake
+                      ...(onMute && mic
                         ? {
                             muted: muted?.includes(giftTarget) ?? false,
                             onMute: () => {
@@ -3611,13 +3638,15 @@ const styles = StyleSheet.create({
   actionsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: ROW_GAP,
     justifyContent: 'center',
     alignItems: 'center',
     paddingBottom: 2,
   },
+  // As wide as the mic, right of the toggle: the centred row keeps the toggle where it was.
+  micBalance: { width: EMOTE_TOGGLE, height: EMOTE_TOGGLE },
   actionsCol: { gap: 6, alignItems: 'stretch', alignSelf: 'stretch' },
-  railToggles: { flexDirection: 'row', gap: 4, alignItems: 'center' },
+  railToggles: { flexDirection: 'row', gap: RAIL_GAP, alignItems: 'center' },
 
   emoteToggle: {
     width: EMOTE_TOGGLE,

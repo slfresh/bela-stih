@@ -1,101 +1,106 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, type GestureResponderEvent, type Insets } from 'react-native';
 import type { Lang } from '@belot/i18n';
 import { pattern } from '../haptics';
 import { Mic } from '../ui/icons';
 import { PressScale } from '../ui/PressScale';
-import { useVoiceRecorder, type Take } from '../voice/useVoiceRecorder';
-import { takeClock } from '../voice/voice';
+import type { MicPhase } from '../voice/useVoiceRecorder';
+import { releasedOn, takeClock } from '../voice/voice';
 import { font, ink, radius, surface, theme } from '../theme';
-
-/** Let go this long after the finger lifts to tell a release on the button from one beside it. */
-const RELEASE_SETTLE_MS = 60;
 
 /**
  * Push-to-talk at the table: hold, speak, let go to send; slide off to take it
  * back. While it records the button turns red and says how long the take has
- * run; my own puck rings meanwhile (`onRecording`). Hidden while the table
- * asks a question - the hook stays, so a take that is cut off that way still
- * goes (what was said, was said).
+ * run. Only the look lives here: the recorder is the online screen's
+ * (useVoiceRecorder), so a take outlives this button when the table's rows
+ * change under it - a question, the deal's end, the phone turned sideways.
+ *
+ * A button that leaves the screen under a finger (the phone turned: the mic
+ * moves to the other layout) may never hear the finger lift, so it ends the
+ * take itself as it goes and sends what was said - or the take would run on
+ * to the limit after the finger had long let go. (A browser cancels the touch
+ * as the page turns, first: that take is dropped, as any cancelled touch.)
+ *
+ * Whether a take goes is decided where the finger lifts, not by a "press":
+ * a phone browser never clicks after a long touch, and a press that became a
+ * long press never presses either. A long press is claimed (and does
+ * nothing) so a phone browser neither opens its menu nor ends the touch.
  */
 export function MicButton({
   lang,
   size,
-  visible,
-  onTake,
-  onSay,
-  onRecording,
+  phase,
+  startedAt,
+  hitSlop,
+  onStart,
+  onFinish,
 }: {
   lang: Lang;
   /** 40 beside the faces' toggle in portrait, 34 in a landscape rail. */
   size: number;
-  visible: boolean;
-  onTake: (take: Take) => void;
-  /** A word over my hand: too short, the microphone refused, a failure. */
-  onSay: (text: string) => void;
-  onRecording?: (on: boolean) => void;
+  phase: MicPhase;
+  startedAt: number;
+  /** Out to the gap's middle on the toggle's side, so the two never share a touch. */
+  hitSlop: Insets;
+  onStart: () => void;
+  onFinish: (send: boolean) => void;
 }) {
   const ui = lang.s.ui;
-  const released = useRef(false);
+  const boxRef = useRef<View>(null);
+  const box = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const [now, setNow] = useState(0);
-  const rec = useVoiceRecorder(onTake, (why) => {
-    if (why === 'short') onSay(ui.micTooShort);
-    else if (why === 'denied') onSay(ui.micDenied);
-    else if (why === 'failed') onSay(ui.micFailed);
-  });
-  const recording = rec.phase === 'recording';
+  const recording = phase === 'recording';
+  const pressing = useRef(false);
+  const onFinishRef = useRef(onFinish);
+  onFinishRef.current = onFinish;
+  useEffect(
+    () => () => {
+      if (pressing.current) onFinishRef.current(true);
+    },
+    [],
+  );
 
-  const onRecordingRef = useRef(onRecording);
-  onRecordingRef.current = onRecording;
-  useEffect(() => {
-    onRecordingRef.current?.(recording);
-  }, [recording]);
   useEffect(() => {
     if (!recording) return;
     setNow(Date.now());
     const t = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(t);
   }, [recording]);
-  const finishRef = useRef(rec.finish);
-  finishRef.current = rec.finish;
-  useEffect(() => {
-    if (!visible) void finishRef.current(true);
-  }, [visible]);
 
-  if (!visible) return null;
   return (
-    <View>
+    <View ref={boxRef} collapsable={false}>
       {recording && (
         <View style={styles.clockBox} pointerEvents="none">
-          <Text style={styles.clock}>{takeClock(Math.max(0, now - rec.startedAt))}</Text>
+          <Text style={styles.clock}>{takeClock(Math.max(0, now - startedAt))}</Text>
         </View>
       )}
       <PressScale
         sound={null}
         haptic={null}
-        hitSlop={8}
+        hitSlop={hitSlop}
         accessibilityRole="button"
         accessibilityLabel={ui.micLabel}
         accessibilityHint={ui.micHint}
         onPressIn={() => {
-          released.current = false;
+          pressing.current = true;
+          box.current = null;
+          boxRef.current?.measure((_x, _y, w, h, pageX, pageY) => {
+            box.current = { x: pageX, y: pageY, w, h };
+          });
           pattern('press');
-          void rec.start();
+          onStart();
         }}
-        onPress={() => {
-          released.current = true;
-          void rec.finish(true);
-        }}
-        onPressOut={() => {
-          // onPress follows onPressOut when the finger lifts on the button;
-          // without it the finger slid off, and the take is taken back.
-          setTimeout(() => {
-            if (!released.current) void finishRef.current(false);
-          }, RELEASE_SETTLE_MS);
+        onLongPress={() => {}}
+        onPressOut={(e: GestureResponderEvent) => {
+          pressing.current = false;
+          const n = e.nativeEvent as { pageX: number; pageY: number; type?: string };
+          onFinish(releasedOn(box.current, n));
         }}
         style={[styles.button, { width: size, height: size }, recording && styles.live]}
       >
-        <Mic size={Math.round(size * 0.5)} colour={recording ? ink.hi : ink.mid} />
+        <View pointerEvents="none">
+          <Mic size={Math.round(size * 0.5)} colour={recording ? ink.hi : ink.mid} />
+        </View>
       </PressScale>
     </View>
   );

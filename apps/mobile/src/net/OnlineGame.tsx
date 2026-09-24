@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { room } from '../cosmetics';
 import {
   ActivityIndicator,
@@ -45,6 +45,7 @@ import { summarize } from '../matchLog';
 import { isoDay } from '@belot/progression';
 import { useNetGame, type NetGame } from './useNetGame';
 import { useVoicePlayback } from '../voice/useVoicePlayback';
+import { useVoiceRecorder, type Take } from '../voice/useVoiceRecorder';
 import { retryHelps } from './trouble';
 
 /**
@@ -104,6 +105,24 @@ export function OnlineGame({
     ],
     [playback.speaking, echoing, net.seat],
   );
+  // Push-to-talk. The recorder lives here, not in the button: the table's
+  // rows come and go under it (a question, the deal's end, the phone turned),
+  // and a take must not go with them. Voice switched off mid-take drops it.
+  const voiceHereRef = useRef(voiceHere);
+  voiceHereRef.current = voiceHere;
+  const { sendVoice } = net;
+  const mic = useVoiceRecorder(
+    useCallback(
+      (take: Take) => {
+        if (voiceHereRef.current) sendVoice(take);
+      },
+      [sendVoice],
+    ),
+  );
+  const { finish: finishTake } = mic;
+  useEffect(() => {
+    if (!voiceHere) void finishTake(false);
+  }, [voiceHere, finishTake]);
 
   // Connect once, on the way in.
   useEffect(() => {
@@ -386,7 +405,7 @@ export function OnlineGame({
       onFinish={leaveAndExit}
       finishLabel={net.lang.s.ui.leaveTable}
       onEmote={net.sendEmote}
-      onVoiceTake={voiceHere ? net.sendVoice : undefined}
+      mic={voiceHere ? mic : undefined}
       speaking={speaking}
       muted={net.muted}
       onMute={net.mute}

@@ -33,54 +33,61 @@ export const PEAK_CEIL_DBFS = -1;
  * many can sound at once; `varied` sounds get a little pitch jitter per play,
  * the way real cards and coins never sound twice the same — melodic ones do
  * not, and neither does the clock, whose two pitches must stay tellable apart.
+ *
+ * `rare` sounds come once a deal or less. Android lets an app hold 40 audio
+ * tracks and every loaded player holds one, playing or not: 55 players held
+ * all 40 and left none for a voice message (the 15 past the limit never
+ * sounded at all). So on Android a rare sound gets a player only while it
+ * sounds, and the pools stay small - `poly` above 1 only where the sound
+ * really overlaps itself (the coins land 50 ms apart and ring for 180).
  */
 export const MIX = {
   // the cards
-  shuffle: { trim: -3, gain: 0.7, poly: 1, varied: true },
+  shuffle: { trim: -3, gain: 0.7, poly: 1, varied: true, rare: true },
   deal: { trim: -2, gain: 0.8, poly: 2, varied: true },
   fan: { trim: -4, gain: 0.6, poly: 1, varied: true },
-  talon: { trim: -3, gain: 0.7, poly: 1, varied: true },
+  talon: { trim: -3, gain: 0.7, poly: 1, varied: true, rare: true },
   sort: { trim: -4, gain: 0.5, poly: 1, varied: true },
-  play: { trim: 0, gain: 0.9, poly: 3, varied: true },
+  play: { trim: 0, gain: 0.9, poly: 2, varied: true },
   sweep: { trim: -1, gain: 0.8, poly: 1, varied: true },
-  stack: { trim: -3, gain: 0.7, poly: 2, varied: true },
+  stack: { trim: -3, gain: 0.7, poly: 1, varied: true },
   trick: { trim: 0, gain: 0.9, poly: 1, varied: true },
-  lastTrick: { trim: 0, gain: 1, poly: 1, varied: true },
+  lastTrick: { trim: 0, gain: 1, poly: 1, varied: true, rare: true },
   // the bidding
-  knock: { trim: -3, gain: 0.7, poly: 2, varied: true },
+  knock: { trim: -3, gain: 0.7, poly: 1, varied: true },
   call: { trim: -1, gain: 0.85, poly: 1, varied: false },
-  stamp: { trim: -2, gain: 0.7, poly: 1, varied: true },
-  kontra: { trim: 0, gain: 0.9, poly: 1, varied: false },
+  stamp: { trim: -2, gain: 0.7, poly: 1, varied: true, rare: true },
+  kontra: { trim: 0, gain: 0.9, poly: 1, varied: false, rare: true },
   // the zvanja
-  zvanje: { trim: -1, gain: 0.85, poly: 1, varied: false },
-  reveal: { trim: -1, gain: 0.8, poly: 1, varied: false },
-  revealDown: { trim: -3, gain: 0.6, poly: 1, varied: false },
-  bela: { trim: 0, gain: 0.9, poly: 1, varied: false },
+  zvanje: { trim: -1, gain: 0.85, poly: 1, varied: false, rare: true },
+  reveal: { trim: -1, gain: 0.8, poly: 1, varied: false, rare: true },
+  revealDown: { trim: -3, gain: 0.6, poly: 1, varied: false, rare: true },
+  bela: { trim: 0, gain: 0.9, poly: 1, varied: false, rare: true },
   // the reckoning
-  stiglja: { trim: 1, gain: 1, poly: 1, varied: false },
-  win: { trim: 1, gain: 1, poly: 1, varied: false },
-  lose: { trim: -1, gain: 0.8, poly: 1, varied: false },
-  matchWon: { trim: 2, gain: 1, poly: 1, varied: false },
-  matchLost: { trim: -1, gain: 0.85, poly: 1, varied: false },
-  tick: { trim: -2, gain: 0.7, poly: 3, varied: false },
+  stiglja: { trim: 1, gain: 1, poly: 1, varied: false, rare: true },
+  win: { trim: 1, gain: 1, poly: 1, varied: false, rare: true },
+  lose: { trim: -1, gain: 0.8, poly: 1, varied: false, rare: true },
+  matchWon: { trim: 2, gain: 1, poly: 1, varied: false, rare: true },
+  matchLost: { trim: -1, gain: 0.85, poly: 1, varied: false, rare: true },
+  tick: { trim: -2, gain: 0.7, poly: 1, varied: false },
   coin: { trim: -3, gain: 0.6, poly: 4, varied: true },
-  levelup: { trim: 1, gain: 1, poly: 1, varied: false },
+  levelup: { trim: 1, gain: 1, poly: 1, varied: false, rare: true },
   // cues
   turn: { trim: 0, gain: 0.9, poly: 1, varied: false },
-  callPrompt: { trim: 0, gain: 0.9, poly: 1, varied: false },
-  settle: { trim: -4, gain: 0.6, poly: 1, varied: true },
+  callPrompt: { trim: 0, gain: 0.9, poly: 1, varied: false, rare: true },
+  settle: { trim: -4, gain: 0.6, poly: 1, varied: true, rare: true },
   // the interface
-  arm: { trim: -4, gain: 0.6, poly: 2, varied: true },
-  tap: { trim: -4, gain: 0.5, poly: 2, varied: true },
-  press: { trim: -5, gain: 0.4, poly: 2, varied: true },
+  arm: { trim: -4, gain: 0.6, poly: 1, varied: true },
+  tap: { trim: -4, gain: 0.5, poly: 1, varied: true },
+  press: { trim: -5, gain: 0.4, poly: 1, varied: true },
   hold: { trim: -4, gain: 0.6, poly: 1, varied: false },
   pop: { trim: -3, gain: 0.6, poly: 2, varied: true },
-  gift: { trim: -3, gain: 0.7, poly: 2, varied: true },
-  purchase: { trim: 0, gain: 0.9, poly: 1, varied: false },
+  gift: { trim: -3, gain: 0.7, poly: 1, varied: true, rare: true },
+  purchase: { trim: 0, gain: 0.9, poly: 1, varied: false, rare: true },
   denied: { trim: -2, gain: 0.7, poly: 1, varied: false },
-  seatJoin: { trim: -2, gain: 0.7, poly: 1, varied: false },
-  seatLeave: { trim: -3, gain: 0.6, poly: 1, varied: false },
-  reconnected: { trim: -1, gain: 0.8, poly: 1, varied: false },
+  seatJoin: { trim: -2, gain: 0.7, poly: 1, varied: false, rare: true },
+  seatLeave: { trim: -3, gain: 0.6, poly: 1, varied: false, rare: true },
+  reconnected: { trim: -1, gain: 0.8, poly: 1, varied: false, rare: true },
 };
 
 /** The trims alone, for the leveller and the log. */
@@ -621,8 +628,8 @@ export function render(name) {
 export function manifest() {
   return Object.fromEntries(
     Object.keys(SFX).map((name) => {
-      const { gain, poly, varied } = MIX[name];
-      return [name, { gain, poly, varied }];
+      const { gain, poly, varied, rare = false } = MIX[name];
+      return [name, { gain, poly, varied, rare }];
     }),
   );
 }

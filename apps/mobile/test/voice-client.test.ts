@@ -110,11 +110,17 @@ describe('the order clips are heard in', () => {
 });
 
 describe('the app around it', () => {
-  it('every join tells the room this app speaks voice, as it does gifts', () => {
+  it("every join tells the room this app speaks voice, and whether its player has it on", () => {
     const n = src('net/useNetGame.ts');
     const joins = n.match(/c\.(joinOrCreate|create|joinById)\(.*\{[^}]*\}\)/g) ?? [];
     expect(joins.length).toBe(4);
-    for (const j of joins) expect(j, j).toMatch(/voice: true/);
+    for (const j of joins) expect(j, j).toMatch(/gifts: true,\s*voice: voiceRef\.current\b/);
+    expect(n).toMatch(/const voiceRef = useRef\(settings\.voice\);\s*voiceRef\.current = settings\.voice;/);
+    // Switched in Settings at the table: the room hears of it at once.
+    expect(n).toMatch(/useEffect\(\(\) => \{\s*roomRef\.current\?\.send\('hears', \{ on: settings\.voice \}\);\s*\}, \[settings\.voice\]\);/);
+    // The server's side of both, typed.
+    const hears: room.ClientMessage = { type: 'hears', on: false };
+    expect(hears.type).toBe('hears');
   });
 
   it("drops a clip from a hidden or muted player before it is heard, and never plays my own", () => {
@@ -132,16 +138,44 @@ describe('the app around it', () => {
     expect(pkg.dependencies['expo-file-system']).toBe('57.0.5');
   });
 
-  it('plays each clip on a player of its own, removed when it ends, the game sounds dipped meanwhile', () => {
+  it("plays each clip at the game's volume, lets it go when it ends, the game sounds dipped meanwhile", () => {
     const p = src('voice/useVoicePlayback.ts');
-    expect(p).toMatch(/player = createAudioPlayer\(src\.uri\);/);
-    expect(p).toMatch(/player\?\.remove\(\);/);
-    expect(p).toMatch(/src\.release\(\);/);
+    expect(p).toMatch(/playback = playClip\(src\.uri, masterVolume\(\), stop\);/);
+    expect(p).toMatch(/playback\?\.stop\(\);\s*src\?\.release\(\);/);
+    // What a killed app left in the cache goes as the screen opens, before any clip can come.
+    expect(p).toMatch(/useEffect\(\(\) => sweepVoiceFiles\(\), \[\]\);/);
     expect(p).toMatch(/setSfxDuck\(SFX_UNDER_VOICE\);/);
     expect(p).toMatch(/setSfxDuck\(1\);/);
     // A clip that never says it is done still lets the next one go.
     expect(p).toMatch(/timer = setTimeout\(stop, clip\.ms \+ FINISH_SLACK_MS\);/);
     expect(src('audio.ts')).toMatch(/gain \* master \* duck \* \(opts\.gain \?\? 1\)/);
+  });
+
+  it("keeps the recorder with the online screen, so the table's rows cannot take a take with them", () => {
+    const o = src('net/OnlineGame.tsx');
+    expect(o).toMatch(/const mic = useVoiceRecorder\(/);
+    expect(o).toMatch(/mic=\{voiceHere \? mic : undefined\}/);
+    // Voice switched off mid-take: dropped, and never sent.
+    expect(o).toMatch(/if \(voiceHereRef\.current\) sendVoice\(take\);/);
+    expect(o).toMatch(/if \(!voiceHere\) void finishTake\(false\);/);
+    const t = src('TableScreen.tsx');
+    expect(t).not.toMatch(/useVoiceRecorder\(/);
+    expect(src('table/MicButton.tsx')).not.toMatch(/useVoiceRecorder\(/);
+    // The button leaving the screen sends what was said.
+    expect(t).toMatch(/const micLive = mic !== undefined && micShown && !settled;/);
+    expect(t).toMatch(/if \(!micLive\) void finishTake\?\.\(true\);/);
+  });
+
+  it('never leaves a microphone open or a take on the phone', () => {
+    const r = src('voice/useVoiceRecorder.ts');
+    // Opened but would not record: closed again.
+    expect(r).toMatch(/if \(prepared\) \{\s*try \{\s*await recorder\.stop\(\);/);
+    // The screen closing mid-take: the file by the name kept at the start, whatever the recorder says.
+    expect(r).toMatch(/takeUri\.current = Platform\.OS === 'web' \? null : recorder\.uri;/);
+    expect(r).toMatch(/void recorder\.stop\(\)\.catch\(\(\) => \{\}\);[\s\S]{0,120}dropTake\(takeUri\.current\);/);
+    const f = src('voice/clipFiles.ts');
+    expect(f).toMatch(/sweep\(new Directory\(Paths\.cache, 'Audio'\), TAKE_FILE\);/);
+    expect(f).toMatch(/sweep\(Paths\.cache, HEARD_FILE\);/);
   });
 
   it('drops a take that is cut short, slid off, or interrupted, unread', () => {
@@ -157,10 +191,20 @@ describe('the table, with voice', () => {
 
   it('offers the mic only while nothing is asked, so no row grows', () => {
     expect(t).toMatch(/const micShown = !asking && !belaOffered && !shed && micFits;/);
-    expect(t).toMatch(/const mic = onVoiceTake \? \(/);
-    // Left of the faces' toggle in both rows: the toggle stays the row's right-most button.
-    expect(t).toMatch(/<View style=\{styles\.actionsRow\}>\s*\{mic\}\s*\{emoteToggle\}/);
-    expect(t).toMatch(/<View style=\{styles\.railToggles\}>\s*\{mic\}\s*\{emoteToggle\}\s*<\/View>/);
+    expect(t).toMatch(/const micButton = micLive \? \(/);
+  });
+
+  it("leaves the faces' toggle where it was before there was a mic", () => {
+    // Portrait: the mic left of it, a spacer as wide right of it, the row centred.
+    expect(t).toMatch(/<View style=\{styles\.actionsRow\}>\s*\{micButton\}\s*\{emoteToggle\}\s*\{micButton && <View style=\{styles\.micBalance\} \/>\}/);
+    expect(t).toMatch(/micBalance: \{ width: EMOTE_TOGGLE, height: EMOTE_TOGGLE \}/);
+    // Sideways: the toggle keeps the rail's left edge.
+    expect(t).toMatch(/<View style=\{styles\.railToggles\}>\s*\{emoteToggle\}\s*\{micButton\}\s*<\/View>/);
+    // Neither touch area reaches past the gap's middle.
+    expect(t).toMatch(/hitSlop=\{land \? \{ top: 8, bottom: 8, left: RAIL_GAP \/ 2, right: 8 \} : \{ top: 8, bottom: 8, left: 8, right: ROW_GAP \/ 2 \}\}/);
+    expect(t).toMatch(/!micButton \? 8 : land \? \{ top: 8, bottom: 8, left: 8, right: RAIL_GAP \/ 2 \} : \{ top: 8, bottom: 8, left: ROW_GAP \/ 2, right: 8 \}/);
+    expect(t).toMatch(/gap: ROW_GAP,\s*justifyContent: 'center'/);
+    expect(t).toMatch(/railToggles: \{ flexDirection: 'row', gap: RAIL_GAP,/);
   });
 
   it('fits a landscape rail beside the toggle at the narrowest rail there is', () => {
@@ -187,13 +231,13 @@ describe('the table, with voice', () => {
   it('lets one player be muted in the player view, unless already hidden', () => {
     const g = src('table/GiftPicker.tsx');
     expect(g).toMatch(/\{moderate\.onMute && !moderate\.hidden && \(/);
-    expect(t).toMatch(/\.\.\.\(onMute && onVoiceTake\s*\?/);
+    expect(t).toMatch(/\.\.\.\(onMute && mic\s*\?/);
   });
 
   it('hears nothing where voice is off, at the table or in Settings', () => {
     const o = src('net/OnlineGame.tsx');
     expect(o).toMatch(/const voiceHere = settings\.voice && net\.voiceOn;/);
-    expect(o).toMatch(/onVoiceTake=\{voiceHere \? net\.sendVoice : undefined\}/);
+    expect(o).toMatch(/mic=\{voiceHere \? mic : undefined\}/);
     expect(o).toMatch(/\(s\) => net\.hidden\.includes\(s\) \|\| net\.muted\.includes\(s\),/);
     // The host's switch in the lobby, as the other rules.
     expect(o).toMatch(/label=\{ui\.voiceRule\}\s*host=\{isHost\}/);
@@ -211,7 +255,7 @@ describe('the table, with voice', () => {
       expect(ui.muteVoice).not.toBe(ui.unmuteVoice);
     }
     const hr = new Lang('hr').s.ui;
-    expect(`${hr.hidePlayerNote} ${hr.muteVoiceNote}`).not.toMatch(/(njegov\w*|njezin\w*|mu|joj)/);
+    expect(`${hr.hidePlayerNote} ${hr.muteVoiceNote}`).not.toMatch(/\b(njegov\w*|njezin\w*|mu|joj)\b/);
     expect(hr.hidePlayerNote).toMatch(/glasovne poruke/);
   });
 });

@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-audio';
 import manifest from '../assets/sfx/manifest.json';
+import { playOnce } from './sfxOnce';
 
 /**
  * The sound bank.
@@ -10,6 +11,11 @@ import manifest from '../assets/sfx/manifest.json';
  * so two cards 140 ms apart both sound, and a coin cascade overlaps. Players
  * are created once and reused. Everything is fire-and-forget — a failed sound
  * must never interrupt a card being played.
+ *
+ * Except on Android for the `rare` ones (once a deal or less): there every
+ * loaded player holds one of the app's 40 audio tracks, so a rare sound gets
+ * a player of its own only while it sounds, released at the end - and a
+ * voice message always finds a track.
  *
  * The manifest is the source of truth for what exists and how loud it plays;
  * the `require` table below has to list the same files by hand, because Metro
@@ -71,6 +77,8 @@ export interface PlayOptions {
 
 const pools = new Map<Sfx, AudioPlayer[]>();
 const next = new Map<Sfx, number>();
+/** Android plays the rare sounds on one-shot players (see the top, and sfxOnce.ts). */
+const ONE_SHOTS = Platform.OS === 'android';
 let enabled = true;
 let master = 0.8;
 let configured = false;
@@ -86,6 +94,11 @@ export function isSoundEnabled(): boolean {
 /** The one volume knob, 0–1, from Settings. */
 export function setMasterVolume(v: number): void {
   master = Math.max(0, Math.min(1, v));
+}
+
+/** The knob as set: a voice message plays at it too. */
+export function masterVolume(): number {
+  return master;
 }
 
 /** The game's sounds step back while a voice message plays (voice/useVoicePlayback.ts); 1 is not at all. */
@@ -141,6 +154,7 @@ function poolOf(name: Sfx): AudioPlayer[] {
 export function preloadSfx(): void {
   void configureOnce();
   for (const name of Object.keys(SOURCES) as Sfx[]) {
+    if (ONE_SHOTS && manifest[name].rare) continue;
     try {
       poolOf(name);
     } catch {
@@ -164,13 +178,18 @@ export function playSfx(name: Sfx, opts: PlayOptions = {}): void {
   if (!enabled) return;
   void configureOnce();
   try {
-    const { gain, varied } = manifest[name];
+    const { gain, varied, rare } = manifest[name];
+    const volume = Math.max(0, Math.min(1, gain * master * duck * (opts.gain ?? 1)));
+    const rate = (varied ? 0.92 + Math.random() * 0.16 : 1) * (opts.rate ?? 1);
+    if (ONE_SHOTS && rare) {
+      playOnce(() => makePlayer(name), volume, rate);
+      return;
+    }
     const player = pick(name);
     // Rewind first: the same effect often fires again before it has finished.
     void player.seekTo(0);
-    player.volume = Math.max(0, Math.min(1, gain * master * duck * (opts.gain ?? 1)));
-    const vary = varied ? 0.92 + Math.random() * 0.16 : 1;
-    player.setPlaybackRate(vary * (opts.rate ?? 1));
+    player.volume = volume;
+    player.setPlaybackRate(rate);
     player.play();
     watchForBlock(player);
   } catch {

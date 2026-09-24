@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { createAudioPlayer, type AudioPlayer } from 'expo-audio';
 import type { Seat } from '@belot/engine';
-import { setSfxDuck } from '../audio';
-import { clipSource } from './clipFiles';
+import { masterVolume, setSfxDuck } from '../audio';
+import { clipSource, sweepVoiceFiles } from './clipFiles';
+import { playClip, type ClipPlayback } from './clipPlayer';
 import { enqueue, nextClip, type HeardClip } from './voice';
 
 /** How far the game's own sounds dip while somebody speaks. */
@@ -12,9 +12,10 @@ const FINISH_SLACK_MS = 2500;
 
 /**
  * The clips others at the table send, played one at a time as they came
- * (voice.ts decides the order, the mutes and what is stale). One player per
- * clip, removed when it ends: expo-audio's players open no media session in
- * this app (scripts/patch-expo-audio.mjs), so none are left behind either.
+ * (voice.ts decides the order, the mutes and what is stale), at the game's
+ * volume. clipPlayer lets each one go when it ends: on a phone the player is
+ * released with its audio track, and expo-audio's players open no media
+ * session in this app (scripts/patch-expo-audio.mjs).
  */
 export function useVoicePlayback(enabled: boolean, blocked: (s: Seat) => boolean, blockedKey: string) {
   const [speaking, setSpeaking] = useState<Seat | null>(null);
@@ -30,23 +31,16 @@ export function useVoicePlayback(enabled: boolean, blocked: (s: Seat) => boolean
     const { clip, rest } = nextClip(queue.current, Date.now(), blockedRef.current);
     queue.current = rest;
     if (!clip) return;
-    const src = clipSource(clip.data, clip.mime, clip.id);
-    let player: AudioPlayer | null = null;
-    let sub: { remove: () => void } | null = null;
+    let src: { uri: string; release: () => void } | null = null;
+    let playback: ClipPlayback | null = null;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let done = false;
     const stop = () => {
       if (done) return;
       done = true;
       if (timer) clearTimeout(timer);
-      try {
-        sub?.remove();
-        player?.pause();
-        player?.remove();
-      } catch {
-        // Already released with the screen.
-      }
-      src.release();
+      playback?.stop();
+      src?.release();
       current.current = null;
       setSpeaking(null);
       setSfxDuck(1);
@@ -54,16 +48,13 @@ export function useVoicePlayback(enabled: boolean, blocked: (s: Seat) => boolean
     };
     current.current = { from: clip.from, stop };
     try {
-      player = createAudioPlayer(src.uri);
-      player.volume = 1;
-      sub = player.addListener('playbackStatusUpdate', (s) => {
-        if (s.didJustFinish) stop();
-      });
-      player.play();
+      src = clipSource(clip.data, clip.mime, clip.id);
+      playback = playClip(src.uri, masterVolume(), stop);
     } catch {
       stop();
       return;
     }
+    if (done) return;
     setSpeaking(clip.from);
     setSfxDuck(SFX_UNDER_VOICE);
     timer = setTimeout(stop, clip.ms + FINISH_SLACK_MS);
@@ -79,6 +70,9 @@ export function useVoicePlayback(enabled: boolean, blocked: (s: Seat) => boolean
     [pump],
   );
 
+  // What a visit the app did not live through left in the cache. First, so
+  // it runs before a clip can arrive.
+  useEffect(() => sweepVoiceFiles(), []);
   // Voice switched off, or the speaker muted, mid-clip: silence at once.
   useEffect(() => {
     if (!enabled) {

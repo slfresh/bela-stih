@@ -102,3 +102,22 @@ export function takeClock(ms: number): string {
   const s = Math.min(Math.floor(ms / 1000), VOICE_MAX_MS / 1000);
   return `0:${String(s).padStart(2, '0')} / 0:${VOICE_MAX_MS / 1000}`;
 }
+
+/** A finger lifted this close to the button still sends; further off, the take is taken back. */
+export const RELEASE_SLOP = 24;
+
+/** Where a press ended, against the button's box on the screen: on it (or near), or slid off. */
+export function releasedOn(
+  box: { x: number; y: number; w: number; h: number } | null,
+  at: { pageX: number; pageY: number; type?: string },
+): boolean {
+  // The browser took the touch away (a scroll, a system gesture): nothing was meant.
+  if (at.type === 'touchcancel' || at.type === 'pointercancel') return false;
+  if (!box) return true;
+  return (
+    at.pageX >= box.x - RELEASE_SLOP &&
+    at.pageX <= box.x + box.w + RELEASE_SLOP &&
+    at.pageY >= box.y - RELEASE_SLOP &&
+    at.pageY <= box.y + box.h + RELEASE_SLOP
+  );
+}

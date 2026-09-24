@@ -1,4 +1,4 @@
-import { File, Paths } from 'expo-file-system';
+import { Directory, File, Paths } from 'expo-file-system';
 import type { VoiceMime } from './voice';
 
 /**
@@ -43,4 +43,29 @@ export function clipSource(data: Uint8Array, mime: VoiceMime, id: number): { uri
       }
     },
   };
+}
+
+/** A clip heard in this app: the name clipSource gives it. */
+export const HEARD_FILE = /^voice-\d+-\d+\.(m4a|webm)$/;
+/** A take: expo-audio records into cache/Audio under this name. */
+export const TAKE_FILE = /^recording-[\w-]+\.m4a$/;
+
+/**
+ * What an earlier visit left behind - the app killed mid-take or mid-clip -
+ * deleted. Called as the online screen opens, when nothing is recording or
+ * playing yet.
+ */
+export function sweepVoiceFiles(): void {
+  const sweep = (dir: Directory, name: RegExp) => {
+    try {
+      if (!dir.exists) return;
+      for (const f of dir.list()) {
+        if (f instanceof File && name.test(f.name)) f.delete();
+      }
+    } catch {
+      // The cache is the system's to clear in the end anyway.
+    }
+  };
+  sweep(new Directory(Paths.cache, 'Audio'), TAKE_FILE);
+  sweep(Paths.cache, HEARD_FILE);
 }
