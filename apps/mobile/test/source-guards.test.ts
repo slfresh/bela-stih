@@ -975,7 +975,7 @@ describe('table gifts', () => {
     expect(g).toMatch(/const next = spendOnGift\(profileRef\.current, id, targets\.length\);/);
     expect(g).toMatch(/profileRef\.current = next;\s*saveProfile\(next\);/);
     // Every delayed beat dies with the match.
-    expect(g).not.toMatch(/setTimeout\(\(\) => \{\s*spawnEmote/);
+    expect(g).not.toMatch(/\bsetTimeout\(\(\) => \{\s*spawnEmote/);
   });
 });
 
