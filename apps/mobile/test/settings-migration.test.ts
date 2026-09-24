@@ -70,4 +70,12 @@ describe('settings from an older app', () => {
     const { settings } = await load(null);
     expect(settings.difficulty).toBe('easy');
   });
+
+  it('the mic is held to talk, unless tapping was chosen; anything else on disk is holding', async () => {
+    expect((await load(null)).settings.voiceMode).toBe('hold');
+    // A 1.5.0 app never saved one.
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', voice: true })).settings.voiceMode).toBe('hold');
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', voiceMode: 'tap' })).settings.voiceMode).toBe('tap');
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', voiceMode: 'shout' })).settings.voiceMode).toBe('hold');
+  });
 });

@@ -201,6 +201,28 @@ export interface UiStrings {
   micTooShort: string;
   micDenied: string;
   micFailed: string;
+  /** Tap-to-talk (a Settings choice): the button's hint, a take too short to send, and the cross that throws one away. */
+  micHintTap: string;
+  micTooShortTap: string;
+  micCancel: string;
+  /** Settings: how the mic works - held while speaking, or tapped to start and tapped again to send. */
+  voiceModeLabel: string;
+  voiceModeHold: string;
+  voiceModeTap: string;
+  /**
+   * What became of my own message, beside the mic. Present tense or no verb
+   * at all: a past tense would give the listener a gender.
+   */
+  voiceSending: string;
+  voiceSent: string;
+  voiceHeardBy: (names: readonly string[]) => string;
+  voiceNobody: string;
+  voiceUnheard: string;
+  voiceNotSent: string;
+  /** The results sheet's voice bar: who is speaking now, and what the mic there does. */
+  voiceSpeaking: (name: string) => string;
+  voiceBarHintHold: string;
+  voiceBarHintTap: string;
   /** Voice at a table: the host's rule in the lobby, and each player's own switch in Settings. */
   voiceRule: string;
   voiceOn: string;
@@ -969,11 +991,27 @@ const hr: Strings = {
     micTooShort: 'Drži tipku dok govoriš',
     micDenied: 'Dopusti mikrofon u postavkama telefona',
     micFailed: 'Snimanje nije uspjelo',
+    micHintTap: 'Dodirni i govori, dodirni opet za slanje',
+    micTooShortTap: 'Poruka je prekratka',
+    micCancel: 'Odbaci poruku',
+    voiceModeLabel: 'Mikrofon',
+    voiceModeHold: 'Drži dok govoriš',
+    voiceModeTap: 'Dodir za početak i kraj',
+    voiceSending: 'Šaljem…',
+    voiceSent: 'Poslano',
+    voiceHeardBy: (names) =>
+      `${names.length === 1 ? 'Čuje' : 'Čuju'} te ${names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} i ${names[names.length - 1]}`} ✓`,
+    voiceNobody: 'Nitko te sada ne može čuti',
+    voiceUnheard: 'Nitko te nije čuo',
+    voiceNotSent: 'Nije poslano',
+    voiceSpeaking: (name) => `${name} govori`,
+    voiceBarHintHold: 'Drži mikrofon i govori',
+    voiceBarHintTap: 'Dodirni mikrofon i govori',
     voiceRule: 'Glasovne poruke',
     voiceOn: 'Uključene',
     voiceOff: 'Isključene',
     voiceSetting: 'Glasovne poruke',
-    voiceSettingHint: 'Za stolom drži tipku s mikrofonom i govori; poruke drugih čuju se same. Ništa se ne sprema.',
+    voiceSettingHint: 'Za stolom drži ili dodirni mikrofon i govori; poruke drugih čuju se same. Ništa se ne sprema.',
     muteVoice: 'Utišaj glas',
     unmuteVoice: 'Uključi glas',
     muteVoiceNote: 'Samo kod tebe: glasovne poruke ovog igrača više ne čuješ.',
@@ -1507,11 +1545,27 @@ const srCyrl: Strings = {
     micTooShort: 'Држи тастер док говориш',
     micDenied: 'Дозволи микрофон у подешавањима телефона',
     micFailed: 'Снимање није успело',
+    micHintTap: 'Додирни и говори, додирни поново за слање',
+    micTooShortTap: 'Порука је прекратка',
+    micCancel: 'Одбаци поруку',
+    voiceModeLabel: 'Микрофон',
+    voiceModeHold: 'Држи док говориш',
+    voiceModeTap: 'Додир за почетак и крај',
+    voiceSending: 'Шаљем…',
+    voiceSent: 'Послато',
+    voiceHeardBy: (names) =>
+      `${names.length === 1 ? 'Чује' : 'Чују'} те ${names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} и ${names[names.length - 1]}`} ✓`,
+    voiceNobody: 'Нико те сада не може чути',
+    voiceUnheard: 'Нико те није чуо',
+    voiceNotSent: 'Није послато',
+    voiceSpeaking: (name) => `${name} говори`,
+    voiceBarHintHold: 'Држи микрофон и говори',
+    voiceBarHintTap: 'Додирни микрофон и говори',
     voiceRule: 'Гласовне поруке',
     voiceOn: 'Укључене',
     voiceOff: 'Искључене',
     voiceSetting: 'Гласовне поруке',
-    voiceSettingHint: 'За столом држи тастер са микрофоном и говори; поруке других се чују саме. Ништа се не чува.',
+    voiceSettingHint: 'За столом држи или додирни микрофон и говори; поруке других се чују саме. Ништа се не чува.',
     muteVoice: 'Утишај глас',
     unmuteVoice: 'Укључи глас',
     muteVoiceNote: 'Само код тебе: гласовне поруке овог играча више не чујеш.',
@@ -2042,11 +2096,27 @@ const en: Strings = {
     micTooShort: 'Hold the button while you speak',
     micDenied: 'Allow the microphone in your phone settings',
     micFailed: 'Recording failed',
+    micHintTap: 'Tap and speak, tap again to send',
+    micTooShortTap: 'Too short to send',
+    micCancel: 'Discard the message',
+    voiceModeLabel: 'Microphone',
+    voiceModeHold: 'Hold while speaking',
+    voiceModeTap: 'Tap to start and stop',
+    voiceSending: 'Sending…',
+    voiceSent: 'Sent',
+    voiceHeardBy: (names) =>
+      `${names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`} heard it ✓`,
+    voiceNobody: 'Nobody here can hear you now',
+    voiceUnheard: 'Nobody heard it',
+    voiceNotSent: 'Not sent',
+    voiceSpeaking: (name) => `${name} is speaking`,
+    voiceBarHintHold: 'Hold the mic and speak',
+    voiceBarHintTap: 'Tap the mic and speak',
     voiceRule: 'Voice messages',
     voiceOn: 'On',
     voiceOff: 'Off',
     voiceSetting: 'Voice messages',
-    voiceSettingHint: "At the table, hold the mic button and speak; others' messages play by themselves. Nothing is stored.",
+    voiceSettingHint: "At the table, hold or tap the mic and speak; others' messages play by themselves. Nothing is stored.",
     muteVoice: 'Mute voice',
     unmuteVoice: 'Unmute voice',
     muteVoiceNote: "Only on your phone: you no longer hear this player's voice messages.",

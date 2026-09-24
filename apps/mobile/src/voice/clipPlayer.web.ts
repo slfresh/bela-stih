@@ -47,7 +47,7 @@ function unlockOnce(): void {
 }
 unlockOnce();
 
-export function playClip(uri: string, volume: number, onEnd: () => void): ClipPlayback {
+export function playClip(uri: string, volume: number, onEnd: () => void, onStart?: () => void): ClipPlayback {
   const a = element();
   if (!a) throw new Error('no audio element');
   let done = false;
@@ -56,17 +56,24 @@ export function playClip(uri: string, volume: number, onEnd: () => void): ClipPl
     stop();
     onEnd();
   };
+  // Really playing, not merely asked to (a refusal never gets here).
+  const playing = () => {
+    a.removeEventListener('playing', playing);
+    if (!done) onStart?.();
+  };
   const stop = () => {
     if (done) return;
     done = true;
     a.removeEventListener('ended', finished);
     a.removeEventListener('error', finished);
+    a.removeEventListener('playing', playing);
     a.pause();
     a.removeAttribute('src');
     a.load();
   };
   a.addEventListener('ended', finished);
   a.addEventListener('error', finished);
+  a.addEventListener('playing', playing);
   a.muted = false;
   a.volume = Math.max(0, Math.min(1, volume));
   a.src = uri;

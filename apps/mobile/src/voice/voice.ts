@@ -1,5 +1,6 @@
 import type { AudioQuality, IOSOutputFormat, RecordingOptions } from 'expo-audio';
 import type { Seat } from '@belot/engine';
+import type { Lang } from '@belot/i18n';
 
 /**
  * Push-to-talk voice messages: the part with no device in it, so it is
@@ -120,4 +121,108 @@ export function releasedOn(
     at.pageY >= box.y - RELEASE_SLOP &&
     at.pageY <= box.y + box.h + RELEASE_SLOP
   );
+}
+
+// --- what became of my own message -------------------------------------------
+
+/** The room answers a clip at once (its echo); longer than this and it never got there. */
+export const ECHO_WAIT_MS = 8000;
+/**
+ * A listener's app plays a clip within STALE_MS of its arrival or never
+ * (nextClip), so no receipt this long after the echo means nobody heard it.
+ */
+export const RECEIPT_WAIT_MS = STALE_MS + 3000;
+/** A settled word stays this long beside the mic. */
+export const STATUS_SHOW_MS = 4000;
+
+/** The room's echo of my clip: whom it went to (null: a room too old to say), and which of them cannot confirm. */
+export interface VoiceEcho {
+  id: number;
+  ms: number;
+  to: readonly Seat[] | null;
+  noReceipt: readonly Seat[];
+}
+
+/** A word that only waits to go away. */
+type Word = 'nobody' | 'unheard' | 'notSent' | 'tooShort' | 'micDenied' | 'recordFailed';
+
+export type SendStatus =
+  /** Let go; the room has not answered yet. */
+  | { kind: 'sending'; since: number }
+  /** The room relayed it to `to`; `heard` have started playing it. `unsure`: some cannot say. */
+  | { kind: 'sent'; since: number; changed: number; id: number; to: readonly Seat[]; heard: readonly Seat[]; unsure: boolean }
+  /** Nobody could hear it, nobody did, it never got there, or a press that sent nothing. */
+  | { kind: Word; since: number };
+
+export function sendStarted(now: number): SendStatus {
+  return { kind: 'sending', since: now };
+}
+
+/** The room's echo. One that comes when nothing is being sent changes nothing. */
+export function sendEchoed(s: SendStatus | null, e: VoiceEcho, now: number): SendStatus | null {
+  if (s?.kind !== 'sending') return s;
+  if (e.to === null) return { kind: 'sent', since: now, changed: now, id: e.id, to: [], heard: [], unsure: true };
+  if (e.to.length === 0) return { kind: 'nobody', since: now };
+  return { kind: 'sent', since: now, changed: now, id: e.id, to: [...e.to], heard: [], unsure: e.noReceipt.length > 0 };
+}
+
+/** A receipt: counted once, and only from a seat this very clip went to. */
+export function sendHeard(s: SendStatus | null, id: number, by: Seat, now: number): SendStatus | null {
+  if (s?.kind !== 'sent' || s.id !== id || !s.to.includes(by) || s.heard.includes(by)) return s;
+  return { ...s, heard: [...s.heard, by], changed: now };
+}
+
+/** A press that sent nothing, and why. */
+export function sendNoted(why: 'short' | 'denied' | 'failed', now: number): SendStatus {
+  return { kind: why === 'short' ? 'tooShort' : why === 'denied' ? 'micDenied' : 'recordFailed', since: now };
+}
+
+/**
+ * What the status has become by `now` (null: nothing left to say) and how
+ * long until it changes by itself. No echo in time: it never got there. No
+ * receipt in time from anyone who could give one: nobody heard it. Anything
+ * else is said for STATUS_SHOW_MS after its last change.
+ */
+export function sendSettle(s: SendStatus | null, now: number): { status: SendStatus | null; nextIn: number | null } {
+  const hold = (st: SendStatus, until: number) =>
+    now >= until ? { status: null, nextIn: null } : { status: st, nextIn: until - now };
+  if (s === null) return { status: null, nextIn: null };
+  if (s.kind === 'sending') {
+    const until = s.since + ECHO_WAIT_MS;
+    return now >= until ? sendSettle({ kind: 'notSent', since: until }, now) : { status: s, nextIn: until - now };
+  }
+  if (s.kind === 'sent') {
+    // Somebody has it, or some cannot say: nothing more is coming worth waiting for.
+    if (s.heard.length > 0 || s.unsure) return hold(s, s.changed + STATUS_SHOW_MS);
+    const until = s.since + RECEIPT_WAIT_MS;
+    return now >= until ? sendSettle({ kind: 'unheard', since: until }, now) : { status: s, nextIn: until - now };
+  }
+  return hold(s, s.since + STATUS_SHOW_MS);
+}
+
+/** The words for it: `mode` picks the too-short line, `name` a seat's name. */
+export function sendStatusText(
+  ui: Lang['s']['ui'],
+  s: SendStatus,
+  mode: 'hold' | 'tap',
+  name: (seat: Seat) => string,
+): string {
+  switch (s.kind) {
+    case 'sending':
+      return ui.voiceSending;
+    case 'sent':
+      return s.heard.length > 0 ? ui.voiceHeardBy(s.heard.map(name)) : ui.voiceSent;
+    case 'nobody':
+      return ui.voiceNobody;
+    case 'unheard':
+      return ui.voiceUnheard;
+    case 'notSent':
+      return ui.voiceNotSent;
+    case 'tooShort':
+      return mode === 'tap' ? ui.micTooShortTap : ui.micTooShort;
+    case 'micDenied':
+      return ui.micDenied;
+    case 'recordFailed':
+      return ui.micFailed;
+  }
 }

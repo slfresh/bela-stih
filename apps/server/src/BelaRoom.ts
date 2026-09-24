@@ -4,8 +4,8 @@ import type { Action, Seat } from '@belot/engine';
 import { DEFAULT_CONFIG, HARD_CONFIG_OVERRIDES, RANKS, SEATS, SUITS, type EngineConfig } from '@belot/engine';
 import type { Card, Rank, Rng, Suit } from '@belot/engine';
 import { Table } from '@belot/table';
-import { EMOTE_GAP_MS, EMOTE_IDS, GIFT_GAP_MS, GIFT_IDS, MATCH_TARGETS, MSG, NEXT_DEAL_MS, PAUSE_MAX_MS, TURN_CHOICES, WAIT_FOR_DROPPED_MS, type ClientMessage, type HoldInfo, type EmoteMessage, type GiftMessage, type JoinGifts, type JoinVoice, type RoomMessage, type SeatInfo, type VoiceMessage, isPlayMode, modeFromLegacy, type PlayMode } from './protocol';
-import { checkClip, VoiceLimiter } from './voice';
+import { EMOTE_GAP_MS, EMOTE_IDS, GIFT_GAP_MS, GIFT_IDS, MATCH_TARGETS, MSG, NEXT_DEAL_MS, PAUSE_MAX_MS, TURN_CHOICES, WAIT_FOR_DROPPED_MS, type ClientMessage, type HoldInfo, type EmoteMessage, type GiftMessage, type JoinGifts, type JoinVoice, type RoomMessage, type SeatInfo, type VoiceHeardMessage, type VoiceMessage, isPlayMode, modeFromLegacy, type PlayMode } from './protocol';
+import { checkClip, VoiceLedger, VoiceLimiter } from './voice';
 import { cleanName } from './names';
 import { tableCode } from './codes';
 
@@ -140,10 +140,12 @@ interface Occupant {
   voice: boolean;
   /** The app can do voice at all (it sent `voice`, true or false); an older one cannot. */
   speaksVoice: boolean;
+  /** The app confirms the clips it plays, and reads confirmations of its own (`receipts: true`, 1.5.1). */
+  receipts: boolean;
 }
 
 /** A chair nobody sits in. */
-const vacant = (): Occupant => ({ sessionId: null, name: '', avatar: '', connected: false, origin: '', gifts: false, voice: false, speaksVoice: false });
+const vacant = (): Occupant => ({ sessionId: null, name: '', avatar: '', connected: false, origin: '', gifts: false, voice: false, speaksVoice: false, receipts: false });
 
 /** Refused because a seat at THIS table is already held from the same place. */
 export const SAME_ORIGIN_CODE = 4300;
@@ -228,6 +230,8 @@ export class BelaRoom extends Room {
   private voiceLimits = new Map<string, VoiceLimiter>();
   /** Numbers each relayed clip, so a client can tell its echo from another clip. */
   private voiceSeq = 0;
+  /** Who was sent which clip lately, for the receipts ('heard'). */
+  private voiceLedger = new VoiceLedger();
   /** Voice messages at this table: always in quick play; a private table's host may switch them off. */
   private voiceOn = true;
   /**
@@ -356,6 +360,7 @@ export class BelaRoom extends Room {
       gifts: options.gifts === true,
       voice: options.voice === true,
       speaksVoice: typeof options.voice === 'boolean',
+      receipts: options.receipts === true,
     };
     this.table.setSeatHuman(seat, true);
     this.gifts[seat] = null;
@@ -545,8 +550,9 @@ export class BelaRoom extends Room {
     // A player the table waits for who says anything at all is back: their
     // "back" may have been the message a flaky connection lost, and a table
     // left waiting on someone who is playing would refuse their every move.
-    // (Not a Settings switch flipped on the way: that is the app, not the player at the table.)
-    if (packet.type !== 'away' && packet.type !== 'hears' && this.waiting.has(seat) && this.occupants[seat]!.connected) {
+    // (Not a Settings switch flipped on the way, nor a clip's receipt: that is
+    // the app, not the player at the table.)
+    if (packet.type !== 'away' && packet.type !== 'hears' && packet.type !== 'heard' && this.waiting.has(seat) && this.occupants[seat]!.connected) {
       this.waiting.delete(seat);
       this.holdChanged();
       if (packet.type === 'back') return;
@@ -749,15 +755,36 @@ export class BelaRoom extends Room {
       if (!limiter.take(Date.now(), clip.ms)) return;
       const id = ++this.voiceSeq;
       const out: VoiceMessage = { from: seat, id, ms: clip.ms, mime: clip.mime, data: clip.data };
+      const to: Seat[] = [];
+      const noReceipt: Seat[] = [];
+      const sessions: string[] = [];
       for (const other of this.clients) {
         const s = this.seatOf(other.sessionId);
         if (s === null || s === seat || !this.hearsVoice(s)) continue;
         other.send(MSG.voice, out);
+        to.push(s);
+        sessions.push(other.sessionId);
+        if (!this.occupants[s]!.receipts) noReceipt.push(s);
       }
+      this.voiceLedger.sent(id, client.sessionId, sessions, Date.now());
       // The speaker hears nothing back, only that the room took it (for the
-      // rings on their own puck).
-      const echo: VoiceMessage = { from: seat, id, ms: clip.ms, mime: clip.mime };
+      // rings on their own puck) and whom it went to: nobody at all is said
+      // at once, and which of them cannot confirm, so no app waits on them.
+      const echo: VoiceMessage = { from: seat, id, ms: clip.ms, mime: clip.mime, to, ...(noReceipt.length > 0 ? { noReceipt } : {}) };
       client.send(MSG.voice, echo);
+      return;
+    }
+
+    if (packet.type === 'heard') {
+      // A clip has started playing at this seat. Believed only from a seat it
+      // was sent to, once, and passed only to a speaker whose app reads it.
+      const speakerId = this.voiceLedger.heard((packet.message as { id?: unknown } | undefined)?.id, client.sessionId, Date.now());
+      if (speakerId === null) return;
+      const speakerSeat = this.seatOf(speakerId);
+      const speaker = this.clients.find((c) => c.sessionId === speakerId);
+      if (speakerSeat === null || !speaker || !this.occupants[speakerSeat]!.receipts) return;
+      const heard: VoiceHeardMessage = { id: (packet.message as { id: number }).id, by: seat };
+      speaker.send(MSG.voiceHeard, heard);
       return;
     }
 

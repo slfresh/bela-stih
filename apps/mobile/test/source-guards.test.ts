@@ -819,7 +819,10 @@ describe('table gifts', () => {
     const t = src('TableScreen.tsx');
     expect(t).not.toMatch(/if \(!result\) return null;/);
     const short = t.slice(t.indexOf('  if (!result) {'), t.indexOf('  // Ours or theirs'));
-    expect(short).toContain('{foot}');
+    // In the sheet, or (sideways, with voice on) in its pinned bar - somewhere, always.
+    expect(short).toContain('{pinFoot ? null : foot}');
+    expect(short).toContain('{bar}');
+    expect(t).toMatch(/const bar = voiceBar \? \([\s\S]{0,200}\{pinFoot \? \([\s\S]{0,160}\{foot\}/);
     expect(short).toMatch(/lang\.s\.ui\.resultMissed/);
     const onEvent = n.slice(n.indexOf('const onEvent = useCallback'), n.indexOf('const onEventRef'));
     const clear = onEvent.indexOf("if (e.kind === 'dealStarted') setBanner(null);");
@@ -1052,9 +1055,9 @@ describe('a screen reader can name every control', () => {
     expect(settings).toMatch(/<Switch\s+accessibilityLabel=\{label\}/);
     // Every chip says whether it is the chosen one, by the same test that lights it.
     const chips = [...settings.matchAll(/accessibilityState=\{\{ selected: ([^}]+) \}\}\s+style=\{\[styles\.localeChip, ([^\]]+?) && styles\.localeChipOn\]\}/g)];
-    expect(chips.length).toBe(7);
+    expect(chips.length).toBe(8);
     for (const m of chips) expect(m[1]!.trim()).toBe(m[2]!.trim());
-    expect((settings.match(/styles\.localeChip, /g) ?? []).length).toBe(7);
+    expect((settings.match(/styles\.localeChip, /g) ?? []).length).toBe(8);
     expect(settings).toMatch(/accessibilityRole="link"\s+accessibilityLabel=\{ui\.privacyPolicy\}/);
   });
 });

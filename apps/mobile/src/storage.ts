@@ -92,7 +92,14 @@ export interface Settings {
    * themselves. Off, there is neither (a table's own switch is its host's).
    */
   voice: boolean;
+  /**
+   * How the mic works: held while speaking (let go sends, slide off takes it
+   * back), or tapped to start and tapped again to send.
+   */
+  voiceMode: VoiceMode;
 }
+
+export type VoiceMode = 'hold' | 'tap';
 
 export const DEFAULT_SETTINGS: Settings = {
   sound: true,
@@ -107,6 +114,7 @@ export const DEFAULT_SETTINGS: Settings = {
   motion: 'system',
   volume: 0.7,
   voice: true,
+  voiceMode: 'hold',
 };
 
 function read<T>(key: string, fallback: T): T {
@@ -179,6 +187,7 @@ export function loadSettings(): Settings {
     changed = true;
   }
   if (changed) write(KEY.settings, s);
+  if (s.voiceMode !== 'hold' && s.voiceMode !== 'tap') s = { ...s, voiceMode: 'hold' };
   // A volume saved by a build with other steps snaps to the nearest chip, or
   // Settings would light none.
   const volume = (VOLUME_OPTIONS as readonly number[]).reduce((best, v) =>

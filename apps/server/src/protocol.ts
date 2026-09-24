@@ -54,6 +54,12 @@ export type ClientMessage =
    * are not taken, until it says otherwise. At a join it is `voice` itself.
    */
   | { type: 'hears'; on: boolean }
+  /**
+   * A clip this app was sent has started playing here (VoiceMessage `id`):
+   * the room tells its speaker who heard it. Sent once per clip, by an app
+   * that joined with `receipts: true`, never for a muted or hidden speaker.
+   */
+  | { type: 'heard'; id: number }
   /** After MATCH_OVER: this seat wants another match with the same people. */
   | { type: 'rematch' }
   /** Withdraw that ask. */
@@ -206,6 +212,12 @@ export const MAX_FRAME_BYTES = 96 * 1024;
  */
 export interface JoinVoice {
   voice?: boolean;
+  /**
+   * The app confirms the clips it plays ('heard') and reads the room's
+   * confirmations of its own (MSG.voiceHeard). Apps before 1.5.1 do neither:
+   * a speaker is told which of the recipients cannot confirm.
+   */
+  receipts?: boolean;
 }
 
 /**
@@ -218,6 +230,16 @@ export interface VoiceMessage {
   ms: number;
   mime: string;
   data?: Uint8Array;
+  /** The speaker's echo only: every seat the clip went to (empty: nobody at the table can hear it). */
+  to?: Seat[];
+  /** The speaker's echo only: those of `to` whose apps cannot confirm (omitted when none). */
+  noReceipt?: Seat[];
+}
+
+/** Server -> a speaker whose app joined with `receipts`: clip `id` has started playing at seat `by`. */
+export interface VoiceHeardMessage {
+  id: number;
+  by: Seat;
 }
 
 /** Server -> everyone: a gift was given. A table gift is ONE message. */
@@ -309,4 +331,5 @@ export const MSG = {
   emote: 'emote',
   gift: 'gift',
   voice: 'voice',
+  voiceHeard: 'voiceHeard',
 } as const;

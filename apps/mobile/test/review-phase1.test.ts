@@ -118,7 +118,8 @@ describe('zvanja in normal play', () => {
     expect(t).toMatch(/const declareButtons = declaring && !autoSkipping \? \(/);
     // ...nor the plain action list, which offered the same skip as "šuti (ne
     // zovi)" in both orientations while the app was answering.
-    expect((t.match(/\{autoSkipping \? null : declareButtons \?\? \(/g) ?? []).length).toBe(2);
+    // (A settled deal keeps a row only for a take outlasting it: no questions there either.)
+    expect((t.match(/\{settled \|\| autoSkipping \? null : declareButtons \?\? \(/g) ?? []).length).toBe(2);
     expect(t).not.toMatch(/\{declareButtons \?\? \(/);
     // Lagana and Prava bela ask as Prava bela always did: nothing comes marked.
     expect(t).toMatch(/if \(!declaring \|\| blind\) return;/);
@@ -150,7 +151,7 @@ describe('joining by code and being away', () => {
     // Any word from a waited-for player means back, in case "back" was lost -
     // except the app's own Settings switch, which is not the player at the table.
     expect(room).toMatch(
-      /if \(packet\.type !== 'away' && packet\.type !== 'hears' && this\.waiting\.has\(seat\) && this\.occupants\[seat\]!\.connected\)/,
+      /if \(packet\.type !== 'away' && packet\.type !== 'hears' && packet\.type !== 'heard' && this\.waiting\.has\(seat\) && this\.occupants\[seat\]!\.connected\)/,
     );
   });
 });

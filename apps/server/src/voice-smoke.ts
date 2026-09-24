@@ -1,6 +1,6 @@
 import './ws-polyfill';
 import { Client, type Room } from 'colyseus.js';
-import { MSG, ROOM_NAME, ROOM_NAME_MODES, VOICE_MAX_BYTES, type RoomMessage, type VoiceMessage } from './protocol';
+import { MSG, ROOM_NAME, ROOM_NAME_MODES, VOICE_MAX_BYTES, type RoomMessage, type VoiceHeardMessage, type VoiceMessage } from './protocol';
 
 /**
  * End-to-end check of push-to-talk against a running server.
@@ -15,7 +15,12 @@ import { MSG, ROOM_NAME, ROOM_NAME_MODES, VOICE_MAX_BYTES, type RoomMessage, typ
  * can, and then nothing goes; a player who switches voice off in Settings
  * ('hears') gets nothing and sends nothing until they switch it back, an app
  * that joined with it off likewise, and an older app cannot claim it; quick
- * play has voice on. The room keeps nothing: there is nothing here to read back.
+ * play has voice on. Receipts (1.5.1): the speaker's echo names every seat
+ * the clip went to and those that cannot confirm; a listener's 'heard'
+ * reaches the speaker once, never from a seat the clip did not go to, and
+ * never to a speaker whose app cannot read it; a speaker alone with bots is
+ * told at once that nobody can hear. The room keeps nothing: there is nothing
+ * here to read back.
  *
  *   npm run start --workspace @belot/server        # in one terminal
  *   npx tsx apps/server/src/voice-smoke.ts         # in another
@@ -34,13 +39,15 @@ function mp4(size: number, fill = 7): Uint8Array {
 interface Side {
   room: Room;
   clips: VoiceMessage[];
+  receipts: VoiceHeardMessage[];
   last: RoomMessage | null;
   closed: boolean;
 }
 
 function side(room: Room): Side {
-  const s: Side = { room, clips: [], last: null, closed: false };
+  const s: Side = { room, clips: [], receipts: [], last: null, closed: false };
   room.onMessage(MSG.voice, (m: VoiceMessage) => s.clips.push(m));
+  room.onMessage(MSG.voiceHeard, (m: VoiceHeardMessage) => s.receipts.push(m));
   room.onMessage(MSG.room, (m: RoomMessage) => (s.last = m));
   room.onMessage(MSG.view, () => {});
   room.onMessage(MSG.error, () => {});
@@ -59,8 +66,8 @@ async function main(): Promise<void> {
   };
   const client = new Client(ENDPOINT);
 
-  const host = side(await client.create(ROOM_NAME_MODES, { name: 'Govornik', private: true, gifts: true, voice: true }));
-  const guest = side(await client.joinById(host.room.roomId, { name: 'Slušatelj', gifts: true, voice: true }));
+  const host = side(await client.create(ROOM_NAME_MODES, { name: 'Govornik', private: true, gifts: true, voice: true, receipts: true }));
+  const guest = side(await client.joinById(host.room.roomId, { name: 'Slušatelj', gifts: true, voice: true, receipts: true }));
   const old = side(await client.joinById(host.room.roomId, { name: 'Stari', gifts: true }));
   await wait(600);
 
@@ -80,6 +87,23 @@ async function main(): Promise<void> {
   check(old.clips.length === 0, 'the older app is sent nothing');
   const echo = host.clips[0];
   check(host.clips.length === 1 && echo?.data === undefined && echo?.id === got?.id, 'the host gets an echo without the audio');
+  const guestSeat = host.last?.seats.findIndex((s) => s.name === 'Slušatelj') ?? -1;
+  const oldSeat = host.last?.seats.findIndex((s) => s.name === 'Stari') ?? -1;
+  check(JSON.stringify(echo?.to) === JSON.stringify([guestSeat]) && echo?.noReceipt === undefined, `the echo names whom it went to (${JSON.stringify(echo?.to)}, guest ${guestSeat})`);
+
+  // ---- receipts ----
+  guest.room.send('heard', { id: got?.id });
+  await wait(600);
+  check(host.receipts.length === 1 && host.receipts[0]?.id === got?.id && host.receipts[0]?.by === guestSeat, `the guest's receipt reaches the host (${JSON.stringify(host.receipts)})`);
+  guest.room.send('heard', { id: got?.id });
+  old.room.send('heard', { id: got?.id });
+  guest.room.send('heard', { id: 987654 });
+  guest.room.send('heard', { id: 'x' });
+  host.room.send('heard', { id: got?.id });
+  await wait(600);
+  check(host.receipts.length === 1, `once only, and never from a seat it did not go to (${host.receipts.length})`);
+  check(guest.receipts.length === 0 && old.receipts.length === 0, 'nobody else hears of it');
+  check(oldSeat >= 0, 'the older app is at the table');
 
   // ---- what the room drops ----
   const before = guest.clips.length;
@@ -164,6 +188,28 @@ async function main(): Promise<void> {
   await wait(800);
   check(quiet.clips.length === 1, 'until it says it hears');
 
+  // ---- a speaker whose app cannot read receipts, and one alone ----
+  const plain = side(await client.create(ROOM_NAME_MODES, { name: 'Obični', private: true, gifts: true, voice: true }));
+  const reader = side(await client.joinById(plain.room.roomId, { name: 'Čitač', gifts: true, voice: true, receipts: true }));
+  await wait(600);
+  plain.room.send('voice', { mime: 'audio/mp4', ms: 1500, data: mp4(5000, 12) });
+  await wait(800);
+  const toReader = reader.clips[0];
+  reader.room.send('heard', { id: toReader?.id });
+  await wait(600);
+  check(toReader !== undefined && plain.receipts.length === 0, `a speaker whose app cannot read receipts is sent none (${plain.receipts.length})`);
+  reader.room.send('voice', { mime: 'audio/mp4', ms: 1500, data: mp4(5000, 13) });
+  await wait(800);
+  const readerEcho = reader.clips.find((c) => c.data === undefined);
+  const plainSeat = reader.last?.seats.findIndex((s) => s.name === 'Obični') ?? -1;
+  check(JSON.stringify(readerEcho?.noReceipt) === JSON.stringify([plainSeat]), `the echo says which listener cannot confirm (${JSON.stringify(readerEcho)})`);
+  const alone = side(await client.create(ROOM_NAME_MODES, { name: 'Sam', private: true, gifts: true, voice: true, receipts: true }));
+  await wait(600);
+  alone.room.send('voice', { mime: 'audio/mp4', ms: 1500, data: mp4(5000, 14) });
+  await wait(800);
+  const aloneEcho = alone.clips[0];
+  check(aloneEcho !== undefined && Array.isArray(aloneEcho.to) && aloneEcho.to.length === 0, `alone at a table, the echo says nobody hears (${JSON.stringify(aloneEcho?.to)})`);
+
   // ---- quick play ----
   const stranger = side(await client.joinOrCreate(ROOM_NAME_MODES, { name: 'Stranac', gifts: true, voice: true }));
   await wait(600);
@@ -172,7 +218,7 @@ async function main(): Promise<void> {
   await wait(600);
   check(oldQuick.last !== null, 'an older app\'s quick play still works');
 
-  for (const s of [host, guest, old, quiet, stranger, oldQuick]) await s.room.leave(true).catch(() => {});
+  for (const s of [host, guest, old, quiet, plain, reader, alone, stranger, oldQuick]) await s.room.leave(true).catch(() => {});
   await wait(300);
   console.log(failures.length === 0 ? '[voice-smoke] PASS' : `[voice-smoke] FAIL (${failures.length})`);
   process.exit(failures.length === 0 ? 0 : 1);

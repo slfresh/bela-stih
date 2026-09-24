@@ -78,7 +78,8 @@ import { cosmetics, room, roomStyle, type DeckStyle } from './cosmetics';
 import { PerfProbe } from './dev/PerfProbe';
 import { EmoteStrip } from './table/EmoteStrip';
 import { GiftPicker } from './table/GiftPicker';
-import { MicButton } from './table/MicButton';
+import { MicButton, TakeClock } from './table/MicButton';
+import { SpeakingLine } from './table/SpeakingLine';
 import type { VoiceMic } from './voice/useVoiceRecorder';
 import { useTurnCues } from './table/useTurnCues';
 import { ConfirmDialog } from './ui/ConfirmDialog';
@@ -103,7 +104,7 @@ import { CardBackFace, SuitPip } from './deck';
 import { playSfx } from './audio';
 import { pattern } from './haptics';
 import { Button } from './ui/Button';
-import { Check, Coin, Crown, Eye, Pause, Star } from './ui/icons';
+import { Check, Close, Coin, Crown, Eye, Pause, Star } from './ui/icons';
 import { EmoteFace } from './emoteArt';
 import { PressScale } from './ui/PressScale';
 import { font, ink, num, radius, space, stroke, surface, team, theme, type } from './theme';
@@ -246,6 +247,10 @@ export interface TableScreenProps {
    * mic is offered, driving the online screen's recorder.
    */
   mic?: VoiceMic;
+  /** What became of my last voice message (sending, sent, who has heard it), said beside the mic. */
+  micStatus?: string | null;
+  /** How the mic works (Settings): held while speaking, or tapped to start and tapped to send. */
+  voiceMode?: 'hold' | 'tap';
   /** Seats whose voice message is playing now: their pucks send out waves. */
   speaking?: readonly Seat[];
   /** Online: players whose voice is muted on this device, and the switch for it. */
@@ -258,6 +263,8 @@ const RAIL_MIC = 34;
 /** The gaps between the toggle and the mic: the portrait row's and the rail's. */
 const ROW_GAP = 8;
 const RAIL_GAP = 4;
+/** The results sheet's voice bar: a 40 dp mic and two short lines beside it. */
+const VOICE_BAR_H = 60;
 
 /** How long touches are swallowed after the table shuts the gift picker by itself. */
 export const GIFT_SHIELD_MS = 400;
@@ -278,7 +285,7 @@ export function TableScreen(props: TableScreenProps) {
     nextDeal, hold: tableHold = null, onPause, onResume, onPlayOn, reconnecting = false,
     handSort = 'auto', arrangeTip = false, onArrangeTip, confirmPlay = 'ambiguous', awaitEcho = false, refusedN = 0,
     gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift, giftReach, hidden, onHide, onReport,
-    mic, speaking, muted, onMute,
+    mic, micStatus = null, voiceMode = 'hold', speaking, muted, onMute,
   } = props;
 
   // Every dimension the table draws is derived from the real window, so eight
@@ -875,17 +882,6 @@ export function TableScreen(props: TableScreenProps) {
     if (recording) set.add(mySeat);
     return set;
   }, [speaking, recording, mySeat]);
-  // A word about the mic over my hand: held too short, the microphone refused.
-  const sayOverHand = useCallback(
-    (words: string) => {
-      AccessibilityInfo.announceForAccessibility(words);
-      const at = anchors.centre(anchorId.seat(mySeat));
-      if (!at) return;
-      fxBus.emit({ kind: 'bubble', at, text: words, tone: 'plain', duration: 2200, speed: 1, fade: reducedRef.current });
-    },
-    [anchors, fxBus, mySeat],
-  );
-
   // A dimmed card, tapped: say which duty rules it out, over my hand, the way
   // a partner across the table would. The follow-suit case carries the led
   // suit's pip, so no suit name has to be declined.
@@ -1565,36 +1561,99 @@ export function TableScreen(props: TableScreenProps) {
   // enough (not on the shortest screens held sideways).
   const micFits = !land || m.railW >= RAIL_MIC + 4 + EMOTE_TOGGLE;
   const micShown = !asking && !belaOffered && !shed && micFits;
-  // The button is on the screen: a take in the making goes when it leaves
-  // (what was said, was said) - the recorder is OnlineGame's and outlives it.
-  const micLive = mic !== undefined && micShown && !settled;
+  // The end of a deal or a match is when people talk: the results sheet has
+  // a mic of its own (its voice bar). A take in the making when the deal
+  // ends keeps going - the row stays, under the sheet, with its mic under the
+  // finger, until the finger lifts (a held take) or the sheet's mic sends it
+  // (a tapped one); the sheet's mic shows it recording meanwhile.
+  const heldOver = settled && mic !== undefined && mic.phase !== 'idle';
+  const micInRow = mic !== undefined && ((micShown && !settled) || heldOver);
+  const micOnSheet = mic !== undefined && settled;
+  // No mic anywhere (a question took the row): a take in the making goes -
+  // what was said, was said. The recorder is OnlineGame's and outlives both.
   const finishTake = mic?.finish;
   useEffect(() => {
-    if (!micLive) void finishTake?.(true);
-  }, [micLive, finishTake]);
-  // A press that sent nothing, said over my hand: too short, refused, failed.
-  const micNote = mic?.note;
+    if (!micInRow && !micOnSheet) void finishTake?.(true);
+  }, [micInRow, micOnSheet, finishTake]);
+  // A question hides the mic, and the words over it: what becomes of my
+  // message meanwhile ("Čuje te Marko") is said over my hand instead, each
+  // new word once - a word already shown beside the mic is not said again.
+  const micHidden = mic !== undefined && !micInRow && !micOnSheet;
+  const statusSeen = useRef<string | null>(null);
   useEffect(() => {
-    if (!micNote) return;
-    const ui = lang.s.ui;
-    sayOverHand(micNote.why === 'short' ? ui.micTooShort : micNote.why === 'denied' ? ui.micDenied : ui.micFailed);
-    // Only a new note speaks; the language and the anchors are read as they are.
+    const was = statusSeen.current;
+    statusSeen.current = micStatus;
+    if (!micHidden || micStatus === null || micStatus === was || micStatus === lang.s.ui.voiceSending) return;
+    const at = anchors.centre(anchorId.seat(mySeat));
+    if (at) fxBus.emit({ kind: 'bubble', at, text: micStatus, tone: 'plain', duration: 2200, speed: 1, fade: reducedRef.current });
+    // Only a new word, or the mic going, says anything; the rest is read as it is.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [micNote]);
+  }, [micHidden, micStatus]);
+  // Tapped to start: a cross throws the take away, in the faces' toggle's
+  // place (the faces wait while I speak), so nothing in the row moves.
+  const tapTake = voiceMode === 'tap' && mic?.phase === 'recording';
+  const micCancel = (size: number, hitSlop: number | { top: number; bottom: number; left: number; right: number }) => (
+    <PressScale
+      onPress={() => void mic?.finish(false)}
+      hitSlop={hitSlop}
+      accessibilityRole="button"
+      accessibilityLabel={lang.s.ui.micCancel}
+      style={[styles.micCancel, { width: size, height: size }]}
+    >
+      <Close size={Math.round(size * 0.4)} />
+    </PressScale>
+  );
   // Where the toggle was before there was a mic, it stays: in portrait the
   // mic is left of it and a spacer as wide balances the centred row; sideways
   // it is right of the toggle, which keeps the rail's left edge. Each touch
   // area reaches the gap's middle and no further.
-  const micButton = micLive ? (
+  const micButton = micInRow ? (
     <MicButton
       lang={lang}
       size={land ? RAIL_MIC : EMOTE_TOGGLE}
       phase={mic.phase}
       startedAt={mic.startedAt}
+      mode={voiceMode}
+      status={micStatus}
+      captionAlign={land ? 'end' : 'center'}
       hitSlop={land ? { top: 8, bottom: 8, left: RAIL_GAP / 2, right: 8 } : { top: 8, bottom: 8, left: 8, right: ROW_GAP / 2 }}
       onStart={() => void mic.start()}
       onFinish={(send) => void mic.finish(send)}
     />
+  ) : null;
+  // The results sheet's voice bar: its mic, and beside it who is speaking
+  // (their pucks are under the sheet), then the take's clock, what became of
+  // my message, or what the mic does.
+  const otherSpeaker = (speaking ?? []).find((s) => s !== mySeat) ?? null;
+  const voiceBar = micOnSheet ? (
+    <View style={styles.voiceBar}>
+      <MicButton
+        lang={lang}
+        size={EMOTE_TOGGLE}
+        phase={mic.phase}
+        startedAt={mic.startedAt}
+        mode={voiceMode}
+        caption="none"
+        hitSlop={8}
+        onStart={() => void mic.start()}
+        onFinish={(send) => void mic.finish(send)}
+      />
+      {tapTake && micCancel(EMOTE_TOGGLE, 8)}
+      <View style={styles.voiceBarWords}>
+        {otherSpeaker !== null && <SpeakingLine words={lang.s.ui.voiceSpeaking(meta(otherSpeaker).name)} reduced={reduced} />}
+        {mic.phase === 'recording' ? (
+          <TakeClock startedAt={mic.startedAt} style={styles.voiceBarText} />
+        ) : micStatus ? (
+          <Text style={styles.voiceBarText} numberOfLines={2}>
+            {micStatus}
+          </Text>
+        ) : otherSpeaker === null ? (
+          <Text style={styles.voiceBarHint} numberOfLines={2}>
+            {voiceMode === 'tap' ? lang.s.ui.voiceBarHintTap : lang.s.ui.voiceBarHintHold}
+          </Text>
+        ) : null}
+      </View>
+    </View>
   ) : null;
 
   const emoteToggle = onEmote ? (
@@ -1717,6 +1776,8 @@ export function TableScreen(props: TableScreenProps) {
         onNext={onNext}
         onFinish={requestLeave}
         finishLabel={finishLabel}
+        voiceBar={voiceBar}
+        wide={land}
       />
     </Animated.View>
   ) : null;
@@ -1780,16 +1841,16 @@ export function TableScreen(props: TableScreenProps) {
                     </View>
                   ) : null}
                 </View>
-                {!settled && (
+                {(!settled || heldOver) && (
                   <View style={styles.actionsCol}>
                     {/* While the app answers "Nemam" itself, nothing to press:
                         the plain action list would offer the same skip again. */}
-                    {autoSkipping ? null : declareButtons ?? (
+                    {settled || autoSkipping ? null : declareButtons ?? (
                       <NonCardActions options={options} lang={lang} onChoose={answer} compact />
                     )}
                     {/* The toggle keeps the rail's left edge; the mic right of it. */}
                     <View style={styles.railToggles}>
-                      {emoteToggle}
+                      {tapTake && micButton ? micCancel(EMOTE_TOGGLE, { top: 8, bottom: 8, left: 8, right: RAIL_GAP / 2 }) : emoteToggle}
                       {micButton}
                     </View>
                   </View>
@@ -1843,13 +1904,14 @@ export function TableScreen(props: TableScreenProps) {
                 </View>
               )}
 
-              {/* actions: bidding, declaring, bela — leaving is the top corner */}
-              {!settled && (
+              {/* actions: bidding, declaring, bela — leaving is the top corner.
+                  Kept (under the results sheet) while a take outlasts the deal. */}
+              {(!settled || heldOver) && (
                 <View style={styles.actionsRow}>
                   {micButton}
-                  {emoteToggle}
+                  {tapTake && micButton ? micCancel(EMOTE_TOGGLE, { top: 8, bottom: 8, left: ROW_GAP / 2, right: 8 }) : emoteToggle}
                   {micButton && <View style={styles.micBalance} />}
-                  {autoSkipping ? null : declareButtons ?? (
+                  {settled || autoSkipping ? null : declareButtons ?? (
                     <NonCardActions options={options} lang={lang} onChoose={send} short={short} />
                   )}
                 </View>
@@ -2835,12 +2897,22 @@ function DealResult({
   onFinish,
   finishLabel,
   reduced = false,
+  voiceBar = null,
+  wide = false,
 }: {
   lang: Lang;
   mySeat: Seat;
   reduced?: boolean;
   /** The sheet scrolls rather than run off a short (landscape) screen. */
   maxHeight: number;
+  /** Online, with voice on: pinned under the scrolling part, never scrolled away. */
+  voiceBar?: React.ReactNode;
+  /**
+   * Sideways: the bar is as wide as the screen, and a deal's two buttons ride
+   * in it beside the mic - the bar's height would otherwise push them below
+   * the fold of a short screen. (A match's end keeps its foot in the sheet.)
+   */
+  wide?: boolean;
   result: DealScoreResult | null;
   matchScores: readonly [number, number];
   matchOver: boolean;
@@ -2900,6 +2972,7 @@ function DealResult({
     );
   };
   const rule = <View style={styles.rule} />;
+  const pinFoot = wide && voiceBar !== null && !matchOver;
   const foot = (
     <ResultFoot
       lang={lang}
@@ -2916,18 +2989,32 @@ function DealResult({
       onNext={onNext}
       onFinish={onFinish}
       finishLabel={finishLabel}
+      pinned={pinFoot}
     />
   );
+  const bar = voiceBar ? (
+    <View style={[styles.voiceBarPanel, { backgroundColor: room().page }]}>
+      {pinFoot ? (
+        <View style={styles.voiceBarWide}>
+          <View style={styles.voiceBarWideVoice}>{voiceBar}</View>
+          {foot}
+        </View>
+      ) : (
+        voiceBar
+      )}
+    </View>
+  ) : null;
 
   // A deal scored while this client was away (it reconnected into DEAL_OVER):
   // its rows would be another deal's, so it shows the match score, says what
   // happened, and above all still answers - a sheet with no way on would
   // leave the table with nothing but Napusti.
+  const scrollMax = voiceBar ? maxHeight - VOICE_BAR_H : maxHeight;
   if (!result) {
     return (
       <Animated.View entering={reduced ? undefined : SlideInDown.duration(280)}>
         <ScrollView
-          style={[styles.resultPanel, { maxHeight, backgroundColor: room().page }]}
+          style={[styles.resultPanel, { maxHeight: scrollMax, backgroundColor: room().page }]}
           contentContainerStyle={styles.resultContent}
         >
           <View style={[styles.sheetBand, matchOver ? (weWon === false ? styles.sheetBandLost : styles.sheetBandMatch) : styles.sheetBandPlain]}>
@@ -2956,8 +3043,9 @@ function DealResult({
             <Text style={[styles.resultHead, styles.resultHeadThem]}>{lang.team(them, mySeat)}</Text>
           </View>
           {row(lang.s.matchScore, matchScores, { hero: true })}
-          {foot}
+          {pinFoot ? null : foot}
         </ScrollView>
+        {bar}
       </Animated.View>
     );
   }
@@ -2983,7 +3071,7 @@ function DealResult({
   return (
     <Animated.View entering={reduced ? undefined : SlideInDown.duration(280)}>
     <ScrollView
-      style={[styles.resultPanel, { maxHeight, backgroundColor: room().page }]}
+      style={[styles.resultPanel, { maxHeight: scrollMax, backgroundColor: room().page }]}
       contentContainerStyle={styles.resultContent}
     >
       {/* The header band says whose deal it was at a glance: tinted by our
@@ -3106,8 +3194,9 @@ function DealResult({
         </Animated.View>
       )}
 
-      {foot}
+      {pinFoot ? null : foot}
     </ScrollView>
+    {bar}
     </Animated.View>
   );
 }
@@ -3126,6 +3215,7 @@ function ResultFoot({
   onNext,
   onFinish,
   finishLabel,
+  pinned = false,
 }: {
   lang: Lang;
   matchOver: boolean;
@@ -3139,6 +3229,8 @@ function ResultFoot({
   onNext: () => void;
   onFinish: () => void;
   finishLabel: string;
+  /** In the pinned voice bar (sideways): no gap above, flush right. */
+  pinned?: boolean;
 }) {
   return (
     <>
@@ -3169,7 +3261,7 @@ function ResultFoot({
           <Button label={finishLabel} tone="plain" onPress={onFinish} />
         </View>
       ) : (
-        <View style={styles.resultButtons}>
+        <View style={[styles.resultButtons, pinned && styles.resultButtonsPinned]}>
           {nextDeal ? (
             <NextDealButton lang={lang} next={nextDeal} onNext={onNext} />
           ) : (
@@ -3645,6 +3737,30 @@ const styles = StyleSheet.create({
   },
   // As wide as the mic, right of the toggle: the centred row keeps the toggle where it was.
   micBalance: { width: EMOTE_TOGGLE, height: EMOTE_TOGGLE },
+  // Tapped to start: throws the take away, in the faces' toggle's place.
+  micCancel: {
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: theme.line,
+    backgroundColor: surface.chip,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Under the results sheet's scrolling part, in its colours: never scrolled away.
+  voiceBarPanel: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: theme.line,
+    minHeight: VOICE_BAR_H,
+    justifyContent: 'center',
+  },
+  voiceBar: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingHorizontal: space.lg, paddingVertical: 8 },
+  voiceBarWords: { flex: 1, gap: 2, minWidth: 0 },
+  // Sideways: the mic and its words, then a deal's buttons, on one line.
+  voiceBarWide: { flexDirection: 'row', alignItems: 'center', paddingRight: space.lg, gap: space.md },
+  voiceBarWideVoice: { flex: 1, minWidth: 0 },
+  voiceBarText: { color: ink.hi, fontFamily: font.bold, fontSize: 14 },
+  voiceBarHint: { color: theme.textDim, fontSize: 13 },
   actionsCol: { gap: 6, alignItems: 'stretch', alignSelf: 'stretch' },
   railToggles: { flexDirection: 'row', gap: RAIL_GAP, alignItems: 'center' },
 
@@ -3750,4 +3866,5 @@ const styles = StyleSheet.create({
   sheetLevelText: { color: theme.accent, ...type.sub, fontFamily: font.bold },
   sheetFoot: { gap: space.sm, alignItems: 'center', marginTop: space.sm },
   resultButtons: { flexDirection: 'row', gap: 10, justifyContent: 'center', marginTop: space.sm },
+  resultButtonsPinned: { marginTop: 0, alignItems: 'center' },
 });

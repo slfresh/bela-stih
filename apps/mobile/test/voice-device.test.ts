@@ -56,6 +56,8 @@ vi.mock('expo-audio', () => ({
 }));
 
 const here = dirname(fileURLToPath(import.meta.url));
+/** MicButton's source with one kind of line ending, for the slices below. */
+const micSource = () => readFileSync(join(here, '../src/table/MicButton.tsx'), 'utf8').split('\r\n').join('\n');
 const make = () => {
   const p = new FakePlayer();
   made.push(p);
@@ -159,6 +161,23 @@ describe("a voice clip on a phone", () => {
     expect([ended, p.released, p.removed, p.listeners.length]).toEqual([1, 1, 0, 0]);
   });
 
+  it('says when the sound really starts, once, and never after it was stopped', async () => {
+    const { playClip } = await import('../src/voice/clipPlayer');
+    let started = 0;
+    playClip('file:///cache/voice-3-2.m4a', 1, () => {}, () => started++);
+    const p = made[0]!;
+    // Loading is not playing.
+    p.emit({ isLoaded: true });
+    expect(started).toBe(0);
+    p.emit({ isLoaded: true, playing: true } as never);
+    p.emit({ isLoaded: true, playing: true } as never);
+    expect(started).toBe(1);
+    const q = playClip('file:///cache/voice-4-2.m4a', 1, () => {}, () => started++);
+    q.stop();
+    made[1]!.emit({ playing: true } as never);
+    expect(started).toBe(1);
+  });
+
   it('is released when stopped too, and a second stop does nothing', async () => {
     const { playClip } = await import('../src/voice/clipPlayer');
     let ended = 0;
@@ -200,17 +219,27 @@ describe('where a press on the mic ends', () => {
   });
 
   it('claims the long press, so a phone browser neither opens its menu nor ends the touch', () => {
-    const b = readFileSync(join(here, '../src/table/MicButton.tsx'), 'utf8');
-    expect(b).toMatch(/onLongPress=\{\(\) => \{\}\}/);
-    // No send is left to a "press": a long touch in a phone browser never clicks.
-    expect(b).not.toMatch(/onPress=\{/);
-    expect(b).toMatch(/onFinish\(releasedOn\(box\.current, n\)\);/);
+    const b = micSource();
+    const held = b.slice(b.indexOf(': {\n              onPressIn'), b.indexOf('style={[styles.button'));
+    expect(held).toMatch(/onLongPress: \(\) => \{\},/);
+    // Held, no send is left to a "press": a long touch in a phone browser never clicks.
+    expect(held).not.toMatch(/onPress:/);
+    expect(held).toMatch(/onFinish\(releasedOn\(box\.current, n\)\);/);
+  });
+
+  it('tapped (Settings), starts on one tap and sends on the next, with nothing done on a press-in', () => {
+    const b = micSource();
+    const tapped = b.slice(b.indexOf('{...(tap'), b.indexOf(': {\n              onPressIn'));
+    expect(tapped).toMatch(/onPress: \(\) => \{\s*if \(phase === 'idle'\) \{\s*pattern\('press'\);\s*onStart\(\);\s*\} else if \(phase === 'recording'\) \{\s*pattern\('press'\);\s*onFinish\(true\);/);
+    expect(tapped).not.toMatch(/onPressIn|onPressOut/);
+    expect(tapped).toMatch(/accessibilityState: \{ selected: recording \}/);
+    expect(b).toMatch(/accessibilityHint=\{tap \? ui\.micHintTap : ui\.micHint\}/);
   });
 
   it('ends the take when the button leaves the screen under the finger (the phone turned)', () => {
     const b = readFileSync(join(here, '../src/table/MicButton.tsx'), 'utf8');
     expect(b).toMatch(/useEffect\(\s*\(\) => \(\) => \{\s*if \(pressing\.current\) onFinishRef\.current\(true\);\s*\},\s*\[\],\s*\);/);
-    expect(b).toMatch(/onPressIn=\{\(\) => \{\s*pressing\.current = true;/);
-    expect(b).toMatch(/onPressOut=\{\(e: GestureResponderEvent\) => \{\s*pressing\.current = false;/);
+    expect(b).toMatch(/onPressIn: \(\) => \{\s*pressing\.current = true;/);
+    expect(b).toMatch(/onPressOut: \(e: GestureResponderEvent\) => \{\s*pressing\.current = false;/);
   });
 });

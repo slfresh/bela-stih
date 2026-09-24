@@ -230,6 +230,29 @@ export function SettingsScreen({
           onSettingsChange({ ...settings, haptics }),
         )}
         {toggleRow(ui.voiceSetting, settings.voice, (voice) => onSettingsChange({ ...settings, voice }))}
+        {/* How the mic works: meaningless while voice is off, shown but asleep. */}
+        <Text style={[styles.rowLabel, !settings.voice && styles.asleep]}>{ui.voiceModeLabel}</Text>
+        <View style={[styles.localeRow, !settings.voice && styles.asleep]}>
+          {(
+            [
+              { id: 'hold', label: ui.voiceModeHold },
+              { id: 'tap', label: ui.voiceModeTap },
+            ] as const
+          ).map((o) => (
+            <PressScale
+              key={o.id}
+              onPress={() => {
+                onSettingsChange({ ...settings, voiceMode: o.id });
+              }}
+              accessibilityState={{ selected: settings.voiceMode === o.id }}
+              style={[styles.localeChip, settings.voiceMode === o.id && styles.localeChipOn]}
+            >
+              <Text style={[styles.localeText, settings.voiceMode === o.id && styles.localeTextOn]}>
+                {o.label}
+              </Text>
+            </PressScale>
+          ))}
+        </View>
         <Text style={styles.hint}>{ui.voiceSettingHint}</Text>
         {/* Loudness means nothing while the sound is off: shown, but asleep. */}
         <Text style={[styles.rowLabel, !settings.sound && styles.asleep]}>{ui.volumeLabel}</Text>

@@ -13,7 +13,7 @@ import { botThinkMs } from '../anim/think';
 import { EMPTY_LOG, logEvent } from '../matchLog';
 import { troubleOf, type Trouble } from './trouble';
 import { isPlayMode, modeFromLegacy, type PlayMode } from '../playMode';
-import { sniffMime, type VoiceMime } from '../voice/voice';
+import { sniffMime, type VoiceMime, type VoiceEcho } from '../voice/voice';
 import type { Take } from '../voice/useVoiceRecorder';
 import { FxBus } from '../anim/FxBus';
 import { makeFxSpawner, spawnEmote } from '../table/fx';
@@ -218,7 +218,8 @@ export function useNetGame(settings: Settings) {
   const [voiceOn, setVoiceOn] = useState(false);
   // Where clips go: the table's playback (OnlineGame) and my own echo's rings.
   const voiceInRef = useRef<((clip: VoiceIn) => void) | null>(null);
-  const voiceEchoRef = useRef<((ms: number) => void) | null>(null);
+  const voiceEchoRef = useRef<((echo: VoiceEcho) => void) | null>(null);
+  const voiceHeardRef = useRef<((id: number, by: Seat) => void) | null>(null);
   const [mode, setMode] = useState<PlayMode>('easy');
   const [hostSeat, setHostSeat] = useState<Seat | null>(null);
   const [series, setSeries] = useState<[number, number]>([0, 0]);
@@ -629,13 +630,25 @@ export function useNetGame(settings: Settings) {
 
     // A clip from the table goes to the playback; nothing is kept. My own
     // comes back without the audio: the room took it, and the others hear it
-    // now - my puck rings for as long.
-    room.onMessage('voice', (msg: { from?: unknown; id?: unknown; ms?: unknown; data?: unknown } | null) => {
+    // now - my puck rings for as long, and the mic says whom it went to.
+    room.onMessage(
+      'voice',
+      (msg: { from?: unknown; id?: unknown; ms?: unknown; data?: unknown; to?: unknown; noReceipt?: unknown } | null) => {
       const from = msg?.from;
       const ms = msg?.ms;
       if (typeof from !== 'number' || from < 0 || from > 3 || typeof ms !== 'number') return;
       if (msg!.data === undefined) {
-        if (from === mySeatRef.current) voiceEchoRef.current?.(ms);
+        if (from === mySeatRef.current) {
+          const seats = (v: unknown): Seat[] =>
+            Array.isArray(v) ? (v.filter((x) => typeof x === 'number' && x >= 0 && x <= 3) as Seat[]) : [];
+          voiceEchoRef.current?.({
+            id: typeof msg!.id === 'number' ? msg!.id : -1,
+            ms,
+            // A room from before receipts says nothing of either: null, "cannot say".
+            to: Array.isArray(msg!.to) ? seats(msg!.to) : null,
+            noReceipt: seats(msg!.noReceipt),
+          });
+        }
         return;
       }
       const seat = from as Seat;
@@ -645,6 +658,13 @@ export function useNetGame(settings: Settings) {
       const mime = data ? sniffMime(data) : null;
       if (!data || !mime) return;
       voiceInRef.current?.({ from: seat, id: typeof msg!.id === 'number' ? msg!.id : 0, ms, mime, data });
+      },
+    );
+    // Somebody's app has started playing my clip.
+    room.onMessage('voiceHeard', (msg: { id?: unknown; by?: unknown } | null) => {
+      const by = msg?.by;
+      if (typeof msg?.id !== 'number' || typeof by !== 'number' || by < 0 || by > 3) return;
+      voiceHeardRef.current?.(msg.id, by as Seat);
     });
 
     room.onLeave((code) => {
@@ -770,7 +790,7 @@ export function useNetGame(settings: Settings) {
     () =>
       connect(async (c) => {
         try {
-          return await eitherRoom((room) => c.joinOrCreate(room, { name, avatar, gifts: true, voice: voiceRef.current }));
+          return await eitherRoom((room) => c.joinOrCreate(room, { name, avatar, gifts: true, voice: voiceRef.current, receipts: true }));
         } catch (err) {
           // The open table already has somebody playing from this connection.
           // With no accounts the server cannot tell a second player here from
@@ -778,7 +798,7 @@ export function useNetGame(settings: Settings) {
           // player's hand by elimination — so it seats us apart rather than
           // turning us away. A fresh public table, and strangers join us there.
           if ((err as { code?: number } | null)?.code !== SAME_ORIGIN_CODE) throw err;
-          return await eitherRoom((room) => c.create(room, { name, avatar, gifts: true, voice: voiceRef.current }));
+          return await eitherRoom((room) => c.create(room, { name, avatar, gifts: true, voice: voiceRef.current, receipts: true }));
         }
       }),
     [connect, name, avatar],
@@ -794,6 +814,7 @@ export function useNetGame(settings: Settings) {
           avatar,
           gifts: true,
           voice: voiceRef.current,
+          receipts: true,
           private: true,
           mode: settings.difficulty,
           hard: settings.difficulty === 'hard',
@@ -803,7 +824,7 @@ export function useNetGame(settings: Settings) {
     [connect, name, avatar, settings.difficulty],
   );
   const joinById = useCallback(
-    (id: string) => connect((c) => c.joinById(normalizeCode(id), { name, avatar, gifts: true, voice: voiceRef.current })),
+    (id: string) => connect((c) => c.joinById(normalizeCode(id), { name, avatar, gifts: true, voice: voiceRef.current, receipts: true })),
     [connect, name, avatar],
   );
 
@@ -854,11 +875,23 @@ export function useNetGame(settings: Settings) {
   const sendVoice = useCallback((take: Take) => {
     roomRef.current?.send('voice', { mime: take.mime, ms: take.ms, data: take.data });
   }, []);
-  /** Where clips from the table go, and my own echo (OnlineGame's playback and rings). */
-  const onVoice = useCallback((hear: ((clip: VoiceIn) => void) | null, echo: ((ms: number) => void) | null) => {
-    voiceInRef.current = hear;
-    voiceEchoRef.current = echo;
+  /** A clip from the table has started playing here: its speaker is told. */
+  const confirmHeard = useCallback((id: number) => {
+    roomRef.current?.send('heard', { id });
   }, []);
+  /** Where clips from the table go, my own echo, and the receipts for it (OnlineGame's playback, rings and mic). */
+  const onVoice = useCallback(
+    (
+      hear: ((clip: VoiceIn) => void) | null,
+      echo: ((e: VoiceEcho) => void) | null,
+      heard: ((id: number, by: Seat) => void) | null,
+    ) => {
+      voiceInRef.current = hear;
+      voiceEchoRef.current = echo;
+      voiceHeardRef.current = heard;
+    },
+    [],
+  );
   /** Mute one player's voice at this table, on this device, or hear them again. */
   const mute = useCallback((s: Seat, on: boolean) => {
     if (s === mySeatRef.current) return;
@@ -1001,6 +1034,7 @@ export function useNetGame(settings: Settings) {
     voiceOn,
     sendVoice,
     onVoice,
+    confirmHeard,
     muted,
     mute,
     // The seats a bot stands in for: a person's once, never a bot's from the start.

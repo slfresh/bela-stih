@@ -17,8 +17,16 @@ const FINISH_SLACK_MS = 2500;
  * released with its audio track, and expo-audio's players open no media
  * session in this app (scripts/patch-expo-audio.mjs).
  */
-export function useVoicePlayback(enabled: boolean, blocked: (s: Seat) => boolean, blockedKey: string) {
+export function useVoicePlayback(
+  enabled: boolean,
+  blocked: (s: Seat) => boolean,
+  blockedKey: string,
+  /** A clip has really started playing here: its speaker is told (the receipt). */
+  onPlayed?: (id: number) => void,
+) {
   const [speaking, setSpeaking] = useState<Seat | null>(null);
+  const onPlayedRef = useRef(onPlayed);
+  onPlayedRef.current = onPlayed;
   const queue = useRef<HeardClip[]>([]);
   const current = useRef<{ from: Seat; stop: () => void } | null>(null);
   const blockedRef = useRef(blocked);
@@ -49,7 +57,7 @@ export function useVoicePlayback(enabled: boolean, blocked: (s: Seat) => boolean
     current.current = { from: clip.from, stop };
     try {
       src = clipSource(clip.data, clip.mime, clip.id);
-      playback = playClip(src.uri, masterVolume(), stop);
+      playback = playClip(src.uri, masterVolume(), stop, () => onPlayedRef.current?.(clip.id));
     } catch {
       stop();
       return;

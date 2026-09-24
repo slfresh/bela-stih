@@ -41,6 +41,56 @@ export function checkClip(mime: unknown, data: unknown, ms: unknown): Clip | nul
   return { mime, data, ms: Math.round(ms) };
 }
 
+/**
+ * How long the room remembers a relayed clip for its receipts. A clip is
+ * played within 20 s of arriving or never (the app drops older ones), so a
+ * minute is ample.
+ */
+export const VOICE_RECEIPT_MS = 60_000;
+/** And at most this many at once, the oldest let go first. */
+export const VOICE_LEDGER_MAX = 256;
+
+/**
+ * Who was sent which clip, so a receipt is believed only from a recipient,
+ * and only once. Session ids, not seats: a seat can change hands in the
+ * lobby, a session does not (and survives a reconnect).
+ */
+export class VoiceLedger {
+  private clips = new Map<number, { from: string; to: Set<string>; heard: Set<string>; at: number }>();
+
+  /** Clip `id`, from session `from`, relayed now to the sessions `to`. */
+  sent(id: number, from: string, to: Iterable<string>, now: number): void {
+    this.prune(now);
+    this.clips.set(id, { from, to: new Set(to), heard: new Set(), at: now });
+    while (this.clips.size > VOICE_LEDGER_MAX) {
+      const oldest = this.clips.keys().next().value as number;
+      this.clips.delete(oldest);
+    }
+  }
+
+  /**
+   * Session `by` says clip `id` has started playing: the speaker's session to
+   * tell, or null - an unknown or forgotten clip, one never sent to `by`, or a
+   * receipt already given.
+   */
+  heard(id: unknown, by: string, now: number): string | null {
+    this.prune(now);
+    if (typeof id !== 'number') return null;
+    const clip = this.clips.get(id);
+    if (!clip || !clip.to.has(by) || clip.heard.has(by)) return null;
+    clip.heard.add(by);
+    return clip.from;
+  }
+
+  private prune(now: number): void {
+    for (const [id, clip] of this.clips) {
+      // Insertion order is time order: the first one young enough ends the sweep.
+      if (now - clip.at < VOICE_RECEIPT_MS) break;
+      this.clips.delete(id);
+    }
+  }
+}
+
 /** Clips from one connection come at least this far apart. */
 export const VOICE_GAP_MS = 1000;
 /** And add up to no more than this much audio in any VOICE_WINDOW_MS: someone talking all the time, no more. */

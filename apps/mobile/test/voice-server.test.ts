@@ -2,7 +2,17 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { checkClip, VOICE_BUDGET_MS, VOICE_BYTES_PER_MS, VOICE_GAP_MS, VOICE_HEADER_BYTES, VoiceLimiter } from '../../server/src/voice';
+import {
+  checkClip,
+  VOICE_BUDGET_MS,
+  VOICE_BYTES_PER_MS,
+  VOICE_GAP_MS,
+  VOICE_HEADER_BYTES,
+  VOICE_LEDGER_MAX,
+  VOICE_RECEIPT_MS,
+  VoiceLedger,
+  VoiceLimiter,
+} from '../../server/src/voice';
 import { MAX_FRAME_BYTES, VOICE_MAX_BYTES, VOICE_MAX_MS, VOICE_MIMES, VOICE_MIN_BYTES } from '../../server/src/protocol';
 
 /**
@@ -96,6 +106,45 @@ describe("one connection's allowance", () => {
   });
 });
 
+describe('receipts', () => {
+  it('are believed only from a seat the clip went to, once, and told to its speaker', () => {
+    const l = new VoiceLedger();
+    l.sent(1, 'speaker', ['a', 'b'], 0);
+    expect(l.heard(1, 'a', 100)).toBe('speaker');
+    expect(l.heard(1, 'a', 200)).toBeNull();
+    expect(l.heard(1, 'c', 200)).toBeNull();
+    expect(l.heard(1, 'speaker', 200)).toBeNull();
+    expect(l.heard(2, 'a', 200)).toBeNull();
+    expect(l.heard('1', 'b', 200)).toBeNull();
+    expect(l.heard(1, 'b', 300)).toBe('speaker');
+  });
+
+  it('are forgotten after a minute, and never pile up', () => {
+    const l = new VoiceLedger();
+    l.sent(1, 's', ['a'], 0);
+    expect(l.heard(1, 'a', VOICE_RECEIPT_MS)).toBeNull();
+    l.sent(2, 's', ['a'], 0);
+    expect(l.heard(2, 'a', VOICE_RECEIPT_MS - 1)).toBe('s');
+    const m = new VoiceLedger();
+    for (let i = 0; i <= VOICE_LEDGER_MAX; i++) m.sent(i, 's', ['a'], 5);
+    expect(m.heard(0, 'a', 6)).toBeNull();
+    expect(m.heard(1, 'a', 6)).toBe('s');
+    expect(m.heard(VOICE_LEDGER_MAX, 'a', 6)).toBe('s');
+  });
+
+  it("reach the speaker only if the speaker's app reads them, and never call a player back", () => {
+    const room = server('BelaRoom.ts');
+    const heard = room.slice(room.indexOf("if (packet.type === 'heard') {"), room.indexOf("if (packet.type === 'hears') {"));
+    expect(heard).toMatch(/const speakerId = this\.voiceLedger\.heard\(/);
+    expect(heard).toMatch(/if \(speakerSeat === null \|\| !speaker \|\| !this\.occupants\[speakerSeat\]!\.receipts\) return;/);
+    expect(heard).toMatch(/speaker\.send\(MSG\.voiceHeard, heard\);/);
+    expect(heard).not.toMatch(/broadcast|console\./);
+    expect(room).toMatch(/receipts: options\.receipts === true,/);
+    expect(room).toMatch(/this\.voiceLedger\.sent\(id, client\.sessionId, sessions, Date\.now\(\)\);/);
+    expect(room).toMatch(/if \(!this\.occupants\[s\]!\.receipts\) noReceipt\.push\(s\);/);
+  });
+});
+
 describe('the room', () => {
   const room = server('BelaRoom.ts');
   const relay = room.slice(room.indexOf("if (packet.type === 'voice') {"), room.indexOf("if (packet.type === 'gift') {"));
@@ -108,7 +157,9 @@ describe('the room', () => {
 
   it('sends the clip to the others whose apps play it, and the speaker only an echo without it', () => {
     expect(relay).toMatch(/if \(s === null \|\| s === seat \|\| !this\.hearsVoice\(s\)\) continue;\s*other\.send\(MSG\.voice, out\);/);
-    expect(relay).toMatch(/const echo: VoiceMessage = \{ from: seat, id, ms: clip\.ms, mime: clip\.mime \};\s*client\.send\(MSG\.voice, echo\);/);
+    expect(relay).toMatch(
+      /const echo: VoiceMessage = \{ from: seat, id, ms: clip\.ms, mime: clip\.mime, to, \.\.\.\(noReceipt\.length > 0 \? \{ noReceipt \} : \{\}\) \};\s*client\.send\(MSG\.voice, echo\);/,
+    );
     expect(relay).not.toMatch(/broadcast/);
     // Nothing keeps it, nothing prints it.
     expect(relay).not.toMatch(/console\./);
@@ -121,7 +172,7 @@ describe('the room', () => {
     // Nothing published: a toggling client costs the table nothing.
     expect(hears).not.toMatch(/this\.(publish|broadcast)\(/);
     expect(room).toMatch(/speaksVoice: typeof options\.voice === 'boolean',/);
-    expect(room).toMatch(/gifts: false, voice: false, speaksVoice: false \}\);/);
+    expect(room).toMatch(/gifts: false, voice: false, speaksVoice: false, receipts: false \}\);/);
   });
 
   it('lets a private table\'s host switch voice off before the start, and quick play keep it', () => {

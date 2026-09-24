@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { room } from '../cosmetics';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Linking,
   Modal,
@@ -46,6 +47,8 @@ import { isoDay } from '@belot/progression';
 import { useNetGame, type NetGame } from './useNetGame';
 import { useVoicePlayback } from '../voice/useVoicePlayback';
 import { useVoiceRecorder, type Take } from '../voice/useVoiceRecorder';
+import { useVoiceSendStatus } from '../voice/useVoiceSendStatus';
+import { sendStatusText } from '../voice/voice';
 import { retryHelps } from './trouble';
 
 /**
@@ -79,25 +82,35 @@ export function OnlineGame({
   // my own echo rings my puck for as long as the table hears it. Here rather
   // than at the table, so a clip that lands in the lobby is heard too.
   const voiceHere = settings.voice && net.voiceOn;
+  // A clip that really starts playing here is confirmed to its speaker.
   const playback = useVoicePlayback(
     voiceHere,
     (s) => net.hidden.includes(s) || net.muted.includes(s),
     `${net.hidden.join(',')}|${net.muted.join(',')}`,
+    net.confirmHeard,
   );
+  // What became of my own last message: said beside the mic.
+  const sent = useVoiceSendStatus();
+  const { echoed: sentEchoed, heard: sentHeard, noted: sentNoted, started: sentStarted } = sent;
   const [echoing, setEchoing] = useState(false);
   const echoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { onVoice } = net;
   useEffect(() => {
-    onVoice(playback.hear, (ms) => {
-      if (echoTimer.current) clearTimeout(echoTimer.current);
-      setEchoing(true);
-      echoTimer.current = setTimeout(() => setEchoing(false), ms);
-    });
+    onVoice(
+      playback.hear,
+      (e) => {
+        if (echoTimer.current) clearTimeout(echoTimer.current);
+        setEchoing(true);
+        echoTimer.current = setTimeout(() => setEchoing(false), e.ms);
+        sentEchoed(e);
+      },
+      sentHeard,
+    );
     return () => {
-      onVoice(null, null);
+      onVoice(null, null, null);
       if (echoTimer.current) clearTimeout(echoTimer.current);
     };
-  }, [onVoice, playback.hear]);
+  }, [onVoice, playback.hear, sentEchoed, sentHeard]);
   const speaking = useMemo(
     () => [
       ...(playback.speaking !== null ? [playback.speaking] : []),
@@ -114,15 +127,36 @@ export function OnlineGame({
   const mic = useVoiceRecorder(
     useCallback(
       (take: Take) => {
-        if (voiceHereRef.current) sendVoice(take);
+        if (!voiceHereRef.current) return;
+        sendVoice(take);
+        sentStarted();
       },
-      [sendVoice],
+      [sendVoice, sentStarted],
     ),
   );
-  const { finish: finishTake } = mic;
+  const { finish: finishTake, note: micNote } = mic;
   useEffect(() => {
     if (!voiceHere) void finishTake(false);
   }, [voiceHere, finishTake]);
+  // A press that sent nothing says why in the same place.
+  useEffect(() => {
+    if (micNote) sentNoted(micNote.why);
+  }, [micNote, sentNoted]);
+  const micStatus =
+    sent.status === null
+      ? null
+      : sendStatusText(net.lang.s.ui, sent.status, settings.voiceMode, (s) => {
+          const info = net.seats.find((x) => x.seat === s);
+          return info ? seatName(net.lang, info) : net.lang.seat(s, net.seat ?? 0);
+        });
+  // Read out as it changes, except the moment of sending.
+  const saidStatus = useRef<string | null>(null);
+  useEffect(() => {
+    if (micStatus !== null && micStatus !== saidStatus.current && sent.status?.kind !== 'sending') {
+      AccessibilityInfo.announceForAccessibility(micStatus);
+    }
+    saidStatus.current = micStatus;
+  }, [micStatus, sent.status?.kind]);
 
   // Connect once, on the way in.
   useEffect(() => {
@@ -406,6 +440,8 @@ export function OnlineGame({
       finishLabel={net.lang.s.ui.leaveTable}
       onEmote={net.sendEmote}
       mic={voiceHere ? mic : undefined}
+      micStatus={voiceHere ? micStatus : null}
+      voiceMode={settings.voiceMode}
       speaking={speaking}
       muted={net.muted}
       onMute={net.mute}

@@ -15,7 +15,17 @@ import {
   VOICE_MAX_BYTES,
   VOICE_MAX_MS,
   webRecordingMime,
+  ECHO_WAIT_MS,
+  RECEIPT_WAIT_MS,
+  STATUS_SHOW_MS,
+  sendEchoed,
+  sendHeard,
+  sendNoted,
+  sendSettle,
+  sendStarted,
+  sendStatusText,
   type HeardClip,
+  type SendStatus,
 } from '../src/voice/voice';
 import * as room from '../../server/src/protocol';
 import { computeTableMetrics, EMOTE_TOGGLE, LAND_TRAY_W } from '../src/table/metrics';
@@ -140,7 +150,7 @@ describe('the app around it', () => {
 
   it("plays each clip at the game's volume, lets it go when it ends, the game sounds dipped meanwhile", () => {
     const p = src('voice/useVoicePlayback.ts');
-    expect(p).toMatch(/playback = playClip\(src\.uri, masterVolume\(\), stop\);/);
+    expect(p).toMatch(/playback = playClip\(src\.uri, masterVolume\(\), stop, \(\) => onPlayedRef\.current\?\.\(clip\.id\)\);/);
     expect(p).toMatch(/playback\?\.stop\(\);\s*src\?\.release\(\);/);
     // What a killed app left in the cache goes as the screen opens, before any clip can come.
     expect(p).toMatch(/useEffect\(\(\) => sweepVoiceFiles\(\), \[\]\);/);
@@ -156,14 +166,15 @@ describe('the app around it', () => {
     expect(o).toMatch(/const mic = useVoiceRecorder\(/);
     expect(o).toMatch(/mic=\{voiceHere \? mic : undefined\}/);
     // Voice switched off mid-take: dropped, and never sent.
-    expect(o).toMatch(/if \(voiceHereRef\.current\) sendVoice\(take\);/);
+    expect(o).toMatch(/if \(!voiceHereRef\.current\) return;\s*sendVoice\(take\);\s*sentStarted\(\);/);
     expect(o).toMatch(/if \(!voiceHere\) void finishTake\(false\);/);
     const t = src('TableScreen.tsx');
     expect(t).not.toMatch(/useVoiceRecorder\(/);
     expect(src('table/MicButton.tsx')).not.toMatch(/useVoiceRecorder\(/);
-    // The button leaving the screen sends what was said.
-    expect(t).toMatch(/const micLive = mic !== undefined && micShown && !settled;/);
-    expect(t).toMatch(/if \(!micLive\) void finishTake\?\.\(true\);/);
+    // No mic left anywhere (a question took the row): what was said goes.
+    expect(t).toMatch(/const micInRow = mic !== undefined && \(\(micShown && !settled\) \|\| heldOver\);/);
+    expect(t).toMatch(/const micOnSheet = mic !== undefined && settled;/);
+    expect(t).toMatch(/if \(!micInRow && !micOnSheet\) void finishTake\?\.\(true\);/);
   });
 
   it('never leaves a microphone open or a take on the phone', () => {
@@ -186,20 +197,178 @@ describe('the app around it', () => {
   });
 });
 
+describe('what became of my message', () => {
+  const t0 = 1_000_000;
+  const echo = (to: Seat[], noReceipt: Seat[] = []) => ({ id: 7, ms: 3000, to, noReceipt });
+  const settle = (s: SendStatus | null, at: number) => sendSettle(s, at).status;
+
+  it('says sending until the room answers, and "not sent" if it never does', () => {
+    const s = sendStarted(t0);
+    expect(settle(s, t0 + ECHO_WAIT_MS - 1)?.kind).toBe('sending');
+    expect(settle(s, t0 + ECHO_WAIT_MS)?.kind).toBe('notSent');
+    // ...said for a while, then nothing.
+    expect(settle(s, t0 + ECHO_WAIT_MS + STATUS_SHOW_MS - 1)?.kind).toBe('notSent');
+    expect(settle(s, t0 + ECHO_WAIT_MS + STATUS_SHOW_MS)).toBeNull();
+    expect(sendSettle(s, t0).nextIn).toBe(ECHO_WAIT_MS);
+  });
+
+  it('says at once when nobody at the table can hear it', () => {
+    expect(sendEchoed(sendStarted(t0), echo([]), t0 + 100)?.kind).toBe('nobody');
+  });
+
+  it('names whoever has heard it, once each, and only from seats it went to', () => {
+    let s = sendEchoed(sendStarted(t0), echo([1, 2]), t0 + 100);
+    expect(s?.kind).toBe('sent');
+    s = sendHeard(s, 7, 2, t0 + 900);
+    s = sendHeard(s, 7, 2, t0 + 950);
+    s = sendHeard(s, 7, 3, t0 + 990); // never sent to seat 3
+    s = sendHeard(s, 8, 1, t0 + 995); // another clip's receipt
+    expect(s?.kind === 'sent' && s.heard).toEqual([2]);
+    s = sendHeard(s, 7, 1, t0 + 1200);
+    expect(s?.kind === 'sent' && s.heard).toEqual([2, 1]);
+    // Said for a while after the last one came.
+    expect(settle(s, t0 + 1200 + STATUS_SHOW_MS - 1)?.kind).toBe('sent');
+    expect(settle(s, t0 + 1200 + STATUS_SHOW_MS)).toBeNull();
+  });
+
+  it('waits as long as a listener could still play it, then says nobody heard it', () => {
+    const s = sendEchoed(sendStarted(t0), echo([1]), t0 + 100);
+    expect(settle(s, t0 + 100 + RECEIPT_WAIT_MS - 1)?.kind).toBe('sent');
+    expect(settle(s, t0 + 100 + RECEIPT_WAIT_MS)?.kind).toBe('unheard');
+    // A listener plays a clip within STALE_MS of its arrival or never.
+    expect(RECEIPT_WAIT_MS).toBeGreaterThan(STALE_MS);
+  });
+
+  it('never says nobody heard it when some listener cannot say (an older app), or the room could not say whom', () => {
+    const unsure = sendEchoed(sendStarted(t0), echo([1, 2], [2]), t0 + 100);
+    expect(settle(unsure, t0 + 100 + STATUS_SHOW_MS - 1)?.kind).toBe('sent');
+    expect(settle(unsure, t0 + 100 + STATUS_SHOW_MS)).toBeNull();
+    const oldRoom = sendEchoed(sendStarted(t0), { id: 7, ms: 3000, to: null, noReceipt: [] }, t0 + 100);
+    expect(oldRoom?.kind).toBe('sent');
+    expect(settle(oldRoom, t0 + 100 + RECEIPT_WAIT_MS + 1)).toBeNull();
+  });
+
+  it('ignores an echo when nothing is being sent, and a press that sent nothing says why', () => {
+    expect(sendEchoed(null, echo([1]), t0)).toBeNull();
+    expect(sendNoted('short', t0).kind).toBe('tooShort');
+    expect(sendNoted('denied', t0).kind).toBe('micDenied');
+    expect(sendNoted('failed', t0).kind).toBe('recordFailed');
+  });
+
+  it('says it in words, in every language, without giving a listener a gender', () => {
+    const names = ['Ivana', 'Marko', 'Ana'];
+    const heard = (n: number): SendStatus => ({ kind: 'sent', since: 0, changed: 0, id: 1, to: [0, 1, 2], heard: [0, 1, 2].slice(0, n) as Seat[], unsure: false });
+    for (const id of LOCALE_IDS) {
+      const ui = new Lang(id).s.ui;
+      const say = (s: SendStatus, mode: 'hold' | 'tap' = 'hold') => sendStatusText(ui, s, mode, (seat) => names[seat]!);
+      const kinds = ['sending', 'nobody', 'unheard', 'notSent', 'micDenied', 'recordFailed'] as const;
+      const words = kinds.map((k) => say({ kind: k, since: 0 }));
+      expect(new Set(words).size, id).toBe(kinds.length);
+      expect(say(heard(0))).toBe(ui.voiceSent);
+      expect(say(heard(1))).toContain('Ivana');
+      expect(say(heard(3))).toMatch(/Ivana.*Marko.*Ana/);
+      expect(say({ kind: 'tooShort', since: 0 }, 'tap')).not.toBe(say({ kind: 'tooShort', since: 0 }, 'hold'));
+      for (const k of ['micHintTap', 'micTooShortTap', 'micCancel', 'voiceModeLabel', 'voiceModeHold', 'voiceModeTap', 'voiceBarHintHold', 'voiceBarHintTap'] as const) {
+        expect(ui[k].length, `${id} ${k}`).toBeGreaterThan(1);
+      }
+      expect(ui.voiceSpeaking('Ivana')).toContain('Ivana');
+    }
+    const hr = new Lang('hr').s.ui;
+    expect(hr.voiceHeardBy(['Ivana'])).toBe('Čuje te Ivana ✓');
+    expect(hr.voiceHeardBy(['Ivana', 'Marko', 'Ana'])).toBe('Čuju te Ivana, Marko i Ana ✓');
+    // Present tense: "čula"/"čuo" would say whether the listener is a woman or a man.
+    for (const id of LOCALE_IDS) {
+      const ui = new Lang(id).s.ui;
+      expect(`${ui.voiceHeardBy(['Ivana'])} ${ui.voiceSpeaking('Ivana')}`).not.toMatch(/čul[ao]|čuo|чул[ао]|чуо/);
+    }
+  });
+});
+
+describe('receipts, the app around them', () => {
+  it('confirms a clip only once it really plays, and asks the room to tell its speaker', () => {
+    const n = src('net/useNetGame.ts');
+    expect(n).toMatch(/const confirmHeard = useCallback\(\(id: number\) => \{\s*roomRef\.current\?\.send\('heard', \{ id \}\);/);
+    expect(n).toMatch(/room\.onMessage\('voiceHeard', /);
+    expect(n).toMatch(/voiceHeardRef\.current\?\.\(msg\.id, by as Seat\);/);
+    // Every join says this app confirms (and reads confirmations).
+    const joins = n.match(/c\.(joinOrCreate|create|joinById)\(.*\{[^}]*\}\)/g) ?? [];
+    expect(joins.length).toBe(4);
+    for (const j of joins) expect(j, j).toMatch(/receipts: true/);
+    // An echo from a room without receipts is "cannot say", never "nobody".
+    expect(n).toMatch(/to: Array\.isArray\(msg!\.to\) \? seats\(msg!\.to\) : null,/);
+    const o = src('net/OnlineGame.tsx');
+    expect(o).toMatch(/`\$\{net\.hidden\.join\(','\)\}\|\$\{net\.muted\.join\(','\)\}`,\s*net\.confirmHeard,/);
+    expect(o).toMatch(/sentEchoed\(e\);/);
+    expect(o).toMatch(/if \(micNote\) sentNoted\(micNote\.why\);/);
+    expect(o).toMatch(/micStatus=\{voiceHere \? micStatus : null\}/);
+    expect(o).toMatch(/voiceMode=\{settings\.voiceMode\}/);
+  });
+});
+
+describe('the end of a deal, with voice', () => {
+  const t = src('TableScreen.tsx').split('\r\n').join('\n');
+
+  it('gives the results sheet a mic of its own, pinned under the part that scrolls', () => {
+    expect(t).toMatch(/const voiceBar = micOnSheet \? \(/);
+    expect(t).toMatch(/finishLabel=\{finishLabel\}\s*voiceBar=\{voiceBar\}/);
+    // Both sheets (a deal seen, a deal missed) pin it, and the scrolling part gives it room.
+    expect(t).toMatch(/const bar = voiceBar \? \(\s*<View style=\{\[styles\.voiceBarPanel, \{ backgroundColor: room\(\)\.page \}\]\}>/);
+    expect((t.match(/<\/ScrollView>\s*\{bar\}/g) ?? []).length).toBe(2);
+    // Sideways a deal's buttons ride in the bar (a short screen would push them off); a match's end keeps its foot.
+    expect(t).toMatch(/const pinFoot = wide && voiceBar !== null && !matchOver;/);
+    expect((t.match(/\{pinFoot \? null : foot\}/g) ?? []).length).toBe(2);
+    expect(t).toMatch(/voiceBar=\{voiceBar\}\s*wide=\{land\}/);
+    expect(t).toMatch(/const scrollMax = voiceBar \? maxHeight - VOICE_BAR_H : maxHeight;/);
+    expect((t.match(/style=\{\[styles\.resultPanel, \{ maxHeight: scrollMax, backgroundColor: room\(\)\.page \}\]\}/g) ?? []).length).toBe(2);
+    // Its words sit beside it, not over the sheet.
+    expect(t).toMatch(/mode=\{voiceMode\}\s*caption="none"/);
+  });
+
+  it('keeps a take going when the deal ends under it, until the finger lifts', () => {
+    expect(t).toMatch(/const heldOver = settled && mic !== undefined && mic\.phase !== 'idle';/);
+    // The row, with the mic under the finger, stays (under the sheet) in both orientations...
+    expect((t.match(/\(!settled \|\| heldOver\) && \(/g) ?? []).length).toBe(2);
+    // ...offering nothing else while it does.
+    expect((t.match(/\{settled \|\| autoSkipping \? null : declareButtons \?\? \(/g) ?? []).length).toBe(2);
+  });
+
+  it('says who is speaking on the sheet, where the pucks are hidden, and what became of my message', () => {
+    expect(t).toMatch(/const otherSpeaker = \(speaking \?\? \[\]\)\.find\(\(s\) => s !== mySeat\) \?\? null;/);
+    expect(t).toMatch(/<SpeakingLine words=\{lang\.s\.ui\.voiceSpeaking\(meta\(otherSpeaker\)\.name\)\} reduced=\{reduced\} \/>/);
+    expect(t).toMatch(/status=\{micStatus\}\s*captionAlign=\{land \? 'end' : 'center'\}/);
+    // A question hides the mic: its new words are said over my hand instead, once each.
+    expect(t).toMatch(/const micHidden = mic !== undefined && !micInRow && !micOnSheet;/);
+    expect(t).toMatch(
+      /if \(!micHidden \|\| micStatus === null \|\| micStatus === was \|\| micStatus === lang\.s\.ui\.voiceSending\) return;\s*const at = anchors\.centre\(anchorId\.seat\(mySeat\)\);\s*if \(at\) fxBus\.emit\(\{ kind: 'bubble', at, text: micStatus,/,
+    );
+  });
+
+  it('tapped to start, offers a cross to throw the take away, wherever the mic is', () => {
+    expect(t).toMatch(/const tapTake = voiceMode === 'tap' && mic\?\.phase === 'recording';/);
+    expect(t).toMatch(/onPress=\{\(\) => void mic\?\.finish\(false\)\}/);
+    expect(t).toMatch(/accessibilityLabel=\{lang\.s\.ui\.micCancel\}/);
+    expect(t).toMatch(/\{tapTake && micCancel\(EMOTE_TOGGLE, 8\)\}/);
+    const settings = src('screens/SettingsScreen.tsx');
+    expect(settings).toMatch(/onSettingsChange\(\{ \.\.\.settings, voiceMode: o\.id \}\);/);
+  });
+});
+
 describe('the table, with voice', () => {
   const t = src('TableScreen.tsx');
 
   it('offers the mic only while nothing is asked, so no row grows', () => {
     expect(t).toMatch(/const micShown = !asking && !belaOffered && !shed && micFits;/);
-    expect(t).toMatch(/const micButton = micLive \? \(/);
+    expect(t).toMatch(/const micButton = micInRow \? \(/);
   });
 
   it("leaves the faces' toggle where it was before there was a mic", () => {
     // Portrait: the mic left of it, a spacer as wide right of it, the row centred.
-    expect(t).toMatch(/<View style=\{styles\.actionsRow\}>\s*\{micButton\}\s*\{emoteToggle\}\s*\{micButton && <View style=\{styles\.micBalance\} \/>\}/);
+    expect(t).toMatch(
+      /<View style=\{styles\.actionsRow\}>\s*\{micButton\}\s*\{tapTake && micButton \? micCancel\(EMOTE_TOGGLE, [^\n]*\) : emoteToggle\}\s*\{micButton && <View style=\{styles\.micBalance\} \/>\}/,
+    );
     expect(t).toMatch(/micBalance: \{ width: EMOTE_TOGGLE, height: EMOTE_TOGGLE \}/);
     // Sideways: the toggle keeps the rail's left edge.
-    expect(t).toMatch(/<View style=\{styles\.railToggles\}>\s*\{emoteToggle\}\s*\{micButton\}\s*<\/View>/);
+    expect(t).toMatch(/<View style=\{styles\.railToggles\}>\s*\{tapTake && micButton \? micCancel\(EMOTE_TOGGLE, [^\n]*\) : emoteToggle\}\s*\{micButton\}\s*<\/View>/);
     // Neither touch area reaches past the gap's middle.
     expect(t).toMatch(/hitSlop=\{land \? \{ top: 8, bottom: 8, left: RAIL_GAP \/ 2, right: 8 \} : \{ top: 8, bottom: 8, left: 8, right: ROW_GAP \/ 2 \}\}/);
     expect(t).toMatch(/!micButton \? 8 : land \? \{ top: 8, bottom: 8, left: 8, right: RAIL_GAP \/ 2 \} : \{ top: 8, bottom: 8, left: ROW_GAP \/ 2, right: 8 \}/);
