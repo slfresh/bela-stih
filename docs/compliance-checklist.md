@@ -24,8 +24,13 @@ keep it that way.
   ads or crash-reporting SDK among the app's dependencies, the store copy and
   the privacy page still say coins are never bought, a crash report goes to
   the player's clipboard and nowhere else, the release ships arm-only with
-  its permissions checked by `scripts/verify-artifact.py`. It fails the build
-  the day any of that changes.
+  its permissions checked by `scripts/verify-artifact.py` (the merged
+  manifest's own `<uses-permission>` elements, parsed from the AAB and the
+  APK). It fails the build the day any of that changes. Its first run found
+  that 1.5.1 asked for SYSTEM_ALERT_WINDOW and READ/WRITE_EXTERNAL_STORAGE
+  (Expo's template and expo-file-system; never used) - 1.5.2 blocks them in
+  app.json, so the manifest now asks for INTERNET, ACCESS_NETWORK_STATE,
+  VIBRATE, RECORD_AUDIO and WAKE_LOCK only.
 - Table gifts (1.3.0) keep them true: a gift is a pick from a fixed 15-item
   catalogue (`GIFTS` in `packages/progression`, duplicated as the server's
   `GIFT_IDS` and cross-checked by a test), bought with earned coins at a

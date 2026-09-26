@@ -91,15 +91,19 @@ before promoting.
 - hr: *Ako se aplikacija sruši, jednim dodirom kopiraš izvještaj o grešci i
   pošalješ ga na prijave@belastih.com. Web-verzija se sada može dodati na
   početni zaslon kao aplikacija. Ponovno spajanje je mirnije, a verzija koja
-  je prestara za igru online to sada i kaže.*
+  je prestara za igru online to sada i kaže. Aplikacija više ne traži dozvole
+  koje nikad nije koristila (crtanje preko drugih aplikacija, pristup pohrani).*
 - sr: *Ако се апликација сруши, једним додиром копираш извештај о грешци и
   пошаљеш га на prijave@belastih.com. Веб-верзија се сада може додати на
   почетни екран као апликација. Поновно повезивање је мирније, а верзија
-  која је престара за игру онлајн то сада и каже.*
+  која је престара за игру онлајн то сада и каже. Апликација више не тражи
+  дозволе које никад није користила (цртање преко других апликација, приступ
+  складишту).*
 - en: *If the app crashes, one tap copies an error report to send to
   prijave@belastih.com. The web version can now be added to the home screen
   as an app. Reconnecting is calmer, and a version too old to play online
-  now says so.*
+  now says so. The app no longer asks for permissions it never used (drawing
+  over other apps, storage access).*
 
 1.5.1 (versionCode 30: no Play form changes - a receipt is the fact of a play, relayed like the clip and never stored) -
 - hr: *Glasovne poruke: vidiš je li poruka stigla - „Poslano”, pa „Čuje te

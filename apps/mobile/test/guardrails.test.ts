@@ -47,6 +47,10 @@ describe('the guardrails', () => {
     expect(build).toMatch(/apps\/mobile\/sourcemaps\/\$VERSION_CODE/);
     expect(read('.gitignore')).toMatch(/^apps\/mobile\/sourcemaps\/$/m);
     const verify = read('scripts/verify-artifact.py');
+    // 1.5.1 shipped asking for SYSTEM_ALERT_WINDOW and the storage pair (Expo's template, expo-file-system)
+    // without using either; from 1.5.2 app.json removes them from the merged manifest and the artifact check refuses them.
+    const app = JSON.parse(read('apps/mobile/app.json'));
+    for (const p of ['SYSTEM_ALERT_WINDOW', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE']) expect(app.expo.android.blockedPermissions, p).toContain(`android.permission.${p}`);
     for (const p of ['SYSTEM_ALERT_WINDOW', 'CAMERA', 'FOREGROUND_SERVICE_MEDIA_PLAYBACK', 'AD_ID', 'ACCESS_FINE_LOCATION']) expect(verify).toContain(p);
     expect(verify).toMatch(/PAGE_16K = 16 \* 1024/);
   });
