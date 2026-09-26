@@ -87,6 +87,20 @@ before promoting.
 
 ### Release notes
 
+1.5.2 (versionCode 31: no Play form changes - nothing new is collected; a crash report is copied to the player's own clipboard and sent by the player, never by the app) -
+- hr: *Ako se aplikacija sruši, jednim dodirom kopiraš izvještaj o grešci i
+  pošalješ ga na prijave@belastih.com. Web-verzija se sada može dodati na
+  početni zaslon kao aplikacija. Ponovno spajanje je mirnije, a verzija koja
+  je prestara za igru online to sada i kaže.*
+- sr: *Ако се апликација сруши, једним додиром копираш извештај о грешци и
+  пошаљеш га на prijave@belastih.com. Веб-верзија се сада може додати на
+  почетни екран као апликација. Поновно повезивање је мирније, а верзија
+  која је престара за игру онлајн то сада и каже.*
+- en: *If the app crashes, one tap copies an error report to send to
+  prijave@belastih.com. The web version can now be added to the home screen
+  as an app. Reconnecting is calmer, and a version too old to play online
+  now says so.*
+
 1.5.1 (versionCode 30: no Play form changes - a receipt is the fact of a play, relayed like the clip and never stored) -
 - hr: *Glasovne poruke: vidiš je li poruka stigla - „Poslano”, pa „Čuje te
   Marko ✓” kad je druga strana pusti. Mikrofon je sada i na obračunu
