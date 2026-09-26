@@ -4,6 +4,7 @@ import {
   cardId,
   createMatch,
   currentActor,
+  detectDeclarations,
   legalActions,
   makeRng,
   publicView,
@@ -219,7 +220,15 @@ function runHarness(config: Partial<EngineConfig>, deals: number, rng: () => num
     // Every offered action must name the seat actually on turn.
     for (const a of legal) expect(a.seat).toBe(actor);
 
-    const choice = legal[Math.floor(rng() * legal.length)]!;
+    let choice = legal[Math.floor(rng() * legal.length)]!;
+    // Blind zvanja offer a card-less template and the marking is the claim: mark a
+    // real one two times in three, a wrong one otherwise, or nothing is ever announced.
+    if (choice.type === 'DECLARE_ANNOUNCE' && !choice.cards) {
+      const hand = s.hands[actor!]!;
+      const held = detectDeclarations(hand, actor!);
+      const wrong = held.length === 0 || rng() < 1 / 3;
+      choice = { type: 'DECLARE_ANNOUNCE', seat: actor!, cards: wrong ? hand.slice(0, 3) : held[Math.floor(rng() * held.length)]!.cards };
+    }
 
     // Spot-check purity and hidden hands without paying for it every step.
     if (steps % 997 === 0) {
@@ -285,13 +294,15 @@ describe('self-play harness', () => {
     ['easy', { declarationMode: 'blind' } as Partial<EngineConfig>],
     ['hard', HARD_CONFIG_OVERRIDES as Partial<EngineConfig>],
   ])(`survives ${OVERLAY_DEALS.toLocaleString()} deals on the shipped %s overlay`, (name, config) => {
-    const rng = makeRng(0x5e1f + name.length * 7919);
+    const rng = makeRng(0x5e1f + ['learn', 'easy', 'hard'].indexOf(name) * 7919);
     const inv = freshInvariants();
     runHarness(config, OVERLAY_DEALS, rng, inv);
     expect(inv.deals).toBe(OVERLAY_DEALS);
     expect(inv.matches).toBeGreaterThan(0);
     expect(inv.pads).toBeGreaterThan(0);
     expect(inv.belas).toBeGreaterThan(0);
+    // Blind modes announce too (the marking policy above), so their zvanja paths are exercised.
+    expect(inv.declarationContests).toBeGreaterThan(0);
     console.log(
       `[selfplay:${name}] ${inv.deals} deals over ${inv.matches} matches — ` +
         `${inv.pads} pads, ${inv.valats} valats, ${inv.belas} belas, ` +

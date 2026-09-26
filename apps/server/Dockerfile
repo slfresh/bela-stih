@@ -9,10 +9,6 @@ FROM node:22-alpine
 
 WORKDIR /app
 ENV NODE_ENV=production
-# Which commit this image is: /health reports it, and the image is tagged by
-# it (deploy-server.sh), so a rollback is `BELA_TAG=<sha> docker compose up`.
-ARG GIT_SHA=dev
-ENV GIT_SHA=$GIT_SHA
 
 # Manifests first, so dependency layers cache across source-only changes.
 COPY package.json package-lock.json tsconfig.json ./
@@ -33,6 +29,12 @@ COPY packages/engine packages/engine
 COPY packages/bots packages/bots
 COPY packages/table packages/table
 COPY apps/server apps/server
+
+# Which commit this image is: /health reports it, and the image is tagged by
+# it (deploy-server.sh), so a rollback is `BELA_TAG=<sha> docker compose up`.
+# Last on purpose: a new commit must not invalidate the npm install above.
+ARG GIT_SHA=dev
+ENV GIT_SHA=$GIT_SHA
 
 EXPOSE 2567
 USER node

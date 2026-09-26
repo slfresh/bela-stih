@@ -37,6 +37,8 @@ import { MSG, ROOM_NAME, ROOM_NAME_MODES, type RoomMessage } from './protocol';
 
 const ENDPOINT = process.env.SERVER_URL ?? 'ws://localhost:2567';
 const OUT = process.argv[2] ?? join('apps', 'server', 'transcripts', 'current');
+/** What /health said when the run began; every tape's meta carries it. */
+let serverHealth: Record<string, unknown> = {};
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // --- the tape ------------------------------------------------------------------
@@ -99,7 +101,9 @@ function fresh(scenario: string): Tape {
       recordedAt: new Date().toISOString(),
       endpoint: ENDPOINT,
       sdk: `colyseus.js ${sdkVersion()}`,
-      serverCommit: gitSha(),
+      // The recorder's own checkout; `server` below is what the server said about itself.
+      recorderCommit: gitSha(),
+      server: serverHealth,
     },
     http: [],
     frames: [],
@@ -342,14 +346,18 @@ async function fullMatch(): Promise<void> {
   tape.notes.push('the rest of the match to 501');
   await play(seats, rng, () => seats.some((s) => s.view?.phase === 'MATCH_OVER'), 20_000);
   await wait(800);
-  tape.notes.push('rematch: three ask, the host forces the start, a deal, then everyone leaves');
+  tape.notes.push('rematch: two ask, one changes their mind and asks again, the host forces the start (rematchStart), a deal, then everyone leaves');
   g1.room.send('rematch', {});
   g2.room.send('rematch', {});
   g3.room.send('rematchCancel', {});
+  // The room ignores a second vote from the same seat inside SIT_GAP_MS (250 ms).
+  await wait(300);
   g3.room.send('rematch', {});
   await wait(400);
-  host.room.send('rematch', {});
+  // What the host's button sends: start now, without waiting for the fourth vote.
+  host.room.send('rematchStart', {});
   await wait(1500);
+  if (!seats.some((s) => s.view && s.view.phase !== 'MATCH_OVER')) throw new Error('the rematch did not start');
   await play(seats, rng, () => seats.some((s) => s.view?.phase === 'DEAL_OVER'), 3000);
   await leaveAll(seats);
   save('full-match');
@@ -380,7 +388,7 @@ async function botsReconnect(): Promise<void> {
     return p === 'DEAL_OVER' || p === 'MATCH_OVER';
   });
   await leaveAll([again]);
-  tape.notes.push('the same token after leaving for good: refused with 4214 (what an app sees when its hold has lapsed)');
+  tape.notes.push('the same token after leaving for good: refused (4212, the room was disposed when its last human left; a lapsed hold on a live room would say 4214)');
   try {
     currentClient = 'host-late';
     await tapedClient('host-late').reconnect(token);
@@ -435,11 +443,20 @@ async function garbage(): Promise<void> {
 }
 
 async function main(): Promise<void> {
-  console.log(`[record] ${ENDPOINT} -> ${OUT}`);
-  await fullMatch();
-  await botsReconnect();
-  await quickPlay();
-  await garbage();
+  // A third argument re-records one tape: `npm run transcript <dir> full-match`.
+  const only = process.argv[3];
+  console.log(`[record] ${ENDPOINT} -> ${OUT}${only ? ` (${only} only)` : ''}`);
+  // What the server said it was, so a tape names the build it was recorded against.
+  try {
+    const res = await fetch(`${ENDPOINT.replace(/^ws/, 'http')}/health`);
+    serverHealth = (await res.json()) as Record<string, unknown>;
+  } catch {
+    serverHealth = { unreachable: true };
+  }
+  const all: Record<string, () => Promise<void>> = { 'full-match': fullMatch, 'bots-reconnect': botsReconnect, 'quick-play': quickPlay, garbage };
+  for (const [name, run] of Object.entries(all)) {
+    if (!only || only === name) await run();
+  }
   process.exit(0);
 }
 

@@ -146,11 +146,15 @@ if [ "$WHAT" != "aab" ]; then python scripts/verify-artifact.py "$AAB" "$APK"; e
 # file and line. Losing it means a release whose crashes cannot be read.
 VERSION_CODE=$(python -c "import json; print(json.load(open('apps/mobile/app.json'))['expo']['android']['versionCode'])")
 MAP=apps/mobile/android/app/build/generated/sourcemaps/react/release/index.android.bundle.map
+# Keyed by versionCode AND the AAB's own sha1 (the one Play reports), so a test
+# build or a rebuild of the same versionCode cannot overwrite the map of the
+# artifact that was actually uploaded.
+AAB_SHA=$(sha1sum "$AAB" | cut -c1-8)
 if [ -f "$MAP" ]; then
-  mkdir -p "apps/mobile/sourcemaps/$VERSION_CODE"
-  cp "$MAP" "apps/mobile/sourcemaps/$VERSION_CODE/index.android.bundle.map"
-  cp "$AAB" "apps/mobile/sourcemaps/$VERSION_CODE/app-release.aab"
-  echo "   source map and AAB archived under apps/mobile/sourcemaps/$VERSION_CODE/"
+  mkdir -p "apps/mobile/sourcemaps/$VERSION_CODE-$AAB_SHA"
+  cp "$MAP" "apps/mobile/sourcemaps/$VERSION_CODE-$AAB_SHA/index.android.bundle.map"
+  cp "$AAB" "apps/mobile/sourcemaps/$VERSION_CODE-$AAB_SHA/app-release.aab"
+  echo "   source map and AAB archived under apps/mobile/sourcemaps/$VERSION_CODE-$AAB_SHA/"
 else
   echo "!! no Hermes source map at $MAP - crashes from this build could not be read"
   exit 1

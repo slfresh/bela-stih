@@ -1,5 +1,5 @@
 import { HARD_CONFIG_OVERRIDES, type EngineConfig } from '@belot/shared-types';
-import { cardId, type Action, type PublicView, type Seat } from '@belot/engine';
+import { cardId, detectDeclarations, type Action, type PublicView, type Seat } from '@belot/engine';
 import { Table, type TableEvent } from '@belot/table';
 
 /**
@@ -20,7 +20,7 @@ import { Table, type TableEvent } from '@belot/table';
  * Seeds are fixed and small: a corpus is worth nothing if it changes by itself.
  */
 
-export const GOLDEN_VERSION = 1;
+export const GOLDEN_VERSION = 2;
 
 /** Every event kind the table can emit; the corpus must reach each one. */
 export const EVENT_KINDS: TableEvent['kind'][] = [
@@ -57,11 +57,19 @@ const MODES: Record<string, Partial<EngineConfig>> = {
   hard: HARD_CONFIG_OVERRIDES,
 };
 
+// Seeds were searched (search-seeds.ts) so that every match announces and reveals zvanja,
+// learn-1001 forces a muss, and no two scenarios share a seed; they are not consecutive on purpose.
+const MODE_SEEDS: Record<string, Record<number, number>> = {
+  learn: { 501: 1000, 701: 1001, 1001: 1012 },
+  easy: { 501: 1011, 701: 1013, 1001: 1014 },
+  hard: { 501: 1021, 701: 1022, 1001: 1023 },
+};
+
 export const SCENARIOS: Scenario[] = [
-  ...Object.entries(MODES).flatMap(([mode, config], i) =>
-    [501, 701, 1001].map((target, j) => ({
+  ...Object.entries(MODES).flatMap(([mode, config]) =>
+    [501, 701, 1001].map((target) => ({
       name: `${mode}-${target}`,
-      seed: 1000 + i * 10 + j,
+      seed: MODE_SEEDS[mode]![target]!,
       config: { ...config, matchTarget: target },
       policy: 'random' as const,
       rematch: mode === 'learn' && target === 501,
@@ -70,12 +78,14 @@ export const SCENARIOS: Scenario[] = [
   // The house-rule knobs, so a change in a dormant path is seen too.
   { name: 'knobs-kontra-tiecancel-1001', seed: 2001, config: { allowKontra: true, declarationTieCancels: true, matchTarget: 1001 }, policy: 'random' },
   { name: 'knobs-french-701', seed: 2002, config: { forcedOvertrumpOverPartner: false, contractTieSucceeds: true, keepBelaOnFailedContract: false, matchTarget: 701 }, policy: 'random' },
+  // The remaining knobs: automatic zvanja and bela, kontra over everything and sweeping, a free dealer, other bonuses.
+  { name: 'knobs-auto-scope-701', seed: 2003, config: { declarationMode: 'auto', belaMode: 'auto', allowKontra: true, kontraScope: 'all', kontraSuccessSweeps: true, dealerMustCall: false, lastTrickBonus: 0, valatBonus: 100, matchTarget: 701 }, policy: 'random' },
   // Seed 4017 was searched for: under the tie-cancel house rule, a deal where both
   // pairs announce equal best zvanja and nobody scores them. The test asserts it stays one.
   { name: 'knobs-tiecancel-cancelled-501', seed: 4017, config: { allowKontra: true, declarationTieCancels: true, matchTarget: 501 }, policy: 'random' },
   // Prava bela's renons: an illegal card ends the deal for the offender.
-  { name: 'renons-hard-501-a', seed: 3001, config: { ...HARD_CONFIG_OVERRIDES, matchTarget: 501 }, policy: 'renons' },
-  { name: 'renons-hard-501-b', seed: 3002, config: { ...HARD_CONFIG_OVERRIDES, matchTarget: 501 }, policy: 'renons' },
+  { name: 'renons-hard-501-a', seed: 3002, config: { ...HARD_CONFIG_OVERRIDES, matchTarget: 501 }, policy: 'renons' },
+  { name: 'renons-hard-501-b', seed: 3003, config: { ...HARD_CONFIG_OVERRIDES, matchTarget: 501 }, policy: 'renons' },
 ];
 
 export interface Coverage {
@@ -87,6 +97,12 @@ export interface Coverage {
   cancelled: number;
   renons: number;
   kontra: number;
+  /** Deals in which somebody announced a zvanje (in blind mode: marked a real one). */
+  announced: number;
+  /** Renons deals in which the defenders were also credited announced zvanja. */
+  renonsZvanja: number;
+  /** Deals in which zvanja were paid - the only trace of them under declarationMode 'auto', which announces nothing. */
+  zvanjaPaid: number;
 }
 
 export interface ScenarioReport {
@@ -125,6 +141,8 @@ export function rngOf(seed: number): () => number {
 
 /** JSON with sorted keys and no undefined: the same bytes from the same value, whatever built it. */
 export function canon(v: unknown): string {
+  // JSON would turn NaN and Infinity into null and hide a broken number behind a stable hash.
+  if (typeof v === 'number' && !Number.isFinite(v)) throw new Error(`non-finite number in the record: ${v}`);
   if (v === null || typeof v !== 'object') return JSON.stringify(v) ?? 'null';
   if (Array.isArray(v)) return '[' + v.map(canon).join(',') + ']';
   const o = v as Record<string, unknown>;
@@ -161,7 +179,7 @@ export function runScenario(sc: Scenario): ScenarioReport {
   const rng = rngOf(sc.seed);
   const table = new Table({ seed: sc.seed, humanSeats: SEATS, config: sc.config });
   const events: Record<string, number> = {};
-  const coverage: Coverage = { pad: 0, valat: 0, muss: 0, bela: 0, contest: 0, cancelled: 0, renons: 0, kontra: 0 };
+  const coverage: Coverage = { pad: 0, valat: 0, muss: 0, bela: 0, contest: 0, cancelled: 0, renons: 0, kontra: 0, announced: 0, renonsZvanja: 0, zvanjaPaid: 0 };
   const dealHashes: string[] = [];
   let steps = 0;
 
@@ -186,6 +204,18 @@ export function runScenario(sc: Scenario): ScenarioReport {
       const legal = table.legal();
       if (legal.length === 0) throw new Error(`${sc.name}: no legal action in phase ${table.phase}`);
       let action = legal[Math.floor(rng() * legal.length)] as Action;
+      // Blind zvanja (easy, hard): the offer is a card-less template and the
+      // marking IS the claim, so uniform play over the template alone would never
+      // announce anything and two of the three shipped modes would go unhashed.
+      // Two markings in three are real (a zvanje the hand holds), one in three is
+      // wrong (the first three cards): the hit, the miss and the skip all recorded.
+      if (action.type === 'DECLARE_ANNOUNCE' && !action.cards) {
+        const seat = action.seat;
+        const hand = table.view(seat).hand;
+        const held = detectDeclarations(hand, seat);
+        const wrong = held.length === 0 || rng() < 1 / 3;
+        action = { type: 'DECLARE_ANNOUNCE', seat, cards: wrong ? hand.slice(0, 3) : held[Math.floor(rng() * held.length)]!.cards };
+      }
       // Only once a card may actually be played: PLAY is also the phase in
       // which the zvanja round asks each seat in turn (legal is DECLARE_* then).
       if (sc.policy === 'renons' && !renonsDone && table.phase === 'PLAY' && legal.some((x) => x.type === 'PLAY_CARD')) {
@@ -221,7 +251,10 @@ export function runScenario(sc: Scenario): ScenarioReport {
       if (result.valatTeam !== null) coverage.valat++;
       if (result.bela[0] + result.bela[1] > 0) coverage.bela++;
       if (result.renonsSeat != null) coverage.renons++;
+      if (result.renonsSeat != null && result.declarationPoints[0] + result.declarationPoints[1] > 0) coverage.renonsZvanja++;
+      if (result.declarationPoints[0] + result.declarationPoints[1] > 0) coverage.zvanjaPaid++;
     }
+    if (declaredTeams.size > 0) coverage.announced++;
     if (mussSeen) coverage.muss++;
     if (declaredTeams.size === 2) {
       coverage.contest++;

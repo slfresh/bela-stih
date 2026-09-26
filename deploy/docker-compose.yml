@@ -18,8 +18,11 @@ services:
       args:
         GIT_SHA: ${BELA_TAG:-dev}
     restart: unless-stopped
-    # Compose restarts a container that stops answering /health; a hung event
-    # loop used to sit there "Up" while every table was dead.
+    # Marks the container unhealthy when it stops answering /health, so
+    # `docker compose ps` says so where a hung event loop used to sit there
+    # "Up" while every table was dead. Nothing restarts it by itself (plain
+    # Docker acts on health only in Swarm; restart: unless-stopped fires on
+    # exit) - UptimeRobot on /health is what alerts a human.
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:2567/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
       interval: 30s

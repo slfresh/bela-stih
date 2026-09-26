@@ -33,8 +33,10 @@ first start — that needs the DNS record to already resolve. Deploys drop
 running matches; ship between games (`/health` says how many are on).
 
 Every image is tagged with its commit (`bela-server:<sha>`, `-dirty` when the
-tree had local changes; the tag is `BELA_TAG` in `/opt/bela/deploy/.env`).
-The box keeps the last two, so there is always one to go back to.
+tree had local or untracked changes; the tag is `BELA_TAG` in
+`/opt/bela/deploy/.env`, and the build that ran before it is `BELA_PREV`).
+The box keeps exactly those two, whatever their age, so the build to go back
+to is always there - even after a rollback followed by a fix.
 
 ## Health, and going back
 
@@ -51,8 +53,10 @@ bash scripts/rollback-server.sh root@YOUR.SERVER.IP          # the previous tag
 bash scripts/rollback-server.sh root@YOUR.SERVER.IP <sha>    # a named one
 ```
 
-swaps `BELA_TAG` back, restarts from the image already on the box (no build),
-and waits for `/health` to report that sha. Then fix forward.
+swaps the tags (`BELA_TAG` becomes the previous build, `BELA_PREV` the one just
+left, so a second rollback returns), restarts from the image already on the box
+(no build), and ends only when `/health` reports that sha - as the deploy does
+for the build it just made. Then fix forward.
 
 ## Wire transcripts
 
@@ -63,10 +67,12 @@ npm run transcript apps/server/transcripts/<version>
 plays four scripted sessions against `SERVER_URL` (default the local server) —
 a full match with everything a table can say, bots and a reconnect, quick play
 and its refusals, garbage — and records every WebSocket frame and matchmake
-request, raw and decoded, gzipped. `apps/server/transcripts/1.5.1/` is what
-the 1.5.1 app and server said to each other. Record a set before a protocol
-change and diff the decoded messages after it; an app in the wild speaks the
-old set.
+request, raw and decoded, gzipped; each tape's `meta.server` is what `/health`
+said about the server it was recorded against. `apps/server/transcripts/1.5.1/`
+is what a 1.5.1 app says and hears (the sessions join without `proto`, as that
+app does). Record a set before a protocol change and diff the decoded messages
+after it; an app in the wild speaks the old set. One tape can be redone alone:
+`npm run transcript apps/server/transcripts/1.5.1 full-match`.
 
 ## Verify like you mean it
 

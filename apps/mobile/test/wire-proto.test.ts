@@ -54,7 +54,11 @@ describe('the wire generation', () => {
     const n = src('net/useNetGame.ts');
     expect(n).toMatch(/const ROOM_GONE_CODE = 4212;/);
     expect(n).toMatch(/const TOKEN_EXPIRED_CODE = 4214;/);
-    expect(n).toMatch(/if \(code === ROOM_GONE_CODE \|\| code === TOKEN_EXPIRED_CODE\) break;/);
+    expect(n).toMatch(/if \(code === ROOM_GONE_CODE\) break;/);
+    // 4214 is what Colyseus says before the server has noticed the drop: never a reason to give up at once.
+    expect(n).toMatch(/if \(code === TOKEN_EXPIRED_CODE && Date\.now\(\) - startedAt > TOKEN_GRACE_MS\) break;/);
+    expect(n).toMatch(/const TOKEN_GRACE_MS = 15_000;/);
+    expect(n).not.toMatch(/code === TOKEN_EXPIRED_CODE\) break;/);
     expect(n).toMatch(/setTimeout\(r, wait \* \(0\.5 \+ Math\.random\(\)\)\)/);
   });
 

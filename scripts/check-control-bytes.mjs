@@ -8,7 +8,8 @@ import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 
 const TEXT = /\.(ts|tsx|mjs|cjs|js|json|md|html|css|sh|py|yml|yaml|txt|webmanifest)$/;
-const files = execSync('git ls-files', { encoding: 'utf8' }).split('\n').filter((f) => TEXT.test(f));
+// -z: a path with a non-ASCII character is otherwise printed quoted and octal-escaped, and then skipped unread.
+const files = execSync('git ls-files -z', { encoding: 'utf8' }).split('\0').filter((f) => TEXT.test(f));
 const bad = [];
 for (const file of files) {
   const buf = readFileSync(file);

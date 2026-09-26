@@ -59,15 +59,17 @@ BLOCKED = {
     'android.permission.BLUETOOTH_CONNECT',
     'com.google.android.gms.permission.AD_ID',
 }
-# Bytes, uncompressed. The 1.5.1 build: arm64 26.9 MB, armeabi-v7a 19.6 MB,
-# dex 27.5 MB. A quarter of headroom; a real new dependency raises these on
-# purpose, in the same commit.
+# Bytes, uncompressed. The 1.5.2 build measured: arm64 20.6 MB, armeabi-v7a
+# 14.2 MB, dex 26.3 MB. Room for a real new dependency, not for a doubling;
+# raise these on purpose, in the same commit as what needs it.
 BUDGET = {
     'lib/arm64-v8a': 34 * 1024 * 1024,
     'lib/armeabi-v7a': 25 * 1024 * 1024,
     'dex': 34 * 1024 * 1024,
 }
 PAGE_16K = 16 * 1024
+# Both spellings request a permission; the -sdk-23 form only on API 23+, which every device we ship to is.
+PERMISSION_ELEMENTS = ('uses-permission', 'uses-permission-sdk-23')
 
 
 def allowed(perm):
@@ -77,7 +79,7 @@ def allowed(perm):
 # --- the APK's binary XML (ResXMLTree) ---------------------------------------
 
 def axml_uses_permissions(blob):
-    """The android:name of every <uses-permission> in an APK's AndroidManifest.xml."""
+    """The android:name of every <uses-permission> (or -sdk-23) in an APK's AndroidManifest.xml."""
     if len(blob) < 8 or struct.unpack_from('<H', blob, 0)[0] != 0x0003:
         raise ValueError('not a binary XML document')
     pool = None
@@ -120,7 +122,7 @@ def axml_uses_permissions(blob):
             # attributeSize, attributeCount, ...; attributeStart is relative to attrExt.
             name_idx, = struct.unpack_from('<I', blob, i + 20)
             attr_start, attr_size, attr_count = struct.unpack_from('<HHH', blob, i + 24)
-            if name_idx < len(pool) and pool[name_idx] == 'uses-permission':
+            if name_idx < len(pool) and pool[name_idx] in PERMISSION_ELEMENTS:
                 for k in range(attr_count):
                     p = i + 16 + attr_start + k * attr_size
                     _ns, an, raw, _size, _res0, dtype, data = struct.unpack_from('<IIIHBBI', blob, p)
@@ -200,7 +202,7 @@ def proto_uses_permissions(blob):
         # XmlElement: 1 namespace_declaration, 2 namespace_uri, 3 name, 4 attribute, 5 child.
         fields = _fields(b)
         name = next((_text(v) for f, w, v in fields if f == 3 and w == 2), '')
-        if name == 'uses-permission':
+        if name in PERMISSION_ELEMENTS:
             for f, w, v in fields:
                 if f == 4 and w == 2:
                     an, av = attribute(v)

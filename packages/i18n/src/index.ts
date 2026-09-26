@@ -967,7 +967,7 @@ const hr: Strings = {
     troubleNoSuchTable: 'Nema otvorenog stola s tom šifrom. Provjeri šifru, ili zamoli prijatelja da je pošalje ponovno.',
     troubleTableClosed: 'Za tim stolom se već igra, ili je pun.',
     troubleOffline: 'Nema veze. Provjeri internet pa pokušaj ponovno.',
-    troubleAppTooOld: 'Ova verzija aplikacije više ne može igrati online. Ažuriraj je u trgovini.',
+    troubleAppTooOld: 'Ova verzija aplikacije više ne može igrati online. Ažuriraj je u Trgovini Google Play.',
     troubleServer: 'Poslužitelj se trenutno ne javlja kako treba. Pokušaj ponovno za koji trenutak.',
     troubleDropped: 'Stol više ne čeka. Pokušaj ponovno ili se vrati na početak.',
     troubleSameNetwork:
@@ -1524,7 +1524,7 @@ const srCyrl: Strings = {
     troubleNoSuchTable: 'Нема отвореног стола са том шифром. Провери шифру, или замоли пријатеља да је пошаље поново.',
     troubleTableClosed: 'За тим столом се већ игра, или је пун.',
     troubleOffline: 'Нема везе. Провери интернет па покушај поново.',
-    troubleAppTooOld: 'Ова верзија апликације више не може да игра онлајн. Ажурирај је у продавници.',
+    troubleAppTooOld: 'Ова верзија апликације више не може да игра онлајн. Ажурирај је у Google Play продавници.',
     troubleServer: 'Сервер се тренутно не јавља како треба. Покушај поново за који тренутак.',
     troubleDropped: 'Сто више не чека. Покушај поново или се врати на почетак.',
     troubleSameNetwork:
@@ -2078,7 +2078,7 @@ const en: Strings = {
     troubleNoSuchTable: 'No open table has that code. Check it, or ask your friend to send it again.',
     troubleTableClosed: 'That table is already playing, or full.',
     troubleOffline: 'No connection. Check your internet and try again.',
-    troubleAppTooOld: 'This version of the app can no longer play online. Update it in the store.',
+    troubleAppTooOld: 'This version of the app can no longer play online. Update it in Google Play.',
     troubleServer: "The server isn't answering properly right now. Try again in a moment.",
     troubleDropped: 'The table is no longer waiting. Try again, or go back to the start.',
     troubleSameNetwork:

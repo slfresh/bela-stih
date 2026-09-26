@@ -22,7 +22,9 @@ const SNAPSHOT = join(here, 'wire-schema.snapshot.json');
 const WANTED: Record<string, string[]> = {
   'apps/server/src/protocol.ts': ['ClientMessage', 'RoomMessage', 'SeatInfo', 'VoiceMessage', 'VoiceHeardMessage', 'EmoteMessage', 'GiftMessage', 'JoinGifts', 'JoinVoice', 'JoinProto', 'HoldInfo'],
   'packages/table/src/index.ts': ['TableEvent'],
-  'packages/shared-types/src/index.ts': ['PublicView', 'Action'],
+  // Everything a view or an action is made of, spelled out - a named type printed by its name
+  // (`Phase`, `Card[]`) would let its members change unseen.
+  'packages/shared-types/src/index.ts': ['PublicView', 'Action', 'Card', 'Suit', 'Rank', 'ContractType', 'PlayContext', 'Seat', 'TeamId', 'Phase', 'TrickPlay', 'DealProgress', 'Declaration', 'DeclarationSummary', 'DeclarationKind', 'DeclarationMode', 'RenonsMode', 'BelaMode', 'EngineConfig'],
   'packages/engine/src/index.ts': ['DealScoreResult'],
 };
 
@@ -36,15 +38,18 @@ function describeTypes(): Record<string, Shape> {
   const checker = program.getTypeChecker();
   const out: Record<string, Shape> = {};
   // Plain names (`Seat`, not an import("...") path): the snapshot must read the same on every machine.
-  const flags = ts.TypeFormatFlags.NoTruncation;
+  // InTypeAlias: a type looked up by its own name is written as its members ('IDLE' | 'BID' | ...), not as itself.
+  const flags = ts.TypeFormatFlags.NoTruncation | ts.TypeFormatFlags.InTypeAlias;
 
   const shapeOf = (t: ts.Type): Shape => {
     if (t.isUnion() && !(t.flags & ts.TypeFlags.Boolean)) {
       // Literal unions ('a' | 'b') stay a string; object unions are spelled out.
-      const objects = t.types.filter((m) => m.getProperties().length > 0);
+      const objects = t.types.filter((m) => m.flags & ts.TypeFlags.Object);
       if (objects.length === t.types.length) return { kind: 'union', members: t.types.map(shapeOf) };
       return { kind: 'other', text: checker.typeToString(t, undefined, flags) };
     }
+    // Only a real object type is walked property by property; a literal, an array or an alias is written out.
+    if (!(t.flags & ts.TypeFlags.Object)) return { kind: 'other', text: checker.typeToString(t, undefined, flags) };
     const props = t.getProperties();
     if (props.length === 0) return { kind: 'other', text: checker.typeToString(t, undefined, flags) };
     const rec: Record<string, string> = {};
@@ -65,8 +70,11 @@ function describeTypes(): Record<string, Shape> {
     for (const name of names) {
       const sym = exports.find((e) => e.name === name);
       expect(sym, `${file} exports ${name}`).toBeDefined();
-      const decl = sym!.declarations?.[0];
-      const type = decl ? checker.getTypeAtLocation(decl) : checker.getDeclaredTypeOfSymbol(sym!);
+      // A re-export (`export { type X } from './y'`) is an alias: asking the ExportSpecifier for its
+      // type gives the error type, which prints as `any` and would pin nothing.
+      const target = sym!.flags & ts.SymbolFlags.Alias ? checker.getAliasedSymbol(sym!) : sym!;
+      const decl = target.declarations?.[0];
+      const type = decl ? checker.getTypeAtLocation(decl) : checker.getDeclaredTypeOfSymbol(target);
       out[`${file}:${name}`] = shapeOf(type);
     }
   }
@@ -99,7 +107,8 @@ describe('the wire schema', () => {
   const now = describeTypes();
 
   it('only ever grows: no message, field or event an app in the wild reads may go or change', () => {
-    if (process.env.SCHEMA_UPDATE) writeFileSync(SNAPSHOT, JSON.stringify(now, null, 1) + '\n');
+    // The snapshot is compared BEFORE it is refreshed: SCHEMA_UPDATE accepts additions, never a removal.
+    if (!existsSync(SNAPSHOT) && process.env.SCHEMA_UPDATE) writeFileSync(SNAPSHOT, JSON.stringify(now, null, 1) + '\n');
     expect(existsSync(SNAPSHOT), 'no snapshot: run once with SCHEMA_UPDATE=1').toBe(true);
     const was = JSON.parse(readFileSync(SNAPSHOT, 'utf8')) as Record<string, Shape>;
     const problems: string[] = [];
@@ -107,7 +116,25 @@ describe('the wire schema', () => {
       if (!(name in now)) problems.push(`${name} is no longer exported`);
       else onlyAdditions(now[name]!, shape, name, problems);
     }
+    // What the APP sends: a new REQUIRED field there is a field an older app never sends, so the
+    // server must treat it as optional. Only optional additions are additive in that direction.
+    const clientNow = now['apps/server/src/protocol.ts:ClientMessage'];
+    const clientWas = was['apps/server/src/protocol.ts:ClientMessage'];
+    if (clientNow?.kind === 'union' && clientWas?.kind === 'union') {
+      for (const m of clientNow.members) {
+        if (m.kind !== 'object') continue;
+        const tag = m.props['type'];
+        const before = clientWas.members.find((w) => w.kind === 'object' && w.props['type'] === tag);
+        if (!before || before.kind !== 'object') continue;
+        for (const k of Object.keys(m.props)) {
+          if (!(k in before.props) && !k.endsWith('?')) problems.push(`ClientMessage[${tag}].${k} is a new REQUIRED field: an app in the wild never sends it`);
+        }
+      }
+    }
     expect(problems, problems.join('\n')).toEqual([]);
+    if (process.env.SCHEMA_UPDATE) writeFileSync(SNAPSHOT, JSON.stringify(now, null, 1) + '\n');
+    // A type the checker could not resolve prints as any/error and would pin nothing: never in the snapshot.
+    expect(JSON.stringify(now)).not.toMatch(/"text":"(any|error|unknown)"/);
     // Additions are fine, but the snapshot must say so: an unsnapshotted addition is a forgotten one.
     expect(JSON.stringify(now), 'the wire grew: refresh the snapshot with SCHEMA_UPDATE=1 and say what was added').toBe(JSON.stringify(was));
   });
@@ -123,5 +150,11 @@ describe('the wire schema', () => {
     const events = now['packages/table/src/index.ts:TableEvent']!;
     expect(events.kind).toBe('union');
     expect((events as { members: Shape[] }).members.length).toBe(15);
+    // The named types are written as their members, and the re-exported result as its fields.
+    expect((now['packages/shared-types/src/index.ts:Phase'] as { text: string }).text).toContain('"BID"');
+    expect((now['packages/shared-types/src/index.ts:Suit'] as { text: string }).text).toContain('"hearts"');
+    const result = now['packages/engine/src/index.ts:DealScoreResult']!;
+    expect(result.kind).toBe('object');
+    for (const k of ['finalScore', 'callerMade', 'renonsSeat?', 'declarationPoints']) expect((result as { props: Record<string, string> }).props, k).toHaveProperty(k);
   });
 });

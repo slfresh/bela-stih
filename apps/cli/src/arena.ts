@@ -164,8 +164,10 @@ function main(): void {
   const [lo, hi] = wilson(aWins, played);
   const [m, mlo, mhi] = meanCi(margins);
   times.sort((x, y) => x - y);
-  const p95 = times[Math.floor(times.length * 0.95)] ?? 0;
-  const p50 = times[Math.floor(times.length * 0.5)] ?? 0;
+  // Nearest-rank percentiles: the k-th smallest with k = ceil(p n), so 0.95 n whole does not step one too far.
+  const rank = (p: number) => times[Math.max(0, Math.ceil(times.length * p) - 1)] ?? 0;
+  const p95 = rank(0.95);
+  const p50 = rank(0.5);
   console.log(`arena: ${args.a} (A) vs ${args.b} (B), ${args.matches} seeds x 2 orientations, ${args.mode} to ${args.target}, seed ${args.seed}`);
   console.log(`  A wins ${pct(aWins / played)} of ${played} matches (95% CI ${pct(lo)}-${pct(hi)})`);
   console.log(`  A's paired points margin per match ${m.toFixed(1)} (95% CI ${mlo.toFixed(1)} to ${mhi.toFixed(1)})`);

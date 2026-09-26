@@ -173,10 +173,11 @@ Nightly it runs the self-play harness over 100,000 deals.
 - **Self-play on what ships.** The same invariants over the three overlays a player can actually
   choose (learn, easy, hard: 2,000 deals each per push, 20,000 nightly), not only the harness's
   house rules.
-- **The golden corpus** (`packages/engine/test/golden/`): 14 seeded matches, 98 deals, every step's
+- **The golden corpus** (`packages/engine/test/golden/`): 15 seeded matches, 95 deals, every step's
   action, all four seats' views and the events it produced, hashed deal by deal and committed. A
-  hash that moves is a rules change, named by scenario and deal. `npm run golden:chromium` proves a
-  real browser hashes the corpus byte for byte as Node does.
+  hash that moves is a rules change, named by scenario and deal; two planted defects (a blind marking
+  that always counts, a renons that pays no zvanja) were shown to turn it red. `npm run golden:chromium`
+  proves a real browser hashes the corpus byte for byte as Node does.
 - **The wire only grows.** Every message, view field and event type is written out by the
   TypeScript checker into `apps/mobile/test/wire-schema.snapshot.json`; a field removed or changed
   while apps that read it are in the wild fails the build. A wire generation number (`proto`) is

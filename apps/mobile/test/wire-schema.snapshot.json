@@ -6,7 +6,7 @@
     "kind": "object",
     "props": {
      "type": "\"action\"",
-     "action": "Action"
+     "action": "{ type: \"BID_PASS\"; seat: Seat; } | { type: \"BID_CALL\"; seat: Seat; suit: Suit; } | { type: \"DOUBLE_KONTRA\"; seat: Seat; } | { type: \"DOUBLE_REKONTRA\"; seat: Seat; } | { type: \"DOUBLE_PASS\"; seat: Seat; } | { type: \"DECLARE_ANNOUNCE\"; seat: Seat; cards?: Card[] | undefined; } | { type: \"DECLARE_SKIP\"; seat: Seat; } | { type: \"PLAY_CARD\"; seat: Seat; card: Card; announceBela?: boolean | undefined; }"
     }
    },
    {
@@ -19,7 +19,7 @@
     "kind": "object",
     "props": {
      "type": "\"sit\"",
-     "seat": "Seat"
+     "seat": "0 | 1 | 2 | 3"
     }
    },
    {
@@ -159,7 +159,7 @@
  "apps/server/src/protocol.ts:SeatInfo": {
   "kind": "object",
   "props": {
-   "seat": "Seat",
+   "seat": "0 | 1 | 2 | 3",
    "name": "string",
    "avatar": "string",
    "connected": "boolean",
@@ -172,7 +172,7 @@
  "apps/server/src/protocol.ts:VoiceMessage": {
   "kind": "object",
   "props": {
-   "from": "Seat",
+   "from": "0 | 1 | 2 | 3",
    "id": "number",
    "ms": "number",
    "mime": "string",
@@ -185,20 +185,20 @@
   "kind": "object",
   "props": {
    "id": "number",
-   "by": "Seat"
+   "by": "0 | 1 | 2 | 3"
   }
  },
  "apps/server/src/protocol.ts:EmoteMessage": {
   "kind": "object",
   "props": {
-   "seat": "Seat",
+   "seat": "0 | 1 | 2 | 3",
    "id": "string"
   }
  },
  "apps/server/src/protocol.ts:GiftMessage": {
   "kind": "object",
   "props": {
-   "from": "Seat",
+   "from": "0 | 1 | 2 | 3",
    "to": "Seat[]",
    "id": "string"
   }
@@ -238,29 +238,29 @@
     "props": {
      "kind": "\"dealStarted\"",
      "dealNumber": "number",
-     "dealer": "Seat"
+     "dealer": "0 | 1 | 2 | 3"
     }
    },
    {
     "kind": "object",
     "props": {
      "kind": "\"bidPassed\"",
-     "seat": "Seat"
+     "seat": "0 | 1 | 2 | 3"
     }
    },
    {
     "kind": "object",
     "props": {
      "kind": "\"bidCalled\"",
-     "seat": "Seat",
-     "suit": "Suit"
+     "seat": "0 | 1 | 2 | 3",
+     "suit": "\"spades\" | \"hearts\" | \"diamonds\" | \"clubs\""
     }
    },
    {
     "kind": "object",
     "props": {
      "kind": "\"doubled\"",
-     "seat": "Seat",
+     "seat": "0 | 1 | 2 | 3",
      "multiplier": "2 | 4"
     }
    },
@@ -268,15 +268,15 @@
     "kind": "object",
     "props": {
      "kind": "\"doublePassed\"",
-     "seat": "Seat"
+     "seat": "0 | 1 | 2 | 3"
     }
    },
    {
     "kind": "object",
     "props": {
      "kind": "\"handsCompleted\"",
-     "trumpSuit": "Suit",
-     "callerSeat": "Seat",
+     "trumpSuit": "\"spades\" | \"hearts\" | \"diamonds\" | \"clubs\"",
+     "callerSeat": "0 | 1 | 2 | 3",
      "multiplier": "1 | 2 | 4"
     }
    },
@@ -284,7 +284,7 @@
     "kind": "object",
     "props": {
      "kind": "\"declared\"",
-     "seat": "Seat",
+     "seat": "0 | 1 | 2 | 3",
      "declarations": "DeclarationSummary[]"
     }
    },
@@ -292,14 +292,14 @@
     "kind": "object",
     "props": {
      "kind": "\"declarationSkipped\"",
-     "seat": "Seat"
+     "seat": "0 | 1 | 2 | 3"
     }
    },
    {
     "kind": "object",
     "props": {
      "kind": "\"declarationsRevealed\"",
-     "team": "TeamId",
+     "team": "0 | 1",
      "declarations": "Declaration[]"
     }
    },
@@ -307,14 +307,14 @@
     "kind": "object",
     "props": {
      "kind": "\"belaCalled\"",
-     "seat": "Seat"
+     "seat": "0 | 1 | 2 | 3"
     }
    },
    {
     "kind": "object",
     "props": {
      "kind": "\"cardPlayed\"",
-     "seat": "Seat",
+     "seat": "0 | 1 | 2 | 3",
      "card": "Card"
     }
    },
@@ -322,7 +322,7 @@
     "kind": "object",
     "props": {
      "kind": "\"trickWon\"",
-     "seat": "Seat",
+     "seat": "0 | 1 | 2 | 3",
      "trickNumber": "number",
      "points": "number",
      "isLastTrick": "boolean"
@@ -340,7 +340,7 @@
     "kind": "object",
     "props": {
      "kind": "\"matchOver\"",
-     "winner": "TeamId",
+     "winner": "0 | 1",
      "matchScores": "[number, number]"
     }
    },
@@ -356,9 +356,9 @@
  "packages/shared-types/src/index.ts:PublicView": {
   "kind": "object",
   "props": {
-   "phase": "Phase",
-   "dealer": "Seat",
-   "seat": "Seat",
+   "phase": "\"IDLE\" | \"BID\" | \"DOUBLE\" | \"PLAY\" | \"DEAL_OVER\" | \"MATCH_OVER\"",
+   "dealer": "0 | 1 | 2 | 3",
+   "seat": "0 | 1 | 2 | 3",
    "hand": "Card[]",
    "handCounts": "[number, number, number, number]",
    "context": "PlayContext",
@@ -387,43 +387,43 @@
     "kind": "object",
     "props": {
      "type": "\"BID_PASS\"",
-     "seat": "Seat"
+     "seat": "0 | 1 | 2 | 3"
     }
    },
    {
     "kind": "object",
     "props": {
      "type": "\"BID_CALL\"",
-     "seat": "Seat",
-     "suit": "Suit"
+     "seat": "0 | 1 | 2 | 3",
+     "suit": "\"spades\" | \"hearts\" | \"diamonds\" | \"clubs\""
     }
    },
    {
     "kind": "object",
     "props": {
      "type": "\"DOUBLE_KONTRA\"",
-     "seat": "Seat"
+     "seat": "0 | 1 | 2 | 3"
     }
    },
    {
     "kind": "object",
     "props": {
      "type": "\"DOUBLE_REKONTRA\"",
-     "seat": "Seat"
+     "seat": "0 | 1 | 2 | 3"
     }
    },
    {
     "kind": "object",
     "props": {
      "type": "\"DOUBLE_PASS\"",
-     "seat": "Seat"
+     "seat": "0 | 1 | 2 | 3"
     }
    },
    {
     "kind": "object",
     "props": {
      "type": "\"DECLARE_ANNOUNCE\"",
-     "seat": "Seat",
+     "seat": "0 | 1 | 2 | 3",
      "cards?": "Card[] | undefined"
     }
    },
@@ -431,22 +431,159 @@
     "kind": "object",
     "props": {
      "type": "\"DECLARE_SKIP\"",
-     "seat": "Seat"
+     "seat": "0 | 1 | 2 | 3"
     }
    },
    {
     "kind": "object",
     "props": {
      "type": "\"PLAY_CARD\"",
-     "seat": "Seat",
+     "seat": "0 | 1 | 2 | 3",
      "card": "Card",
      "announceBela?": "boolean | undefined"
     }
    }
   ]
  },
- "packages/engine/src/index.ts:DealScoreResult": {
+ "packages/shared-types/src/index.ts:Card": {
+  "kind": "object",
+  "props": {
+   "suit": "\"spades\" | \"hearts\" | \"diamonds\" | \"clubs\"",
+   "rank": "\"7\" | \"8\" | \"9\" | \"10\" | \"J\" | \"Q\" | \"K\" | \"A\""
+  }
+ },
+ "packages/shared-types/src/index.ts:Suit": {
   "kind": "other",
-  "text": "any"
+  "text": "\"spades\" | \"hearts\" | \"diamonds\" | \"clubs\""
+ },
+ "packages/shared-types/src/index.ts:Rank": {
+  "kind": "other",
+  "text": "\"7\" | \"8\" | \"9\" | \"10\" | \"J\" | \"Q\" | \"K\" | \"A\""
+ },
+ "packages/shared-types/src/index.ts:ContractType": {
+  "kind": "other",
+  "text": "\"SUIT\" | \"ALL_TRUMPS\" | \"NO_TRUMPS\""
+ },
+ "packages/shared-types/src/index.ts:PlayContext": {
+  "kind": "object",
+  "props": {
+   "contractType": "\"SUIT\" | \"ALL_TRUMPS\" | \"NO_TRUMPS\"",
+   "trumpSuit": "Suit | null"
+  }
+ },
+ "packages/shared-types/src/index.ts:Seat": {
+  "kind": "other",
+  "text": "0 | 1 | 2 | 3"
+ },
+ "packages/shared-types/src/index.ts:TeamId": {
+  "kind": "other",
+  "text": "0 | 1"
+ },
+ "packages/shared-types/src/index.ts:Phase": {
+  "kind": "other",
+  "text": "\"IDLE\" | \"BID\" | \"DOUBLE\" | \"PLAY\" | \"DEAL_OVER\" | \"MATCH_OVER\""
+ },
+ "packages/shared-types/src/index.ts:TrickPlay": {
+  "kind": "object",
+  "props": {
+   "seat": "0 | 1 | 2 | 3",
+   "card": "Card"
+  }
+ },
+ "packages/shared-types/src/index.ts:DealProgress": {
+  "kind": "object",
+  "props": {
+   "tricksPlayed": "number",
+   "cardPoints": "[number, number]",
+   "tricksWon": "[number, number]",
+   "lastTrickTeam": "TeamId | null",
+   "lastTrickBonus": "number",
+   "declarationPoints": "[number, number]",
+   "declarationTeam": "TeamId | null",
+   "bela": "[number, number]",
+   "running": "[number, number]",
+   "callerTeam": "0 | 1",
+   "multiplier": "1 | 2 | 4",
+   "pot": "number",
+   "target": "number",
+   "callerNeeds": "number",
+   "callerSafe": "boolean",
+   "callerDoomed": "boolean",
+   "valatPossible": "[boolean, boolean]",
+   "provisional": "boolean",
+   "belaPending": "boolean"
+  }
+ },
+ "packages/shared-types/src/index.ts:Declaration": {
+  "kind": "object",
+  "props": {
+   "kind": "\"sequence\" | \"carre\"",
+   "cards": "Card[]",
+   "value": "number",
+   "length": "number",
+   "topRank": "\"7\" | \"8\" | \"9\" | \"10\" | \"J\" | \"Q\" | \"K\" | \"A\"",
+   "seat": "0 | 1 | 2 | 3"
+  }
+ },
+ "packages/shared-types/src/index.ts:DeclarationSummary": {
+  "kind": "object",
+  "props": {
+   "kind": "\"sequence\" | \"carre\"",
+   "value": "number",
+   "length": "number",
+   "topRank": "\"7\" | \"8\" | \"9\" | \"10\" | \"J\" | \"Q\" | \"K\" | \"A\"",
+   "seat": "0 | 1 | 2 | 3"
+  }
+ },
+ "packages/shared-types/src/index.ts:DeclarationKind": {
+  "kind": "other",
+  "text": "\"sequence\" | \"carre\""
+ },
+ "packages/shared-types/src/index.ts:DeclarationMode": {
+  "kind": "other",
+  "text": "\"auto\" | \"announce\" | \"blind\""
+ },
+ "packages/shared-types/src/index.ts:RenonsMode": {
+  "kind": "other",
+  "text": "\"block\" | \"punish\""
+ },
+ "packages/shared-types/src/index.ts:BelaMode": {
+  "kind": "other",
+  "text": "\"auto\" | \"announce\""
+ },
+ "packages/shared-types/src/index.ts:EngineConfig": {
+  "kind": "object",
+  "props": {
+   "matchTarget": "number",
+   "forcedOvertrumpOverPartner": "boolean",
+   "renonsMode": "\"block\" | \"punish\"",
+   "keepBelaOnFailedContract": "boolean",
+   "contractTieSucceeds": "boolean",
+   "allowKontra": "boolean",
+   "kontraScope": "\"trickPoints\" | \"all\"",
+   "kontraSuccessSweeps": "boolean",
+   "dealerMustCall": "boolean",
+   "lastTrickBonus": "number",
+   "valatBonus": "number",
+   "declarationTieCancels": "boolean",
+   "declarationMode": "\"auto\" | \"announce\" | \"blind\"",
+   "belaMode": "\"auto\" | \"announce\""
+  }
+ },
+ "packages/engine/src/index.ts:DealScoreResult": {
+  "kind": "object",
+  "props": {
+   "cardPoints": "[number, number]",
+   "trickPoints": "[number, number]",
+   "valatTeam": "TeamId | null",
+   "valatBonus": "[number, number]",
+   "declarationPoints": "[number, number]",
+   "tricksWon": "[number, number]",
+   "bela": "[number, number]",
+   "rawTotal": "[number, number]",
+   "callerMade": "boolean",
+   "finalScore": "[number, number]",
+   "renonsSeat?": "Seat | null | undefined"
+  }
  }
 }

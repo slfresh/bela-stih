@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -13,25 +13,25 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, '..', '..', '..');
 const read = (p: string) => readFileSync(join(ROOT, p), 'utf8');
 
+/** Every dependency of every workspace, dev ones included: a billing or analytics SDK anywhere is one too many. */
+function allDependencies(): string[] {
+  const manifests = ['package.json', ...['apps', 'packages'].flatMap((d) => readdirSync(join(ROOT, d)).map((w) => `${d}/${w}/package.json`))].filter((f) => existsSync(join(ROOT, f)));
+  return manifests.flatMap((f) => {
+    const pkg = JSON.parse(read(f));
+    return Object.keys({ ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) });
+  });
+}
+
 describe('the guardrails', () => {
   it('coins can never be bought: no purchase, billing or ads dependency anywhere', () => {
-    const deps = Object.keys({
-      ...(JSON.parse(read('apps/mobile/package.json')).dependencies ?? {}),
-      ...(JSON.parse(read('apps/mobile/package.json')).devDependencies ?? {}),
-      ...(JSON.parse(read('package.json')).dependencies ?? {}),
-    });
-    for (const d of deps) expect(d, d).not.toMatch(/iap|in-app-purchase|purchases|billing|admob|google-mobile-ads|adsdk|revenuecat|stripe/i);
+    for (const d of allDependencies()) expect(d, d).not.toMatch(/iap|in-app-purchase|purchases|billing|admob|google-mobile-ads|adsdk|revenuecat|stripe|paddle|adjust|appsflyer|ironsource|unity-ads/i);
     // And the published promise stays published.
     expect(read('docs/play-store.md')).toMatch(/never be bought or cashed out/);
     expect(read('docs/compliance-checklist.md')).toMatch(/Coins can never be bought — no in-app purchase of any kind, ever/);
   });
 
   it('reports nothing by itself: no crash or analytics SDK, the crash screen offers the clipboard instead', () => {
-    const deps = Object.keys({
-      ...(JSON.parse(read('apps/mobile/package.json')).dependencies ?? {}),
-      ...(JSON.parse(read('package.json')).dependencies ?? {}),
-    });
-    for (const d of deps) expect(d, d).not.toMatch(/sentry|crashlytics|firebase|bugsnag|amplitude|mixpanel|segment|datadog/i);
+    for (const d of allDependencies()) expect(d, d).not.toMatch(/sentry|crashlytics|firebase|bugsnag|amplitude|mixpanel|segment|datadog|posthog|newrelic|instabug/i);
     const boundary = read('apps/mobile/src/ui/ErrorBoundary.tsx');
     expect(boundary).toMatch(/Clipboard\.setStringAsync\(this\.report\(\)\)/);
     // The report names the build and the phone, never the player.
@@ -51,6 +51,9 @@ describe('the guardrails', () => {
     // without using either; from 1.5.2 app.json removes them from the merged manifest and the artifact check refuses them.
     const app = JSON.parse(read('apps/mobile/app.json'));
     for (const p of ['SYSTEM_ALERT_WINDOW', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE']) expect(app.expo.android.blockedPermissions, p).toContain(`android.permission.${p}`);
+    // The names must be in the BLOCKED set itself, not merely somewhere in the file (a comment would do that).
+    const blocked = /BLOCKED = \{([\s\S]*?)\n\}/.exec(verify)?.[1] ?? '';
+    for (const p of ['SYSTEM_ALERT_WINDOW', 'CAMERA', 'FOREGROUND_SERVICE_MEDIA_PLAYBACK', 'AD_ID', 'ACCESS_FINE_LOCATION', 'READ_EXTERNAL_STORAGE']) expect(blocked, p).toContain(`.${p}'`);
     for (const p of ['SYSTEM_ALERT_WINDOW', 'CAMERA', 'FOREGROUND_SERVICE_MEDIA_PLAYBACK', 'AD_ID', 'ACCESS_FINE_LOCATION']) expect(verify).toContain(p);
     expect(verify).toMatch(/PAGE_16K = 16 \* 1024/);
   });

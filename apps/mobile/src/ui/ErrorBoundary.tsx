@@ -63,7 +63,10 @@ export class ErrorBoundary extends Component<
     const device =
       Platform.OS === 'android'
         ? `Android ${c.Release ?? Platform.Version} · ${[c.Brand, c.Model].filter(Boolean).join(' ')}`
-        : `${Platform.OS} ${String(Platform.Version)}`;
+        : Platform.OS === 'web'
+          ? // react-native-web's Platform.Version is a constant '0.0.0'; the user agent names the browser and OS.
+            `web · ${typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown'}`
+          : `${Platform.OS} ${String(Platform.Version)}`;
     return [
       `Bela Štih ${this.props.version} · ${device}`,
       e ? `${e.name}: ${e.message}` : 'no error',

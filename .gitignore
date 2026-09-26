@@ -10,3 +10,4 @@ apps/mobile/credentials.json
 apps/mobile/dist/
 deploy/site/igra/
 apps/mobile/sourcemaps/
+__pycache__/

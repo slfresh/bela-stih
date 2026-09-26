@@ -59,6 +59,19 @@ describe('the golden corpus', () => {
       const wanted = SCENARIOS.find((x) => x.name === s.name)!.policy === 'renons';
       expect(s.coverage.renons > 0, `${s.name}: renons ${wanted ? 'expected' : 'not expected'}`).toBe(wanted);
     }
+    // Every scenario - the blind modes included - announces zvanja and reveals them (or cancels
+    // the contest, where that is the point), so the marking check, the blind reveal and their
+    // scoring are in every mode's hashes. Automatic zvanja announce nothing: there, zvanja paid.
+    for (const s of report.scenarios) {
+      if (s.config.declarationMode === 'auto') {
+        expect(s.coverage.zvanjaPaid, `${s.name}: automatic zvanja never paid out`).toBeGreaterThan(0);
+        continue;
+      }
+      expect(s.coverage.announced, `${s.name}: no deal announced a zvanje`).toBeGreaterThan(0);
+      expect((s.events['declarationsRevealed'] ?? 0) + s.coverage.cancelled, `${s.name}: zvanja neither revealed nor cancelled`).toBeGreaterThan(0);
+    }
+    // And a renons paid out announced zvanja at least once, so that credit is hashed too.
+    expect(report.scenarios.reduce((n, s) => n + s.coverage.renonsZvanja, 0), 'no renons deal ever credited announced zvanja').toBeGreaterThan(0);
     // The searched seed still does what it was chosen for.
     const tie = report.scenarios.find((s) => s.name === 'knobs-tiecancel-cancelled-501')!;
     expect(tie.coverage.cancelled, 'seed 4017 no longer produces a cancelled contest').toBeGreaterThan(0);

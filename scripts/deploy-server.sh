@@ -46,7 +46,9 @@ rm -f "$TAR"
 # working tree differs), /health reports the same, and the previous image
 # stays on the box: rollback-server.sh puts it back in about two minutes.
 SHA=$(git rev-parse --short HEAD)
-git diff --quiet HEAD -- apps/server packages deploy 2>/dev/null || SHA="$SHA-dirty"
+# Untracked files count too (git diff would not see a new file), and so do the
+# root files the tarball ships; ignored files (node_modules, deploy/site) do not.
+[ -z "$(git status --porcelain -- apps/server packages deploy package.json package-lock.json tsconfig.json .dockerignore 2>/dev/null)" ] || SHA="$SHA-dirty"
 echo "== building and starting on the box (domain: $DOMAIN, build $SHA)"
 ssh "$SERVER" "bash -s" <<REMOTE
 set -euo pipefail
@@ -55,15 +57,20 @@ tar xzf deploy.tgz && rm deploy.tgz
 cd deploy
 export DOMAIN=$DOMAIN
 export BELA_TAG=$SHA
-# Leave DOMAIN and the tag on the box too. Without them a plain "docker compose
+# The build that was running until now is the one a rollback goes back to -
+# by what RAN, not by image age: after a rollback and a fix-forward the newest
+# two images would be the fix and the bad build, and the known-good one gone.
+PREV=\$(grep '^BELA_TAG=' .env 2>/dev/null | cut -d= -f2 || true)
+[ "\$PREV" = "$SHA" ] && PREV=\$(grep '^BELA_PREV=' .env 2>/dev/null | cut -d= -f2 || true)
+# Leave DOMAIN and the tags on the box too. Without them a plain "docker compose
 # ps" or "logs" in this directory fails on the unset variable -- a trap for
 # anyone debugging here later, and a hazard if they reach for "up -d" with an
 # empty domain or the wrong image.
-printf 'DOMAIN=%s\nBELA_TAG=%s\n' "$DOMAIN" "$SHA" > .env
+printf 'DOMAIN=%s\nBELA_TAG=%s\nBELA_PREV=%s\n' "$DOMAIN" "$SHA" "\$PREV" > .env
 docker compose build bela
 docker compose up -d
-# Keep this build and the one before it for a rollback; anything older goes.
-docker images bela-server --format '{{.Tag}} {{.CreatedAt}}' | sort -k2 -r | awk 'NR > 2 { print \$1 }' | grep -v "^$SHA\$" | xargs -r -I{} docker rmi bela-server:{} >/dev/null 2>&1 || true
+# Keep this build and the one that ran before it for a rollback; anything else goes.
+docker images bela-server --format '{{.Tag}}' | { grep -vx -e "$SHA" -e "\${PREV:-none}" || true; } | xargs -r -I{} docker rmi bela-server:{} >/dev/null 2>&1 || true
 echo "== images on the box: \$(docker images bela-server --format '{{.Tag}}' | tr '\n' ' ')"
 # The Caddyfile is bind-mounted as a single FILE, and the upload above replaces
 # it rather than writing in place -- so the running container goes on holding
@@ -100,10 +107,14 @@ fi
 docker compose ps
 REMOTE
 
-echo "== waiting for TLS + health"
-for i in $(seq 1 30); do
-  if curl -fsS "https://$DOMAIN/health" >/dev/null 2>&1; then break; fi
+echo "== waiting for TLS + health to report $SHA"
+OK=
+for i in $(seq 1 45); do
+  H=$(curl -fsS "https://$DOMAIN/health" 2>/dev/null || true)
+  case "$H" in *"\"sha\":\"$SHA\""*) OK=1; break;; esac
   sleep 2
 done
-curl -fsS "https://$DOMAIN/health" && echo "" && echo "== LIVE at https://$DOMAIN"
+echo "$H"
+[ -n "$OK" ] || { echo "!! /health never reported $SHA - what is live is not what was just built"; exit 1; }
+echo "== LIVE at https://$DOMAIN"
 echo "== verify the transport promise:  SERVER_URL=wss://$DOMAIN npm run smoke"

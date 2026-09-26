@@ -114,6 +114,8 @@ const SAME_ORIGIN_CODE = 4300;
 const ROOM_GONE_CODE = 4212;
 /** Colyseus: the reconnection token has lapsed (MATCHMAKE_EXPIRED). */
 const TOKEN_EXPIRED_CODE = 4214;
+/** How long a 4214 still means "the server has not noticed the drop yet" (its ws pings: 3 s x 3). */
+const TOKEN_GRACE_MS = 15_000;
 
 export type NetStatus =
   | 'idle'
@@ -742,7 +744,8 @@ export function useNetGame(settings: Settings) {
     // Keep trying for as long as the server actually holds the seat. Giving up
     // early and dropping the token stranded anyone whose link came back inside
     // the window: the room locks on start, so this token is the only way in.
-    const deadline = Date.now() + RECONNECT_HOLD_MS;
+    const startedAt = Date.now();
+    const deadline = startedAt + RECONNECT_HOLD_MS;
     try {
       for (let wait = 0; Date.now() < deadline; wait = Math.min(5000, wait + 1000)) {
         // Jittered: a whole cafe's phones coming back on one router would
@@ -770,10 +773,15 @@ export function useNetGame(settings: Settings) {
           setError(null);
           return;
         } catch (err) {
-          // The table is gone (disposed, or the token was never valid): no
-          // number of retries brings it back. Anything else is the line.
+          // The table is gone (disposed): no number of retries brings it back.
+          // "Token expired" (4214) is also what Colyseus answers BEFORE the
+          // server has noticed our old socket died - it only starts holding the
+          // seat once its own pings give up on it, up to ~9 s after we saw the
+          // drop - so for the first while that code means "not yet", and only
+          // later "never". Anything else is the line.
           const code = (err as { code?: number } | null)?.code;
-          if (code === ROOM_GONE_CODE || code === TOKEN_EXPIRED_CODE) break;
+          if (code === ROOM_GONE_CODE) break;
+          if (code === TOKEN_EXPIRED_CODE && Date.now() - startedAt > TOKEN_GRACE_MS) break;
           setStatus('connecting');
         }
       }
