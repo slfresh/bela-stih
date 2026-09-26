@@ -28,6 +28,8 @@ import { useGifts } from '../table/useGifts';
 import { notePeople, standInsOf } from './standIns';
 import { localHold, type TableHold, type WireHold } from './hold';
 import { normalizeCode } from './code';
+import { PROTO } from './proto';
+import { APP_VERSION } from '../screens/common';
 
 /**
  * A table driven by the server, presented through the same animation director
@@ -108,6 +110,10 @@ async function eitherRoom(ask: (name: string) => Promise<Room>): Promise<Room> {
 const RECONNECT_HOLD_MS = 30 * 60_000;
 /** The server's refusal when a seat here is already held from this connection. */
 const SAME_ORIGIN_CODE = 4300;
+/** Colyseus: the room id is unknown or the room has been disposed (MATCHMAKE_INVALID_ROOM_ID). */
+const ROOM_GONE_CODE = 4212;
+/** Colyseus: the reconnection token has lapsed (MATCHMAKE_EXPIRED). */
+const TOKEN_EXPIRED_CODE = 4214;
 
 export type NetStatus =
   | 'idle'
@@ -739,7 +745,9 @@ export function useNetGame(settings: Settings) {
     const deadline = Date.now() + RECONNECT_HOLD_MS;
     try {
       for (let wait = 0; Date.now() < deadline; wait = Math.min(5000, wait + 1000)) {
-        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+        // Jittered: a whole cafe's phones coming back on one router would
+        // otherwise knock on the server in lockstep.
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait * (0.5 + Math.random())));
         // The player gave up and walked away while we were waiting.
         if (reconnectTokenRef.current !== token) return;
         try {
@@ -761,7 +769,11 @@ export function useNetGame(settings: Settings) {
           playSfx('reconnected');
           setError(null);
           return;
-        } catch {
+        } catch (err) {
+          // The table is gone (disposed, or the token was never valid): no
+          // number of retries brings it back. Anything else is the line.
+          const code = (err as { code?: number } | null)?.code;
+          if (code === ROOM_GONE_CODE || code === TOKEN_EXPIRED_CODE) break;
           setStatus('connecting');
         }
       }
@@ -790,7 +802,7 @@ export function useNetGame(settings: Settings) {
     () =>
       connect(async (c) => {
         try {
-          return await eitherRoom((room) => c.joinOrCreate(room, { name, avatar, gifts: true, voice: voiceRef.current, receipts: true }));
+          return await eitherRoom((room) => c.joinOrCreate(room, { name, avatar, gifts: true, voice: voiceRef.current, receipts: true, proto: PROTO, appVersion: APP_VERSION }));
         } catch (err) {
           // The open table already has somebody playing from this connection.
           // With no accounts the server cannot tell a second player here from
@@ -798,7 +810,7 @@ export function useNetGame(settings: Settings) {
           // player's hand by elimination — so it seats us apart rather than
           // turning us away. A fresh public table, and strangers join us there.
           if ((err as { code?: number } | null)?.code !== SAME_ORIGIN_CODE) throw err;
-          return await eitherRoom((room) => c.create(room, { name, avatar, gifts: true, voice: voiceRef.current, receipts: true }));
+          return await eitherRoom((room) => c.create(room, { name, avatar, gifts: true, voice: voiceRef.current, receipts: true, proto: PROTO, appVersion: APP_VERSION }));
         }
       }),
     [connect, name, avatar],
@@ -815,6 +827,8 @@ export function useNetGame(settings: Settings) {
           gifts: true,
           voice: voiceRef.current,
           receipts: true,
+          proto: PROTO,
+          appVersion: APP_VERSION,
           private: true,
           mode: settings.difficulty,
           hard: settings.difficulty === 'hard',
@@ -824,7 +838,7 @@ export function useNetGame(settings: Settings) {
     [connect, name, avatar, settings.difficulty],
   );
   const joinById = useCallback(
-    (id: string) => connect((c) => c.joinById(normalizeCode(id), { name, avatar, gifts: true, voice: voiceRef.current, receipts: true })),
+    (id: string) => connect((c) => c.joinById(normalizeCode(id), { name, avatar, gifts: true, voice: voiceRef.current, receipts: true, proto: PROTO, appVersion: APP_VERSION })),
     [connect, name, avatar],
   );
 

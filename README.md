@@ -63,6 +63,18 @@ ever shown a card held by another seat. `npm run fill -- <roomId> 3` seats three
 at an existing table, which is how one phone gets tested against a full room. `npm run play` is the
 terminal client; `npm run icons` and `npm run sfx` regenerate the artwork and the sound kit.
 
+```bash
+npm run arena -- --a medium --b easy --matches 200
+```
+
+`arena` sits two bot levels against each other over duplicate deals (every seed played from both
+sides, so the cards cancel out) and prints A's win rate with a 95% interval, the paired points
+margin, how often a deal was a muss, a pad or a valat, and decision times. Medium against medium
+is the baseline (30% muss, 20% pad, exactly 50% by construction); a stronger bot has to beat
+medium here before it sits at a table. `npm run transcript` records the wire between a client and
+the server (see `docs/deploy.md`), `npm run golden:chromium` replays the golden corpus in a real
+Chromium, `npm run typecheck:all` runs the three TypeScript projects.
+
 ### Playing online from a device over USB
 
 ```bash
@@ -122,9 +134,13 @@ The self-play harness defaults to 10,000 deals (~30s). Shorten it while iteratin
 SELFPLAY_DEALS=300 npx vitest run
 ```
 
+`.github/workflows/ci.yml` runs all of it on every push: the dependency patchers' `--check`,
+the control-byte scan, the three typechecks, vitest, and the golden corpus replayed in Chromium.
+Nightly it runs the self-play harness over 100,000 deals.
+
 ## What the test suite guarantees
 
-`npm test` — **235 tests, all passing:**
+`npm test` — **896 tests, all passing:**
 
 - **Two value systems, context-derived.** A card stores only `suit + rank`; power and points are
   derived from `{ contractType, trumpSuit }`. The same Jack is 20 in trump and 2 outside it.
@@ -146,14 +162,25 @@ SELFPLAY_DEALS=300 npx vitest run
 - **The contract threshold is a comparison, not a hardcoded 82.** An exact 81-81 board is a *pad*.
 - **Valat** pays 90 on top of the last trick for 252 — awarded to whoever actually swept, which may
   be the defenders.
-- **Self-play harness:** 10,000 deals across 2,725 matches of random legal play, asserting after
+- **Self-play harness:** 10,000 deals across 2,737 matches of random legal play, asserting after
   every deal that all 32 cards were played exactly once, card points total 152, trick points total
   162, `rawTotal` equals its declared parts, and the deal conserves
   `(162 + valat) x multiplier + declarations + bela`. It also spot-checks that `applyAction` never
   mutates its input, and that a seat's view never contains a card currently in somebody else's hand.
-  Random play reaches the hard cases: **5,049 pads, 198 valats, 1,125 belas, 3,917 declaration
-  contests (54 cancelled), 12,969 doublings.** The harness deliberately runs with `allowKontra: true`
+  Random play reaches the hard cases: **5,218 pads, 144 valats, 1,149 belas, 3,951 declaration
+  contests (64 cancelled), 13,189 doublings.** The harness deliberately runs with `allowKontra: true`
   so the doubling path stays under test even though the shipped game does not use it.
+- **Self-play on what ships.** The same invariants over the three overlays a player can actually
+  choose (learn, easy, hard: 2,000 deals each per push, 20,000 nightly), not only the harness's
+  house rules.
+- **The golden corpus** (`packages/engine/test/golden/`): 14 seeded matches, 98 deals, every step's
+  action, all four seats' views and the events it produced, hashed deal by deal and committed. A
+  hash that moves is a rules change, named by scenario and deal. `npm run golden:chromium` proves a
+  real browser hashes the corpus byte for byte as Node does.
+- **The wire only grows.** Every message, view field and event type is written out by the
+  TypeScript checker into `apps/mobile/test/wire-schema.snapshot.json`; a field removed or changed
+  while apps that read it are in the wild fails the build. A wire generation number (`proto`) is
+  sent at every join, and a server may refuse an app too old to talk to it (code 4301).
 
 ### Rule constants, externally cross-checked
 

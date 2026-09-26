@@ -1,0 +1,54 @@
+# Every push and pull request: the patched node_modules, the three typechecks,
+# every test, the golden corpus in Node and in Chromium, the wire schema, and
+# a scan for control bytes. Nightly: 100,000 deals of self-play on every
+# shipped rules overlay. The Android release is built locally on purpose
+# (scripts/build-android.sh: the patch pipeline and the artifact checks); a
+# release AAB is never made here.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      # npm ci runs apps/mobile's postinstall, which applies both patches.
+      - run: npm ci
+      - name: the patches are applied
+        run: node scripts/patch-reanimated.mjs --check && node scripts/patch-expo-audio.mjs --check
+      - name: no control bytes
+        run: node scripts/check-control-bytes.mjs
+      - name: typecheck (root, mobile, server; silence is the only pass)
+        run: bash scripts/typecheck.sh
+      - name: tests
+        run: npx vitest run
+      - name: the golden corpus in Chromium
+        run: |
+          npx playwright install --with-deps chromium
+          node scripts/golden-chromium.mjs
+
+  selfplay-nightly:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 100,000 deals of random legal play on every shipped overlay
+        run: SELFPLAY_DEALS=100000 npx vitest run packages/engine/test/selfplay.test.ts

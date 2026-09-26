@@ -43,6 +43,7 @@ const FONTS = {
 LogBox.ignoreLogs(['Reduced motion setting is overwritten']);
 import { setCardLocale, setCosmetics, setDeckStyle } from './src/cosmetics';
 import { ErrorBoundary } from './src/ui/ErrorBoundary';
+import { APP_VERSION } from './src/screens/common';
 import { useMotionPolicy } from './src/anim/useMotionPolicy';
 import { MotionProvider } from './src/anim/MotionHere';
 
@@ -229,6 +230,9 @@ export default function App() {
       title={lang.s.ui.crashTitle}
       body={lang.s.ui.crashBody}
       action={lang.s.ui.back}
+      copyLabel={lang.s.ui.crashCopy}
+      copiedLabel={lang.s.ui.crashCopied}
+      version={APP_VERSION}
       resetKey={screenKey}
       onReset={() => {
         setMenu('home');

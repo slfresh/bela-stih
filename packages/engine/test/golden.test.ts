@@ -1,0 +1,78 @@
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { describe, expect, it } from 'vitest';
+import { canon, EVENT_KINDS, hash64, runGolden, SCENARIOS, type GoldenReport } from './golden/run';
+
+/**
+ * The rules produce today what they produced when expected.json was written.
+ * A hash that moves is a rules change - wanted or not - and the first deal
+ * that moved is named. Refresh the fixture only for a change made on purpose:
+ *
+ *   GOLDEN_UPDATE=1 npx vitest run packages/engine/test/golden.test.ts
+ *
+ * and say why in the same commit.
+ */
+
+const here = dirname(fileURLToPath(import.meta.url));
+const FIXTURE = join(here, 'golden', 'expected.json');
+
+describe('the golden corpus', () => {
+  const report = runGolden();
+
+  it('is the same as when it was written, deal for deal', () => {
+    if (process.env.GOLDEN_UPDATE) {
+      writeFileSync(FIXTURE, JSON.stringify(report, null, 1) + '\n');
+    }
+    expect(existsSync(FIXTURE), 'no fixture: run once with GOLDEN_UPDATE=1').toBe(true);
+    const expected = JSON.parse(readFileSync(FIXTURE, 'utf8')) as GoldenReport;
+    expect(report.version).toBe(expected.version);
+    expect(report.scenarios.map((s) => s.name)).toEqual(expected.scenarios.map((s) => s.name));
+    for (const [i, s] of report.scenarios.entries()) {
+      const was = expected.scenarios[i]!;
+      const firstDiff = s.dealHashes.findIndex((h, d) => h !== was.dealHashes[d]);
+      expect(
+        firstDiff,
+        `${s.name} (seed ${s.seed}): deal ${firstDiff + 1} of ${s.dealHashes.length} no longer hashes the same (${s.dealHashes[firstDiff]} vs ${was.dealHashes[firstDiff]}) - a rules change?`,
+      ).toBe(-1);
+      expect(s.dealHashes.length, `${s.name}: the match now has a different number of deals`).toBe(was.dealHashes.length);
+      expect(s.hash).toBe(was.hash);
+    }
+    expect(report.hash).toBe(expected.hash);
+  });
+
+  it('reaches every event kind and every rare path', () => {
+    const kinds = new Set(report.scenarios.flatMap((s) => Object.keys(s.events)));
+    for (const k of EVENT_KINDS) expect(kinds.has(k), `no scenario emits ${k}`).toBe(true);
+    const total = report.scenarios.reduce(
+      (acc, s) => {
+        for (const [k, v] of Object.entries(s.coverage)) acc[k] = (acc[k] ?? 0) + v;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+    for (const k of ['pad', 'valat', 'muss', 'bela', 'contest', 'cancelled', 'renons', 'kontra']) {
+      expect(total[k] ?? 0, `the corpus never reaches ${k}`).toBeGreaterThan(0);
+    }
+    // Renons only where it was asked for, and there in every match.
+    for (const s of report.scenarios) {
+      const wanted = SCENARIOS.find((x) => x.name === s.name)!.policy === 'renons';
+      expect(s.coverage.renons > 0, `${s.name}: renons ${wanted ? 'expected' : 'not expected'}`).toBe(wanted);
+    }
+    // The searched seed still does what it was chosen for.
+    const tie = report.scenarios.find((s) => s.name === 'knobs-tiecancel-cancelled-501')!;
+    expect(tie.coverage.cancelled, 'seed 4017 no longer produces a cancelled contest').toBeGreaterThan(0);
+  });
+
+  it('hashes canonically: key order and undefined never matter, and a changed value does', () => {
+    expect(canon({ b: 1, a: [2, { d: undefined, c: 3 }] })).toBe('{"a":[2,{"c":3}],"b":1}');
+    expect(hash64(canon({ x: 1, y: 2 }))).toBe(hash64(canon({ y: 2, x: 1 })));
+    expect(hash64(canon({ x: 1 }))).not.toBe(hash64(canon({ x: 2 })));
+    expect(hash64('')).toHaveLength(16);
+  });
+
+  it('is deterministic run to run', () => {
+    const again = runGolden([SCENARIOS[0]!.name]);
+    expect(again.scenarios[0]!.hash).toBe(report.scenarios[0]!.hash);
+  });
+});

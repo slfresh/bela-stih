@@ -1,0 +1,452 @@
+{
+ "apps/server/src/protocol.ts:ClientMessage": {
+  "kind": "union",
+  "members": [
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"action\"",
+     "action": "Action"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"start\""
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"sit\"",
+     "seat": "Seat"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"next\""
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"emote\"",
+     "id": "string"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"gift\"",
+     "id": "string",
+     "to": "Seat | \"table\""
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"voice\"",
+     "ms": "number",
+     "mime": "string",
+     "data": "Uint8Array<ArrayBufferLike>"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"hears\"",
+     "on": "boolean"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"heard\"",
+     "id": "number"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"rematch\""
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"rematchCancel\""
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"rematchStart\""
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"pause\""
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"resume\""
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"playOn\""
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"clock\"",
+     "seconds": "number"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"rules\"",
+     "target?": "number | undefined",
+     "mode?": "PlayMode | undefined",
+     "hard?": "boolean | undefined",
+     "voice?": "boolean | undefined"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"away\""
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"back\""
+    }
+   }
+  ]
+ },
+ "apps/server/src/protocol.ts:RoomMessage": {
+  "kind": "object",
+  "props": {
+   "seats": "SeatInfo[]",
+   "status": "\"waiting\" | \"playing\" | \"finished\"",
+   "events": "TableEvent[]",
+   "turnMsLeft?": "number | undefined",
+   "turnTotalMs?": "number | undefined",
+   "mode?": "PlayMode | undefined",
+   "hard?": "boolean | undefined",
+   "hostSeat?": "Seat | undefined",
+   "series": "[number, number]",
+   "matchNumber": "number",
+   "rematchVotes?": "Seat[] | undefined",
+   "turnSeconds?": "number | undefined",
+   "target?": "number | undefined",
+   "private?": "true | undefined",
+   "voice?": "true | undefined",
+   "hold?": "HoldInfo | undefined",
+   "nextMsLeft?": "number | undefined",
+   "nextVotes?": "Seat[] | undefined"
+  }
+ },
+ "apps/server/src/protocol.ts:SeatInfo": {
+  "kind": "object",
+  "props": {
+   "seat": "Seat",
+   "name": "string",
+   "avatar": "string",
+   "connected": "boolean",
+   "bot": "boolean",
+   "gift?": "string | undefined",
+   "seesGifts?": "true | undefined",
+   "hearsVoice?": "true | undefined"
+  }
+ },
+ "apps/server/src/protocol.ts:VoiceMessage": {
+  "kind": "object",
+  "props": {
+   "from": "Seat",
+   "id": "number",
+   "ms": "number",
+   "mime": "string",
+   "data?": "Uint8Array<ArrayBufferLike> | undefined",
+   "to?": "Seat[] | undefined",
+   "noReceipt?": "Seat[] | undefined"
+  }
+ },
+ "apps/server/src/protocol.ts:VoiceHeardMessage": {
+  "kind": "object",
+  "props": {
+   "id": "number",
+   "by": "Seat"
+  }
+ },
+ "apps/server/src/protocol.ts:EmoteMessage": {
+  "kind": "object",
+  "props": {
+   "seat": "Seat",
+   "id": "string"
+  }
+ },
+ "apps/server/src/protocol.ts:GiftMessage": {
+  "kind": "object",
+  "props": {
+   "from": "Seat",
+   "to": "Seat[]",
+   "id": "string"
+  }
+ },
+ "apps/server/src/protocol.ts:JoinGifts": {
+  "kind": "object",
+  "props": {
+   "gifts?": "boolean | undefined"
+  }
+ },
+ "apps/server/src/protocol.ts:JoinVoice": {
+  "kind": "object",
+  "props": {
+   "voice?": "boolean | undefined",
+   "receipts?": "boolean | undefined"
+  }
+ },
+ "apps/server/src/protocol.ts:JoinProto": {
+  "kind": "object",
+  "props": {
+   "proto?": "number | undefined",
+   "appVersion?": "string | undefined"
+  }
+ },
+ "apps/server/src/protocol.ts:HoldInfo": {
+  "kind": "object",
+  "props": {
+   "paused?": "{ by: Seat; msLeft: number; } | undefined",
+   "waiting": "{ seat: Seat; msLeft: number; }[]"
+  }
+ },
+ "packages/table/src/index.ts:TableEvent": {
+  "kind": "union",
+  "members": [
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"dealStarted\"",
+     "dealNumber": "number",
+     "dealer": "Seat"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"bidPassed\"",
+     "seat": "Seat"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"bidCalled\"",
+     "seat": "Seat",
+     "suit": "Suit"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"doubled\"",
+     "seat": "Seat",
+     "multiplier": "2 | 4"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"doublePassed\"",
+     "seat": "Seat"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"handsCompleted\"",
+     "trumpSuit": "Suit",
+     "callerSeat": "Seat",
+     "multiplier": "1 | 2 | 4"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"declared\"",
+     "seat": "Seat",
+     "declarations": "DeclarationSummary[]"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"declarationSkipped\"",
+     "seat": "Seat"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"declarationsRevealed\"",
+     "team": "TeamId",
+     "declarations": "Declaration[]"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"belaCalled\"",
+     "seat": "Seat"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"cardPlayed\"",
+     "seat": "Seat",
+     "card": "Card"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"trickWon\"",
+     "seat": "Seat",
+     "trickNumber": "number",
+     "points": "number",
+     "isLastTrick": "boolean"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"dealScored\"",
+     "result": "DealScoreResult",
+     "matchScores": "[number, number]"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"matchOver\"",
+     "winner": "TeamId",
+     "matchScores": "[number, number]"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "kind": "\"matchStarted\"",
+     "matchNumber": "number"
+    }
+   }
+  ]
+ },
+ "packages/shared-types/src/index.ts:PublicView": {
+  "kind": "object",
+  "props": {
+   "phase": "Phase",
+   "dealer": "Seat",
+   "seat": "Seat",
+   "hand": "Card[]",
+   "handCounts": "[number, number, number, number]",
+   "context": "PlayContext",
+   "callerSeat": "Seat | null",
+   "multiplier": "1 | 2 | 4",
+   "trickLeader": "Seat | null",
+   "currentTrick": "TrickPlay[]",
+   "toAct": "Seat | null",
+   "declareTurn": "Seat | null",
+   "revealedDeclarations": "Declaration[]",
+   "matchScores": "[number, number]",
+   "announcedDeclarations": "DeclarationSummary[]",
+   "myDeclarations": "Declaration[]",
+   "mustDeclare": "boolean",
+   "canDeclare": "boolean",
+   "canAnnounceBela": "boolean",
+   "belaAnnouncedBy": "Seat | null",
+   "dealProgress": "DealProgress | null",
+   "legalActions": "Action[]"
+  }
+ },
+ "packages/shared-types/src/index.ts:Action": {
+  "kind": "union",
+  "members": [
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"BID_PASS\"",
+     "seat": "Seat"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"BID_CALL\"",
+     "seat": "Seat",
+     "suit": "Suit"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"DOUBLE_KONTRA\"",
+     "seat": "Seat"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"DOUBLE_REKONTRA\"",
+     "seat": "Seat"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"DOUBLE_PASS\"",
+     "seat": "Seat"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"DECLARE_ANNOUNCE\"",
+     "seat": "Seat",
+     "cards?": "Card[] | undefined"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"DECLARE_SKIP\"",
+     "seat": "Seat"
+    }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"PLAY_CARD\"",
+     "seat": "Seat",
+     "card": "Card",
+     "announceBela?": "boolean | undefined"
+    }
+   }
+  ]
+ },
+ "packages/engine/src/index.ts:DealScoreResult": {
+  "kind": "other",
+  "text": "any"
+ }
+}

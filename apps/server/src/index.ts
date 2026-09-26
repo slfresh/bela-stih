@@ -1,9 +1,9 @@
 import { createServer } from 'node:http';
 import express, { type Request, type Response } from 'express';
-import { Server } from '@colyseus/core';
+import { matchMaker, Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { BelaRoom } from './BelaRoom';
-import { MAX_FRAME_BYTES, ROOM_NAME, ROOM_NAME_MODES } from './protocol';
+import { MAX_FRAME_BYTES, MIN_PROTO, PROTO, ROOM_NAME, ROOM_NAME_MODES } from './protocol';
 
 /**
  * The Bela game server.
@@ -38,9 +38,23 @@ const PORT = Number(process.env.PORT ?? 2567);
 
 const app = express();
 
-// A health endpoint, so a host or uptime check has something to hit.
+// A health endpoint, so a host or uptime check has something to hit - and
+// says which build this is (the image's git SHA, set by the deploy), which
+// wire generations it serves, and how busy it is. Counts only: nothing here
+// names a table or a player.
+const STARTED_AT = Date.now();
+const SHA = process.env.GIT_SHA ?? 'dev';
 app.get('/health', (_req: Request, res: Response) => {
-  res.json({ ok: true, room: ROOM_NAME });
+  res.json({
+    ok: true,
+    room: ROOM_NAME,
+    sha: SHA,
+    proto: PROTO,
+    minProto: MIN_PROTO,
+    rooms: matchMaker.stats.local.roomCount,
+    players: matchMaker.stats.local.ccu,
+    uptimeSeconds: Math.floor((Date.now() - STARTED_AT) / 1000),
+  });
 });
 
 const httpServer = createServer(app);

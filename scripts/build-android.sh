@@ -38,6 +38,10 @@ node scripts/patch-expo-audio.mjs
 (cd apps/mobile && npx expo prebuild --platform android --no-install)
 # prebuild recreates android/ and deletes local.properties every time.
 echo "sdk.dir=$SDK_DIR" > apps/mobile/android/local.properties
+# A release is for phones: no x86 or x86_64 code (a quarter of the native
+# size, for emulators only). CI's emulator builds a debug APK its own way.
+sed -i 's/^reactNativeArchitectures=.*/reactNativeArchitectures=armeabi-v7a,arm64-v8a/' apps/mobile/android/gradle.properties
+grep -q '^reactNativeArchitectures=armeabi-v7a,arm64-v8a$' apps/mobile/android/gradle.properties || { echo "!! could not set the release ABIs in gradle.properties"; exit 1; }
 
 TASKS="bundleRelease assembleRelease"
 [ "$WHAT" = "aab" ] && TASKS="bundleRelease"
@@ -132,6 +136,24 @@ if [ "$WHAT" != "aab" ]; then
   check "$APK" assets/index.android.bundle
   check_report "$APK" assets/index.android.bundle
   check_audio "$APK"
+fi
+# Permissions, 16 KB page alignment of every 64-bit library, size budgets.
+if [ "$WHAT" != "aab" ]; then python scripts/verify-artifact.py "$AAB" "$APK"; else python scripts/verify-artifact.py "$AAB"; fi
+
+# The Hermes source map for this build, kept by versionCode (outside git: it is
+# ~10 MB and useless without the matching bundle). A crash report from a
+# player's phone carries bytecode offsets; this is what turns them back into
+# file and line. Losing it means a release whose crashes cannot be read.
+VERSION_CODE=$(python -c "import json; print(json.load(open('apps/mobile/app.json'))['expo']['android']['versionCode'])")
+MAP=apps/mobile/android/app/build/generated/sourcemaps/react/release/index.android.bundle.map
+if [ -f "$MAP" ]; then
+  mkdir -p "apps/mobile/sourcemaps/$VERSION_CODE"
+  cp "$MAP" "apps/mobile/sourcemaps/$VERSION_CODE/index.android.bundle.map"
+  cp "$AAB" "apps/mobile/sourcemaps/$VERSION_CODE/app-release.aab"
+  echo "   source map and AAB archived under apps/mobile/sourcemaps/$VERSION_CODE/"
+else
+  echo "!! no Hermes source map at $MAP - crashes from this build could not be read"
+  exit 1
 fi
 
 # A test build is moved off the path the submit line names, and that line is

@@ -526,6 +526,8 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
           ? ui.troubleTableClosed
           : net.trouble === 'sameNetwork'
             ? ui.troubleSameNetwork
+            : net.trouble === 'appTooOld'
+            ? ui.troubleAppTooOld
             : net.trouble === 'offline'
             ? ui.troubleOffline
             : ui.troubleServer

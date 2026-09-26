@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Belot / Bela \u2014 Balkan 4-player partnership card game. Shared TypeScript rules engine, bots, server, and Expo client.",
+  "description": "Belot / Bela — Balkan 4-player partnership card game. Shared TypeScript rules engine, bots, server, and Expo client.",
   "workspaces": [
     "packages/*",
     "apps/*"
@@ -20,11 +20,16 @@
     "icons": "node scripts/make-icons.mjs",
     "sfx": "node scripts/make-sfx.mjs",
     "android": "npm run android --workspace @belot/mobile",
-    "fill": "npm run fill --workspace @belot/server --"
+    "fill": "npm run fill --workspace @belot/server --",
+    "arena": "tsx apps/cli/src/arena.ts",
+    "typecheck:all": "bash scripts/typecheck.sh",
+    "golden:chromium": "node scripts/golden-chromium.mjs",
+    "transcript": "tsx apps/server/src/record-transcript.ts"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "@types/node": "^22.0.0",
+    "playwright": "^1.63.0",
     "tsx": "^4.23.12",
     "typescript": "^5.6.3",
     "vitest": "^2.1.8"

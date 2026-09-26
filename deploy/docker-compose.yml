@@ -8,10 +8,24 @@
 # the static privacy-policy page for everything else.
 services:
   bela:
+    # Tagged by the commit it was built from (deploy-server.sh writes BELA_TAG
+    # into .env), so the previous build is still on the box and a rollback is
+    # scripts/rollback-server.sh - about two minutes, no rebuild.
+    image: bela-server:${BELA_TAG:-dev}
     build:
       context: ..
       dockerfile: apps/server/Dockerfile
+      args:
+        GIT_SHA: ${BELA_TAG:-dev}
     restart: unless-stopped
+    # Compose restarts a container that stops answering /health; a hung event
+    # loop used to sit there "Up" while every table was dead.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:2567/health').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     # PID 1 is npm, which does not reliably pass a stop signal on to the server
     # underneath it — so a restart hit the timeout and killed it outright.
     # tini sits in front and forwards the signal, letting Colyseus close the

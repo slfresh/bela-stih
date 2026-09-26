@@ -42,18 +42,29 @@ echo "== uploading to $SERVER"
 scp -q "$TAR" "$SERVER:/opt/bela/deploy.tgz"
 rm -f "$TAR"
 
-echo "== building and starting on the box (domain: $DOMAIN)"
+# The image is tagged by the commit it was built from ("-dirty" when the
+# working tree differs), /health reports the same, and the previous image
+# stays on the box: rollback-server.sh puts it back in about two minutes.
+SHA=$(git rev-parse --short HEAD)
+git diff --quiet HEAD -- apps/server packages deploy 2>/dev/null || SHA="$SHA-dirty"
+echo "== building and starting on the box (domain: $DOMAIN, build $SHA)"
 ssh "$SERVER" "bash -s" <<REMOTE
 set -euo pipefail
 cd /opt/bela
 tar xzf deploy.tgz && rm deploy.tgz
 cd deploy
 export DOMAIN=$DOMAIN
-# Leave DOMAIN on the box too. Without it a plain "docker compose ps" or "logs"
-# in this directory fails on the unset variable -- a trap for anyone debugging
-# here later, and a hazard if they reach for "up -d" with an empty domain.
-echo "DOMAIN=$DOMAIN" > .env
-docker compose up -d --build
+export BELA_TAG=$SHA
+# Leave DOMAIN and the tag on the box too. Without them a plain "docker compose
+# ps" or "logs" in this directory fails on the unset variable -- a trap for
+# anyone debugging here later, and a hazard if they reach for "up -d" with an
+# empty domain or the wrong image.
+printf 'DOMAIN=%s\nBELA_TAG=%s\n' "$DOMAIN" "$SHA" > .env
+docker compose build bela
+docker compose up -d
+# Keep this build and the one before it for a rollback; anything older goes.
+docker images bela-server --format '{{.Tag}} {{.CreatedAt}}' | sort -k2 -r | awk 'NR > 2 { print \$1 }' | grep -v "^$SHA\$" | xargs -r -I{} docker rmi bela-server:{} >/dev/null 2>&1 || true
+echo "== images on the box: \$(docker images bela-server --format '{{.Tag}}' | tr '\n' ' ')"
 # The Caddyfile is bind-mounted as a single FILE, and the upload above replaces
 # it rather than writing in place -- so the running container goes on holding
 # the old inode and quietly serving the previous config. Nothing reports this:

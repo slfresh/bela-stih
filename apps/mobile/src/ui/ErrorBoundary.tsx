@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { font, radius, theme } from '../theme';
 
 /**
@@ -11,7 +12,13 @@ import { font, radius, theme } from '../theme';
  * express.
  *
  * Deliberately self-contained (no shared Button, no i18n import): the whole
- * point is to still render when something below it could not.
+ * point is to still render when something below it could not. The words come
+ * in as props from the app, which still has them.
+ *
+ * "Kopiraj izvještaj o grešci" puts the error, the app's version and the
+ * phone's model on the clipboard for the player to send: the app reports
+ * nothing by itself (no crash SDK - the privacy page says so), so this is the
+ * only way a crash on a stranger's phone ever reaches the developer.
  */
 export class ErrorBoundary extends Component<
   {
@@ -19,6 +26,11 @@ export class ErrorBoundary extends Component<
     title: string;
     body: string;
     action: string;
+    /** The copy button, and what it says once the report is on the clipboard. */
+    copyLabel: string;
+    copiedLabel: string;
+    /** The app's version, for the report. */
+    version: string;
     /** Called after the boundary resets; the app returns to the home screen. */
     onReset: () => void;
     /**
@@ -28,20 +40,35 @@ export class ErrorBoundary extends Component<
      */
     resetKey: string;
   },
-  { error: Error | null }
+  { error: Error | null; copied: boolean }
 > {
-  state = { error: null as Error | null };
+  state = { error: null as Error | null, copied: false };
 
   static getDerivedStateFromError(error: Error) {
-    return { error };
+    return { error, copied: false };
   }
 
   componentDidUpdate(prev: { resetKey: string }) {
-    if (this.state.error && prev.resetKey !== this.props.resetKey) this.setState({ error: null });
+    if (this.state.error && prev.resetKey !== this.props.resetKey) this.setState({ error: null, copied: false });
   }
 
   componentDidCatch(error: Error) {
     if (__DEV__) console.error('[bela] render error', error);
+  }
+
+  /** The report: what broke, in which build, on what. Nothing about the player. */
+  report(): string {
+    const e = this.state.error;
+    const c = (Platform.constants ?? {}) as { Brand?: string; Model?: string; Release?: string };
+    const device =
+      Platform.OS === 'android'
+        ? `Android ${c.Release ?? Platform.Version} · ${[c.Brand, c.Model].filter(Boolean).join(' ')}`
+        : `${Platform.OS} ${String(Platform.Version)}`;
+    return [
+      `Bela Štih ${this.props.version} · ${device}`,
+      e ? `${e.name}: ${e.message}` : 'no error',
+      e?.stack ?? '',
+    ].join('\n');
   }
 
   render() {
@@ -55,13 +82,26 @@ export class ErrorBoundary extends Component<
         <Text style={styles.body}>{this.props.body}</Text>
         <Pressable
           onPress={() => {
-            this.setState({ error: null });
+            this.setState({ error: null, copied: false });
             this.props.onReset();
           }}
           style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
           accessibilityRole="button"
         >
           <Text style={styles.btnText}>{this.props.action}</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => {
+            void Clipboard.setStringAsync(this.report()).then(
+              () => this.setState({ copied: true }),
+              () => {},
+            );
+          }}
+          style={({ pressed }) => [styles.btn, styles.btnPlain, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={this.props.copyLabel}
+        >
+          <Text style={styles.btnText}>{this.state.copied ? this.props.copiedLabel : this.props.copyLabel}</Text>
         </Pressable>
       </View>
     );
@@ -90,6 +130,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.accent,
   },
+  btnPlain: { marginTop: 4, backgroundColor: 'transparent', borderColor: theme.line },
   pressed: { opacity: 0.7, transform: [{ translateY: 2 }] },
   btnText: { color: theme.text, fontSize: 15, fontFamily: font.bold },
 });

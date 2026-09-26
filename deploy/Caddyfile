@@ -20,9 +20,16 @@
 	@unhashed not path /igra/_expo/* /igra/assets/*
 	header @unhashed Cache-Control "no-cache"
 
+	# The address the game server trusts for its one-seat-per-network rule
+	# (BelaRoom.onAuth). Colyseus reads X-Real-IP before X-Forwarded-For, and
+	# a client can send either header itself; Caddy overwrites X-Real-IP with
+	# the real peer address on every proxied request, so nothing a client
+	# writes gets through. Both proxies: the matchmaking POSTs and the socket.
 	@game path /matchmake/* /health
 	handle @game {
-		reverse_proxy bela:2567
+		reverse_proxy bela:2567 {
+			header_up X-Real-IP {remote_host}
+		}
 	}
 
 	@ws {
@@ -30,7 +37,9 @@
 		header Upgrade websocket
 	}
 	handle @ws {
-		reverse_proxy bela:2567
+		reverse_proxy bela:2567 {
+			header_up X-Real-IP {remote_host}
+		}
 	}
 
 	# Invite links: /join/CODE all render the same static page, which reads

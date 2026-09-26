@@ -172,7 +172,7 @@ describe('the room', () => {
     // Nothing published: a toggling client costs the table nothing.
     expect(hears).not.toMatch(/this\.(publish|broadcast)\(/);
     expect(room).toMatch(/speaksVoice: typeof options\.voice === 'boolean',/);
-    expect(room).toMatch(/gifts: false, voice: false, speaksVoice: false, receipts: false \}\);/);
+    expect(room).toMatch(/gifts: false, voice: false, speaksVoice: false, receipts: false, proto: 0 \}\);/);
   });
 
   it('lets a private table\'s host switch voice off before the start, and quick play keep it', () => {

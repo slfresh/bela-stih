@@ -20,6 +20,12 @@ keep it that way.
   per-connection logging, no database.
 - Coin economy invariants (earned-only, non-redeemable, no stakes) — keep
   these four facts true and gambling law stays entirely out of scope.
+- Guardrail test (1.5.2, `apps/mobile/test/guardrails.test.ts`): no billing,
+  ads or crash-reporting SDK among the app's dependencies, the store copy and
+  the privacy page still say coins are never bought, a crash report goes to
+  the player's clipboard and nowhere else, the release ships arm-only with
+  its permissions checked by `scripts/verify-artifact.py`. It fails the build
+  the day any of that changes.
 - Table gifts (1.3.0) keep them true: a gift is a pick from a fixed 15-item
   catalogue (`GIFTS` in `packages/progression`, duplicated as the server's
   `GIFT_IDS` and cross-checked by a test), bought with earned coins at a
@@ -169,7 +175,9 @@ the new certificate before promoting 1.3.0. If the rating would cost the
 
 ## Standing invariants — do not break these without re-auditing
 
-1. Coins can never be bought (no IAP for currency).
+1. Coins can never be bought — no in-app purchase of any kind, ever (decided
+   2026-09-26: one earned, non-redeemable chip; a second, purchasable one would
+   make the table a real-money game). Pinned by `guardrails.test.ts`.
 2. Coins can never be redeemed or transferred — a gift spends the sender's
    coins and credits no one.
 3. Nothing of value is staked on a match outcome.

@@ -4,7 +4,7 @@ import type { Action, Seat } from '@belot/engine';
 import { DEFAULT_CONFIG, HARD_CONFIG_OVERRIDES, RANKS, SEATS, SUITS, type EngineConfig } from '@belot/engine';
 import type { Card, Rank, Rng, Suit } from '@belot/engine';
 import { Table } from '@belot/table';
-import { EMOTE_GAP_MS, EMOTE_IDS, GIFT_GAP_MS, GIFT_IDS, MATCH_TARGETS, MSG, NEXT_DEAL_MS, PAUSE_MAX_MS, TURN_CHOICES, WAIT_FOR_DROPPED_MS, type ClientMessage, type HoldInfo, type EmoteMessage, type GiftMessage, type JoinGifts, type JoinVoice, type RoomMessage, type SeatInfo, type VoiceHeardMessage, type VoiceMessage, isPlayMode, modeFromLegacy, type PlayMode } from './protocol';
+import { EMOTE_GAP_MS, EMOTE_IDS, GIFT_GAP_MS, GIFT_IDS, MATCH_TARGETS, MIN_PROTO, MSG, NEXT_DEAL_MS, PAUSE_MAX_MS, TURN_CHOICES, UPDATE_APP_CODE, WAIT_FOR_DROPPED_MS, type ClientMessage, type HoldInfo, type EmoteMessage, type GiftMessage, type JoinGifts, type JoinProto, type JoinVoice, type RoomMessage, type SeatInfo, type VoiceHeardMessage, type VoiceMessage, isPlayMode, modeFromLegacy, type PlayMode } from './protocol';
 import { checkClip, VoiceLedger, VoiceLimiter } from './voice';
 import { cleanName } from './names';
 import { tableCode } from './codes';
@@ -142,10 +142,12 @@ interface Occupant {
   speaksVoice: boolean;
   /** The app confirms the clips it plays, and reads confirmations of its own (`receipts: true`, 1.5.1). */
   receipts: boolean;
+  /** The wire generation the app joined with (protocol.ts PROTO); 0 for an app from before the handshake. */
+  proto: number;
 }
 
 /** A chair nobody sits in. */
-const vacant = (): Occupant => ({ sessionId: null, name: '', avatar: '', connected: false, origin: '', gifts: false, voice: false, speaksVoice: false, receipts: false });
+const vacant = (): Occupant => ({ sessionId: null, name: '', avatar: '', connected: false, origin: '', gifts: false, voice: false, speaksVoice: false, receipts: false, proto: 0 });
 
 /** Refused because a seat at THIS table is already held from the same place. */
 export const SAME_ORIGIN_CODE = 4300;
@@ -157,6 +159,12 @@ function originOf(context: AuthContext): string {
   // x-forwarded-for is a list when there is more than one proxy; the client is
   // the first entry.
   return String(first ?? '').split(',')[0]!.trim();
+}
+
+/** The wire generation an app joined with: what it said, or 0 for an app from before the handshake. */
+function protoOf(options: unknown): number {
+  const p = (options as JoinProto | null)?.proto;
+  return typeof p === 'number' && Number.isInteger(p) && p >= 0 ? p : 0;
 }
 
 /** Each version as the engine's own switches (the rules themselves are untouched). */
@@ -331,7 +339,10 @@ export class BelaRoom extends Room {
    * Private tables are exempt: you get in by knowing the code, and sharing it
    * with somebody is the entire point.
    */
-  override onAuth(_client: Client, _options: unknown, context: AuthContext): { origin: string } {
+  override onAuth(_client: Client, options: unknown, context: AuthContext): { origin: string } {
+    // An app too old for this wire is refused at the door, before it takes a
+    // seat (protocol.ts: the generation, and why MIN_PROTO is 0 for now).
+    if (protoOf(options) < MIN_PROTO) throw new ServerError(UPDATE_APP_CODE, 'update the app');
     const origin = originOf(context);
     const clash =
       this.isPublic &&
@@ -361,6 +372,7 @@ export class BelaRoom extends Room {
       voice: options.voice === true,
       speaksVoice: typeof options.voice === 'boolean',
       receipts: options.receipts === true,
+      proto: protoOf(options),
     };
     this.table.setSeatHuman(seat, true);
     this.gifts[seat] = null;

@@ -1,0 +1,614 @@
+{
+ "version": 1,
+ "scenarios": [
+  {
+   "name": "learn-501",
+   "seed": 1000,
+   "config": {
+    "matchTarget": 501
+   },
+   "deals": 10,
+   "steps": 375,
+   "events": {
+    "dealStarted": 10,
+    "bidPassed": 5,
+    "bidCalled": 10,
+    "handsCompleted": 10,
+    "declarationSkipped": 38,
+    "cardPlayed": 320,
+    "trickWon": 80,
+    "dealScored": 10,
+    "declared": 2,
+    "declarationsRevealed": 1,
+    "matchOver": 2,
+    "matchStarted": 1,
+    "belaCalled": 1
+   },
+   "coverage": {
+    "pad": 6,
+    "valat": 0,
+    "muss": 0,
+    "bela": 1,
+    "contest": 1,
+    "cancelled": 0,
+    "renons": 0,
+    "kontra": 0
+   },
+   "dealHashes": [
+    "822fc9693bad36e9",
+    "33cb30e0596b32a0",
+    "c008166b6f3108a7",
+    "f870900b8515de91",
+    "8f362579d4c0d899",
+    "d56f4ebbff357ed3",
+    "910ad39c372316c6",
+    "4e6e4b117bcebd4d",
+    "80e2c03fc692ad65",
+    "fe06a947b4e3fe7b"
+   ],
+   "hash": "e81371d996049641"
+  },
+  {
+   "name": "learn-701",
+   "seed": 1001,
+   "config": {
+    "matchTarget": 701
+   },
+   "deals": 5,
+   "steps": 187,
+   "events": {
+    "dealStarted": 5,
+    "bidPassed": 2,
+    "bidCalled": 5,
+    "handsCompleted": 5,
+    "declarationSkipped": 19,
+    "cardPlayed": 160,
+    "trickWon": 40,
+    "dealScored": 5,
+    "declared": 1,
+    "declarationsRevealed": 1,
+    "matchOver": 1
+   },
+   "coverage": {
+    "pad": 3,
+    "valat": 0,
+    "muss": 0,
+    "bela": 0,
+    "contest": 0,
+    "cancelled": 0,
+    "renons": 0,
+    "kontra": 0
+   },
+   "dealHashes": [
+    "9e2b0311ed4678cb",
+    "52da07e85a97d8f0",
+    "8cdc0fe3a927fcb1",
+    "3ca9aae5bbeb62b5",
+    "6aab0b03cbd3a6d5"
+   ],
+   "hash": "df5a766b84411063"
+  },
+  {
+   "name": "learn-1001",
+   "seed": 1002,
+   "config": {
+    "matchTarget": 1001
+   },
+   "deals": 10,
+   "steps": 373,
+   "events": {
+    "dealStarted": 10,
+    "bidPassed": 3,
+    "bidCalled": 10,
+    "handsCompleted": 10,
+    "declarationSkipped": 32,
+    "declared": 8,
+    "declarationsRevealed": 7,
+    "cardPlayed": 320,
+    "trickWon": 80,
+    "dealScored": 10,
+    "matchOver": 1
+   },
+   "coverage": {
+    "pad": 5,
+    "valat": 0,
+    "muss": 0,
+    "bela": 0,
+    "contest": 1,
+    "cancelled": 0,
+    "renons": 0,
+    "kontra": 0
+   },
+   "dealHashes": [
+    "91d409131b30b237",
+    "744be7cff4a691f1",
+    "a67aae8c1e6751d8",
+    "086234c3dcc0a64f",
+    "61fbcf41cb239d7f",
+    "aa054eb5287d0c71",
+    "5dec65b9644d895f",
+    "0b5fa0b09489f034",
+    "11a6b11a8a50da7e",
+    "5caeb175e399fb41"
+   ],
+   "hash": "2d40ba30bbf4b01e"
+  },
+  {
+   "name": "easy-501",
+   "seed": 1010,
+   "config": {
+    "declarationMode": "blind",
+    "matchTarget": 501
+   },
+   "deals": 6,
+   "steps": 224,
+   "events": {
+    "dealStarted": 6,
+    "bidPassed": 2,
+    "bidCalled": 6,
+    "handsCompleted": 6,
+    "declared": 13,
+    "declarationSkipped": 11,
+    "cardPlayed": 192,
+    "trickWon": 48,
+    "dealScored": 6,
+    "belaCalled": 1,
+    "matchOver": 1
+   },
+   "coverage": {
+    "pad": 5,
+    "valat": 0,
+    "muss": 0,
+    "bela": 1,
+    "contest": 0,
+    "cancelled": 0,
+    "renons": 0,
+    "kontra": 0
+   },
+   "dealHashes": [
+    "1c6b4f51449d784d",
+    "f7251d252a385643",
+    "fec3a615d294ff7b",
+    "d04faf09cba858c5",
+    "767e2c01656188bf",
+    "74de21bf5aaaaf47"
+   ],
+   "hash": "676651d4bbeb065a"
+  },
+  {
+   "name": "easy-701",
+   "seed": 1011,
+   "config": {
+    "declarationMode": "blind",
+    "matchTarget": 701
+   },
+   "deals": 7,
+   "steps": 263,
+   "events": {
+    "dealStarted": 7,
+    "bidPassed": 4,
+    "bidCalled": 7,
+    "handsCompleted": 7,
+    "declarationSkipped": 17,
+    "declared": 11,
+    "cardPlayed": 224,
+    "trickWon": 56,
+    "dealScored": 7,
+    "matchOver": 1
+   },
+   "coverage": {
+    "pad": 4,
+    "valat": 0,
+    "muss": 0,
+    "bela": 0,
+    "contest": 0,
+    "cancelled": 0,
+    "renons": 0,
+    "kontra": 0
+   },
+   "dealHashes": [
+    "3c778da578e823c7",
+    "d167da07037cf2b7",
+    "3ff35a19c90cbccd",
+    "7c685269829a3807",
+    "7bc21f5c86974946",
+    "b321b59ad5e0a988",
+    "3413f27add4d7310"
+   ],
+   "hash": "34c05392b373cdde"
+  },
+  {
+   "name": "easy-1001",
+   "seed": 1012,
+   "config": {
+    "declarationMode": "blind",
+    "matchTarget": 1001
+   },
+   "deals": 9,
+   "steps": 337,
+   "events": {
+    "dealStarted": 9,
+    "bidPassed": 4,
+    "bidCalled": 9,
+    "handsCompleted": 9,
+    "declared": 18,
+    "cardPlayed": 288,
+    "trickWon": 72,
+    "dealScored": 9,
+    "declarationSkipped": 18,
+    "belaCalled": 1,
+    "matchOver": 1
+   },
+   "coverage": {
+    "pad": 5,
+    "valat": 2,
+    "muss": 1,
+    "bela": 1,
+    "contest": 0,
+    "cancelled": 0,
+    "renons": 0,
+    "kontra": 0
+   },
+   "dealHashes": [
+    "53fc04a98ac989d5",
+    "9b09590cc21c2388",
+    "f747f499ee401e0b",
+    "bfd1d6188a446c4c",
+    "b74e4f3ebfef6a12",
+    "b81119cb6671cda5",
+    "38b2654439fefb4a",
+    "80e205cbb7c0ab41",
+    "307bb17672682f84"
+   ],
+   "hash": "708d2670fe972326"
+  },
+  {
+   "name": "hard-501",
+   "seed": 1020,
+   "config": {
+    "renonsMode": "punish",
+    "declarationMode": "blind",
+    "matchTarget": 501
+   },
+   "deals": 5,
+   "steps": 186,
+   "events": {
+    "dealStarted": 5,
+    "bidPassed": 1,
+    "bidCalled": 5,
+    "handsCompleted": 5,
+    "declarationSkipped": 15,
+    "declared": 5,
+    "cardPlayed": 160,
+    "trickWon": 40,
+    "dealScored": 5,
+    "matchOver": 1
+   },
+   "coverage": {
+    "pad": 4,
+    "valat": 0,
+    "muss": 0,
+    "bela": 0,
+    "contest": 0,
+    "cancelled": 0,
+    "renons": 0,
+    "kontra": 0
+   },
+   "dealHashes": [
+    "eb46ec893ee483f7",
+    "4a90cc3b33c233f5",
+    "847265ea16c5d2d6",
+    "6b4842b552d67f77",
+    "ece4b7e51415edfb"
+   ],
+   "hash": "f9e21f37aaf6dc97"
+  },
+  {
+   "name": "hard-701",
+   "seed": 1021,
+   "config": {
+    "renonsMode": "punish",
+    "declarationMode": "blind",
+    "matchTarget": 701
+   },
+   "deals": 9,
+   "steps": 338,
+   "events": {
+    "dealStarted": 9,
+    "bidPassed": 5,
+    "bidCalled": 9,
+    "handsCompleted": 9,
+    "declared": 16,
+    "declarationSkipped": 20,
+    "cardPlayed": 288,
+    "trickWon": 72,
+    "dealScored": 9,
+    "matchOver": 1
+   },
+   "coverage": {
+    "pad": 5,
+    "valat": 0,
+    "muss": 1,
+    "bela": 0,
+    "contest": 0,
+    "cancelled": 0,
+    "renons": 0,
+    "kontra": 0
+   },
+   "dealHashes": [
+    "51f3379a57c89fba",
+    "f9f384193895c091",
+    "6ff9b61d17a208cb",
+    "b1efc6c5d3e60d9b",
+    "4560f015772b6c23",
+    "f1a272c51d89b359",
+    "41e27e569e8a6a60",
+    "6a4fd0f900062305",
+    "ae720d1d60f5b3ef"
+   ],
+   "hash": "608dbe5a7ae4269c"
+  },
+  {
+   "name": "hard-1001",
+   "seed": 1022,
+   "config": {
+    "renonsMode": "punish",
+    "declarationMode": "blind",
+    "matchTarget": 1001
+   },
+   "deals": 10,
+   "steps": 373,
+   "events": {
+    "dealStarted": 10,
+    "bidPassed": 3,
+    "bidCalled": 10,
+    "handsCompleted": 10,
+    "declarationSkipped": 20,
+    "declared": 20,
+    "belaCalled": 2,
+    "cardPlayed": 320,
+    "trickWon": 80,
+    "dealScored": 10,
+    "matchOver": 1
+   },
+   "coverage": {
+    "pad": 4,
+    "valat": 0,
+    "muss": 0,
+    "bela": 2,
+    "contest": 0,
+    "cancelled": 0,
+    "renons": 0,
+    "kontra": 0
+   },
+   "dealHashes": [
+    "e91b034cf0cc9e10",
+    "6c17029fb2f1dcdb",
+    "42cf57e5f52ff2ef",
+    "adb984202922f1ec",
+    "175f4b68b20ca614",
+    "8635c7a2869935dc",
+    "eacb1ece1a599762",
+    "60cbffc24afb951c",
+    "43c24b3e02e1769a",
+    "b3a999b869161b6e"
+   ],
+   "hash": "aac693961377b4de"
+  },
+  {
+   "name": "knobs-kontra-tiecancel-1001",
+   "seed": 2001,
+   "config": {
+    "allowKontra": true,
+    "declarationTieCancels": true,
+    "matchTarget": 1001
+   },
+   "deals": 4,
+   "steps": 158,
+   "events": {
+    "dealStarted": 4,
+    "bidPassed": 1,
+    "bidCalled": 4,
+    "doubled": 6,
+    "handsCompleted": 4,
+    "declarationSkipped": 15,
+    "declared": 1,
+    "declarationsRevealed": 1,
+    "cardPlayed": 128,
+    "trickWon": 32,
+    "dealScored": 4,
+    "doublePassed": 3,
+    "belaCalled": 1,
+    "matchOver": 1
+   },
+   "coverage": {
+    "pad": 3,
+    "valat": 0,
+    "muss": 0,
+    "bela": 1,
+    "contest": 0,
+    "cancelled": 0,
+    "renons": 0,
+    "kontra": 3
+   },
+   "dealHashes": [
+    "14d1f3ba774d2abc",
+    "96677b963ed4c824",
+    "4298a7bbb05286c9",
+    "9562a2a4469126ae"
+   ],
+   "hash": "18d55ff614cf8bfc"
+  },
+  {
+   "name": "knobs-french-701",
+   "seed": 2002,
+   "config": {
+    "forcedOvertrumpOverPartner": false,
+    "contractTieSucceeds": true,
+    "keepBelaOnFailedContract": false,
+    "matchTarget": 701
+   },
+   "deals": 7,
+   "steps": 261,
+   "events": {
+    "dealStarted": 7,
+    "bidPassed": 2,
+    "bidCalled": 7,
+    "handsCompleted": 7,
+    "declarationSkipped": 23,
+    "cardPlayed": 224,
+    "trickWon": 56,
+    "dealScored": 7,
+    "declared": 5,
+    "declarationsRevealed": 3,
+    "matchOver": 1
+   },
+   "coverage": {
+    "pad": 2,
+    "valat": 0,
+    "muss": 0,
+    "bela": 0,
+    "contest": 1,
+    "cancelled": 0,
+    "renons": 0,
+    "kontra": 0
+   },
+   "dealHashes": [
+    "2595202ab9770dee",
+    "e8d666d483b08fe0",
+    "68972950da9fba2a",
+    "0f00204832c6e294",
+    "28136c30f4332220",
+    "07d915e9d46352c5",
+    "bd0e53576ae77543"
+   ],
+   "hash": "d327818aba3de382"
+  },
+  {
+   "name": "knobs-tiecancel-cancelled-501",
+   "seed": 4017,
+   "config": {
+    "allowKontra": true,
+    "declarationTieCancels": true,
+    "matchTarget": 501
+   },
+   "deals": 2,
+   "steps": 81,
+   "events": {
+    "dealStarted": 2,
+    "bidCalled": 2,
+    "doublePassed": 4,
+    "doubled": 3,
+    "handsCompleted": 2,
+    "declarationSkipped": 6,
+    "cardPlayed": 64,
+    "trickWon": 16,
+    "dealScored": 2,
+    "declared": 2,
+    "belaCalled": 1,
+    "matchOver": 1
+   },
+   "coverage": {
+    "pad": 1,
+    "valat": 0,
+    "muss": 0,
+    "bela": 1,
+    "contest": 1,
+    "cancelled": 1,
+    "renons": 0,
+    "kontra": 2
+   },
+   "dealHashes": [
+    "e8a2bd5d4d2097ed",
+    "40cdbaf1401ee8b7"
+   ],
+   "hash": "9cf03fb622cb0bf8"
+  },
+  {
+   "name": "renons-hard-501-a",
+   "seed": 3001,
+   "config": {
+    "renonsMode": "punish",
+    "declarationMode": "blind",
+    "matchTarget": 501
+   },
+   "deals": 7,
+   "steps": 51,
+   "events": {
+    "dealStarted": 7,
+    "bidPassed": 1,
+    "bidCalled": 7,
+    "handsCompleted": 7,
+    "declarationSkipped": 17,
+    "cardPlayed": 15,
+    "dealScored": 7,
+    "declared": 11,
+    "matchOver": 1
+   },
+   "coverage": {
+    "pad": 0,
+    "valat": 0,
+    "muss": 0,
+    "bela": 0,
+    "contest": 0,
+    "cancelled": 0,
+    "renons": 7,
+    "kontra": 0
+   },
+   "dealHashes": [
+    "7098514e03fd604e",
+    "e8ba7389e6042ec3",
+    "77a3a079e6a1f95d",
+    "a51f30a52e213a55",
+    "23b2f220163111c0",
+    "ea9ac9d23208baea",
+    "310505455a9d5041"
+   ],
+   "hash": "fcba15c235be769e"
+  },
+  {
+   "name": "renons-hard-501-b",
+   "seed": 3002,
+   "config": {
+    "renonsMode": "punish",
+    "declarationMode": "blind",
+    "matchTarget": 501
+   },
+   "deals": 7,
+   "steps": 51,
+   "events": {
+    "dealStarted": 7,
+    "bidPassed": 2,
+    "bidCalled": 7,
+    "handsCompleted": 7,
+    "declared": 15,
+    "declarationSkipped": 13,
+    "cardPlayed": 14,
+    "dealScored": 7,
+    "belaCalled": 1,
+    "matchOver": 1
+   },
+   "coverage": {
+    "pad": 0,
+    "valat": 0,
+    "muss": 0,
+    "bela": 1,
+    "contest": 0,
+    "cancelled": 0,
+    "renons": 7,
+    "kontra": 0
+   },
+   "dealHashes": [
+    "62a390d087c0e052",
+    "55b98aad08875241",
+    "57b5ef43f9f944d5",
+    "774883ece81f121c",
+    "10b34d2110ddcb2f",
+    "566be42374b4c2d5",
+    "25fbdfd06292bb1c"
+   ],
+   "hash": "26ce4deba2e6b1d7"
+  }
+ ],
+ "hash": "7ba55107f326674f"
+}

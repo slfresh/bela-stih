@@ -1,5 +1,5 @@
 import { Resvg } from '@resvg/resvg-js';
-import { writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { FELT, markSvg } from './brand.mjs';
 
@@ -45,5 +45,20 @@ render('android-icon-monochrome.png', markSvg({ size: 1024, bg: false, cardScale
 // Splash mark sits on the themed background from app.json.
 render('splash-icon.png', markSvg({ size: 1024, bg: false, cardScale: 0.34 }), 1024);
 render('favicon.png', markSvg({ size: 96, cardScale: 0.42 }), 96);
+
+// The web app's icons (public/manifest.webmanifest): the same mark, plus a
+// maskable one drawn like the adaptive icon - the cards inside the safe
+// circle, the felt to the edge - so a launcher's crop cuts nothing off.
+const WEB = join(process.cwd(), 'apps', 'mobile', 'public', 'icons');
+mkdirSync(WEB, { recursive: true });
+const web = (name, svg, width) => {
+  const png = new Resvg(svg, { fitTo: { mode: 'width', value: width } }).render().asPng();
+  writeFileSync(join(WEB, name), png);
+  console.log(`  public/icons/${name}  ${width}x${width}  ${(png.length / 1024).toFixed(0)}KB`);
+};
+web('pwa-192.png', markSvg({ size: 1024 }), 192);
+web('pwa-512.png', markSvg({ size: 1024 }), 512);
+web('maskable-512.png', markSvg({ size: 1024, cardScale: 0.26 }), 512);
+web('apple-touch-icon.png', markSvg({ size: 1024 }), 180);
 
 console.log('Done.');

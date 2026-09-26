@@ -76,8 +76,13 @@ describe('renons (auzmeš) under renonsMode punish', () => {
     const offTeam = teamOf(seat);
     const defTeam = (1 - offTeam) as 0 | 1;
     expect(result.finalScore[offTeam]).toBe(0);
-    // 162 plus whatever zvanja/bela had been announced by ANYONE this deal.
-    expect(result.finalScore[defTeam]).toBeGreaterThanOrEqual(162);
+    // Exactly the table (152 + the last trick) plus every zvanje announced by
+    // ANYONE this deal plus an announced bela - flat, no multiplier.
+    const zvanja = s.announcedDeclarations.flat().reduce((t, d) => t + d.value, 0);
+    const bela = s.belaAnnouncedSeat !== null ? 20 : 0;
+    expect(result.declarationPoints[defTeam]).toBe(zvanja);
+    expect(result.bela[defTeam]).toBe(bela);
+    expect(result.finalScore[defTeam]).toBe(162 + zvanja + bela);
     expect(done.matchScores[defTeam]).toBe(before[defTeam] + result.finalScore[defTeam]);
     expect(done.matchScores[offTeam]).toBe(before[offTeam]);
   });

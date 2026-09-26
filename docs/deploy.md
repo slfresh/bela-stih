@@ -27,9 +27,46 @@ bash scripts/deploy-server.sh root@YOUR.SERVER.IP bela.yourdomain.com
 ```
 
 Packs the server + shared packages, uploads, builds on the box, restarts, and
-waits for `https://bela.yourdomain.com/health` to answer. Caddy fetches the
-Let's Encrypt certificate automatically on first start — that needs the DNS
-record to already resolve. Deploys drop running matches; ship between games.
+waits for `https://bela.yourdomain.com/health` to answer with the commit it
+was built from. Caddy fetches the Let's Encrypt certificate automatically on
+first start — that needs the DNS record to already resolve. Deploys drop
+running matches; ship between games (`/health` says how many are on).
+
+Every image is tagged with its commit (`bela-server:<sha>`, `-dirty` when the
+tree had local changes; the tag is `BELA_TAG` in `/opt/bela/deploy/.env`).
+The box keeps the last two, so there is always one to go back to.
+
+## Health, and going back
+
+`https://bela.yourdomain.com/health` answers
+`{ ok, room, sha, proto, minProto, rooms, players, uptimeSeconds }`: the commit
+running, the wire generation served and the oldest app still admitted, and
+whether anyone is at a table. Compose polls it every 30 s and `docker compose
+ps` shows the container unhealthy when it stops answering.
+
+If a deploy goes wrong:
+
+```bash
+bash scripts/rollback-server.sh root@YOUR.SERVER.IP          # the previous tag
+bash scripts/rollback-server.sh root@YOUR.SERVER.IP <sha>    # a named one
+```
+
+swaps `BELA_TAG` back, restarts from the image already on the box (no build),
+and waits for `/health` to report that sha. Then fix forward.
+
+## Wire transcripts
+
+```bash
+npm run transcript apps/server/transcripts/<version>
+```
+
+plays four scripted sessions against `SERVER_URL` (default the local server) —
+a full match with everything a table can say, bots and a reconnect, quick play
+and its refusals, garbage — and records every WebSocket frame and matchmake
+request, raw and decoded, gzipped. `apps/server/transcripts/1.5.1/` is what
+the 1.5.1 app and server said to each other. Record a set before a protocol
+change and diff the decoded messages after it; an app in the wild speaks the
+old set.
 
 ## Verify like you mean it
 
@@ -47,6 +84,9 @@ SERVER_URL=wss://bela.yourdomain.com npx tsx src/rules-smoke.ts
 # pausing, waiting for a dropped friend, the next-deal countdown, short codes
 # (about two minutes; it waits out the old 60 s seat hold on purpose):
 SERVER_URL=wss://bela.yourdomain.com npx tsx src/hold-smoke.ts
+# voice clips: relayed to the seats that can hear, the sender's echo, the
+# limiter, junk dropped with the socket kept open, the host's switch:
+SERVER_URL=wss://bela.yourdomain.com npx tsx src/voice-smoke.ts
 ```
 
 The new quick phrases (`dobro`, `ups`, `idemo`) and the rules message need

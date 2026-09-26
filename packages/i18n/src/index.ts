@@ -140,6 +140,9 @@ export interface UiStrings {
   /** The branded screen a render error lands on, instead of a blank one. */
   crashTitle: string;
   crashBody: string;
+  /** The crash screen's second button: the error, the version and the phone, to the clipboard. */
+  crashCopy: string;
+  crashCopied: string;
 
   privacyPolicy: string;
 
@@ -161,6 +164,8 @@ export interface UiStrings {
   troubleNoSuchTable: string;
   troubleTableClosed: string;
   troubleOffline: string;
+  /** The server refused this app as too old for its wire (net/proto.ts UPDATE_APP_CODE). */
+  troubleAppTooOld: string;
   troubleServer: string;
   /** The lobby's connection dropped, and the seat was not got back. */
   troubleDropped: string;
@@ -946,6 +951,8 @@ const hr: Strings = {
     back: 'Natrag',
     crashTitle: 'Nešto je pošlo po zlu',
     crashBody: 'Aplikacija je naletjela na grešku. Vrati se na početni ekran i pokušaj ponovno.',
+    crashCopy: 'Kopiraj izvještaj o grešci',
+    crashCopied: 'Kopirano – pošalji na prijave@belastih.com',
     privacyPolicy: 'Pravila privatnosti',
 
     emotePhrase: (id) => HR_EMOTES[id] ?? id,
@@ -960,6 +967,7 @@ const hr: Strings = {
     troubleNoSuchTable: 'Nema otvorenog stola s tom šifrom. Provjeri šifru, ili zamoli prijatelja da je pošalje ponovno.',
     troubleTableClosed: 'Za tim stolom se već igra, ili je pun.',
     troubleOffline: 'Nema veze. Provjeri internet pa pokušaj ponovno.',
+    troubleAppTooOld: 'Ova verzija aplikacije više ne može igrati online. Ažuriraj je u trgovini.',
     troubleServer: 'Poslužitelj se trenutno ne javlja kako treba. Pokušaj ponovno za koji trenutak.',
     troubleDropped: 'Stol više ne čeka. Pokušaj ponovno ili se vrati na početak.',
     troubleSameNetwork:
@@ -1500,6 +1508,8 @@ const srCyrl: Strings = {
     back: 'Назад',
     crashTitle: 'Нешто је пошло по злу',
     crashBody: 'Апликација је наишла на грешку. Врати се на почетни екран и покушај поново.',
+    crashCopy: 'Копирај извештај о грешци',
+    crashCopied: 'Копирано – пошаљи на prijave@belastih.com',
     privacyPolicy: 'Правила приватности',
 
     emotePhrase: (id) => SR_EMOTES[id] ?? id,
@@ -1514,6 +1524,7 @@ const srCyrl: Strings = {
     troubleNoSuchTable: 'Нема отвореног стола са том шифром. Провери шифру, или замоли пријатеља да је пошаље поново.',
     troubleTableClosed: 'За тим столом се већ игра, или је пун.',
     troubleOffline: 'Нема везе. Провери интернет па покушај поново.',
+    troubleAppTooOld: 'Ова верзија апликације више не може да игра онлајн. Ажурирај је у продавници.',
     troubleServer: 'Сервер се тренутно не јавља како треба. Покушај поново за који тренутак.',
     troubleDropped: 'Сто више не чека. Покушај поново или се врати на почетак.',
     troubleSameNetwork:
@@ -2051,6 +2062,8 @@ const en: Strings = {
     back: 'Back',
     crashTitle: 'Something went wrong',
     crashBody: 'The app hit an error. Go back to the home screen and try again.',
+    crashCopy: 'Copy the error report',
+    crashCopied: 'Copied – send it to prijave@belastih.com',
     privacyPolicy: 'Privacy policy',
 
     emotePhrase: (id) => EN_EMOTES[id] ?? id,
@@ -2065,6 +2078,7 @@ const en: Strings = {
     troubleNoSuchTable: 'No open table has that code. Check it, or ask your friend to send it again.',
     troubleTableClosed: 'That table is already playing, or full.',
     troubleOffline: 'No connection. Check your internet and try again.',
+    troubleAppTooOld: 'This version of the app can no longer play online. Update it in the store.',
     troubleServer: "The server isn't answering properly right now. Try again in a moment.",
     troubleDropped: 'The table is no longer waiting. Try again, or go back to the start.',
     troubleSameNetwork:

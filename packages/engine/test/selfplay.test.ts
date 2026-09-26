@@ -15,6 +15,7 @@ import {
   type GameState,
   type Seat,
 } from '@belot/engine';
+import { HARD_CONFIG_OVERRIDES, type EngineConfig } from '@belot/shared-types';
 
 /**
  * The self-play harness. Thousands of deals of uniformly random *legal* play,
@@ -187,66 +188,74 @@ function collectCards(value: unknown, out: Card[] = []): Card[] {
   return out;
 }
 
+function freshInvariants(): Invariants {
+  return {
+    deals: 0,
+    pads: 0,
+    valats: 0,
+    belas: 0,
+    declarationContests: 0,
+    cancelledContests: 0,
+    kontras: 0,
+    matches: 0,
+    maxDealScore: 0,
+  };
+}
+
+/** Random legal play over `deals` deals under `config`, every scored deal checked against the invariants. */
+function runHarness(config: Partial<EngineConfig>, deals: number, rng: () => number, inv: Invariants): void {
+  let matchSeed = 1;
+  let s = startDeal(createMatch({ seed: matchSeed, dealer: 0, config: config }));
+  let steps = 0;
+
+  while (inv.deals < deals) {
+    if (steps++ > deals * 200) throw new Error('harness failed to make progress');
+
+    const actor = currentActor(s);
+    expect(actor).not.toBeNull();
+
+    const legal = legalActions(s);
+    expect(legal.length).toBeGreaterThan(0);
+    // Every offered action must name the seat actually on turn.
+    for (const a of legal) expect(a.seat).toBe(actor);
+
+    const choice = legal[Math.floor(rng() * legal.length)]!;
+
+    // Spot-check purity and hidden hands without paying for it every step.
+    if (steps % 997 === 0) {
+      assertPure(s, choice);
+      if (s.phase === 'PLAY') assertNoLeak(s);
+    }
+
+    const before = s;
+    s = applyAction(s, choice);
+
+    if (before.phase === 'DOUBLE' && s.multiplier !== before.multiplier) inv.kontras += 1;
+
+    if (s.phase === 'DEAL_OVER' || s.phase === 'MATCH_OVER') {
+      if (s.lastDealResult) {
+        checkDeal(s, s.lastDealResult, inv);
+        inv.deals += 1;
+      }
+      if (s.phase === 'MATCH_OVER') {
+        inv.matches += 1;
+        s = startDeal(createMatch({ seed: ++matchSeed, dealer: 0, config: config }));
+      } else {
+        s = startDeal(s);
+      }
+    }
+  }
+}
+
 describe('self-play harness', () => {
   it(`survives ${DEALS.toLocaleString()} deals of random legal play`, () => {
     const rng = makeRng(0xbe10c);
-    const inv: Invariants = {
-      deals: 0,
-      pads: 0,
-      valats: 0,
-      belas: 0,
-      declarationContests: 0,
-      cancelledContests: 0,
-      kontras: 0,
-      matches: 0,
-      maxDealScore: 0,
-    };
+    const inv = freshInvariants();
 
-    let matchSeed = 1;
     // Keep the doubling path under test, and the tie-cancel HOUSE RULE on so the
     // cancelled-contest invariant still gets exercised (the shipped default now
     // resolves ties to the first player in rotation, per UHDDR rule 7).
-    const harnessConfig = { allowKontra: true, declarationTieCancels: true };
-    let s = startDeal(createMatch({ seed: matchSeed, dealer: 0, config: harnessConfig }));
-    let steps = 0;
-
-    while (inv.deals < DEALS) {
-      if (steps++ > DEALS * 200) throw new Error('harness failed to make progress');
-
-      const actor = currentActor(s);
-      expect(actor).not.toBeNull();
-
-      const legal = legalActions(s);
-      expect(legal.length).toBeGreaterThan(0);
-      // Every offered action must name the seat actually on turn.
-      for (const a of legal) expect(a.seat).toBe(actor);
-
-      const choice = legal[Math.floor(rng() * legal.length)]!;
-
-      // Spot-check purity and hidden hands without paying for it every step.
-      if (steps % 997 === 0) {
-        assertPure(s, choice);
-        if (s.phase === 'PLAY') assertNoLeak(s);
-      }
-
-      const before = s;
-      s = applyAction(s, choice);
-
-      if (before.phase === 'DOUBLE' && s.multiplier !== before.multiplier) inv.kontras += 1;
-
-      if (s.phase === 'DEAL_OVER' || s.phase === 'MATCH_OVER') {
-        if (s.lastDealResult) {
-          checkDeal(s, s.lastDealResult, inv);
-          inv.deals += 1;
-        }
-        if (s.phase === 'MATCH_OVER') {
-          inv.matches += 1;
-          s = startDeal(createMatch({ seed: ++matchSeed, dealer: 0, config: harnessConfig }));
-        } else {
-          s = startDeal(s);
-        }
-      }
-    }
+    runHarness({ allowKontra: true, declarationTieCancels: true }, DEALS, rng, inv);
 
     // The harness is only meaningful if random play actually reaches the hard cases.
     expect(inv.deals).toBe(DEALS);
@@ -264,6 +273,29 @@ describe('self-play harness', () => {
         `${inv.pads} pads, ${inv.valats} valats, ${inv.belas} belas, ` +
         `${inv.declarationContests} declaration contests (${inv.cancelledContests} cancelled), ` +
         `${inv.kontras} doublings, biggest deal ${inv.maxDealScore}`,
+    );
+  });
+
+  // The three overlays a player can actually choose, so the invariants are
+  // proven on what ships and not only on the harness's own house rules. A
+  // fifth of the deals each; the nightly run (SELFPLAY_DEALS=100000) makes that 20k.
+  const OVERLAY_DEALS = Math.max(200, Math.floor(DEALS / 5));
+  it.each([
+    ['learn', {} as Partial<EngineConfig>],
+    ['easy', { declarationMode: 'blind' } as Partial<EngineConfig>],
+    ['hard', HARD_CONFIG_OVERRIDES as Partial<EngineConfig>],
+  ])(`survives ${OVERLAY_DEALS.toLocaleString()} deals on the shipped %s overlay`, (name, config) => {
+    const rng = makeRng(0x5e1f + name.length * 7919);
+    const inv = freshInvariants();
+    runHarness(config, OVERLAY_DEALS, rng, inv);
+    expect(inv.deals).toBe(OVERLAY_DEALS);
+    expect(inv.matches).toBeGreaterThan(0);
+    expect(inv.pads).toBeGreaterThan(0);
+    expect(inv.belas).toBeGreaterThan(0);
+    console.log(
+      `[selfplay:${name}] ${inv.deals} deals over ${inv.matches} matches — ` +
+        `${inv.pads} pads, ${inv.valats} valats, ${inv.belas} belas, ` +
+        `${inv.declarationContests} declaration contests, biggest deal ${inv.maxDealScore}`,
     );
   });
 });

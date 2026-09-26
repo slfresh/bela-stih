@@ -206,6 +206,22 @@ export const VOICE_MIMES: readonly string[] = ['audio/mp4', 'audio/webm'];
 export const MAX_FRAME_BYTES = 96 * 1024;
 
 /**
+ * The wire's generation. An app says `proto` (and its `appVersion`) when it
+ * joins; the room refuses anything under MIN_PROTO with UPDATE_APP_CODE. An
+ * app from before this handshake (1.5.1 and older) sends nothing and counts
+ * as generation 0, so MIN_PROTO stays 0 until a server can no longer serve
+ * those apps (the plan's R6a) and they are under 1% of installs.
+ */
+export const PROTO = 1;
+export const MIN_PROTO = 0;
+/** Refused at the door: the app is too old for this server. */
+export const UPDATE_APP_CODE = 4301;
+export interface JoinProto {
+  proto?: number;
+  appVersion?: string;
+}
+
+/**
  * Client -> server join option: this app can play and record voice clips
  * (present at all), and its player has them on (true). Older apps send
  * nothing and are never sent a clip.
