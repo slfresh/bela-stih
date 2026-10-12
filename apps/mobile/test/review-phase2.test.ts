@@ -355,7 +355,9 @@ describe('the same four, across evenings', () => {
     expect(o).toMatch(/const fourPeople = net\.seats\.length === 4 && net\.seats\.every\(\(s\) => s\.name !== SERVER_FALLBACK\(s\.seat\)\);/);
     expect(o).toMatch(/const id = `\$\{isoDay\(new Date\(\)\)\}:\$\{net\.roomId\}:\$\{net\.matchNumber\}`;/);
     expect(o).toMatch(/rematchLabel=\{fourPeople \? net\.lang\.s\.ui\.revans : undefined\}/);
-    expect(o).toMatch(/series=\{shownSeries\}/);
+    // The table shows this sitting's tally alone; the long count is the statistics screen's.
+    expect(o).toMatch(/series=\{net\.series\}/);
+    expect(o).not.toMatch(/shownSeries|seriesEntry/);
     for (const id of LOCALE_IDS) {
       const ui = new Lang(id).s.ui;
       expect(ui.revans).not.toBe(ui.playAgain);

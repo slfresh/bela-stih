@@ -30,6 +30,7 @@ export function ProfileScreen({
   onProfileChange,
   onOpenShop,
   onOpenHistory,
+  onOpenStats,
   onBack,
 }: {
   lang: Lang;
@@ -38,8 +39,9 @@ export function ProfileScreen({
   onSettingsChange: (s: Settings) => void;
   onProfileChange: (p: PlayerProfile) => void;
   onOpenShop: () => void;
-  /** The matches with friends and their statistics. */
+  /** The matches with friends, match by match; and what they add up to. */
   onOpenHistory: () => void;
+  onOpenStats: () => void;
   onBack: () => void;
 }) {
   const ui = lang.s.ui;
@@ -156,13 +158,22 @@ export function ProfileScreen({
         ))}
       </Panel>
       {friends.played > 0 && <Text style={styles.friends}>{ui.friendsLine(friends.played, friends.rate)}</Text>}
-      <Button label={ui.historyOpen} tone="plain" onPress={onOpenHistory} />
+      <View style={styles.actions}>
+        <View style={styles.fill}>
+          <Button label={ui.historyOpen} tone="plain" onPress={onOpenHistory} />
+        </View>
+        <View style={styles.fill}>
+          <Button label={ui.statsOpen} tone="plain" onPress={onOpenStats} />
+        </View>
+      </View>
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
   identity: { alignItems: 'center', gap: 10 },
+  actions: { flexDirection: 'row', gap: space.sm },
+  fill: { flex: 1 },
   nameInput: {
     alignSelf: 'stretch',
     color: ink.hi,

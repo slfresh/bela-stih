@@ -387,6 +387,19 @@ export interface UiStrings {
    */
   historyTitle: string;
   historyOpen: string;
+  /**
+   * "Statistika": the totals, the long count between the same four across
+   * evenings (the table itself shows only the sitting in progress), the
+   * people, and the lifetime numbers.
+   */
+  statsTitle: string;
+  statsOpen: string;
+  statsEmpty: string;
+  statsHeadToHead: string;
+  statsNoSeries: string;
+  /** One group of four: my partner, then the two opponents. */
+  statsVs: (partner: string, opp1: string, opp2: string) => string;
+  statsOverall: string;
   historyEmpty: string;
   historyLocal: string;
   historyTotals: string;
@@ -1140,8 +1153,16 @@ const hr: Strings = {
     qrLabel: (code) => `QR kod stola ${code}`,
     qrHint: 'Neka ga prijatelj skenira kamerom mobitela.',
     inviteText: (code, url) => `Zaigraj belu sa mnom! Šifra stola: ${code}\n${url}`,
-    historyTitle: 'Povijest i statistika',
+    historyTitle: 'Povijest',
     historyOpen: 'Povijest partija',
+    statsTitle: 'Statistika',
+    statsOpen: 'Statistika',
+    statsEmpty:
+      'Još nema brojki. Odigraj partiju s prijateljima za privatnim stolom: ovdje se skuplja tko vodi, s kim igraš i koliko je ukupno odigrano.',
+    statsHeadToHead: 'Međusobno',
+    statsNoSeries: 'Međusobni rezultat skuplja se kad za stolom sjede četiri osobe: isti par protiv istog para, iz večeri u večer.',
+    statsVs: (partner, o1, o2) => `Ti i ${partner} · protiv: ${o1}, ${o2}`,
+    statsOverall: 'Sve partije',
     historyEmpty:
       'Još nema partija s prijateljima. Napravi privatni stol i pozovi ih: ovdje će se skupljati sve partije s njima, tko je s kim u paru i tko vodi.',
     historyLocal: 'Povijest se čuva samo na ovom uređaju.',
@@ -1704,8 +1725,16 @@ const srCyrl: Strings = {
     qrLabel: (code) => `QR код стола ${code}`,
     qrHint: 'Нека га пријатељ скенира камером телефона.',
     inviteText: (code, url) => `Заиграј белу са мном! Шифра стола: ${code}\n${url}`,
-    historyTitle: 'Историја и статистика',
+    historyTitle: 'Историја',
     historyOpen: 'Историја партија',
+    statsTitle: 'Статистика',
+    statsOpen: 'Статистика',
+    statsEmpty:
+      'Још нема бројки. Одиграј партију са пријатељима за приватним столом: овде се скупља ко води, с ким играш и колико је укупно одиграно.',
+    statsHeadToHead: 'Међусобно',
+    statsNoSeries: 'Међусобни резултат скупља се кад за столом седе четири особе: исти пар против истог пара, из вечери у вече.',
+    statsVs: (partner, o1, o2) => `Ти и ${partner} · против: ${o1}, ${o2}`,
+    statsOverall: 'Све партије',
     historyEmpty:
       'Још нема партија са пријатељима. Направи приватни сто и позови их: овде ће се скупљати све партије с њима, ко је с ким у пару и ко води.',
     historyLocal: 'Историја се чува само на овом уређају.',
@@ -2265,8 +2294,16 @@ const en: Strings = {
     qrLabel: (code) => `QR code for table ${code}`,
     qrHint: 'Let a friend scan it with their phone camera.',
     inviteText: (code, url) => `Come play Bela with me! Table code: ${code}\n${url}`,
-    historyTitle: 'History and statistics',
+    historyTitle: 'History',
     historyOpen: 'Match history',
+    statsTitle: 'Statistics',
+    statsOpen: 'Statistics',
+    statsEmpty:
+      'No numbers yet. Play a match with friends at a private table: who leads, who you play with and how much has been played all gather here.',
+    statsHeadToHead: 'Head to head',
+    statsNoSeries: 'The head-to-head count builds when four people sit at the table: the same pair against the same pair, evening after evening.',
+    statsVs: (partner, o1, o2) => `You and ${partner} · against: ${o1}, ${o2}`,
+    statsOverall: 'All matches',
     historyEmpty:
       'No matches with friends yet. Create a private table and invite them: every match with them, who partners whom and who leads, will gather here.',
     historyLocal: 'The history is kept on this device only.',

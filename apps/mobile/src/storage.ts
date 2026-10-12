@@ -219,6 +219,12 @@ export interface SeriesEntry {
   us: number;
   them: number;
   seen: string[];
+  /**
+   * The four as last seen, for the statistics screen: me and my partner,
+   * the two opponents. Absent in entries from before the screen existed
+   * (series.ts seriesNames reads the key then).
+   */
+  names?: { us: [string, string]; them: [string, string] };
 }
 export type SeriesBook = Record<string, SeriesEntry>;
 

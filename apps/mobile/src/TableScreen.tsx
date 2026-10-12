@@ -2057,8 +2057,10 @@ const TableHeader = memo(function TableHeader({
   /** The version, said beside the target: nobody is caught out by what it asks. */
   mode?: PlayMode;
   /**
-   * Matches won per side since these four sat down (online; absolute team
-   * ids like matchScores). Between the pills once a match has been won, so the
+   * Matches won per side since these people sat down at THIS table - the
+   * server's count online, the screen's own offline; absolute team ids like
+   * matchScores. Never the long count across evenings: that is the
+   * statistics screen's. Between the pills once a match has been won, so the
    * first match looks exactly as it always did.
    */
   series?: readonly [number, number] | null;
@@ -3245,8 +3247,9 @@ function ResultFoot({
   return (
     <>
       {matchOver ? (
-        // Online stacks the series line over its buttons; offline has no
-        // series, and its two answers sit side by side like a deal's.
+        // With a sitting's tally (online always, offline from the first
+        // rematch) the series line stacks over its buttons; without one the
+        // two answers sit side by side like a deal's.
         <View style={series ? styles.sheetFoot : styles.resultButtons}>
           {/* The double win, said before the tally it doubled. */}
           {matchDouble && <Text style={styles.doubleLine}>{lang.s.ui.doubleWinLine}</Text>}

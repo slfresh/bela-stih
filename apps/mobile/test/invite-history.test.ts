@@ -119,7 +119,7 @@ describe('the history of matches with friends', () => {
   it('opens from home and the profile, and says it stays on the device', () => {
     const app = src('App.tsx');
     expect(app).toMatch(/menu === 'history' \? \(\s*<HistoryScreen/);
-    expect(app).toMatch(/const history = useMemo\(\(\) => \(menu === 'history' \? loadHistory\(\) : \[\]\), \[menu\]\);/);
+    expect(app).toMatch(/const history = useMemo\(\(\) => \(menu === 'history' \|\| menu === 'stats' \? loadHistory\(\) : \[\]\), \[menu\]\);/);
     expect(src('src/HomeScreen.tsx')).toMatch(/<Button label=\{ui\.historyOpen\} tone="plain" onPress=\{onOpenHistory\} \/>/);
     expect(src('src/screens/ProfileScreen.tsx')).toMatch(/<Button label=\{ui\.historyOpen\} tone="plain" onPress=\{onOpenHistory\} \/>/);
     expect(src('src/screens/HistoryScreen.tsx')).toMatch(/<Text style=\{styles\.local\}>\{ui\.historyLocal\}<\/Text>/);
