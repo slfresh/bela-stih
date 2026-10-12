@@ -306,6 +306,15 @@ export interface UiStrings {
   doubleWinHint: string;
   doubleWinLine: string;
   doubleTag: string;
+  /**
+   * How well the bots play (not the game version): Settings' and the lobby's
+   * choice, the three strengths' names, and what the choice covers.
+   */
+  botLevel: string;
+  botLevelEasy: string;
+  botLevelMedium: string;
+  botLevelHard: string;
+  botLevelHint: string;
   /** Hand arranging + sorting. */
   arrangeHint: string;
   arrangeDone: string;
@@ -1092,6 +1101,11 @@ const hr: Strings = {
     doubleWinHint: 'Samo do 1001: par koji dođe do 1001 dok je drugi još ispod 500 dobiva dvije partije. Dogovori se prije stola.',
     doubleWinLine: 'Dupla pobjeda: računa se kao dvije partije',
     doubleTag: 'dupla',
+    botLevel: 'Jačina botova',
+    botLevelEasy: 'Lagani',
+    botLevelMedium: 'Srednji',
+    botLevelHard: 'Jaki',
+    botLevelHint: 'Vrijedi za sve botove u igri protiv botova i za one koji popunjavaju mjesta za tvojim privatnim stolom. Jaki pamte odigrane karte i gledaju unaprijed.',
     arrangeHint: 'Dodirni dvije karte da ih zamijeniš.',
     arrangeDone: 'Gotovo',
     arrangeTip: 'Pritisni i drži karte da ih složiš',
@@ -1664,6 +1678,11 @@ const srCyrl: Strings = {
     doubleWinHint: 'Само до 1001: пар који дође до 1001 док је други још испод 500 добија две партије. Договори се пре стола.',
     doubleWinLine: 'Дупла победа: рачуна се као две партије',
     doubleTag: 'дупла',
+    botLevel: 'Јачина ботова',
+    botLevelEasy: 'Лагани',
+    botLevelMedium: 'Средњи',
+    botLevelHard: 'Јаки',
+    botLevelHint: 'Важи за све ботове у игри против ботова и за оне који попуњавају места за твојим приватним столом. Јаки памте одигране карте и гледају унапред.',
     arrangeHint: 'Додирни две карте да их замениш.',
     arrangeDone: 'Готово',
     arrangeTip: 'Притисни и држи карте да их сложиш',
@@ -2233,6 +2252,11 @@ const en: Strings = {
     doubleWinHint: 'Only when playing to 1001: the pair that reaches 1001 while the other is still under 500 is credited with two matches. Agree on it before the table.',
     doubleWinLine: 'Double win: counts as two matches',
     doubleTag: 'double',
+    botLevel: 'Bot strength',
+    botLevelEasy: 'Easy',
+    botLevelMedium: 'Medium',
+    botLevelHard: 'Strong',
+    botLevelHint: 'Applies to every bot when you play against bots, and to the ones filling seats at your private table. Strong bots remember the cards played and look ahead.',
     arrangeHint: 'Tap two cards to swap them.',
     arrangeDone: 'Done',
     arrangeTip: 'Press and hold your cards to arrange them',

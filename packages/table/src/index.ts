@@ -26,7 +26,7 @@ import {
   teamOf,
   type Rng,
 } from '@belot/engine';
-import { decideAction, type BotLevel } from '@belot/bots';
+import { decideAction, type BotLevel, type BotMemory } from '@belot/bots';
 
 /**
  * @belot/table — the seat-aware session layer.
@@ -245,8 +245,13 @@ export class Table {
       if (guard++ > 4096) throw new Error('bot loop failed to make progress');
       const seat = this.actor();
       if (seat === null || this.humans.has(seat)) return;
-      this.applyAndRecord(decideAction(this.view(seat), this.rng, this.botLevel));
+      this.applyAndRecord(decideAction(this.view(seat), this.rng, this.botLevel, this.memory()));
     }
+  }
+
+  /** What a bot may remember of the deal: its tricks so far, public to all four (the hard bot plays to them). */
+  private memory(): BotMemory {
+    return { completedTricks: this.s.completedTricks };
   }
 
   /**
@@ -260,7 +265,7 @@ export class Table {
    */
   botMoveFor(seat: Seat): void {
     if (this.actor() !== seat) return;
-    this.applyAndRecord(decideAction(this.view(seat), this.rng, this.botLevel));
+    this.applyAndRecord(decideAction(this.view(seat), this.rng, this.botLevel, this.memory()));
     // Whoever is next may also be a bot; advancing to the next human decision
     // is the same thing a normal submit() does.
     this.runBots();

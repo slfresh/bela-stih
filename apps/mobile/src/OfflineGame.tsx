@@ -81,7 +81,7 @@ function OfflineMatch({
   // ERR_KEEP_AWAKE_TAG_INVALID on every exit. The platform never changes at
   // runtime, so the hook order is stable.
   if (Platform.OS !== 'web') useKeepAwake(); // eslint-disable-line react-hooks/rules-of-hooks
-  const g = useGame(settings, 'medium', giftStore, botGiftStore);
+  const g = useGame(settings, settings.botLevel, giftStore, botGiftStore);
 
   const settled = g.view.phase === 'DEAL_OVER' || g.view.phase === 'MATCH_OVER';
   const matchOver = g.view.phase === 'MATCH_OVER';

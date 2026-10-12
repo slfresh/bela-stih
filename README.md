@@ -71,7 +71,14 @@ npm run arena -- --a medium --b easy --matches 200
 sides, so the cards cancel out) and prints A's win rate with a 95% interval, the paired points
 margin, how often a deal was a muss, a pad or a valat, and decision times. Medium against medium
 is the baseline (30% muss, 20% pad, exactly 50% by construction); a stronger bot has to beat
-medium here before it sits at a table. `npm run transcript` records the wire between a client and
+medium here before it sits at a table. The three levels (`packages/bots`): **easy** is a beginner
+(calls only a clearly good hand, leads its fattest card, takes a trick with its biggest), **medium**
+the rule-based baseline, **hard** medium's rules plus a memory of the deal (voids and ceilings
+read off every forced play) and a look-ahead - every candidate card played out over hands dealt
+from the cards still unseen, scored with the contract. Measured at 300 seeds: hard beats medium
+64.5% of the time (95% CI 60.6-68.2%, +142 points a match) in every version, hard beats easy
+75%, medium beats easy 68%; a hard decision takes 0.01 ms typically and 3-9 ms at the 95th
+percentile in Node. `npm run transcript` records the wire between a client and
 the server (see `docs/deploy.md`), `npm run golden:chromium` replays the golden corpus in a real
 Chromium, `npm run typecheck:all` runs the three TypeScript projects.
 

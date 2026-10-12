@@ -53,6 +53,9 @@ export function coachTip(view: PublicView, mySeat: Seat, options: readonly Actio
   if (!bidding && !playing) return null;
   let pick: Action;
   try {
+    // Medium on purpose, whatever strength the bots play at: the coach
+    // explains the simple, teachable rules ("an ace: lead it"), and the hard
+    // bot's reasons rest on a memory of the deal the hint cannot show.
     pick = decideAction({ ...view, legalActions: [...options] }, steady, 'medium');
   } catch {
     return null;
