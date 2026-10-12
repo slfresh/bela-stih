@@ -58,7 +58,7 @@ describe('the brand paths', () => {
     expect(root('scripts/make-icons.mjs')).toMatch(/from '\.\/brand\.mjs'/);
     expect(root('scripts/make-store-assets.mjs')).toMatch(/from '\.\/brand\.mjs'/);
     // The generated art is committed; the scripts must have been run.
-    for (const f of ['icon.png', 'android-icon-foreground.png', 'android-icon-monochrome.png', 'splash-icon.png', 'favicon.png']) {
+    for (const f of ['icon.png', 'ios-icon.png', 'android-icon-foreground.png', 'android-icon-monochrome.png', 'splash-icon.png', 'favicon.png']) {
       expect(existsSync(join(__dirname, '..', 'assets', f)), f).toBe(true);
     }
   });

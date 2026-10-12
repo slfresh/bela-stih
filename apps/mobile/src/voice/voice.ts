@@ -56,8 +56,10 @@ export function recordingOptions(webMime: string | undefined): RecordingOptions 
     numberOfChannels: 1,
     bitRate: VOICE_BIT_RATE,
     android: { extension: '.m4a', outputFormat: 'mpeg4', audioEncoder: 'aac', sampleRate: 16_000 },
-    // No iOS build ships; the type requires the fields (MPEG4AAC, AudioQuality.LOW),
-    // written as values so this module loads no native code under test.
+    // IOSOutputFormat.MPEG4AAC and AudioQuality.LOW, written as their values so
+    // this module loads no native code under test (ios-config.test.ts pins
+    // them against the installed enums). AAC in .m4a on both phones: a clip
+    // recorded on either plays on the other and in the browser alike.
     ios: { extension: '.m4a', outputFormat: 'aac ' as IOSOutputFormat, audioQuality: 32 as AudioQuality },
     web: { ...(webMime ? { mimeType: webMime } : {}), bitsPerSecond: VOICE_BIT_RATE },
   };

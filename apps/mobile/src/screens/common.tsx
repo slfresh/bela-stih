@@ -39,7 +39,15 @@ export function ScreenShell({
         <Text style={styles.title}>{title}</Text>
         <View style={styles.backButton} />
       </View>
-      <ScrollView contentContainerStyle={styles.scroll}>{children}</ScrollView>
+      {/* iOS: the nickname field scrolls clear of the keyboard, and a tap on a
+          button while it is up presses the button (no-ops on Android and the web). */}
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets
+      >
+        {children}
+      </ScrollView>
       {overlay}
     </SafeAreaView>
   );

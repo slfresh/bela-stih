@@ -124,8 +124,11 @@ export default function App() {
   // Back out of a game (or a menu screen) rather than out of the app. Without
   // this, Android's back button drops straight to whatever was behind and
   // takes the deal in progress with it — and people press back constantly.
+  // Android only: iOS has no hardware back (its edge swipe is a navigator's,
+  // and this app has none; every screen carries its own back chevron), and on
+  // the web the API only logs an error. The browser's Back is handled below.
   useEffect(() => {
-    if (Platform.OS === 'web') return; // no hardware back; the API only logs an error there
+    if (Platform.OS !== 'android') return;
     if (launch === null && menu === 'home') return; // at the root, let back close the app
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       // A match in progress asks before it is abandoned (see ui/backGuard).
