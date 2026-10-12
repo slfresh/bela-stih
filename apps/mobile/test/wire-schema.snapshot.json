@@ -116,7 +116,8 @@
      "target?": "number | undefined",
      "mode?": "PlayMode | undefined",
      "hard?": "boolean | undefined",
-     "voice?": "boolean | undefined"
+     "voice?": "boolean | undefined",
+     "doubleWin?": "boolean | undefined"
     }
    },
    {
@@ -151,6 +152,7 @@
    "target?": "number | undefined",
    "private?": "true | undefined",
    "voice?": "true | undefined",
+   "doubleWin?": "true | undefined",
    "hold?": "HoldInfo | undefined",
    "nextMsLeft?": "number | undefined",
    "nextVotes?": "Seat[] | undefined"
@@ -341,7 +343,8 @@
     "props": {
      "kind": "\"matchOver\"",
      "winner": "0 | 1",
-     "matchScores": "[number, number]"
+     "matchScores": "[number, number]",
+     "double?": "true | undefined"
     }
    },
    {
@@ -567,7 +570,8 @@
    "valatBonus": "number",
    "declarationTieCancels": "boolean",
    "declarationMode": "\"auto\" | \"announce\" | \"blind\"",
-   "belaMode": "\"auto\" | \"announce\""
+   "belaMode": "\"auto\" | \"announce\"",
+   "doubleWinBelow500": "boolean"
   }
  },
  "packages/engine/src/index.ts:DealScoreResult": {

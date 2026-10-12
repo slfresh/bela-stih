@@ -79,6 +79,7 @@ export function HistoryScreen({
                   <Text style={styles.date}>{recordDate(r.at)}</Text>
                   <Text style={[styles.result, r.won ? styles.resultWon : styles.resultLost]}>
                     {r.won ? ui.resultWon : ui.resultLost}
+                    {r.double ? ` · ${ui.doubleTag}` : ''}
                   </Text>
                 </View>
                 <View style={styles.matchMid}>

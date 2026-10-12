@@ -60,6 +60,7 @@ export {
   currentActor,
   applyAction,
   matchWinner,
+  matchWins,
   publicView,
   type GameState,
   type CreateMatchOptions,

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { Room, ServerError, type AuthContext, type Client } from '@colyseus/core';
 import type { Action, Seat } from '@belot/engine';
-import { DEFAULT_CONFIG, HARD_CONFIG_OVERRIDES, RANKS, SEATS, SUITS, type EngineConfig } from '@belot/engine';
+import { DEFAULT_CONFIG, DOUBLE_WIN_TARGET, HARD_CONFIG_OVERRIDES, RANKS, SEATS, SUITS, type EngineConfig } from '@belot/engine';
 import type { Card, Rank, Rng, Suit } from '@belot/engine';
 import { Table } from '@belot/table';
 import { EMOTE_GAP_MS, EMOTE_IDS, GIFT_GAP_MS, GIFT_IDS, MATCH_TARGETS, MIN_PROTO, MSG, NEXT_DEAL_MS, PAUSE_MAX_MS, TURN_CHOICES, UPDATE_APP_CODE, WAIT_FOR_DROPPED_MS, type ClientMessage, type HoldInfo, type EmoteMessage, type GiftMessage, type JoinGifts, type JoinProto, type JoinVoice, type RoomMessage, type SeatInfo, type VoiceHeardMessage, type VoiceMessage, isPlayMode, modeFromLegacy, type PlayMode } from './protocol';
@@ -182,6 +182,8 @@ export class BelaRoom extends Room {
   private mode: PlayMode = 'easy';
   /** Points the match is played to: quick play's 1001, or what a private table's host chose. */
   private target = DEFAULT_CONFIG.matchTarget;
+  /** The double-win rule (protocol.ts): a private table's host may switch it on, and only at 1001. */
+  private doubleWin = false;
   /** Public tables are the ones strangers are matched into. */
   private isPublic = true;
   /** The table's creator (first joiner); start-with-bots rights follow them. */
@@ -251,7 +253,7 @@ export class BelaRoom extends Room {
   private gifts: (string | null)[] = [null, null, null, null];
 
   override onCreate(
-    options: { private?: boolean; mode?: unknown; hard?: boolean; target?: number; modes?: boolean } = {},
+    options: { private?: boolean; mode?: unknown; hard?: boolean; target?: number; modes?: boolean; doubleWin?: unknown } = {},
   ): void {
     this.occupants = SEATS.map(vacant);
     // The version and a shorter match are the host's choice, and only on
@@ -270,6 +272,10 @@ export class BelaRoom extends Room {
         : standard;
     if (options.private === true && typeof options.target === 'number' && MATCH_TARGETS.includes(options.target)) {
       this.target = options.target;
+    }
+    // The double win is the host's too, and only for the full game.
+    if (options.private === true && options.doubleWin === true && this.target === DOUBLE_WIN_TARGET) {
+      this.doubleWin = true;
     }
     this.buildTable();
 
@@ -501,7 +507,7 @@ export class BelaRoom extends Room {
   private buildTable(): void {
     this.table = new Table({
       humanSeats: [...SEATS],
-      config: { ...MODE_CONFIG[this.mode], matchTarget: this.target },
+      config: { ...MODE_CONFIG[this.mode], matchTarget: this.target, doubleWinBelow500: this.doubleWin },
       // No seed at all. Table's default is `Date.now()`, which is fine for the
       // CLI and offline play (dealer and player are the same device) and
       // catastrophic here — but so is any 32-bit seed, crypto or not, because
@@ -640,7 +646,9 @@ export class BelaRoom extends Room {
     if (packet.type === 'rules') {
       // The same four conditions as the clock: before the start, a private
       // table, its host, and only what is offered.
-      const m = packet.message as { target?: unknown; mode?: unknown; hard?: unknown; voice?: unknown } | undefined;
+      const m = packet.message as
+        | { target?: unknown; mode?: unknown; hard?: unknown; voice?: unknown; doubleWin?: unknown }
+        | undefined;
       if (this.started || this.isPublic || seat !== this.actingHostSeat()) return;
       // Voice on or off changes nothing on the table itself: no rebuild.
       const voiceChanged = typeof m?.voice === 'boolean' && m.voice !== this.voiceOn;
@@ -648,6 +656,16 @@ export class BelaRoom extends Room {
       let changed = false;
       if (typeof m?.target === 'number' && MATCH_TARGETS.includes(m.target) && m.target !== this.target) {
         this.target = m.target;
+        changed = true;
+      }
+      // The double win is defined for the full game only: a shorter match
+      // drops it, and asking for it at one is ignored.
+      if (this.target !== DOUBLE_WIN_TARGET && this.doubleWin) {
+        this.doubleWin = false;
+        changed = true;
+      }
+      if (typeof m?.doubleWin === 'boolean' && this.target === DOUBLE_WIN_TARGET && m.doubleWin !== this.doubleWin) {
+        this.doubleWin = m.doubleWin;
         changed = true;
       }
       // The version by name, or an older app's `hard` switch.
@@ -854,7 +872,8 @@ export class BelaRoom extends Room {
     // Score the series exactly once per match, however many publishes follow.
     if (this.table.phase === 'MATCH_OVER' && this.lastRecordedMatch !== this.matchNumber) {
       this.lastRecordedMatch = this.matchNumber;
-      this.series[this.table.winner()!] += 1;
+      // One match, or two under the double-win rule.
+      this.series[this.table.winner()!] += this.table.matchWins();
     }
     if (this.isHeld() || this.table.phase === 'MATCH_OVER') this.stopTimer();
     else this.armTimer();
@@ -1135,6 +1154,7 @@ export class BelaRoom extends Room {
       target: this.target,
       ...(this.isPublic ? {} : { private: true as const }),
       ...(this.voiceOn ? { voice: true as const } : {}),
+      ...(this.doubleWin ? { doubleWin: true as const } : {}),
       ...(this.isHeld() ? { hold: this.holdInfo()! } : {}),
       ...(this.nextEndsAt > 0 ? { nextMsLeft: Math.max(0, this.nextEndsAt - Date.now()) } : {}),
       ...(this.table.phase === 'DEAL_OVER' && this.nextVotes.size > 0 ? { nextVotes: [...this.nextVotes] } : {}),

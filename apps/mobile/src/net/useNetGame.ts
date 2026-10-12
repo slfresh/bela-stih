@@ -170,6 +170,8 @@ interface RoomMessage {
   private?: true;
   /** Voice messages are on at this table (absent from an older server: there are none). */
   voice?: true;
+  /** The double-win rule is on at this table (absent from an older server, or off). */
+  doubleWin?: true;
   /** Present while a private table stands still. */
   hold?: WireHold;
   /** At DEAL_OVER: time until the next deal starts by itself. */
@@ -257,6 +259,10 @@ export function useNetGame(settings: Settings) {
   const [turnSeconds, setTurnSeconds] = useState(30);
   const [target, setTarget] = useState(1001);
   const [isPrivate, setIsPrivate] = useState(false);
+  /** The double-win rule is on at this table. */
+  const [doubleWin, setDoubleWin] = useState(false);
+  /** The match just finished counted for two (the matchOver event said so). */
+  const [matchDouble, setMatchDouble] = useState(false);
   // Once this room has been a table, a dropped connection keeps the table on
   // screen while the hook gets back into the seat - not the lobby, which is
   // where a phone call used to leave the player.
@@ -421,6 +427,8 @@ export function useNetGame(settings: Settings) {
     setDealerHop(false);
     setLastDealResult(null);
     setWinnerTeam(null);
+    setMatchDouble(false);
+    setDoubleWin(false);
     setTurnDeadline(null);
     setHold(null);
     setNextDeadline(null);
@@ -567,6 +575,7 @@ export function useNetGame(settings: Settings) {
       setTarget(msg.target ?? 1001);
       setIsPrivate(msg.private === true);
       setVoiceOn(msg.voice === true);
+      setDoubleWin(msg.doubleWin === true);
       // A stale-tap refusal is stale itself the moment the game moves on.
       if (msg.events.length > 0) setError(null);
       if (msg.turnTotalMs) setTurnTotalMs(msg.turnTotalMs);
@@ -575,10 +584,14 @@ export function useNetGame(settings: Settings) {
       // The result panel needs the scored deal, which only the events carry.
       for (const e of msg.events) {
         if (e.kind === 'dealScored') setLastDealResult(e.result);
-        if (e.kind === 'matchOver') setWinnerTeam(e.winner);
+        if (e.kind === 'matchOver') {
+          setWinnerTeam(e.winner);
+          setMatchDouble(e.double === true);
+        }
         // A new match wipes the last one's verdict off the screen.
         if (e.kind === 'matchStarted') {
           setWinnerTeam(null);
+          setMatchDouble(false);
           setLastDealResult(null);
           setBanner(null);
         }
@@ -840,10 +853,12 @@ export function useNetGame(settings: Settings) {
           private: true,
           mode: settings.difficulty,
           hard: settings.difficulty === 'hard',
+          // The host's double-win switch seeds the table too (the server takes it only at 1001).
+          doubleWin: settings.doubleWin,
           }),
         ),
       ),
-    [connect, name, avatar, settings.difficulty],
+    [connect, name, avatar, settings.difficulty, settings.doubleWin],
   );
   const joinById = useCallback(
     (id: string) => connect((c) => c.joinById(normalizeCode(id), { name, avatar, gifts: true, voice: voiceRef.current, receipts: true, proto: PROTO, appVersion: APP_VERSION })),
@@ -870,9 +885,9 @@ export function useNetGame(settings: Settings) {
   const playOn = useCallback(() => roomRef.current?.send('playOn', {}), []);
   /** Host, before the start: the turn clock. */
   const setClock = useCallback((seconds: number) => roomRef.current?.send('clock', { seconds }), []);
-  /** Host, before the start: the match length and Prava bela (either may be left out). */
+  /** Host, before the start: the match length, the version, voice, the double win (any may be left out). */
   const setRules = useCallback(
-    (rules: { target?: number; mode?: PlayMode; voice?: boolean }) =>
+    (rules: { target?: number; mode?: PlayMode; voice?: boolean; doubleWin?: boolean }) =>
       roomRef.current?.send('rules', {
         ...rules,
         // A server from before the three versions reads only the old switch.
@@ -1020,6 +1035,8 @@ export function useNetGame(settings: Settings) {
     turnSeconds,
     target,
     isPrivate,
+    doubleWin,
+    matchDouble,
     // Getting back into a seat after a drop: the table stays up meanwhile.
     reconnecting: atTable && (status === 'disconnected' || status === 'connecting'),
     pause,

@@ -1055,9 +1055,9 @@ describe('a screen reader can name every control', () => {
     expect(settings).toMatch(/<Switch\s+accessibilityLabel=\{label\}/);
     // Every chip says whether it is the chosen one, by the same test that lights it.
     const chips = [...settings.matchAll(/accessibilityState=\{\{ selected: ([^}]+) \}\}\s+style=\{\[styles\.localeChip, ([^\]]+?) && styles\.localeChipOn\]\}/g)];
-    expect(chips.length).toBe(8);
+    expect(chips.length).toBe(9);
     for (const m of chips) expect(m[1]!.trim()).toBe(m[2]!.trim());
-    expect((settings.match(/styles\.localeChip, /g) ?? []).length).toBe(8);
+    expect((settings.match(/styles\.localeChip, /g) ?? []).length).toBe(9);
     expect(settings).toMatch(/accessibilityRole="link"\s+accessibilityLabel=\{ui\.privacyPolicy\}/);
   });
 });

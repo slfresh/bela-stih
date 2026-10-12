@@ -19,6 +19,7 @@ import {
   legalActions,
   makeRng,
   matchWinner,
+  matchWins,
   pointValue,
   publicView,
   startDeal,
@@ -62,7 +63,8 @@ export type TableEvent =
   | { kind: 'cardPlayed'; seat: Seat; card: Card }
   | { kind: 'trickWon'; seat: Seat; trickNumber: number; points: number; isLastTrick: boolean }
   | { kind: 'dealScored'; result: DealScoreResult; matchScores: [number, number] }
-  | { kind: 'matchOver'; winner: TeamId; matchScores: [number, number] }
+  /** `double` only under the optional rule, when the win counts for two matches (engine matchWins). */
+  | { kind: 'matchOver'; winner: TeamId; matchScores: [number, number]; double?: true }
   /** A fresh match at the same table, same seats. */
   | { kind: 'matchStarted'; matchNumber: number };
 
@@ -279,6 +281,11 @@ export class Table {
     return matchWinner(this.s);
   }
 
+  /** How many matches the winner is credited with (1, or 2 under the double-win rule). */
+  matchWins(): 1 | 2 {
+    return matchWins(this.s);
+  }
+
   // --- event derivation ----------------------------------------------------
 
   /** Did this action end the asking? Then the winner's cards go on the table. */
@@ -386,6 +393,8 @@ export class Table {
         kind: 'matchOver',
         winner: matchWinner(after)!,
         matchScores: [after.matchScores[0], after.matchScores[1]],
+        // Absent unless earned, so the golden corpus's hashes stay put.
+        ...(matchWins(after) === 2 ? { double: true as const } : {}),
       });
     }
   }

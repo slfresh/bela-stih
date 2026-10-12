@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Lang, LOCALE_IDS } from '@belot/i18n';
-import { addRecord, HISTORY_KEEP, nameKey, people, recordDate, totals, type MatchRecord } from '../src/net/history';
+import { addRecord, HISTORY_KEEP, nameKey, people, recordDate, recordWins, totals, type MatchRecord } from '../src/net/history';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = (f: string) => readFileSync(join(here, '..', f), 'utf8');
@@ -62,6 +62,24 @@ describe('the history of matches with friends', () => {
     expect(t.streak).toEqual({ won: true, n: 2 });
     expect(t.bestStreak).toBe(3);
     expect(totals([])).toMatchObject({ played: 0, rate: 0, streak: null, bestStreak: 0 });
+  });
+
+  it('a double win counts for two: in the totals, the runs, and with each person', () => {
+    // Newest first: W(double) L W(double)
+    const list = [
+      rec({ id: 'd3', won: true, double: true, partner: 'Ivo', opponents: ['Marko', 'Petra'] }),
+      rec({ id: 'd2', won: false, partner: 'Ivo', opponents: ['Marko', 'Petra'] }),
+      rec({ id: 'd1', won: true, double: true, partner: 'Ivo', opponents: ['Marko', 'Petra'] }),
+    ];
+    const t = totals(list);
+    expect(t).toMatchObject({ played: 5, won: 4, lost: 1, rate: 80, bestStreak: 2 });
+    expect(t.streak).toEqual({ won: true, n: 2 });
+    const byName = Object.fromEntries(people(list).map((p) => [nameKey(p.name), p]));
+    expect(byName.ivo).toMatchObject({ withPlayed: 5, withWon: 4 });
+    expect(byName.marko).toMatchObject({ againstPlayed: 5, againstWon: 4 });
+    // A record from before the rule counts for one.
+    expect(recordWins(rec({ id: 'x', won: true }))).toBe(1);
+    expect(recordWins({ double: true })).toBe(2);
   });
 
   it('counts each person with me and against me; bots are nobody', () => {

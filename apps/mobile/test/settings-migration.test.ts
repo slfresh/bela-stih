@@ -78,4 +78,12 @@ describe('settings from an older app', () => {
     expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', voiceMode: 'tap' })).settings.voiceMode).toBe('tap');
     expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', voiceMode: 'shout' })).settings.voiceMode).toBe('hold');
   });
+
+  it('the double win is off unless this app switched it on; anything else on disk is off', async () => {
+    expect((await load(null)).settings.doubleWin).toBe(false);
+    // A 1.5 app never saved one.
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy' })).settings.doubleWin).toBe(false);
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', doubleWin: true })).settings.doubleWin).toBe(true);
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', doubleWin: 'yes' })).settings.doubleWin).toBe(false);
+  });
 });

@@ -295,6 +295,17 @@ export interface UiStrings {
   rematchAsked: string;
   startAnyway: string;
   seriesScore: string;
+  /**
+   * The double win, the optional rule of the full game (1001): the lobby's and
+   * Settings' choice, its explanation, the result sheet's line, and the tag a
+   * history row carries.
+   */
+  doubleWinRule: string;
+  doubleWinOn: string;
+  doubleWinOff: string;
+  doubleWinHint: string;
+  doubleWinLine: string;
+  doubleTag: string;
   /** Hand arranging + sorting. */
   arrangeHint: string;
   arrangeDone: string;
@@ -815,6 +826,7 @@ const hr: Strings = {
           'Igra se u četvero, u dva para: partner ti sjedi nasuprot.',
           'Špil ima 32 karte: žir, list, srce i bundeva, od sedmice do asa.',
           'Igra ide nadesno. Svako dijeljenje piše bodove objema stranama, a partiju dobiva par koji prvi dođe do 1001 boda (za privatnim stolom može i do 501 ili 701).',
+          'Po dogovoru, samo do 1001: dupla pobjeda. Par koji dođe do 1001 dok je drugi još ispod 500 dobiva dvije partije. Uključuje se prije stola, u postavkama ili za privatnim stolom.',
         ],
       },
       {
@@ -1061,6 +1073,12 @@ const hr: Strings = {
     rematchAsked: 'Nova partija je zatražena',
     startAnyway: 'Počni svejedno',
     seriesScore: 'Partije',
+    doubleWinRule: 'Dupla pobjeda',
+    doubleWinOn: 'Da',
+    doubleWinOff: 'Ne',
+    doubleWinHint: 'Samo do 1001: par koji dođe do 1001 dok je drugi još ispod 500 dobiva dvije partije. Dogovori se prije stola.',
+    doubleWinLine: 'Dupla pobjeda: računa se kao dvije partije',
+    doubleTag: 'dupla',
     arrangeHint: 'Dodirni dvije karte da ih zamijeniš.',
     arrangeDone: 'Gotovo',
     arrangeTip: 'Pritisni i drži karte da ih složiš',
@@ -1372,6 +1390,7 @@ const srCyrl: Strings = {
           'Игра се у четворо, у два пара: партнер ти седи преко пута.',
           'Шпил има 32 карте: жир, лист, срце и бундева, од седмице до аса.',
           'Игра иде надесно. Свако дељење пише бодове обема странама, а партију добија пар који први дође до 1001 бода (за приватним столом може и до 501 или 701).',
+          'По договору, само до 1001: дупла победа. Пар који дође до 1001 док је други још испод 500 добија две партије. Укључује се пре стола, у подешавањима или за приватним столом.',
         ],
       },
       {
@@ -1618,6 +1637,12 @@ const srCyrl: Strings = {
     rematchAsked: 'Нова партија је затражена',
     startAnyway: 'Почни свеједно',
     seriesScore: 'Партије',
+    doubleWinRule: 'Дупла победа',
+    doubleWinOn: 'Да',
+    doubleWinOff: 'Не',
+    doubleWinHint: 'Само до 1001: пар који дође до 1001 док је други још испод 500 добија две партије. Договори се пре стола.',
+    doubleWinLine: 'Дупла победа: рачуна се као две партије',
+    doubleTag: 'дупла',
     arrangeHint: 'Додирни две карте да их замениш.',
     arrangeDone: 'Готово',
     arrangeTip: 'Притисни и држи карте да их сложиш',
@@ -1926,6 +1951,7 @@ const en: Strings = {
           'Four players in two pairs: your partner sits across from you.',
           'The deck has 32 cards: acorns, leaves, hearts and bells, from seven to ace.',
           'Play goes to the right. Every deal scores points for both sides, and the first pair to reach 1001 wins the match (a private table can play to 501 or 701).',
+          'By agreement, only when playing to 1001: the double win. The pair that reaches 1001 while the other is still under 500 is credited with two matches. Switched on before the table, in Settings or at a private table.',
         ],
       },
       {
@@ -2172,6 +2198,12 @@ const en: Strings = {
     rematchAsked: 'You asked for another match',
     startAnyway: 'Start anyway',
     seriesScore: 'Matches',
+    doubleWinRule: 'Double win',
+    doubleWinOn: 'Yes',
+    doubleWinOff: 'No',
+    doubleWinHint: 'Only when playing to 1001: the pair that reaches 1001 while the other is still under 500 is credited with two matches. Agree on it before the table.',
+    doubleWinLine: 'Double win: counts as two matches',
+    doubleTag: 'double',
     arrangeHint: 'Tap two cards to swap them.',
     arrangeDone: 'Done',
     arrangeTip: 'Press and hold your cards to arrange them',

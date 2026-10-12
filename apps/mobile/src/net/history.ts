@@ -23,6 +23,8 @@ export interface MatchRecord {
   /** The version played; absent in records from before the three versions (see recordMode). */
   mode?: PlayMode;
   won: boolean;
+  /** Under the double-win rule: this match counts for two (totals, people). Absent otherwise. */
+  double?: true;
   /** The final match score, ours first. */
   score: [number, number];
   /** Deals each side took, ours first; null when this device missed part of the match. */
@@ -65,20 +67,29 @@ export interface Totals {
   bestStreak: number;
 }
 
+/** What a record counts for: two under the double-win rule, one otherwise. */
+export function recordWins(r: Pick<MatchRecord, 'double'>): 1 | 2 {
+  return r.double ? 2 : 1;
+}
+
 export function totals(list: readonly MatchRecord[]): Totals {
-  const played = list.length;
-  const won = list.filter((r) => r.won).length;
+  let played = 0;
+  let won = 0;
+  for (const r of list) {
+    played += recordWins(r);
+    if (r.won) won += recordWins(r);
+  }
   let streak: Totals['streak'] = null;
   for (const r of list) {
     // Newest first: the run lasts while the results match the latest.
-    if (streak === null) streak = { won: r.won, n: 1 };
-    else if (r.won === streak.won) streak.n += 1;
+    if (streak === null) streak = { won: r.won, n: recordWins(r) };
+    else if (r.won === streak.won) streak.n += recordWins(r);
     else break;
   }
   let bestStreak = 0;
   let run = 0;
   for (const r of list) {
-    run = r.won ? run + 1 : 0;
+    run = r.won ? run + recordWins(r) : 0;
     bestStreak = Math.max(bestStreak, run);
   }
   return {
@@ -125,16 +136,17 @@ export function people(list: readonly MatchRecord[]): PersonStats[] {
     return p;
   };
   for (const r of list) {
+    const w = recordWins(r);
     const partner = seen(r.partner, r.at);
     if (partner) {
-      partner.withPlayed += 1;
-      if (r.won) partner.withWon += 1;
+      partner.withPlayed += w;
+      if (r.won) partner.withWon += w;
     }
     for (const o of r.opponents) {
       const opp = seen(o, r.at);
       if (opp) {
-        opp.againstPlayed += 1;
-        if (r.won) opp.againstWon += 1;
+        opp.againstPlayed += w;
+        if (r.won) opp.againstWon += w;
       }
     }
   }

@@ -73,6 +73,12 @@ export interface Settings {
    * games, and the private tables this player hosts, start in it.
    */
   difficulty: PlayMode;
+  /**
+   * The double win, the optional rule of the full game: the pair that reaches
+   * 1001 while the other is still under 500 is credited with two matches.
+   * Offline games, and the private tables this player hosts, start with it.
+   */
+  doubleWin: boolean;
   /** Card face style: mađarice (default), vintage photos, French suits, or big-and-simple. */
   deckStyle: 'madarice' | 'starinske' | 'francuske' | 'simple';
   /** How the hand is laid out. 'manual' keeps whatever the player arranged. */
@@ -107,6 +113,7 @@ export const DEFAULT_SETTINGS: Settings = {
   locale: 'hr',
   nickname: '',
   difficulty: 'easy',
+  doubleWin: false,
   deckStyle: 'madarice',
   handSort: 'auto',
   arrangeTips: 0,
@@ -188,6 +195,8 @@ export function loadSettings(): Settings {
   }
   if (changed) write(KEY.settings, s);
   if (s.voiceMode !== 'hold' && s.voiceMode !== 'tap') s = { ...s, voiceMode: 'hold' };
+  // The double win is on only when this app's own switch says so.
+  if (s.doubleWin !== true) s = { ...s, doubleWin: false };
   // A volume saved by a build with other steps snaps to the nearest chip, or
   // Settings would light none.
   const volume = (VOLUME_OPTIONS as readonly number[]).reduce((best, v) =>

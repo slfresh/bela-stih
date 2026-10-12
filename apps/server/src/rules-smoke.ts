@@ -128,6 +128,28 @@ async function main(): Promise<void> {
   check(guest.last?.mode === 'easy', 'Lagana again');
   check((guest.view?.hand.length ?? 0) === 0, 'the lobby still shows nobody a card');
 
+  // ---- the double win: the full game's rule only ----
+  check(guest.last?.doubleWin !== true, 'a new table has no double win');
+  host.room.send('rules', { doubleWin: true });
+  await wait(400);
+  check(guest.last?.doubleWin !== true, 'at 501 the double win is not taken');
+  host.room.send('rules', { target: 1001 });
+  await wait(400);
+  host.room.send('rules', { doubleWin: true });
+  await wait(400);
+  check(guest.last?.target === 1001 && guest.last?.doubleWin === true, 'at 1001 the host switches it on and the guest sees it');
+  guest.room.send('rules', { doubleWin: false });
+  await wait(400);
+  check(guest.last?.doubleWin === true, 'a guest cannot switch it off');
+  host.room.send('rules', { target: 501 });
+  await wait(400);
+  check(guest.last?.target === 501 && guest.last?.doubleWin !== true, 'a shorter match drops it');
+  const dbl = side();
+  wire(await client.create(ROOM_NAME_MODES, { name: 'Dupli', private: true, doubleWin: true }), dbl);
+  await wait(500);
+  check(dbl.last?.doubleWin === true, 'a table created with it starts with it');
+  await dbl.room.leave(true);
+
   // ---- quick play keeps the full game ----
   const stranger = side();
   wire(await client.joinOrCreate(ROOM_NAME_MODES, { name: 'Stranac' }), stranger);

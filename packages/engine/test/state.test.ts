@@ -6,6 +6,9 @@ import {
   currentActor,
   legalActions,
   matchWinner,
+  matchWins,
+  DEFAULT_CONFIG,
+  type EngineConfig,
   publicView,
   startDeal,
   teamOf,
@@ -395,5 +398,41 @@ describe('the live deal counter crosses the wire safely', () => {
     expect(publicView(s, 0).dealProgress!.belaPending).toBe(
       publicView(s, 2).dealProgress!.belaPending,
     );
+  });
+});
+
+describe('the double win (the optional rule of the full game)', () => {
+  /** A finished match with the given totals, under the given config. */
+  const over = (scores: [number, number], config: Partial<EngineConfig> = {}, phase: GameState['phase'] = 'MATCH_OVER') => {
+    const s = createMatch({ dealer: 0, seed: 1, config: { matchTarget: 1001, doubleWinBelow500: true, ...config } });
+    s.matchScores = scores;
+    s.phase = phase;
+    return s;
+  };
+
+  it('credits two matches when the losers are still under 500', () => {
+    expect(matchWins(over([1010, 499]))).toBe(2);
+    expect(matchWins(over([380, 1001]))).toBe(2);
+    expect(matchWins(over([1010, 0]))).toBe(2);
+  });
+
+  it('one match at 500 or more, with the rule off, or before the match is over', () => {
+    expect(matchWins(over([1010, 500]))).toBe(1);
+    expect(matchWins(over([1010, 640]))).toBe(1);
+    expect(matchWins(over([1010, 499], { doubleWinBelow500: false }))).toBe(1);
+    expect(matchWins(over([900, 499], {}, 'DEAL_OVER'))).toBe(1);
+  });
+
+  it('is defined for 1001 alone: a 501 or 701 table never doubles, whatever the flag says', () => {
+    expect(matchWins(over([510, 120], { matchTarget: 501 }))).toBe(1);
+    expect(matchWins(over([710, 200], { matchTarget: 701 }))).toBe(1);
+  });
+
+  it('is off by default', () => {
+    expect(DEFAULT_CONFIG.doubleWinBelow500).toBe(false);
+    const plain = createMatch({ dealer: 0, seed: 1 });
+    plain.matchScores = [1010, 100];
+    plain.phase = 'MATCH_OVER';
+    expect(matchWins(plain)).toBe(1);
   });
 });

@@ -252,10 +252,10 @@ export function OnlineGame({
   useEffect(() => {
     if (group === null || mine === null || !net.matchOver || net.winnerTeam === null || !net.roomId) return;
     const id = `${isoDay(new Date())}:${net.roomId}:${net.matchNumber}`;
-    const book = recordMatch(loadSeries(), group, id, net.winnerTeam === teamOf(mine));
+    const book = recordMatch(loadSeries(), group, id, net.winnerTeam === teamOf(mine), net.matchDouble ? 2 : 1);
     saveSeries(book);
     setSeriesEntry(book[group] ?? null);
-  }, [group, mine, net.matchOver, net.winnerTeam, net.roomId, net.matchNumber]);
+  }, [group, mine, net.matchOver, net.winnerTeam, net.roomId, net.matchNumber, net.matchDouble]);
 
   // The history of matches with friends (net/history.ts): every finished match
   // at a private table where at least one other chair had a person in it. A
@@ -291,6 +291,7 @@ export function OnlineGame({
         hard: net.mode === 'hard',
         mode: net.mode,
         won: net.winnerTeam === us,
+        ...(net.matchDouble ? { double: true as const } : {}),
         score: [scores[us], scores[them]],
         deals: sum ? [sum.won[us], sum.won[them]] : null,
         best: sum?.best?.points ?? null,
@@ -385,6 +386,7 @@ export function OnlineGame({
       awaitEcho
       refusedN={net.refusals}
       series={shownSeries}
+      matchDouble={net.matchDouble}
       askedRematch={net.rematchVotes.includes(net.seat)}
       // The same four again: a return match, not just another one.
       rematchLabel={fourPeople ? net.lang.s.ui.revans : undefined}
@@ -697,6 +699,18 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
           ]}
           onPick={(k) => net.setRules({ voice: k === 'on' })}
         />
+        {/* The double win is a rule of the full game only: a shorter match never offers it. */}
+        {net.target === 1001 && (
+          <Choice
+            label={ui.doubleWinRule}
+            host={isHost}
+            options={[
+              { key: 'on', text: ui.doubleWinOn, on: net.doubleWin },
+              { key: 'off', text: ui.doubleWinOff, on: !net.doubleWin },
+            ]}
+            onPick={(k) => net.setRules({ doubleWin: k === 'on' })}
+          />
+        )}
       </View>
     ) : null;
 

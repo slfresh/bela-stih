@@ -172,6 +172,30 @@ export function SettingsScreen({
         </Text>
       </Panel>
 
+      {/* The double win: an optional rule of the full game, chosen before the table. */}
+      <Panel label={ui.doubleWinRule}>
+        <View style={styles.localeRow}>
+          {(
+            [
+              { on: true, label: ui.doubleWinOn },
+              { on: false, label: ui.doubleWinOff },
+            ] as const
+          ).map((o) => (
+            <PressScale
+              key={String(o.on)}
+              onPress={() => {
+                onSettingsChange({ ...settings, doubleWin: o.on });
+              }}
+              accessibilityState={{ selected: settings.doubleWin === o.on }}
+              style={[styles.localeChip, settings.doubleWin === o.on && styles.localeChipOn]}
+            >
+              <Text style={[styles.localeText, settings.doubleWin === o.on && styles.localeTextOn]}>{o.label}</Text>
+            </PressScale>
+          ))}
+        </View>
+        <Text style={styles.hint}>{ui.doubleWinHint}</Text>
+      </Panel>
+
       <Panel label={ui.confirmPlayLabel}>
         <View style={styles.localeRow}>
           {(

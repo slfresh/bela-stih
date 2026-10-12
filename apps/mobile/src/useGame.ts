@@ -72,7 +72,8 @@ export function useGame(
     tableRef.current = new Table({
       humanSeats: [HUMAN],
       botLevel: level,
-      config: MODE_CONFIG[settings.difficulty],
+      // Offline always plays the full game, so the double win applies as set.
+      config: { ...MODE_CONFIG[settings.difficulty], doubleWinBelow500: settings.doubleWin },
     });
   }
   const table = tableRef.current;

@@ -18,15 +18,19 @@ export function groupKey(ours: readonly string[], theirs: readonly string[]): st
 /** How many counted matches each entry remembers, so it never grows without end. */
 export const SEEN_KEEP = 60;
 
-/** The book after a finished match: one more to the side that took it, once per match. */
-export function recordMatch(book: SeriesBook, key: string, matchId: string, weWon: boolean): SeriesBook {
+/**
+ * The book after a finished match: one more to the side that took it (two
+ * under the double-win rule), once per match.
+ */
+export function recordMatch(book: SeriesBook, key: string, matchId: string, weWon: boolean, wins: 1 | 2 = 1): SeriesBook {
   const e: SeriesEntry = book[key] ?? { us: 0, them: 0, seen: [] };
   if (e.seen.includes(matchId)) return book;
   return {
     ...book,
     [key]: {
-      us: e.us + (weWon ? 1 : 0),
-      them: e.them + (weWon ? 0 : 1),
+      ...e,
+      us: e.us + (weWon ? wins : 0),
+      them: e.them + (weWon ? 0 : wins),
       seen: [...e.seen, matchId].slice(-SEEN_KEEP),
     },
   };

@@ -166,6 +166,7 @@ function OfflineMatch({
       lastDealResult={g.table.state.lastDealResult}
       matchScores={g.view.matchScores}
       winnerTeam={g.table.winner()}
+      matchDouble={matchOver && g.table.matchWins() === 2}
       profile={g.profile}
       banner={g.banner}
       anchors={g.anchors}
