@@ -34,7 +34,7 @@
 
   <a class="button open" id="open" href="#">Otvori u aplikaciji · Open in app</a>
   <a class="button open" id="web" href="/igra/">Igraj u pregledniku · Play in browser</a>
-  <a class="button store"
+  <a class="button store" id="store"
      href="https://play.google.com/store/apps/details?id=com.slfresh.belastih">
     Preuzmi na Google Playu · Get it on Google Play
   </a>
@@ -48,14 +48,23 @@
     var m = location.pathname.match(/\/join\/([A-Za-z0-9_-]{1,24})\/?$/);
     var code = m ? m[1] : '';
     document.getElementById('code').textContent = code || '—';
-    // intent:// opens the installed app (custom scheme, no verification
-    // needed) and falls back to the Play listing when it is not installed.
-    document.getElementById('open').href =
-      'intent://join/' + encodeURIComponent(code) +
-      '#Intent;scheme=belastih;package=com.slfresh.belastih;' +
-      'S.browser_fallback_url=' +
-      encodeURIComponent('https://play.google.com/store/apps/details?id=com.slfresh.belastih') +
-      ';end';
+    // An iPhone with the app installed never sees this page: the universal
+    // link (.well-known/apple-app-site-association) opens the table directly.
+    // Without the app, Safari lands here, and the app's own scheme is the one
+    // way to try it (Safari asks before opening it; no App Store listing yet
+    // to fall back to, so the Play button is hidden).
+    var ios = /iPhone|iPad|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (ios) document.getElementById('store').style.display = 'none';
+    // Android: intent:// opens the installed app (custom scheme, no
+    // verification needed) and falls back to the Play listing when it is not.
+    document.getElementById('open').href = ios
+      ? 'belastih://join/' + encodeURIComponent(code)
+      : 'intent://join/' + encodeURIComponent(code) +
+        '#Intent;scheme=belastih;package=com.slfresh.belastih;' +
+        'S.browser_fallback_url=' +
+        encodeURIComponent('https://play.google.com/store/apps/details?id=com.slfresh.belastih') +
+        ';end';
     // The browser build joins straight from a query parameter.
     document.getElementById('web').href = '/igra/?code=' + encodeURIComponent(code);
   </script>

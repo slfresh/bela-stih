@@ -131,7 +131,14 @@ export function HomeScreen({
     <AnchorHost map={anchors}>
       <SafeAreaView style={[styles.safe, { backgroundColor: room().page }]}>
         <View style={styles.fill}>
-          <ScrollView contentContainerStyle={styles.scroll}>
+          {/* iOS: a tap on Enter while the keyboard is up must press it, not
+              only dismiss the keyboard; and the code field scrolls clear of
+              the keyboard instead of hiding under it. Both are no-ops elsewhere. */}
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            automaticallyAdjustKeyboardInsets
+          >
             {/* identity header */}
             <View style={styles.headerRow}>
               <PressScale

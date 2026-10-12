@@ -32,6 +32,12 @@ console.log('Writing icons to', OUT);
 // Store / launcher icon: the whole mark, full bleed (the platform rounds it).
 render('icon.png', markSvg({ size: 1024 }), 1024);
 
+// The iOS icon: the same mark on a felt square with no rounding of its own.
+// App Store Connect refuses an icon with any transparency, and Expo would
+// otherwise flatten icon.png's clear corners onto white - a white sliver
+// peeking out at each corner of Apple's own mask.
+render('ios-icon.png', markSvg({ size: 1024, square: true }), 1024);
+
 // Adaptive icon: the inner ~66% is the only guaranteed-visible area, so the
 // cards sit well inside it and the background is the felt alone.
 render('android-icon-foreground.png', markSvg({ size: 1024, bg: false, cardScale: 0.26 }), 1024);

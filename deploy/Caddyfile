@@ -20,6 +20,12 @@
 	@unhashed not path /igra/_expo/* /igra/assets/*
 	header @unhashed Cache-Control "no-cache"
 
+	# iOS universal links: Apple fetches this file (no extension, so the file
+	# server would guess octet-stream) and insists on JSON. The Android twin,
+	# assetlinks.json, names its own type.
+	@aasa path /.well-known/apple-app-site-association
+	header @aasa Content-Type application/json
+
 	# The address the game server trusts for its one-seat-per-network rule
 	# (BelaRoom.onAuth). Colyseus reads X-Real-IP before X-Forwarded-For, and
 	# a client can send either header itself; Caddy overwrites X-Real-IP with

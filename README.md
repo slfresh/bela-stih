@@ -39,7 +39,7 @@ packages/
   progression/    levels, coins, daily bonus, quests — pure, no storage, no clock
 apps/
   cli/            playable terminal Bela — a real client for the engine, not a mock
-  mobile/         Expo client (SDK 57, RN 0.86) — builds and runs on Android
+  mobile/         Expo client (SDK 57, RN 0.86) — Android locally, iOS through EAS (docs/ios-eas.md)
   server/         authoritative Colyseus room; `npm run smoke` proves hidden hands
 scripts/          make-icons.mjs and make-sfx.mjs — all art and audio is generated
 ```
@@ -113,6 +113,17 @@ cd apps/mobile && npx expo run:android
 
 Verified end to end on a physical device (Xiaomi, Android 15, arm64): Gradle build, install,
 Metro bundle, and real taps driving the shared engine. `npx expo-doctor` passes 21/21.
+
+iOS builds in the cloud, no Mac needed (`apps/mobile/eas.json`: `development`, `preview`,
+`production`, each with a `-simulator` twin where it makes sense):
+
+```bash
+cd apps/mobile && eas build -p ios --profile preview
+```
+
+What the iOS build is made of, and the one placeholder to fill before invite links open the app
+(the Apple Team ID in `deploy/site/.well-known/apple-app-site-association`), is in
+[docs/ios-eas.md](docs/ios-eas.md).
 
 The **same engine** runs on-device and on the authoritative server. The **same bot** is the offline
 opponent and the online disconnect-fill. The **same `Table`** backs the terminal client, the Expo

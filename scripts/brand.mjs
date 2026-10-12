@@ -104,8 +104,11 @@ export function feltDefs(id = 'felt') {
  * the rim sits in (0 for a full-bleed launcher icon, more for a splash mark);
  * `cardScale` the cards' share of the canvas.
  */
-export function markSvg({ size, bg = true, rim = true, cardScale = 0.36, suits = ['acorns', 'hearts'], mono = null }) {
+export function markSvg({ size, bg = true, rim = true, square = false, cardScale = 0.36, suits = ['acorns', 'hearts'], mono = null }) {
   const r = size * 0.22;
+  // `square` fills the whole canvas (iOS masks the corners itself and refuses
+  // an icon with any transparency); the rim keeps its own rounding inside.
+  const bgRadius = square ? 0 : r;
   const rimInset = size * 0.06;
   const cardW = size * cardScale;
   const cards = mono
@@ -113,7 +116,7 @@ export function markSvg({ size, bg = true, rim = true, cardScale = 0.36, suits =
     : fan(suits, { cx: size / 2, cy: size / 2, cardW, offset: 0.3 });
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
   <defs>${feltDefs('felt')}</defs>
-  ${bg ? `<rect width="${size}" height="${size}" rx="${r}" fill="url(#felt)"/>` : ''}
+  ${bg ? `<rect width="${size}" height="${size}" rx="${bgRadius}" fill="url(#felt)"/>` : ''}
   ${bg && rim ? `<rect x="${rimInset}" y="${rimInset}" width="${size - 2 * rimInset}" height="${size - 2 * rimInset}" rx="${r - rimInset}" fill="none" stroke="${GOLD}" stroke-width="${size * 0.014}" opacity="0.9"/>` : ''}
   ${cards}
 </svg>`;

@@ -20,6 +20,7 @@
     "icons": "node scripts/make-icons.mjs",
     "sfx": "node scripts/make-sfx.mjs",
     "android": "npm run android --workspace @belot/mobile",
+    "ios": "npm run ios --workspace @belot/mobile",
     "fill": "npm run fill --workspace @belot/server --",
     "arena": "tsx apps/cli/src/arena.ts",
     "typecheck:all": "bash scripts/typecheck.sh",
