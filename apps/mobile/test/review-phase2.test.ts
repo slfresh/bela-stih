@@ -45,7 +45,16 @@ describe('a private table-s rules, in one place', () => {
     expect(rules).toMatch(/MATCH_TARGETS\.includes\(m\.target\)/);
     expect(rules).toMatch(/this\.buildTable\(\);/);
     // The table is built with them (the smoke plays a 501 match to its end).
-    expect(room).toMatch(/config: \{ \.\.\.MODE_CONFIG\[this\.mode\], matchTarget: this\.target \}/);
+    expect(room).toMatch(/config: \{ \.\.\.MODE_CONFIG\[this\.mode\], matchTarget: this\.target, doubleWinBelow500: this\.doubleWin \}/);
+    // The double win rides only on the full game: a shorter match drops it, and the series counts it twice.
+    expect(rules).toMatch(/if \(this\.target !== DOUBLE_WIN_TARGET && this\.doubleWin\) \{/);
+    expect(rules).toMatch(/typeof m\?\.doubleWin === 'boolean' && this\.target === DOUBLE_WIN_TARGET/);
+    expect(room).toMatch(/this\.series\[this\.table\.winner\(\)!\] \+= this\.table\.matchWins\(\);/);
+    // The strength of the bots that fill a seat: the host's, built into the table, told to everyone.
+    expect(room).toMatch(/botLevel: this\.botLevel,\s*config: \{/);
+    expect(rules).toMatch(/if \(isBotLevel\(m\?\.botLevel\) && m\.botLevel !== this\.botLevel\) \{/);
+    expect(room).toMatch(/if \(options\.private === true && isBotLevel\(options\.botLevel\)\) this\.botLevel = options\.botLevel;/);
+    expect(room).toMatch(/\.\.\.\(this\.doubleWin \? \{ doubleWin: true as const \} : \{\}\),/);
     expect(room).toMatch(/target: this\.target,/);
   });
 
@@ -54,6 +63,12 @@ describe('a private table-s rules, in one place', () => {
     expect(o).toMatch(/label=\{ui\.matchLength\}/);
     expect(o).toMatch(/label=\{net\.lang\.s\.difficulty\}/);
     expect(o).toMatch(/label=\{ui\.turnClock\}/);
+    // The double win is offered at the full game only.
+    expect(o).toMatch(/\{net\.target === 1001 && \(\s*<Choice\s*label=\{ui\.doubleWinRule\}/);
+    expect(o).toMatch(/onPick=\{\(k\) => net\.setRules\(\{ doubleWin: k === 'on' \}\)\}/);
+    // The bots' strength, from the same list the server takes.
+    expect(o).toMatch(/label=\{ui\.botLevel\}/);
+    expect(o).toMatch(/options=\{BOT_LEVELS\.map\(\(b\) => \(\{ key: b, text: botLevelName\(net\.lang, b\), on: net\.botLevel === b \}\)\)\}/);
     expect(o).toMatch(/disabled=\{!host\}/);
     expect(o).toMatch(/accessibilityState=\{\{ checked: o\.on, disabled: !host \}\}/);
     // And the table says them: the length, and the version beside it, always.
@@ -332,6 +347,12 @@ describe('the same four, across evenings', () => {
     expect(book.k).toMatchObject({ us: 1, them: 0 });
     book = recordMatch(book, 'k', 'd1:ABCDE:1', false);
     expect(book.k).toMatchObject({ us: 1, them: 1 });
+    // A double win counts for two, still once per match.
+    book = recordMatch(book, 'k', 'd1:ABCDE:2', true, 2);
+    book = recordMatch(book, 'k', 'd1:ABCDE:2', true, 2);
+    expect(book.k).toMatchObject({ us: 3, them: 1 });
+    book = recordMatch(book, 'k', 'd1:ABCDE:3', false, 2);
+    expect(book.k).toMatchObject({ us: 3, them: 3 });
     for (let i = 0; i < SEEN_KEEP + 10; i++) book = recordMatch(book, 'k', `m${i}`, true);
     expect(book.k!.seen.length).toBe(SEEN_KEEP);
   });
@@ -341,7 +362,9 @@ describe('the same four, across evenings', () => {
     expect(o).toMatch(/const fourPeople = net\.seats\.length === 4 && net\.seats\.every\(\(s\) => s\.name !== SERVER_FALLBACK\(s\.seat\)\);/);
     expect(o).toMatch(/const id = `\$\{isoDay\(new Date\(\)\)\}:\$\{net\.roomId\}:\$\{net\.matchNumber\}`;/);
     expect(o).toMatch(/rematchLabel=\{fourPeople \? net\.lang\.s\.ui\.revans : undefined\}/);
-    expect(o).toMatch(/series=\{shownSeries\}/);
+    // The table shows this sitting's tally alone; the long count is the statistics screen's.
+    expect(o).toMatch(/series=\{net\.series\}/);
+    expect(o).not.toMatch(/shownSeries|seriesEntry/);
     for (const id of LOCALE_IDS) {
       const ui = new Lang(id).s.ui;
       expect(ui.revans).not.toBe(ui.playAgain);

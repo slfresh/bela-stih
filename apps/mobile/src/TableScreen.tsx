@@ -190,7 +190,10 @@ export interface TableScreenProps {
    */
   awaitEcho?: boolean;
   refusedN?: number;
+  /** Matches won per side since these four sat down at THIS table (absolute team ids, like matchScores). */
   series?: readonly [number, number] | null;
+  /** The match just finished counted for two (the double-win rule): the sheet says so. */
+  matchDouble?: boolean;
   askedRematch?: boolean;
   waitingFor?: number;
   onRematch?: () => void;
@@ -281,7 +284,7 @@ export function TableScreen(props: TableScreenProps) {
     cue = null,
     dealerHop = false,
     turnDeadline = null, turnTotalMs, onAction, onNext, onFinish, finishLabel, onEmote,
-    playMode = 'easy', matchTarget = 1001, matchLog, series, askedRematch, waitingFor, onRematch, onForceRematch, rematchLabel,
+    playMode = 'easy', matchTarget = 1001, matchLog, series, matchDouble = false, askedRematch, waitingFor, onRematch, onForceRematch, rematchLabel,
     nextDeal, hold: tableHold = null, onPause, onResume, onPlayOn, reconnecting = false,
     handSort = 'auto', arrangeTip = false, onArrangeTip, confirmPlay = 'ambiguous', awaitEcho = false, refusedN = 0,
     gifts, giftLanded, giftFrom, giftReadyAt = 0, onGift, giftReach, hidden, onHide, onReport,
@@ -1756,6 +1759,7 @@ export function TableScreen(props: TableScreenProps) {
             : null
         }
         series={series}
+        matchDouble={matchDouble}
         call={
           view.callerSeat !== null
             ? {
@@ -2053,8 +2057,10 @@ const TableHeader = memo(function TableHeader({
   /** The version, said beside the target: nobody is caught out by what it asks. */
   mode?: PlayMode;
   /**
-   * Matches won per side since these four sat down (online; absolute team
-   * ids like matchScores). Between the pills once a match has been won, so the
+   * Matches won per side since these people sat down at THIS table - the
+   * server's count online, the screen's own offline; absolute team ids like
+   * matchScores. Never the long count across evenings: that is the
+   * statistics screen's. Between the pills once a match has been won, so the
    * first match looks exactly as it always did.
    */
   series?: readonly [number, number] | null;
@@ -2884,6 +2890,7 @@ function DealResult({
   renonsText,
   wrongCard = null,
   series,
+  matchDouble = false,
   call = null,
   summary = null,
   award = null,
@@ -2924,6 +2931,8 @@ function DealResult({
   wrongCard?: readonly string[] | null;
   /** Matches won per side since this roster sat down; online only. */
   series?: readonly [number, number] | null;
+  /** The match just finished counted for two: said over the series line. */
+  matchDouble?: boolean;
   /** Who called the deal (null name: me), on which trump, at what stake. */
   call?: { name: string | null; team: TeamId; trump: Suit | null; multiplier: 1 | 2 | 4 } | null;
   /** At the end of a match: deals taken and our best one (null: not the whole match seen). */
@@ -2980,6 +2989,7 @@ function DealResult({
       // Ours first, as the header's chip has it: absolute order swapped the
       // two sides for whoever sat on the second team.
       series={series ? [series[us], series[them]] : null}
+      matchDouble={matchDouble}
       askedRematch={askedRematch}
       waitingFor={waitingFor}
       onRematch={onRematch}
@@ -3206,6 +3216,7 @@ function ResultFoot({
   lang,
   matchOver,
   series,
+  matchDouble = false,
   askedRematch,
   waitingFor = 0,
   onRematch,
@@ -3220,6 +3231,7 @@ function ResultFoot({
   lang: Lang;
   matchOver: boolean;
   series?: readonly [number, number] | null;
+  matchDouble?: boolean;
   askedRematch?: boolean;
   waitingFor?: number;
   onRematch?: () => void;
@@ -3235,9 +3247,12 @@ function ResultFoot({
   return (
     <>
       {matchOver ? (
-        // Online stacks the series line over its buttons; offline has no
-        // series, and its two answers sit side by side like a deal's.
+        // With a sitting's tally (online always, offline from the first
+        // rematch) the series line stacks over its buttons; without one the
+        // two answers sit side by side like a deal's.
         <View style={series ? styles.sheetFoot : styles.resultButtons}>
+          {/* The double win, said before the tally it doubled. */}
+          {matchDouble && <Text style={styles.doubleLine}>{lang.s.ui.doubleWinLine}</Text>}
           {series && (
             <Text style={styles.seriesLine}>
               {lang.s.ui.seriesScore}  {series[0]} : {series[1]}
@@ -3416,6 +3431,7 @@ const styles = StyleSheet.create({
   scoreValue: { color: theme.text, fontSize: 20, fontFamily: font.bold },
   subDim: { color: theme.textDim, fontSize: 12 },
   seriesLine: { color: theme.textDim, fontSize: 13, textAlign: 'center' },
+  doubleLine: { color: theme.accent, ...type.sub, fontFamily: font.bold, textAlign: 'center' },
   pillRow: { flexDirection: 'row', gap: 6, alignItems: 'center' },
   // The Pauza button: a compact square beside the leave button.
   pauseButton: {

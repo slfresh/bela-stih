@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks';
-import { decideAction, type BotLevel } from '@belot/bots';
+import { decideAction, isBotLevel, type BotLevel } from '@belot/bots';
 import {
   applyAction,
   createMatch,
@@ -44,7 +44,7 @@ function parseArgs(argv: string[]): Args {
     const i = argv.indexOf(flag);
     return i >= 0 && i + 1 < argv.length ? argv[i + 1]! : null;
   };
-  const level = (v: string | null, d: BotLevel): BotLevel => (v === 'easy' || v === 'medium' ? v : d);
+  const level = (v: string | null, d: BotLevel): BotLevel => (isBotLevel(v) ? v : d);
   const mode = get('--mode');
   return {
     a: level(get('--a'), 'medium'),
@@ -91,7 +91,7 @@ function playMatch(seed: number, config: Partial<EngineConfig>, levels: [BotLeve
     if (actor === null) throw new Error(`no actor in phase ${s.phase}`);
     const level = levels[teamOf(actor)];
     const t0 = performance.now();
-    const action = decideAction(publicView(s, actor), rng, level);
+    const action = decideAction(publicView(s, actor), rng, level, { completedTricks: s.completedTricks });
     times.push(performance.now() - t0);
     if (action.type === 'BID_PASS') passes++;
     if (action.type === 'BID_CALL' && passes === 3) out.muss++;

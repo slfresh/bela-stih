@@ -13,7 +13,7 @@ import type {
   TeamId,
   TrickPlay,
 } from '@belot/shared-types';
-import { DEFAULT_CONFIG, SEATS, SUITS } from '@belot/shared-types';
+import { DEFAULT_CONFIG, DOUBLE_WIN_FLOOR, DOUBLE_WIN_TARGET, SEATS, SUITS } from '@belot/shared-types';
 import {
   cardEquals,
   cardId,
@@ -767,6 +767,19 @@ function finishDeal(s: GameState, result: DealScoreResult): GameState {
 export function matchWinner(s: GameState): TeamId | null {
   if (s.phase !== 'MATCH_OVER') return null;
   return s.matchScores[0] > s.matchScores[1] ? 0 : 1;
+}
+
+/**
+ * How many matches the winner is credited with: 2 under the optional
+ * double-win rule (config.doubleWinBelow500) when the full game was played
+ * (DOUBLE_WIN_TARGET) and the losers never reached DOUBLE_WIN_FLOOR; 1
+ * otherwise, and always before the match is over.
+ */
+export function matchWins(s: GameState): 1 | 2 {
+  const winner = matchWinner(s);
+  if (winner === null) return 1;
+  if (!s.config.doubleWinBelow500 || s.config.matchTarget !== DOUBLE_WIN_TARGET) return 1;
+  return s.matchScores[1 - winner] < DOUBLE_WIN_FLOOR ? 2 : 1;
 }
 
 /** Redacted, hidden-hand-safe view for a single seat (what crosses the wire). */

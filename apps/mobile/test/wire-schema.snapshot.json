@@ -116,7 +116,9 @@
      "target?": "number | undefined",
      "mode?": "PlayMode | undefined",
      "hard?": "boolean | undefined",
-     "voice?": "boolean | undefined"
+     "voice?": "boolean | undefined",
+     "doubleWin?": "boolean | undefined",
+     "botLevel?": "BotLevel | undefined"
     }
    },
    {
@@ -151,6 +153,8 @@
    "target?": "number | undefined",
    "private?": "true | undefined",
    "voice?": "true | undefined",
+   "doubleWin?": "true | undefined",
+   "botLevel?": "BotLevel | undefined",
    "hold?": "HoldInfo | undefined",
    "nextMsLeft?": "number | undefined",
    "nextVotes?": "Seat[] | undefined"
@@ -341,7 +345,8 @@
     "props": {
      "kind": "\"matchOver\"",
      "winner": "0 | 1",
-     "matchScores": "[number, number]"
+     "matchScores": "[number, number]",
+     "double?": "true | undefined"
     }
    },
    {
@@ -352,6 +357,10 @@
     }
    }
   ]
+ },
+ "packages/bots/src/index.ts:BotLevel": {
+  "kind": "other",
+  "text": "\"easy\" | \"hard\" | \"medium\""
  },
  "packages/shared-types/src/index.ts:PublicView": {
   "kind": "object",
@@ -567,7 +576,8 @@
    "valatBonus": "number",
    "declarationTieCancels": "boolean",
    "declarationMode": "\"auto\" | \"announce\" | \"blind\"",
-   "belaMode": "\"auto\" | \"announce\""
+   "belaMode": "\"auto\" | \"announce\"",
+   "doubleWinBelow500": "boolean"
   }
  },
  "packages/engine/src/index.ts:DealScoreResult": {

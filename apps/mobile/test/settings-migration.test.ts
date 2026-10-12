@@ -78,4 +78,23 @@ describe('settings from an older app', () => {
     expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', voiceMode: 'tap' })).settings.voiceMode).toBe('tap');
     expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', voiceMode: 'shout' })).settings.voiceMode).toBe('hold');
   });
+
+  it('the bots are of middle strength unless chosen otherwise; a strength no app writes is the middle one', async () => {
+    expect((await load(null)).settings.botLevel).toBe('medium');
+    // A 1.5 app never saved one.
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy' })).settings.botLevel).toBe('medium');
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', botLevel: 'hard' })).settings.botLevel).toBe('hard');
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', botLevel: 'easy' })).settings.botLevel).toBe('easy');
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', botLevel: 'brutal' })).settings.botLevel).toBe('medium');
+    // The game version and the bot strength are two settings: one never sets the other.
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'hard' })).settings.botLevel).toBe('medium');
+  });
+
+  it('the double win is off unless this app switched it on; anything else on disk is off', async () => {
+    expect((await load(null)).settings.doubleWin).toBe(false);
+    // A 1.5 app never saved one.
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy' })).settings.doubleWin).toBe(false);
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', doubleWin: true })).settings.doubleWin).toBe(true);
+    expect((await load({ ...v13, arrangeTips: 2, difficulty: 'easy', doubleWin: 'yes' })).settings.doubleWin).toBe(false);
+  });
 });

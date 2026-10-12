@@ -295,6 +295,26 @@ export interface UiStrings {
   rematchAsked: string;
   startAnyway: string;
   seriesScore: string;
+  /**
+   * The double win, the optional rule of the full game (1001): the lobby's and
+   * Settings' choice, its explanation, the result sheet's line, and the tag a
+   * history row carries.
+   */
+  doubleWinRule: string;
+  doubleWinOn: string;
+  doubleWinOff: string;
+  doubleWinHint: string;
+  doubleWinLine: string;
+  doubleTag: string;
+  /**
+   * How well the bots play (not the game version): Settings' and the lobby's
+   * choice, the three strengths' names, and what the choice covers.
+   */
+  botLevel: string;
+  botLevelEasy: string;
+  botLevelMedium: string;
+  botLevelHard: string;
+  botLevelHint: string;
   /** Hand arranging + sorting. */
   arrangeHint: string;
   arrangeDone: string;
@@ -376,6 +396,19 @@ export interface UiStrings {
    */
   historyTitle: string;
   historyOpen: string;
+  /**
+   * "Statistika": the totals, the long count between the same four across
+   * evenings (the table itself shows only the sitting in progress), the
+   * people, and the lifetime numbers.
+   */
+  statsTitle: string;
+  statsOpen: string;
+  statsEmpty: string;
+  statsHeadToHead: string;
+  statsNoSeries: string;
+  /** One group of four: my partner, then the two opponents. */
+  statsVs: (partner: string, opp1: string, opp2: string) => string;
+  statsOverall: string;
   historyEmpty: string;
   historyLocal: string;
   historyTotals: string;
@@ -815,6 +848,7 @@ const hr: Strings = {
           'Igra se u četvero, u dva para: partner ti sjedi nasuprot.',
           'Špil ima 32 karte: žir, list, srce i bundeva, od sedmice do asa.',
           'Igra ide nadesno. Svako dijeljenje piše bodove objema stranama, a partiju dobiva par koji prvi dođe do 1001 boda (za privatnim stolom može i do 501 ili 701).',
+          'Po dogovoru, samo do 1001: dupla pobjeda. Par koji dođe do 1001 dok je drugi još ispod 500 dobiva dvije partije. Uključuje se prije stola, u postavkama ili za privatnim stolom.',
         ],
       },
       {
@@ -1061,6 +1095,17 @@ const hr: Strings = {
     rematchAsked: 'Nova partija je zatražena',
     startAnyway: 'Počni svejedno',
     seriesScore: 'Partije',
+    doubleWinRule: 'Dupla pobjeda',
+    doubleWinOn: 'Da',
+    doubleWinOff: 'Ne',
+    doubleWinHint: 'Samo do 1001: par koji dođe do 1001 dok je drugi još ispod 500 dobiva dvije partije. Dogovori se prije stola.',
+    doubleWinLine: 'Dupla pobjeda: računa se kao dvije partije',
+    doubleTag: 'dupla',
+    botLevel: 'Jačina botova',
+    botLevelEasy: 'Lagani',
+    botLevelMedium: 'Srednji',
+    botLevelHard: 'Jaki',
+    botLevelHint: 'Vrijedi za sve botove u igri protiv botova i za one koji popunjavaju mjesta za tvojim privatnim stolom. Jaki pamte odigrane karte i gledaju unaprijed.',
     arrangeHint: 'Dodirni dvije karte da ih zamijeniš.',
     arrangeDone: 'Gotovo',
     arrangeTip: 'Pritisni i drži karte da ih složiš',
@@ -1122,8 +1167,16 @@ const hr: Strings = {
     qrLabel: (code) => `QR kod stola ${code}`,
     qrHint: 'Neka ga prijatelj skenira kamerom mobitela.',
     inviteText: (code, url) => `Zaigraj belu sa mnom! Šifra stola: ${code}\n${url}`,
-    historyTitle: 'Povijest i statistika',
+    historyTitle: 'Povijest',
     historyOpen: 'Povijest partija',
+    statsTitle: 'Statistika',
+    statsOpen: 'Statistika',
+    statsEmpty:
+      'Još nema brojki. Odigraj partiju s prijateljima za privatnim stolom: ovdje se skuplja tko vodi, s kim igraš i koliko je ukupno odigrano.',
+    statsHeadToHead: 'Međusobno',
+    statsNoSeries: 'Međusobni rezultat skuplja se kad za stolom sjede četiri osobe: isti par protiv istog para, iz večeri u večer.',
+    statsVs: (partner, o1, o2) => `Ti i ${partner} · protiv: ${o1}, ${o2}`,
+    statsOverall: 'Sve partije',
     historyEmpty:
       'Još nema partija s prijateljima. Napravi privatni stol i pozovi ih: ovdje će se skupljati sve partije s njima, tko je s kim u paru i tko vodi.',
     historyLocal: 'Povijest se čuva samo na ovom uređaju.',
@@ -1372,6 +1425,7 @@ const srCyrl: Strings = {
           'Игра се у четворо, у два пара: партнер ти седи преко пута.',
           'Шпил има 32 карте: жир, лист, срце и бундева, од седмице до аса.',
           'Игра иде надесно. Свако дељење пише бодове обема странама, а партију добија пар који први дође до 1001 бода (за приватним столом може и до 501 или 701).',
+          'По договору, само до 1001: дупла победа. Пар који дође до 1001 док је други још испод 500 добија две партије. Укључује се пре стола, у подешавањима или за приватним столом.',
         ],
       },
       {
@@ -1618,6 +1672,17 @@ const srCyrl: Strings = {
     rematchAsked: 'Нова партија је затражена',
     startAnyway: 'Почни свеједно',
     seriesScore: 'Партије',
+    doubleWinRule: 'Дупла победа',
+    doubleWinOn: 'Да',
+    doubleWinOff: 'Не',
+    doubleWinHint: 'Само до 1001: пар који дође до 1001 док је други још испод 500 добија две партије. Договори се пре стола.',
+    doubleWinLine: 'Дупла победа: рачуна се као две партије',
+    doubleTag: 'дупла',
+    botLevel: 'Јачина ботова',
+    botLevelEasy: 'Лагани',
+    botLevelMedium: 'Средњи',
+    botLevelHard: 'Јаки',
+    botLevelHint: 'Важи за све ботове у игри против ботова и за оне који попуњавају места за твојим приватним столом. Јаки памте одигране карте и гледају унапред.',
     arrangeHint: 'Додирни две карте да их замениш.',
     arrangeDone: 'Готово',
     arrangeTip: 'Притисни и држи карте да их сложиш',
@@ -1679,8 +1744,16 @@ const srCyrl: Strings = {
     qrLabel: (code) => `QR код стола ${code}`,
     qrHint: 'Нека га пријатељ скенира камером телефона.',
     inviteText: (code, url) => `Заиграј белу са мном! Шифра стола: ${code}\n${url}`,
-    historyTitle: 'Историја и статистика',
+    historyTitle: 'Историја',
     historyOpen: 'Историја партија',
+    statsTitle: 'Статистика',
+    statsOpen: 'Статистика',
+    statsEmpty:
+      'Још нема бројки. Одиграј партију са пријатељима за приватним столом: овде се скупља ко води, с ким играш и колико је укупно одиграно.',
+    statsHeadToHead: 'Међусобно',
+    statsNoSeries: 'Међусобни резултат скупља се кад за столом седе четири особе: исти пар против истог пара, из вечери у вече.',
+    statsVs: (partner, o1, o2) => `Ти и ${partner} · против: ${o1}, ${o2}`,
+    statsOverall: 'Све партије',
     historyEmpty:
       'Још нема партија са пријатељима. Направи приватни сто и позови их: овде ће се скупљати све партије с њима, ко је с ким у пару и ко води.',
     historyLocal: 'Историја се чува само на овом уређају.',
@@ -1926,6 +1999,7 @@ const en: Strings = {
           'Four players in two pairs: your partner sits across from you.',
           'The deck has 32 cards: acorns, leaves, hearts and bells, from seven to ace.',
           'Play goes to the right. Every deal scores points for both sides, and the first pair to reach 1001 wins the match (a private table can play to 501 or 701).',
+          'By agreement, only when playing to 1001: the double win. The pair that reaches 1001 while the other is still under 500 is credited with two matches. Switched on before the table, in Settings or at a private table.',
         ],
       },
       {
@@ -2172,6 +2246,17 @@ const en: Strings = {
     rematchAsked: 'You asked for another match',
     startAnyway: 'Start anyway',
     seriesScore: 'Matches',
+    doubleWinRule: 'Double win',
+    doubleWinOn: 'Yes',
+    doubleWinOff: 'No',
+    doubleWinHint: 'Only when playing to 1001: the pair that reaches 1001 while the other is still under 500 is credited with two matches. Agree on it before the table.',
+    doubleWinLine: 'Double win: counts as two matches',
+    doubleTag: 'double',
+    botLevel: 'Bot strength',
+    botLevelEasy: 'Easy',
+    botLevelMedium: 'Medium',
+    botLevelHard: 'Strong',
+    botLevelHint: 'Applies to every bot when you play against bots, and to the ones filling seats at your private table. Strong bots remember the cards played and look ahead.',
     arrangeHint: 'Tap two cards to swap them.',
     arrangeDone: 'Done',
     arrangeTip: 'Press and hold your cards to arrange them',
@@ -2233,8 +2318,16 @@ const en: Strings = {
     qrLabel: (code) => `QR code for table ${code}`,
     qrHint: 'Let a friend scan it with their phone camera.',
     inviteText: (code, url) => `Come play Bela with me! Table code: ${code}\n${url}`,
-    historyTitle: 'History and statistics',
+    historyTitle: 'History',
     historyOpen: 'Match history',
+    statsTitle: 'Statistics',
+    statsOpen: 'Statistics',
+    statsEmpty:
+      'No numbers yet. Play a match with friends at a private table: who leads, who you play with and how much has been played all gather here.',
+    statsHeadToHead: 'Head to head',
+    statsNoSeries: 'The head-to-head count builds when four people sit at the table: the same pair against the same pair, evening after evening.',
+    statsVs: (partner, o1, o2) => `You and ${partner} · against: ${o1}, ${o2}`,
+    statsOverall: 'All matches',
     historyEmpty:
       'No matches with friends yet. Create a private table and invite them: every match with them, who partners whom and who leads, will gather here.',
     historyLocal: 'The history is kept on this device only.',

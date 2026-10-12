@@ -29,7 +29,7 @@ interface Args {
   auto: boolean;
   seed: number;
   deals: number | null;
-  level: 'easy' | 'medium';
+  level: 'easy' | 'medium' | 'hard';
 }
 
 function parseArgs(argv: string[]): Args {
@@ -43,7 +43,7 @@ function parseArgs(argv: string[]): Args {
     auto: argv.includes('--auto'),
     seed: seedArg === null ? (Date.now() & 0x7fffffff) : Number(seedArg),
     deals: dealsArg === null ? null : Number(dealsArg),
-    level: get('--level') === 'easy' ? 'easy' : 'medium',
+    level: get('--level') === 'easy' ? 'easy' : get('--level') === 'hard' ? 'hard' : 'medium',
   };
 }
 

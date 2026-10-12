@@ -444,3 +444,29 @@ describe('botMoveFor and moveCount', () => {
     expect(t.moveCount).toBe(before);
   });
 });
+
+describe('the double win on the matchOver event', () => {
+  it('is flagged exactly when the engine credits two, and never with the rule off', () => {
+    let doubles = 0;
+    let singles = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const t = new Table({ seed, config: { doubleWinBelow500: true } });
+      t.playWholeMatch();
+      const over = t.drainEvents().find((e) => e.kind === 'matchOver')!;
+      const loser = t.matchScores[1 - over.winner];
+      const expected = loser < 500 ? 2 : 1;
+      expect(t.matchWins()).toBe(expected);
+      expect(over.double).toBe(expected === 2 ? true : undefined);
+      if (expected === 2) doubles++;
+      else singles++;
+    }
+    // Both outcomes occur across these seeds, or the test proves nothing.
+    expect(doubles).toBeGreaterThan(0);
+    expect(singles).toBeGreaterThan(0);
+
+    const off = new Table({ seed: 3 });
+    off.playWholeMatch();
+    expect(off.matchWins()).toBe(1);
+    expect(off.drainEvents().find((e) => e.kind === 'matchOver')!.double).toBeUndefined();
+  });
+});

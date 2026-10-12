@@ -12,7 +12,8 @@ import { PlayingCard } from '../PlayingCard';
 import { playSfx, setMasterVolume, setSoundEnabled } from '../audio';
 import { font, ink, radius, space, surface, theme, type } from '../theme';
 import { APP_VERSION, Panel, ScreenShell } from './common';
-import { modeName, PLAY_MODES } from '../playMode';
+import { botLevelName, modeName, PLAY_MODES } from '../playMode';
+import { BOT_LEVELS } from '@belot/bots';
 
 const LOCALES: ReadonlyArray<{ id: Settings['locale']; label: string }> = [
   { id: 'hr', label: 'Hrvatski' },
@@ -170,6 +171,49 @@ export function SettingsScreen({
               ? lang.s.difficultyHardHint
               : lang.s.difficultyEasyHint}
         </Text>
+      </Panel>
+
+      {/* How well the bots play - every bot offline, the seat-fillers at the tables this player hosts. */}
+      <Panel label={ui.botLevel}>
+        <View style={styles.localeRow}>
+          {BOT_LEVELS.map((b) => (
+            <PressScale
+              key={b}
+              onPress={() => {
+                onSettingsChange({ ...settings, botLevel: b });
+              }}
+              accessibilityState={{ selected: settings.botLevel === b }}
+              style={[styles.localeChip, settings.botLevel === b && styles.localeChipOn]}
+            >
+              <Text style={[styles.localeText, settings.botLevel === b && styles.localeTextOn]}>{botLevelName(lang, b)}</Text>
+            </PressScale>
+          ))}
+        </View>
+        <Text style={styles.hint}>{ui.botLevelHint}</Text>
+      </Panel>
+
+      {/* The double win: an optional rule of the full game, chosen before the table. */}
+      <Panel label={ui.doubleWinRule}>
+        <View style={styles.localeRow}>
+          {(
+            [
+              { on: true, label: ui.doubleWinOn },
+              { on: false, label: ui.doubleWinOff },
+            ] as const
+          ).map((o) => (
+            <PressScale
+              key={String(o.on)}
+              onPress={() => {
+                onSettingsChange({ ...settings, doubleWin: o.on });
+              }}
+              accessibilityState={{ selected: settings.doubleWin === o.on }}
+              style={[styles.localeChip, settings.doubleWin === o.on && styles.localeChipOn]}
+            >
+              <Text style={[styles.localeText, settings.doubleWin === o.on && styles.localeTextOn]}>{o.label}</Text>
+            </PressScale>
+          ))}
+        </View>
+        <Text style={styles.hint}>{ui.doubleWinHint}</Text>
       </Panel>
 
       <Panel label={ui.confirmPlayLabel}>

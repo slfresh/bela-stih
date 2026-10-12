@@ -1,4 +1,5 @@
 import { isPlayMode, type PlayMode } from './playMode';
+import { isBotLevel, type BotLevel } from '@belot/bots';
 import { Platform } from 'react-native';
 import { emptyProfile, ensureQuests, isoDay, type PlayerProfile } from '@belot/progression';
 import { localeFor } from './locale';
@@ -73,6 +74,18 @@ export interface Settings {
    * games, and the private tables this player hosts, start in it.
    */
   difficulty: PlayMode;
+  /**
+   * The double win, the optional rule of the full game: the pair that reaches
+   * 1001 while the other is still under 500 is credited with two matches.
+   * Offline games, and the private tables this player hosts, start with it.
+   */
+  doubleWin: boolean;
+  /**
+   * How well the bots play (packages/bots): lagani, srednji or jaki. Offline
+   * every bot at the table, partner included; online the bots that fill a
+   * seat at the private tables this player hosts. Not the game version.
+   */
+  botLevel: BotLevel;
   /** Card face style: mađarice (default), vintage photos, French suits, or big-and-simple. */
   deckStyle: 'madarice' | 'starinske' | 'francuske' | 'simple';
   /** How the hand is laid out. 'manual' keeps whatever the player arranged. */
@@ -107,6 +120,8 @@ export const DEFAULT_SETTINGS: Settings = {
   locale: 'hr',
   nickname: '',
   difficulty: 'easy',
+  doubleWin: false,
+  botLevel: 'medium',
   deckStyle: 'madarice',
   handSort: 'auto',
   arrangeTips: 0,
@@ -188,6 +203,10 @@ export function loadSettings(): Settings {
   }
   if (changed) write(KEY.settings, s);
   if (s.voiceMode !== 'hold' && s.voiceMode !== 'tap') s = { ...s, voiceMode: 'hold' };
+  // The double win is on only when this app's own switch says so.
+  if (s.doubleWin !== true) s = { ...s, doubleWin: false };
+  // A bot strength no app writes (or none at all) plays the middle one.
+  if (!isBotLevel(s.botLevel)) s = { ...s, botLevel: 'medium' };
   // A volume saved by a build with other steps snaps to the nearest chip, or
   // Settings would light none.
   const volume = (VOLUME_OPTIONS as readonly number[]).reduce((best, v) =>
@@ -210,6 +229,12 @@ export interface SeriesEntry {
   us: number;
   them: number;
   seen: string[];
+  /**
+   * The four as last seen, for the statistics screen: me and my partner,
+   * the two opponents. Absent in entries from before the screen existed
+   * (series.ts seriesNames reads the key then).
+   */
+  names?: { us: [string, string]; them: [string, string] };
 }
 export type SeriesBook = Record<string, SeriesEntry>;
 

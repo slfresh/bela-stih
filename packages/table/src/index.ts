@@ -19,13 +19,14 @@ import {
   legalActions,
   makeRng,
   matchWinner,
+  matchWins,
   pointValue,
   publicView,
   startDeal,
   teamOf,
   type Rng,
 } from '@belot/engine';
-import { decideAction, type BotLevel } from '@belot/bots';
+import { decideAction, type BotLevel, type BotMemory } from '@belot/bots';
 
 /**
  * @belot/table — the seat-aware session layer.
@@ -62,7 +63,8 @@ export type TableEvent =
   | { kind: 'cardPlayed'; seat: Seat; card: Card }
   | { kind: 'trickWon'; seat: Seat; trickNumber: number; points: number; isLastTrick: boolean }
   | { kind: 'dealScored'; result: DealScoreResult; matchScores: [number, number] }
-  | { kind: 'matchOver'; winner: TeamId; matchScores: [number, number] }
+  /** `double` only under the optional rule, when the win counts for two matches (engine matchWins). */
+  | { kind: 'matchOver'; winner: TeamId; matchScores: [number, number]; double?: true }
   /** A fresh match at the same table, same seats. */
   | { kind: 'matchStarted'; matchNumber: number };
 
@@ -243,8 +245,13 @@ export class Table {
       if (guard++ > 4096) throw new Error('bot loop failed to make progress');
       const seat = this.actor();
       if (seat === null || this.humans.has(seat)) return;
-      this.applyAndRecord(decideAction(this.view(seat), this.rng, this.botLevel));
+      this.applyAndRecord(decideAction(this.view(seat), this.rng, this.botLevel, this.memory()));
     }
+  }
+
+  /** What a bot may remember of the deal: its tricks so far, public to all four (the hard bot plays to them). */
+  private memory(): BotMemory {
+    return { completedTricks: this.s.completedTricks };
   }
 
   /**
@@ -258,7 +265,7 @@ export class Table {
    */
   botMoveFor(seat: Seat): void {
     if (this.actor() !== seat) return;
-    this.applyAndRecord(decideAction(this.view(seat), this.rng, this.botLevel));
+    this.applyAndRecord(decideAction(this.view(seat), this.rng, this.botLevel, this.memory()));
     // Whoever is next may also be a bot; advancing to the next human decision
     // is the same thing a normal submit() does.
     this.runBots();
@@ -277,6 +284,11 @@ export class Table {
 
   winner(): TeamId | null {
     return matchWinner(this.s);
+  }
+
+  /** How many matches the winner is credited with (1, or 2 under the double-win rule). */
+  matchWins(): 1 | 2 {
+    return matchWins(this.s);
   }
 
   // --- event derivation ----------------------------------------------------
@@ -386,6 +398,8 @@ export class Table {
         kind: 'matchOver',
         winner: matchWinner(after)!,
         matchScores: [after.matchScores[0], after.matchScores[1]],
+        // Absent unless earned, so the golden corpus's hashes stay put.
+        ...(matchWins(after) === 2 ? { double: true as const } : {}),
       });
     }
   }

@@ -1,5 +1,6 @@
 import { HARD_CONFIG_OVERRIDES, type EngineConfig } from '@belot/engine';
 import type { Lang } from '@belot/i18n';
+import type { BotLevel } from '@belot/bots';
 
 /**
  * The three versions of the game, each a set of the engine's own switches
@@ -53,4 +54,9 @@ export function modeFromLegacy(hard: boolean | undefined): PlayMode {
 /** The version's name as the player reads it. */
 export function modeName(lang: Lang, m: PlayMode): string {
   return m === 'learn' ? lang.s.difficultyLearn : m === 'hard' ? lang.s.difficultyHard : lang.s.difficultyEasy;
+}
+
+/** The bot strength's name as the player reads it (packages/bots BotLevel): lagani, srednji, jaki. */
+export function botLevelName(lang: Lang, level: BotLevel): string {
+  return level === 'easy' ? lang.s.ui.botLevelEasy : level === 'hard' ? lang.s.ui.botLevelHard : lang.s.ui.botLevelMedium;
 }

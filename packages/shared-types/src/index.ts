@@ -204,7 +204,19 @@ export interface EngineConfig {
   declarationMode: DeclarationMode;
   /** Must bela be called when playing the first of the trump K/Q? Default 'announce'. */
   belaMode: BelaMode;
+  /**
+   * The optional house rule for the full game (1001 only): the pair that
+   * reaches 1001 while the other is still under 500 is credited with TWO
+   * matches. Chosen before the table starts; ignored at any other target
+   * (see DOUBLE_WIN_TARGET), and with no effect on the deal's scoring - only
+   * on how many matches the win counts for (matchWins).
+   */
+  doubleWinBelow500: boolean;
 }
+
+/** The only match length the double win is defined for, and the floor the loser must be under. */
+export const DOUBLE_WIN_TARGET = 1001;
+export const DOUBLE_WIN_FLOOR = 500;
 
 export const DEFAULT_CONFIG: EngineConfig = {
   matchTarget: 1001,
@@ -221,6 +233,7 @@ export const DEFAULT_CONFIG: EngineConfig = {
   declarationTieCancels: false,
   declarationMode: 'announce',
   belaMode: 'announce',
+  doubleWinBelow500: false,
 };
 
 /** The hard-difficulty ("prava bela") overrides applied on top of the defaults. */

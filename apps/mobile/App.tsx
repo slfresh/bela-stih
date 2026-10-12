@@ -13,11 +13,13 @@ import { OnlineGame } from './src/net/OnlineGame';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { RulesScreen } from './src/screens/RulesScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
+import { StatsScreen } from './src/screens/StatsScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { ShopScreen } from './src/screens/ShopScreen';
 import {
   loadHistory,
   loadProfile,
+  loadSeries,
   loadSettings,
   saveProfile,
   saveSettings,
@@ -48,7 +50,7 @@ import { useMotionPolicy } from './src/anim/useMotionPolicy';
 import { MotionProvider } from './src/anim/MotionHere';
 
 /** The menu stack, one level deep: home, or one of its satellite screens. */
-type MenuScreen = 'home' | 'shop' | 'settings' | 'profile' | 'rules' | 'history';
+type MenuScreen = 'home' | 'shop' | 'settings' | 'profile' | 'rules' | 'history' | 'stats';
 
 /**
  * A handful of screens and no router: the menu (home plus shop / settings /
@@ -147,8 +149,9 @@ export default function App() {
   });
 
   const toHome = useCallback(() => setMenu('home'), []);
-  // Read afresh each time the history opens: a match may have ended since.
-  const history = useMemo(() => (menu === 'history' ? loadHistory() : []), [menu]);
+  // Read afresh each time the history or the statistics open: a match may have ended since.
+  const history = useMemo(() => (menu === 'history' || menu === 'stats' ? loadHistory() : []), [menu]);
+  const seriesBook = useMemo(() => (menu === 'stats' ? loadSeries() : {}), [menu]);
 
   const content =
     launch === null ? (
@@ -179,6 +182,16 @@ export default function App() {
               setMenu('home');
               setLaunch({ mode: 'create' });
             }}
+            onOpenStats={() => setMenu('stats')}
+          />
+        ) : menu === 'stats' ? (
+          <StatsScreen
+            lang={lang}
+            history={history}
+            series={seriesBook}
+            profile={profile}
+            onBack={toHome}
+            onOpenHistory={() => setMenu('history')}
           />
         ) : menu === 'profile' ? (
           <ProfileScreen
@@ -189,6 +202,7 @@ export default function App() {
             onProfileChange={updateProfile}
             onOpenShop={() => setMenu('shop')}
             onOpenHistory={() => setMenu('history')}
+            onOpenStats={() => setMenu('stats')}
             onBack={toHome}
           />
         ) : (
@@ -204,6 +218,7 @@ export default function App() {
             onOpenProfile={() => setMenu('profile')}
             onOpenRules={() => setMenu('rules')}
             onOpenHistory={() => setMenu('history')}
+            onOpenStats={() => setMenu('stats')}
           />
         )
     ) : launch.mode === 'gallery' ? (

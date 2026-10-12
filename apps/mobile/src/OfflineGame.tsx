@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { useKeepAwake } from 'expo-keep-awake';
-import { teamOf } from '@belot/engine';
+import { teamOf, type TeamId } from '@belot/engine';
 import { anchorId } from './anim/FxBus';
 import { COIN_CASCADE_DELAY_MS, coinCascadeCount, coinDingTimers, coinsLandedMs, MATCH_CASCADE_HOLD_MS } from './anim/lifetimes';
 import { isMatchAward } from './feedback';
@@ -33,6 +33,13 @@ export function OfflineGame({
   // So do the bots' manners: a coffee in the last deal and another in the
   // rematch's first would be two deals running.
   const botGiftStore = useRef<BotGiftState>(BOT_GIFTS_START);
+  // And the sitting's tally: matches won per team since this table was
+  // opened, like the server keeps for an online one. Shown in the header's
+  // chip and on the match-end sheet; gone with the table.
+  const [sitting, setSitting] = useState<[number, number]>([0, 0]);
+  const onMatchOver = useCallback((winner: TeamId, wins: 1 | 2) => {
+    setSitting((s) => (winner === 0 ? [s[0] + wins, s[1]] : [s[0], s[1] + wins]));
+  }, []);
   return (
     <OfflineMatch
       key={matchId}
@@ -42,6 +49,8 @@ export function OfflineGame({
       onRematch={() => setMatchId((n) => n + 1)}
       giftStore={giftStore}
       botGiftStore={botGiftStore}
+      series={sitting}
+      onMatchOver={onMatchOver}
     />
   );
 }
@@ -53,6 +62,8 @@ function OfflineMatch({
   onRematch,
   giftStore,
   botGiftStore,
+  series,
+  onMatchOver,
 }: {
   settings: Settings;
   onSettingsChange?: (s: Settings) => void;
@@ -60,13 +71,17 @@ function OfflineMatch({
   onRematch: () => void;
   giftStore: { current: GiftSeats };
   botGiftStore: { current: BotGiftState };
+  /** This sitting's tally, kept by the screen above the match. */
+  series: readonly [number, number];
+  /** The match ended: who took it, and for how many (the double win). */
+  onMatchOver: (winner: TeamId, wins: 1 | 2) => void;
 }) {
   // Not on the web: the Wake Lock API needs a gesture and a secure context,
   // and deactivating a lock that never activated rejects with
   // ERR_KEEP_AWAKE_TAG_INVALID on every exit. The platform never changes at
   // runtime, so the hook order is stable.
   if (Platform.OS !== 'web') useKeepAwake(); // eslint-disable-line react-hooks/rules-of-hooks
-  const g = useGame(settings, 'medium', giftStore, botGiftStore);
+  const g = useGame(settings, settings.botLevel, giftStore, botGiftStore);
 
   const settled = g.view.phase === 'DEAL_OVER' || g.view.phase === 'MATCH_OVER';
   const matchOver = g.view.phase === 'MATCH_OVER';
@@ -130,6 +145,16 @@ function OfflineMatch({
     }
   }, [g.banner, g.anchors, g.fxBus, g.motion]);
 
+  // The sitting's tally, once per match (this component is remounted for each).
+  const counted = useRef(false);
+  useEffect(() => {
+    if (!matchOver || counted.current) return;
+    const winner = g.table.winner();
+    if (winner === null) return;
+    counted.current = true;
+    onMatchOver(winner, g.table.matchWins());
+  }, [matchOver, g.table, onMatchOver]);
+
   const cheered = useRef(false);
   useEffect(() => {
     if (matchOver && !cheered.current && g.table.winner() === teamOf(HUMAN)) {
@@ -166,6 +191,8 @@ function OfflineMatch({
       lastDealResult={g.table.state.lastDealResult}
       matchScores={g.view.matchScores}
       winnerTeam={g.table.winner()}
+      matchDouble={matchOver && g.table.matchWins() === 2}
+      series={series}
       profile={g.profile}
       banner={g.banner}
       anchors={g.anchors}

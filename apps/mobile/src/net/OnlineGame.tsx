@@ -38,10 +38,11 @@ import { Copy } from '../ui/icons';
 import { useBackCloses } from '../ui/backGuard';
 import { reportMailto, reportStamp } from '../report';
 import { APP_VERSION } from '../screens/common';
-import { loadHistory, loadSeries, saveHistory, saveSeries, type SeriesEntry, type Settings } from '../storage';
+import { loadHistory, loadSeries, saveHistory, saveSeries, type Settings } from '../storage';
 import { groupKey, recordMatch } from './series';
 import { addRecord, UNNAMED } from './history';
-import { isPlayMode, modeName, PLAY_MODES } from '../playMode';
+import { botLevelName, isPlayMode, modeName, PLAY_MODES } from '../playMode';
+import { BOT_LEVELS, isBotLevel } from '@belot/bots';
 import { summarize } from '../matchLog';
 import { isoDay } from '@belot/progression';
 import { useNetGame, type NetGame } from './useNetGame';
@@ -245,17 +246,19 @@ export function OnlineGame({
           [((mine + 1) % 4) as Seat, ((mine + 3) % 4) as Seat].map((s) => net.realName(s)),
         )
       : null;
-  const [seriesEntry, setSeriesEntry] = useState<SeriesEntry | null>(null);
-  useEffect(() => {
-    setSeriesEntry(group !== null ? (loadSeries()[group] ?? null) : null);
-  }, [group]);
+  // Written as the match ends, read on the statistics screen - never on the
+  // table, which shows only the sitting in progress (net.series).
   useEffect(() => {
     if (group === null || mine === null || !net.matchOver || net.winnerTeam === null || !net.roomId) return;
     const id = `${isoDay(new Date())}:${net.roomId}:${net.matchNumber}`;
-    const book = recordMatch(loadSeries(), group, id, net.winnerTeam === teamOf(mine));
-    saveSeries(book);
-    setSeriesEntry(book[group] ?? null);
-  }, [group, mine, net.matchOver, net.winnerTeam, net.roomId, net.matchNumber]);
+    const names = {
+      us: [net.realName(mine), net.realName(((mine + 2) % 4) as Seat)] as [string, string],
+      them: [net.realName(((mine + 1) % 4) as Seat), net.realName(((mine + 3) % 4) as Seat)] as [string, string],
+    };
+    saveSeries(recordMatch(loadSeries(), group, id, net.winnerTeam === teamOf(mine), net.matchDouble ? 2 : 1, names));
+    // The names are read as the match ends, like the id.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group, mine, net.matchOver, net.winnerTeam, net.roomId, net.matchNumber, net.matchDouble]);
 
   // The history of matches with friends (net/history.ts): every finished match
   // at a private table where at least one other chair had a person in it. A
@@ -291,6 +294,7 @@ export function OnlineGame({
         hard: net.mode === 'hard',
         mode: net.mode,
         won: net.winnerTeam === us,
+        ...(net.matchDouble ? { double: true as const } : {}),
         score: [scores[us], scores[them]],
         deals: sum ? [sum.won[us], sum.won[them]] : null,
         best: sum?.best?.points ?? null,
@@ -299,15 +303,6 @@ export function OnlineGame({
     // Recorded as the match ends: its id is final then, and a rematch's is new.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mine, net.isPrivate, net.matchOver, net.winnerTeam, net.roomId, net.matchNumber]);
-  // The series as the table shows it, by team id: the long one when there is
-  // one, tonight's otherwise (a table with a bot, or before four sat down).
-  const shownSeries: [number, number] =
-    seriesEntry && mine !== null
-      ? teamOf(mine) === 0
-        ? [seriesEntry.us, seriesEntry.them]
-        : [seriesEntry.them, seriesEntry.us]
-      : net.series;
-
   // Every match of a series deserves its own confetti, so the latch is keyed
   // on the match rather than on the mount.
   const cheeredMatch = useRef(-1);
@@ -384,7 +379,10 @@ export function OnlineGame({
       // second tap in the gap sends nothing.
       awaitEcho
       refusedN={net.refusals}
-      series={shownSeries}
+      // This sitting's tally alone (the server's count since these people sat
+      // down); the long one between the same four lives on the statistics screen.
+      series={net.series}
+      matchDouble={net.matchDouble}
       askedRematch={net.rematchVotes.includes(net.seat)}
       // The same four again: a return match, not just another one.
       rematchLabel={fourPeople ? net.lang.s.ui.revans : undefined}
@@ -696,6 +694,27 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
             { key: 'off', text: ui.voiceOff, on: !net.voiceOn },
           ]}
           onPick={(k) => net.setRules({ voice: k === 'on' })}
+        />
+        {/* The double win is a rule of the full game only: a shorter match never offers it. */}
+        {net.target === 1001 && (
+          <Choice
+            label={ui.doubleWinRule}
+            host={isHost}
+            options={[
+              { key: 'on', text: ui.doubleWinOn, on: net.doubleWin },
+              { key: 'off', text: ui.doubleWinOff, on: !net.doubleWin },
+            ]}
+            onPick={(k) => net.setRules({ doubleWin: k === 'on' })}
+          />
+        )}
+        {/* The strength of the bots that fill a seat: a dropped friend's, or the empty ones at the start. */}
+        <Choice
+          label={ui.botLevel}
+          host={isHost}
+          options={BOT_LEVELS.map((b) => ({ key: b, text: botLevelName(net.lang, b), on: net.botLevel === b }))}
+          onPick={(k) => {
+            if (isBotLevel(k)) net.setRules({ botLevel: k });
+          }}
         />
       </View>
     ) : null;
