@@ -1,5 +1,6 @@
 import type { Action, PublicView, Seat } from '@belot/engine';
 import type { TableEvent } from '@belot/table';
+import type { BotLevel } from '@belot/bots';
 
 /**
  * The wire protocol, in one file so the client and the room cannot drift.
@@ -86,6 +87,8 @@ export type ClientMessage =
       voice?: boolean;
       /** The double win (reach 1001 while the others are under 500 = two matches); taken only while the table plays to 1001. */
       doubleWin?: boolean;
+      /** How well the bots that fill a seat play (packages/bots). */
+      botLevel?: BotLevel;
     }
   /**
    * Private tables: this player's app went to the background - a phone call
@@ -342,6 +345,8 @@ export interface RoomMessage {
   voice?: true;
   /** The double-win rule is on at this table (only ever with target 1001; see ClientMessage rules). */
   doubleWin?: true;
+  /** How well the bots that fill a seat play; absent from an older server: medium. */
+  botLevel?: BotLevel;
   /** Present while the table stands still: paused, or waiting for a dropped player. */
   hold?: HoldInfo;
   /** At DEAL_OVER: milliseconds until the next deal starts by itself. */

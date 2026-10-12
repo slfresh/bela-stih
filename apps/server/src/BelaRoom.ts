@@ -4,6 +4,7 @@ import type { Action, Seat } from '@belot/engine';
 import { DEFAULT_CONFIG, DOUBLE_WIN_TARGET, HARD_CONFIG_OVERRIDES, RANKS, SEATS, SUITS, type EngineConfig } from '@belot/engine';
 import type { Card, Rank, Rng, Suit } from '@belot/engine';
 import { Table } from '@belot/table';
+import { isBotLevel, type BotLevel } from '@belot/bots';
 import { EMOTE_GAP_MS, EMOTE_IDS, GIFT_GAP_MS, GIFT_IDS, MATCH_TARGETS, MIN_PROTO, MSG, NEXT_DEAL_MS, PAUSE_MAX_MS, TURN_CHOICES, UPDATE_APP_CODE, WAIT_FOR_DROPPED_MS, type ClientMessage, type HoldInfo, type EmoteMessage, type GiftMessage, type JoinGifts, type JoinProto, type JoinVoice, type RoomMessage, type SeatInfo, type VoiceHeardMessage, type VoiceMessage, isPlayMode, modeFromLegacy, type PlayMode } from './protocol';
 import { checkClip, VoiceLedger, VoiceLimiter } from './voice';
 import { cleanName } from './names';
@@ -184,6 +185,8 @@ export class BelaRoom extends Room {
   private target = DEFAULT_CONFIG.matchTarget;
   /** The double-win rule (protocol.ts): a private table's host may switch it on, and only at 1001. */
   private doubleWin = false;
+  /** How well the bots that fill a seat play: quick play's medium, or what a private table's host chose. */
+  private botLevel: BotLevel = 'medium';
   /** Public tables are the ones strangers are matched into. */
   private isPublic = true;
   /** The table's creator (first joiner); start-with-bots rights follow them. */
@@ -253,7 +256,15 @@ export class BelaRoom extends Room {
   private gifts: (string | null)[] = [null, null, null, null];
 
   override onCreate(
-    options: { private?: boolean; mode?: unknown; hard?: boolean; target?: number; modes?: boolean; doubleWin?: unknown } = {},
+    options: {
+      private?: boolean;
+      mode?: unknown;
+      hard?: boolean;
+      target?: number;
+      modes?: boolean;
+      doubleWin?: unknown;
+      botLevel?: unknown;
+    } = {},
   ): void {
     this.occupants = SEATS.map(vacant);
     // The version and a shorter match are the host's choice, and only on
@@ -277,6 +288,8 @@ export class BelaRoom extends Room {
     if (options.private === true && options.doubleWin === true && this.target === DOUBLE_WIN_TARGET) {
       this.doubleWin = true;
     }
+    // And the strength of the bots that fill a seat; strangers get the middle one.
+    if (options.private === true && isBotLevel(options.botLevel)) this.botLevel = options.botLevel;
     this.buildTable();
 
     // A code friends can read out and type (codes.ts), at every table: a
@@ -507,6 +520,7 @@ export class BelaRoom extends Room {
   private buildTable(): void {
     this.table = new Table({
       humanSeats: [...SEATS],
+      botLevel: this.botLevel,
       config: { ...MODE_CONFIG[this.mode], matchTarget: this.target, doubleWinBelow500: this.doubleWin },
       // No seed at all. Table's default is `Date.now()`, which is fine for the
       // CLI and offline play (dealer and player are the same device) and
@@ -647,7 +661,7 @@ export class BelaRoom extends Room {
       // The same four conditions as the clock: before the start, a private
       // table, its host, and only what is offered.
       const m = packet.message as
-        | { target?: unknown; mode?: unknown; hard?: unknown; voice?: unknown; doubleWin?: unknown }
+        | { target?: unknown; mode?: unknown; hard?: unknown; voice?: unknown; doubleWin?: unknown; botLevel?: unknown }
         | undefined;
       if (this.started || this.isPublic || seat !== this.actingHostSeat()) return;
       // Voice on or off changes nothing on the table itself: no rebuild.
@@ -672,6 +686,11 @@ export class BelaRoom extends Room {
       const mode = isPlayMode(m?.mode) ? m.mode : modeFromLegacy(m?.hard);
       if (mode !== null && mode !== this.mode) {
         this.mode = mode;
+        changed = true;
+      }
+      // The strength of the bots that fill a seat.
+      if (isBotLevel(m?.botLevel) && m.botLevel !== this.botLevel) {
+        this.botLevel = m.botLevel;
         changed = true;
       }
       if (changed) this.buildTable();
@@ -1155,6 +1174,7 @@ export class BelaRoom extends Room {
       ...(this.isPublic ? {} : { private: true as const }),
       ...(this.voiceOn ? { voice: true as const } : {}),
       ...(this.doubleWin ? { doubleWin: true as const } : {}),
+      botLevel: this.botLevel,
       ...(this.isHeld() ? { hold: this.holdInfo()! } : {}),
       ...(this.nextEndsAt > 0 ? { nextMsLeft: Math.max(0, this.nextEndsAt - Date.now()) } : {}),
       ...(this.table.phase === 'DEAL_OVER' && this.nextVotes.size > 0 ? { nextVotes: [...this.nextVotes] } : {}),

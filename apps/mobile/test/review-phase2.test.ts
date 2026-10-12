@@ -50,6 +50,10 @@ describe('a private table-s rules, in one place', () => {
     expect(rules).toMatch(/if \(this\.target !== DOUBLE_WIN_TARGET && this\.doubleWin\) \{/);
     expect(rules).toMatch(/typeof m\?\.doubleWin === 'boolean' && this\.target === DOUBLE_WIN_TARGET/);
     expect(room).toMatch(/this\.series\[this\.table\.winner\(\)!\] \+= this\.table\.matchWins\(\);/);
+    // The strength of the bots that fill a seat: the host's, built into the table, told to everyone.
+    expect(room).toMatch(/botLevel: this\.botLevel,\s*config: \{/);
+    expect(rules).toMatch(/if \(isBotLevel\(m\?\.botLevel\) && m\.botLevel !== this\.botLevel\) \{/);
+    expect(room).toMatch(/if \(options\.private === true && isBotLevel\(options\.botLevel\)\) this\.botLevel = options\.botLevel;/);
     expect(room).toMatch(/\.\.\.\(this\.doubleWin \? \{ doubleWin: true as const \} : \{\}\),/);
     expect(room).toMatch(/target: this\.target,/);
   });
@@ -62,6 +66,9 @@ describe('a private table-s rules, in one place', () => {
     // The double win is offered at the full game only.
     expect(o).toMatch(/\{net\.target === 1001 && \(\s*<Choice\s*label=\{ui\.doubleWinRule\}/);
     expect(o).toMatch(/onPick=\{\(k\) => net\.setRules\(\{ doubleWin: k === 'on' \}\)\}/);
+    // The bots' strength, from the same list the server takes.
+    expect(o).toMatch(/label=\{ui\.botLevel\}/);
+    expect(o).toMatch(/options=\{BOT_LEVELS\.map\(\(b\) => \(\{ key: b, text: botLevelName\(net\.lang, b\), on: net\.botLevel === b \}\)\)\}/);
     expect(o).toMatch(/disabled=\{!host\}/);
     expect(o).toMatch(/accessibilityState=\{\{ checked: o\.on, disabled: !host \}\}/);
     // And the table says them: the length, and the version beside it, always.

@@ -13,6 +13,7 @@ import { botThinkMs } from '../anim/think';
 import { EMPTY_LOG, logEvent } from '../matchLog';
 import { troubleOf, type Trouble } from './trouble';
 import { isPlayMode, modeFromLegacy, type PlayMode } from '../playMode';
+import { isBotLevel, type BotLevel } from '@belot/bots';
 import { sniffMime, type VoiceMime, type VoiceEcho } from '../voice/voice';
 import type { Take } from '../voice/useVoiceRecorder';
 import { FxBus } from '../anim/FxBus';
@@ -172,6 +173,8 @@ interface RoomMessage {
   voice?: true;
   /** The double-win rule is on at this table (absent from an older server, or off). */
   doubleWin?: true;
+  /** How well the bots that fill a seat play (absent from an older server: medium). */
+  botLevel?: unknown;
   /** Present while a private table stands still. */
   hold?: WireHold;
   /** At DEAL_OVER: time until the next deal starts by itself. */
@@ -263,6 +266,8 @@ export function useNetGame(settings: Settings) {
   const [doubleWin, setDoubleWin] = useState(false);
   /** The match just finished counted for two (the matchOver event said so). */
   const [matchDouble, setMatchDouble] = useState(false);
+  /** How well the bots that fill a seat play at this table. */
+  const [botLevel, setBotLevel] = useState<BotLevel>('medium');
   // Once this room has been a table, a dropped connection keeps the table on
   // screen while the hook gets back into the seat - not the lobby, which is
   // where a phone call used to leave the player.
@@ -429,6 +434,7 @@ export function useNetGame(settings: Settings) {
     setWinnerTeam(null);
     setMatchDouble(false);
     setDoubleWin(false);
+    setBotLevel('medium');
     setTurnDeadline(null);
     setHold(null);
     setNextDeadline(null);
@@ -576,6 +582,7 @@ export function useNetGame(settings: Settings) {
       setIsPrivate(msg.private === true);
       setVoiceOn(msg.voice === true);
       setDoubleWin(msg.doubleWin === true);
+      setBotLevel(isBotLevel(msg.botLevel) ? msg.botLevel : 'medium');
       // A stale-tap refusal is stale itself the moment the game moves on.
       if (msg.events.length > 0) setError(null);
       if (msg.turnTotalMs) setTurnTotalMs(msg.turnTotalMs);
@@ -853,12 +860,14 @@ export function useNetGame(settings: Settings) {
           private: true,
           mode: settings.difficulty,
           hard: settings.difficulty === 'hard',
-          // The host's double-win switch seeds the table too (the server takes it only at 1001).
+          // The host's double-win switch seeds the table too (the server takes it only at 1001),
+          // and the strength of the bots that fill a seat.
           doubleWin: settings.doubleWin,
+          botLevel: settings.botLevel,
           }),
         ),
       ),
-    [connect, name, avatar, settings.difficulty, settings.doubleWin],
+    [connect, name, avatar, settings.difficulty, settings.doubleWin, settings.botLevel],
   );
   const joinById = useCallback(
     (id: string) => connect((c) => c.joinById(normalizeCode(id), { name, avatar, gifts: true, voice: voiceRef.current, receipts: true, proto: PROTO, appVersion: APP_VERSION })),
@@ -887,7 +896,7 @@ export function useNetGame(settings: Settings) {
   const setClock = useCallback((seconds: number) => roomRef.current?.send('clock', { seconds }), []);
   /** Host, before the start: the match length, the version, voice, the double win (any may be left out). */
   const setRules = useCallback(
-    (rules: { target?: number; mode?: PlayMode; voice?: boolean; doubleWin?: boolean }) =>
+    (rules: { target?: number; mode?: PlayMode; voice?: boolean; doubleWin?: boolean; botLevel?: BotLevel }) =>
       roomRef.current?.send('rules', {
         ...rules,
         // A server from before the three versions reads only the old switch.
@@ -1037,6 +1046,7 @@ export function useNetGame(settings: Settings) {
     isPrivate,
     doubleWin,
     matchDouble,
+    botLevel,
     // Getting back into a seat after a drop: the table stays up meanwhile.
     reconnecting: atTable && (status === 'disconnected' || status === 'connecting'),
     pause,

@@ -150,14 +150,35 @@ async function main(): Promise<void> {
   check(dbl.last?.doubleWin === true, 'a table created with it starts with it');
   await dbl.room.leave(true);
 
+  // ---- the strength of the bots that fill a seat ----
+  check(guest.last?.botLevel === 'medium', `a new table's bots are of middle strength (${guest.last?.botLevel})`);
+  guest.room.send('rules', { botLevel: 'hard' });
+  await wait(400);
+  check(guest.last?.botLevel === 'medium', 'a guest cannot change it');
+  host.room.send('rules', { botLevel: 'hard' });
+  await wait(400);
+  check(guest.last?.botLevel === 'hard', 'the host picks strong bots and the guest sees it');
+  host.room.send('rules', { botLevel: 'brutal' });
+  await wait(400);
+  check(guest.last?.botLevel === 'hard', 'only the three strengths are taken');
+  host.room.send('rules', { botLevel: 'easy' });
+  await wait(400);
+  check(guest.last?.botLevel === 'easy', 'and easy');
+  const strong = side();
+  wire(await client.create(ROOM_NAME_MODES, { name: 'Jaki', private: true, botLevel: 'hard' }), strong);
+  await wait(500);
+  check(strong.last?.botLevel === 'hard', 'a table created with strong bots starts with them');
+  await strong.room.leave(true);
+
   // ---- quick play keeps the full game ----
   const stranger = side();
   wire(await client.joinOrCreate(ROOM_NAME_MODES, { name: 'Stranac' }), stranger);
   await wait(500);
   check(stranger.last?.mode === 'easy', `quick play is Lagana (${stranger.last?.mode})`);
-  stranger.room.send('rules', { target: 501, mode: 'hard' });
+  stranger.room.send('rules', { target: 501, mode: 'hard', botLevel: 'hard', doubleWin: true });
   await wait(400);
   check(stranger.last?.target === 1001 && stranger.last?.mode === 'easy', 'and stays 1001 and Lagana whatever anyone sends');
+  check(stranger.last?.botLevel === 'medium' && stranger.last?.doubleWin !== true, 'with middle bots and no double win');
 
   // ---- an app from before the three versions ----
   // Its quick play is what it always was (zvanja announced), and never at a

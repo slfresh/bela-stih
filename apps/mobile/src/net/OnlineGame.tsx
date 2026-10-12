@@ -41,7 +41,8 @@ import { APP_VERSION } from '../screens/common';
 import { loadHistory, loadSeries, saveHistory, saveSeries, type Settings } from '../storage';
 import { groupKey, recordMatch } from './series';
 import { addRecord, UNNAMED } from './history';
-import { isPlayMode, modeName, PLAY_MODES } from '../playMode';
+import { botLevelName, isPlayMode, modeName, PLAY_MODES } from '../playMode';
+import { BOT_LEVELS, isBotLevel } from '@belot/bots';
 import { summarize } from '../matchLog';
 import { isoDay } from '@belot/progression';
 import { useNetGame, type NetGame } from './useNetGame';
@@ -706,6 +707,15 @@ function Waiting({ net, onExit }: { net: NetGame; onExit: () => void }) {
             onPick={(k) => net.setRules({ doubleWin: k === 'on' })}
           />
         )}
+        {/* The strength of the bots that fill a seat: a dropped friend's, or the empty ones at the start. */}
+        <Choice
+          label={ui.botLevel}
+          host={isHost}
+          options={BOT_LEVELS.map((b) => ({ key: b, text: botLevelName(net.lang, b), on: net.botLevel === b }))}
+          onPick={(k) => {
+            if (isBotLevel(k)) net.setRules({ botLevel: k });
+          }}
+        />
       </View>
     ) : null;
 

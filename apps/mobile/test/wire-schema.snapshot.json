@@ -117,7 +117,8 @@
      "mode?": "PlayMode | undefined",
      "hard?": "boolean | undefined",
      "voice?": "boolean | undefined",
-     "doubleWin?": "boolean | undefined"
+     "doubleWin?": "boolean | undefined",
+     "botLevel?": "BotLevel | undefined"
     }
    },
    {
@@ -153,6 +154,7 @@
    "private?": "true | undefined",
    "voice?": "true | undefined",
    "doubleWin?": "true | undefined",
+   "botLevel?": "BotLevel | undefined",
    "hold?": "HoldInfo | undefined",
    "nextMsLeft?": "number | undefined",
    "nextVotes?": "Seat[] | undefined"
@@ -355,6 +357,10 @@
     }
    }
   ]
+ },
+ "packages/bots/src/index.ts:BotLevel": {
+  "kind": "other",
+  "text": "\"easy\" | \"hard\" | \"medium\""
  },
  "packages/shared-types/src/index.ts:PublicView": {
   "kind": "object",

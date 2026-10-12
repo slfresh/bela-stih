@@ -22,6 +22,8 @@ const SNAPSHOT = join(here, 'wire-schema.snapshot.json');
 const WANTED: Record<string, string[]> = {
   'apps/server/src/protocol.ts': ['ClientMessage', 'RoomMessage', 'SeatInfo', 'VoiceMessage', 'VoiceHeardMessage', 'EmoteMessage', 'GiftMessage', 'JoinGifts', 'JoinVoice', 'JoinProto', 'HoldInfo'],
   'packages/table/src/index.ts': ['TableEvent'],
+  // The bots' strength travels on the wire (rules, RoomMessage) under its own name: spelled out here.
+  'packages/bots/src/index.ts': ['BotLevel'],
   // Everything a view or an action is made of, spelled out - a named type printed by its name
   // (`Phase`, `Card[]`) would let its members change unseen.
   'packages/shared-types/src/index.ts': ['PublicView', 'Action', 'Card', 'Suit', 'Rank', 'ContractType', 'PlayContext', 'Seat', 'TeamId', 'Phase', 'TrickPlay', 'DealProgress', 'Declaration', 'DeclarationSummary', 'DeclarationKind', 'DeclarationMode', 'RenonsMode', 'BelaMode', 'EngineConfig'],
