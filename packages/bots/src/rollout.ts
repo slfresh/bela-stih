@@ -132,10 +132,17 @@ export function playOut(view: PublicView, hands: Card[][], first: Card, rng: () 
 }
 
 /** The candidate with the best mean settlement over ROLLOUTS deals; ties keep the earlier (preferred) one. */
-export function bestByRollout(view: PublicView, k: Constraints, candidates: readonly PlayCardAction[], rng: () => number): PlayCardAction {
+export function bestByRollout(
+  view: PublicView,
+  k: Constraints,
+  candidates: readonly PlayCardAction[],
+  rng: () => number,
+  /** Points added to each candidate's mean: what the play-outs cannot see (the bela 20, the partner's conventions). */
+  bonus?: readonly number[],
+): PlayCardAction {
   if (candidates.length < 2) return candidates[0]!;
-  const totals = candidates.map(() => 0);
   const n = rolloutsFor(candidates.length);
+  const totals = candidates.map((_, c) => (bonus?.[c] ?? 0) * n);
   for (let i = 0; i < n; i++) {
     const hands = sampleHands(view, k, rng);
     for (let c = 0; c < candidates.length; c++) totals[c] += playOut(view, hands, candidates[c]!.card, rng);

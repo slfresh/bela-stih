@@ -44,6 +44,8 @@ interface Knowledge {
   voids: boolean[][];
   /** caps[seat][slot]: that seat holds nothing of that suit above this power (Infinity: no ceiling known). */
   caps: number[][];
+  /** Each trick's leader and led suit, and who took it (null for the one in progress): what a partner has shown. */
+  leads: { leader: Seat; suit: Suit; winner: Seat | null }[];
 }
 
 const slotOf = (card: Card, ctx: Ctx): number => (isTrump(card, ctx) ? TRUMP_SLOT : SUIT_SLOT[card.suit]);
@@ -59,18 +61,20 @@ function learn(view: PublicView, memory: BotMemory | undefined): Knowledge {
   const caps = SEATS.map(() => SLOTS.map(() => Infinity));
   const played = new Set<string>();
 
-  const tricks: TrickPlay[][] = [];
+  const tricks: { plays: TrickPlay[]; winner: Seat | null }[] = [];
   let leader = ((view.dealer + 1) % 4) as Seat;
   for (const t of memory?.completedTricks ?? []) {
-    tricks.push(t.cards.map((card, i) => ({ seat: ((leader + i) % 4) as Seat, card })));
+    tricks.push({ plays: t.cards.map((card, i) => ({ seat: ((leader + i) % 4) as Seat, card })), winner: t.winnerSeat });
     leader = t.winnerSeat;
   }
-  tricks.push(view.currentTrick);
+  tricks.push({ plays: view.currentTrick, winner: null });
 
-  for (const plays of tricks) {
+  const leads: Knowledge['leads'] = [];
+  for (const { plays, winner } of tricks) {
     if (plays.length === 0) continue;
     for (const p of plays) played.add(cardId(p.card));
     const led = plays[0]!.card;
+    leads.push({ leader: plays[0]!.seat, suit: led.suit, winner });
     const ledTrump = isTrump(led, ctx);
     const ledSlot = slotOf(led, ctx);
     let highestLed = ledTrump ? -Infinity : rankPower(led, ctx);
@@ -100,7 +104,7 @@ function learn(view: PublicView, memory: BotMemory | undefined): Knowledge {
 
   const mine = new Set(view.hand.map(cardId));
   const unseen = makeDeck().filter((c) => !played.has(cardId(c)) && !mine.has(cardId(c)));
-  return { unseen, voids, caps };
+  return { unseen, voids, caps, leads };
 }
 
 /** The hard bot's choices, given the deal so far. */
@@ -288,8 +292,57 @@ class Mind {
       const slot = this.slot(c);
       return !this.k.voids[seat]![slot] && this.k.caps[seat]![slot]! > this.power(c);
     };
-    return bestByRollout(this.view, { unseen: this.k.unseen, mayHold }, ordered, rng);
+    return bestByRollout(this.view, { unseen: this.k.unseen, mayHold }, ordered, rng, ordered.map((p) => this.convention(p)));
   }
+
+  /**
+   * The partner's conventions, as points on top of what the play-outs find
+   * (they cannot see the bela 20, nor what a partner meant). In play order:
+   * call the bela; never take a trick off a partner who already holds it;
+   * when the partner's card may still be beaten, hold the trick for them;
+   * on a lead, return the suit the partner led and won, lead through a
+   * caller sitting on the left so the partner plays last, and lead where
+   * the partner can cut.
+   */
+  convention(p: PlayCardAction): number {
+    let bonus = 0;
+    if (p.announceBela === true) bonus += 20;
+    const trick = this.view.currentTrick;
+    if (trick.length === 0) {
+      if (isTrump(p.card, this.ctx)) return bonus;
+      const slot = this.slot(p.card);
+      // The partner's suit: one they led and we took.
+      if (this.k.leads.some((l) => l.leader === this.partner && l.suit === p.card.suit && l.winner !== null && !this.isOpponent(l.winner))) {
+        bonus += 4;
+      }
+      // Through the caller on my left: they commit second, my partner plays last.
+      const caller = this.view.callerSeat;
+      const lho = ((this.me + 1) % 4) as Seat;
+      if (caller !== null && caller === lho && this.isOpponent(caller) && this.mayHold(caller, slot) && !this.isMaster(p.card) && !this.exposedTen(p.card)) {
+        bonus += 3;
+      }
+      // Where the partner can cut and the opponent before them cannot.
+      if (this.couldRuff(this.partner, slot) && !this.couldRuff(lho, slot)) bonus += 3;
+      return bonus;
+    }
+    const winnerSeat = trick[trickWinnerIndex(trick.map((t) => t.card), this.ctx)]!.seat;
+    if (winnerSeat !== this.partner) return bonus;
+    const partnerCard = trick.find((t) => t.seat === this.partner)!.card;
+    const holds = !this.beatenLater(partnerCard);
+    const wins = wouldWin(trick, p.card, this.ctx);
+    // A trick the partner already holds is not taken off them (unless every card would).
+    if (holds && wins && !this.view.legalActions.every((a) => a.type !== 'PLAY_CARD' || wouldWin(trick, a.card, this.ctx))) bonus -= 8;
+    // One they may lose is held for them, with a card that will keep it.
+    if (!holds && wins && !this.beatenLater(p.card)) bonus += 2;
+    return bonus;
+  }
+}
+
+/** The conventions' points for each legal card, for the tests: what the hard bot adds to the look-ahead. */
+export function hardConventions(view: PublicView, memory: BotMemory | undefined): { card: Card; bonus: number }[] {
+  const mind = new Mind(view, memory);
+  const plays = preferBela(view.legalActions.filter((a): a is PlayCardAction => a.type === 'PLAY_CARD'));
+  return plays.map((p) => ({ card: p.card, bonus: mind.convention(p) }));
 }
 
 function cmpId(a: PlayCardAction, b: PlayCardAction): number {
