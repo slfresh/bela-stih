@@ -408,3 +408,51 @@ describe('the hard bot looks ahead', () => {
     expect(cardId(bestByRollout(view, k, view.legalActions as never, makeRng(5)).card)).toBe('7H');
   });
 });
+
+import { hardConventions } from '../src/hard';
+
+describe('the hard bot keeps a partner-s conventions', () => {
+  const bonusOf = (view: PublicView, tricks: DealTrick[] | null, id: string) =>
+    hardConventions(view, tricks ? { completedTricks: tricks } : undefined).find((b) => cardId(b.card) === id)!.bonus;
+
+  it('calls the bela: the twenty the play-outs cannot see', () => {
+    const view = viewOf(0, ['KS', 'QS', '7H'], [], ['KS', 'QS', '7H']);
+    view.legalActions = [
+      { type: 'PLAY_CARD', seat: 0, card: c('KS') },
+      { type: 'PLAY_CARD', seat: 0, card: c('KS'), announceBela: true },
+      { type: 'PLAY_CARD', seat: 0, card: c('7H') },
+    ];
+    const bonuses = hardConventions(view, undefined);
+    expect(bonuses.find((b) => cardId(b.card) === 'KS')!.bonus).toBeGreaterThanOrEqual(20);
+    expect(bonuses.find((b) => cardId(b.card) === '7H')!.bonus).toBeLessThan(20);
+  });
+
+  it('never takes a trick off a partner who already holds it', () => {
+    // Seat 0 (my partner) leads the ten; the only card above it, the ace, is mine.
+    const view = viewOf(2, ['AH', '9H'], [[0, '10H'], [1, '7H']], ['AH', '9H']);
+    expect(bonusOf(view, [], 'AH')).toBeLessThan(0);
+    expect(bonusOf(view, [], '9H')).toBe(0);
+  });
+
+  it('holds a trick the partner may lose, with a card that keeps it', () => {
+    // The partner's queen can still be beaten by the king still out; my ace cannot.
+    const view = viewOf(2, ['AH', '8H'], [[0, 'QH'], [1, '7H']], ['AH', '8H']);
+    expect(bonusOf(view, [], 'AH')).toBeGreaterThan(0);
+    expect(bonusOf(view, [], '8H')).toBe(0);
+  });
+
+  it('returns the suit the partner led and won', () => {
+    // dealer 3 in viewOf: trick one is led by seat 0. Make seat 2 lead the second trick and win it.
+    const seen = [trickOf(2, ['7H', '8H', 'AH', '9H']), trickOf(2, ['AD', '7D', '8D', '9D'])];
+    const view = { ...viewOf(0, ['10D', '7C'], [], ['10D', '7C']), callerSeat: 0 as Seat };
+    expect(bonusOf(view, seen, '10D')).toBeGreaterThan(bonusOf(view, seen, '7C'));
+  });
+
+  it('leads through a caller on its left', () => {
+    const view = { ...viewOf(0, ['8C', '7S'], [], ['8C', '7S']), callerSeat: 1 as Seat };
+    expect(bonusOf(view, [], '8C')).toBeGreaterThan(0);
+    expect(bonusOf(view, [], '7S')).toBe(0); // a trump is no lead "through" anyone
+    const mine = { ...viewOf(0, ['8C', '7S'], [], ['8C', '7S']), callerSeat: 2 as Seat };
+    expect(bonusOf(mine, [], '8C')).toBe(0); // my own partner called: nothing to lead through
+  });
+});
