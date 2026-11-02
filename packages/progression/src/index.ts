@@ -50,6 +50,31 @@ export interface PlayerProfile {
 
   /** Recipients of every table gift this player has paid for (a table gift to three counts three). */
   giftsSent: number;
+
+  /**
+   * The games beyond Bela, one tally each. Bela keeps the counters above, as
+   * it always has; a profile from before the other games simply has none.
+   */
+  games?: Partial<Record<string, GameStats>>;
+}
+
+/** One game's tally: rounds (a hand, a coup) and matches, played and won. */
+export interface GameStats {
+  roundsPlayed: number;
+  roundsWon: number;
+  matchesPlayed: number;
+  matchesWon: number;
+}
+
+const NO_STATS: GameStats = { roundsPlayed: 0, roundsWon: 0, matchesPlayed: 0, matchesWon: 0 };
+
+/** A game's tally on this profile, zeros when it has never been played. */
+export function gameStats(profile: PlayerProfile, game: string): GameStats {
+  return { ...NO_STATS, ...profile.games?.[game] };
+}
+
+function withGameStats(profile: PlayerProfile, game: string, f: (g: GameStats) => GameStats): PlayerProfile {
+  return { ...profile, games: { ...profile.games, [game]: f(gameStats(profile, game)) } };
 }
 
 export const STARTING_COINS = 1000;
@@ -240,6 +265,43 @@ export function applyMatchOutcome(
     profile: bumpQuests(result.profile, null, won),
     award: result.award,
   };
+}
+
+/**
+ * A round of any game beyond Bela: the same scale as a Bela deal, so an hour
+ * of one game levels you like an hour of another. Coins only ever come IN.
+ */
+export function applyRoundOutcome(
+  profile: PlayerProfile,
+  game: string,
+  won: boolean,
+): { profile: PlayerProfile; award: Award } {
+  const stats = withGameStats(profile, game, (g) => ({
+    ...g,
+    roundsPlayed: g.roundsPlayed + 1,
+    roundsWon: g.roundsWon + (won ? 1 : 0),
+  }));
+  return award(stats, XP.dealPlayed + (won ? XP.dealWon : 0), won ? COINS.dealWon : 0, won ? ['roundPlayed', 'roundWon'] : ['roundPlayed']);
+}
+
+/** A finished match of any game beyond Bela. Winning one counts for the "win a match" quest, whatever the game. */
+export function applyGameMatchOutcome(
+  profile: PlayerProfile,
+  game: string,
+  won: boolean,
+): { profile: PlayerProfile; award: Award } {
+  const stats = withGameStats(profile, game, (g) => ({
+    ...g,
+    matchesPlayed: g.matchesPlayed + 1,
+    matchesWon: g.matchesWon + (won ? 1 : 0),
+  }));
+  const result = award(
+    stats,
+    won ? XP.matchWon : XP.matchLost,
+    won ? COINS.matchWon : COINS.matchLost,
+    [won ? 'matchWon' : 'matchLost'],
+  );
+  return { profile: bumpQuests(result.profile, null, won), award: result.award };
 }
 
 // ---------------------------------------------------------------------------

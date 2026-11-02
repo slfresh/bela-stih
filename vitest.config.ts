@@ -14,6 +14,7 @@ export default defineConfig({
       '@belot/progression': r('./packages/progression/src/index.ts'),
       '@belot/game-core': r('./packages/game-core/src/index.ts'),
       '@belot/games-bela': r('./packages/games/bela/src/index.ts'),
+      '@belot/games-osmice': r('./packages/games/osmice/src/index.ts'),
     },
   },
   test: {

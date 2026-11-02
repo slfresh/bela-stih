@@ -474,3 +474,42 @@ describe('table gifts', () => {
     expect(spendOnGift(old as PlayerProfile, 'kava', 1).giftsSent).toBe(1);
   });
 });
+
+describe('the games beyond Bela', () => {
+  it('keep their own tally and leave the Bela counters alone', async () => {
+    const { applyRoundOutcome, applyGameMatchOutcome, gameStats, emptyProfile } = await import('@belot/progression');
+    let p = emptyProfile();
+    const bela = { dealsPlayed: p.dealsPlayed, matchesPlayed: p.matchesPlayed };
+    p = applyRoundOutcome(p, 'osmice', true).profile;
+    p = applyRoundOutcome(p, 'osmice', false).profile;
+    const m = applyGameMatchOutcome(p, 'osmice', true);
+    p = m.profile;
+    expect(gameStats(p, 'osmice')).toEqual({ roundsPlayed: 2, roundsWon: 1, matchesPlayed: 1, matchesWon: 1 });
+    expect(gameStats(p, 'holdem')).toEqual({ roundsPlayed: 0, roundsWon: 0, matchesPlayed: 0, matchesWon: 0 });
+    expect({ dealsPlayed: p.dealsPlayed, matchesPlayed: p.matchesPlayed }).toEqual(bela);
+    expect(m.award.coins).toBeGreaterThan(0);
+  });
+
+  it('only ever add coins', async () => {
+    const { applyRoundOutcome, applyGameMatchOutcome, emptyProfile } = await import('@belot/progression');
+    let p = emptyProfile();
+    const start = p.coins;
+    for (let i = 0; i < 50; i++) {
+      p = applyRoundOutcome(p, 'osmice', i % 3 === 0).profile;
+      if (i % 10 === 9) p = applyGameMatchOutcome(p, 'osmice', i % 20 === 19).profile;
+      expect(p.coins).toBeGreaterThanOrEqual(start);
+    }
+  });
+
+  it('a match won in any game counts for the win-a-match quest', async () => {
+    const { applyGameMatchOutcome, ensureQuests, emptyProfile } = await import('@belot/progression');
+    let day = 1;
+    let p = emptyProfile();
+    // Find a day whose quests include winning a match.
+    while (!ensureQuests(p, `2026-01-${String(day).padStart(2, '0')}`).quests.some((q) => q.kind === 'winMatch')) day++;
+    p = ensureQuests(p, `2026-01-${String(day).padStart(2, '0')}`);
+    const before = p.quests.find((q) => q.kind === 'winMatch')!.progress;
+    p = applyGameMatchOutcome(p, 'osmice', true).profile;
+    expect(p.quests.find((q) => q.kind === 'winMatch')!.progress).toBe(before + 1);
+  });
+});

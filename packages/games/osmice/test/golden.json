@@ -1,0 +1,47 @@
+{
+  "two players": [
+    "659a97a705451fdb",
+    "047a281be01733d6",
+    "d8de0b0c56afeaef",
+    "fd0617ac92170879",
+    "a2cfbd842f4f1a17",
+    "c914c78cdbd41f72",
+    "9407e68b8770626a",
+    "a745833a3299ebe9",
+    "7a684d36e5badda8",
+    "ff94cc7c669202f2",
+    "d585401729e1922c"
+  ],
+  "three players": [
+    "8f09d7f20f66b136",
+    "1fd56cae88113065",
+    "5d23f4320044214b",
+    "fd8da66af17504d6",
+    "0e270139800331e5",
+    "4b07951d431867e0",
+    "77288c1c7389961e"
+  ],
+  "four players, stacked draws": [
+    "ee43593c6840f5c5",
+    "6dc796ce1a40ae9c",
+    "dd49f53c46f87812",
+    "f832de53d6a27ecf",
+    "b9c64b22214e1ca7",
+    "729c6e7864a93a53",
+    "1eeccd59fa6092d9",
+    "6d5d10835221e98d",
+    "cab61dc93cf0bfc8",
+    "710b83e6ca9e76a0"
+  ],
+  "six players, short hands": [
+    "d54a1ca1581d4ec3",
+    "6702599216fdaf43",
+    "3fa3f1cb9565f565"
+  ],
+  "draw-four anywhere": [
+    "69f6655bf82df04b",
+    "3f9c47f1a1634f44",
+    "410cf5def7591c3d",
+    "bb8a75d20e3df04c"
+  ]
+}

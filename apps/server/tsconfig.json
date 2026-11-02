@@ -12,7 +12,8 @@
       "@belot/bots": ["../../packages/bots/src/index.ts"],
       "@belot/table": ["../../packages/table/src/index.ts"],
       "@belot/game-core": ["../../packages/game-core/src/index.ts"],
-      "@belot/games-bela": ["../../packages/games/bela/src/index.ts"]
+      "@belot/games-bela": ["../../packages/games/bela/src/index.ts"],
+      "@belot/games-osmice": ["../../packages/games/osmice/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts"]

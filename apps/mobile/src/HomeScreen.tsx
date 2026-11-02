@@ -22,6 +22,7 @@ import { Button } from './ui/Button';
 import { Check, Coin, Crown, Gear, Robot } from './ui/icons';
 import { Panel } from './ui/Panel';
 import { TableHero } from './home/TableHero';
+import { MoreGames, type OtherGame } from './home/MoreGames';
 import { Wordmark } from './home/Wordmark';
 import { PressScale } from './ui/PressScale';
 import type { Settings } from './storage';
@@ -45,7 +46,9 @@ export type Launch =
   | { mode: 'quick' }
   | { mode: 'create' }
   | { mode: 'join'; code: string }
-  | { mode: 'gallery' };
+  | { mode: 'gallery' }
+  /** One of the games beyond Bela, against the bots. */
+  | { mode: 'game'; game: OtherGame; players: number };
 
 export function HomeScreen({
   lang,
@@ -299,6 +302,9 @@ export function HomeScreen({
                 </View>
               ))}
             </Panel>
+
+            {/* The other tables in the room: the games beyond Bela. */}
+            <MoreGames lang={lang} onPlay={(game, players) => go({ mode: 'game', game, players })} />
 
             {/* For whoever has never played bela, or plays it differently at
                 home; the evenings with friends, match by match; and what they

@@ -6,6 +6,7 @@ import type {
   Suit,
   TeamId,
 } from '@belot/shared-types';
+import { gamesStrings, osmiceStrings, type GamesStrings, type OsmiceStrings } from './games';
 
 /**
  * @belot/i18n — the words, and the deck.
@@ -2400,6 +2401,16 @@ export class Lang {
     return this.t;
   }
 
+  /** Words shared by the games beyond Bela (the home's game list, player counts). */
+  get games(): GamesStrings {
+    return gamesStrings(this.id);
+  }
+
+  /** Osmice's own words. */
+  get osmice(): OsmiceStrings {
+    return osmiceStrings(this.id);
+  }
+
   /** The mađarice name: žir, list, srce, bundeva. */
   suitName(suit: Suit): string {
     return this.t.suit[suit];
@@ -2475,3 +2486,12 @@ export class Lang {
 }
 
 export const LOCALE_IDS: LocaleId[] = ['hr', 'sr-Cyrl', 'en'];
+
+export {
+  gamesStrings,
+  osmiceStrings,
+  type GamesStrings,
+  type OsmiceActionKey,
+  type OsmiceColourKey,
+  type OsmiceStrings,
+} from './games';

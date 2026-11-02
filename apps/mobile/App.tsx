@@ -10,6 +10,7 @@ import { DeckGallery } from './src/DeckGallery';
 import { WebShell } from './src/WebShell';
 import { OfflineGame } from './src/OfflineGame';
 import { OnlineGame } from './src/net/OnlineGame';
+import { OsmiceGame } from './src/games/osmice/OsmiceGame';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { RulesScreen } from './src/screens/RulesScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
@@ -225,6 +226,8 @@ export default function App() {
       <DeckGallery onExit={exitToHome} />
     ) : launch.mode === 'offline' ? (
       <OfflineGame settings={settings} onSettingsChange={updateSettings} onExit={exitToHome} />
+    ) : launch.mode === 'game' ? (
+      <OsmiceGame settings={settings} players={launch.players} level={settings.botLevel} onExit={exitToHome} />
     ) : (
       <OnlineGame
         settings={settings}
@@ -238,7 +241,7 @@ export default function App() {
   // Screens fade in rather than cutting — entering only: there is no router
   // to hold the old screen for an exit, and a rematch remount would otherwise
   // show two tables. The key remounts the wrapper on every screen change.
-  const screenKey = launch ? `game:${launch.mode}` : `menu:${menu}`;
+  const screenKey = launch ? (launch.mode === 'game' ? `game:${launch.game}:${launch.players}` : `game:${launch.mode}`) : `menu:${menu}`;
 
   // A render error anywhere below lands on a branded panel whose one button
   // leads home — not a blank page. The boundary sits inside the shell so the
