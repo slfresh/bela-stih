@@ -20,7 +20,7 @@ const ROOT = join(here, '..', '..', '..');
 const SNAPSHOT = join(here, 'wire-schema.snapshot.json');
 
 const WANTED: Record<string, string[]> = {
-  'apps/server/src/protocol.ts': ['ClientMessage', 'RoomMessage', 'SeatInfo', 'VoiceMessage', 'VoiceHeardMessage', 'EmoteMessage', 'GiftMessage', 'JoinGifts', 'JoinVoice', 'JoinProto', 'HoldInfo'],
+  'apps/server/src/protocol.ts': ['ClientMessage', 'RoomMessage', 'SeatInfo', 'VoiceMessage', 'VoiceHeardMessage', 'EmoteMessage', 'GiftMessage', 'JoinGifts', 'JoinVoice', 'JoinProto', 'HoldInfo', 'GameId', 'PlayerInfo', 'WindowInfo', 'GameHoldInfo', 'GameRoomMessage', 'GameViewMessage', 'JoinGame'],
   'packages/table/src/index.ts': ['TableEvent'],
   // The bots' strength travels on the wire (rules, RoomMessage) under its own name: spelled out here.
   'packages/bots/src/index.ts': ['BotLevel'],

@@ -55,8 +55,8 @@ describe("the server's nickname filter", () => {
   });
 
   it('is the one the room uses, and ships an explicit list', () => {
-    const room = readFileSync(join(here, '../../server/src/BelaRoom.ts'), 'utf8');
-    expect(room).toMatch(/import \{ cleanName \} from '\.\/names';/);
+    const room = readFileSync(join(here, '../../server/src/BelaRoom.ts'), 'utf8') + readFileSync(join(here, '../../server/src/room/GameRoom.ts'), 'utf8');
+    expect(room).toMatch(/import \{ cleanName \} from '\.\.\/names';/);
     expect(room).not.toMatch(/function cleanName/);
     expect(Array.isArray(BLOCKED_NAME_PARTS)).toBe(true);
   });

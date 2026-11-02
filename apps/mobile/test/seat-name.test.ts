@@ -9,7 +9,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 
 describe("the server's fallback seat name is said in the player's language", () => {
   it('is exactly the name the server gives a seat nobody named', () => {
-    const room = readFileSync(join(here, '../../server/src/BelaRoom.ts'), 'utf8');
+    const room = readFileSync(join(here, '../../server/src/BelaRoom.ts'), 'utf8') + readFileSync(join(here, '../../server/src/room/GameRoom.ts'), 'utf8');
     // ONE fallback there, in seatInfo, by the seat the occupant sits in now.
     // Baking it into the occupant at join would send the wrong chair's number
     // - untranslated - to everyone after that player moves seats in the lobby.

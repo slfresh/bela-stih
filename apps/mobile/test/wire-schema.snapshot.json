@@ -132,6 +132,13 @@
     "props": {
      "type": "\"back\""
     }
+   },
+   {
+    "kind": "object",
+    "props": {
+     "type": "\"move\"",
+     "action": "unknown"
+    }
    }
   ]
  },
@@ -232,6 +239,74 @@
   "props": {
    "paused?": "{ by: Seat; msLeft: number; } | undefined",
    "waiting": "{ seat: Seat; msLeft: number; }[]"
+  }
+ },
+ "apps/server/src/protocol.ts:GameId": {
+  "kind": "other",
+  "text": "\"bela\" | \"osmice\" | \"baccarat\" | \"blackjack\" | \"holdem\""
+ },
+ "apps/server/src/protocol.ts:PlayerInfo": {
+  "kind": "object",
+  "props": {
+   "seat": "number",
+   "name": "string",
+   "avatar": "string",
+   "connected": "boolean",
+   "bot": "boolean",
+   "gift?": "string | undefined",
+   "seesGifts?": "true | undefined",
+   "hearsVoice?": "true | undefined"
+  }
+ },
+ "apps/server/src/protocol.ts:WindowInfo": {
+  "kind": "object",
+  "props": {
+   "seats": "number[]",
+   "msLeft": "number",
+   "totalMs": "number"
+  }
+ },
+ "apps/server/src/protocol.ts:GameHoldInfo": {
+  "kind": "object",
+  "props": {
+   "paused?": "{ by: number; msLeft: number; } | undefined",
+   "waiting": "{ seat: number; msLeft: number; }[]"
+  }
+ },
+ "apps/server/src/protocol.ts:GameRoomMessage": {
+  "kind": "object",
+  "props": {
+   "game": "\"bela\" | \"osmice\" | \"baccarat\" | \"blackjack\" | \"holdem\"",
+   "players": "PlayerInfo[]",
+   "seatCount": "number",
+   "status": "\"waiting\" | \"playing\" | \"finished\"",
+   "events": "unknown[]",
+   "window?": "WindowInfo | undefined",
+   "turnSeconds": "number",
+   "hostSeat?": "number | undefined",
+   "series": "number[]",
+   "matchNumber": "number",
+   "rematchVotes?": "number[] | undefined",
+   "nextMsLeft?": "number | undefined",
+   "nextVotes?": "number[] | undefined",
+   "hold?": "GameHoldInfo | undefined",
+   "private?": "true | undefined",
+   "voice?": "true | undefined",
+   "botLevel": "\"easy\" | \"hard\" | \"medium\"",
+   "rules": "{ [x: string]: unknown; }"
+  }
+ },
+ "apps/server/src/protocol.ts:GameViewMessage": {
+  "kind": "object",
+  "props": {
+   "seat": "number",
+   "view": "unknown"
+  }
+ },
+ "apps/server/src/protocol.ts:JoinGame": {
+  "kind": "object",
+  "props": {
+   "game?": "GameId | undefined"
   }
  },
  "packages/table/src/index.ts:TableEvent": {

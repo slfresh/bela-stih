@@ -97,7 +97,13 @@ export type ClientMessage =
    */
   | { type: 'away' }
   /** ...and is back. */
-  | { type: 'back' };
+  | { type: 'back' }
+  /**
+   * Any game's move, at a table of any game (GameRoomMessage). The action is
+   * that game's own and is rebuilt from primitives by its normaliser before
+   * the game sees it; at a Bela table it means exactly what `action` does.
+   */
+  | { type: 'move'; action: unknown };
 
 /** Turn clocks a private table's host may choose, in seconds. Quick play keeps the first. */
 export const TURN_CHOICES: readonly number[] = [30, 60, 90];
@@ -364,3 +370,101 @@ export const MSG = {
   voice: 'voice',
   voiceHeard: 'voiceHeard',
 } as const;
+
+// ---------------------------------------------------------------------------
+// Tables of every game
+// ---------------------------------------------------------------------------
+
+/**
+ * The games the app plays. Bela keeps its own room names and room message
+ * (above), which the shipped apps read; every other game is served by the
+ * same GameRoom and speaks GameRoomMessage, with seats as plain numbers
+ * because its tables are not always four.
+ */
+export type GameId = 'bela' | 'osmice' | 'baccarat' | 'blackjack' | 'holdem';
+
+export const GAME_IDS: readonly GameId[] = ['bela', 'osmice', 'baccarat', 'blackjack', 'holdem'];
+
+export function isGameId(x: unknown): x is GameId {
+  return typeof x === 'string' && (GAME_IDS as readonly string[]).includes(x);
+}
+
+/** The room each game is served under. Bela's name is the one its apps have always asked for. */
+export const ROOM_NAMES: Record<GameId, string> = {
+  bela: ROOM_NAME_MODES,
+  osmice: 'osmice',
+  baccarat: 'baccarat',
+  blackjack: 'blackjack',
+  holdem: 'holdem',
+};
+
+/** A seat at a table of any game, as everyone there sees it. */
+export interface PlayerInfo {
+  seat: number;
+  name: string;
+  /** Preset avatar id chosen client-side; empty string when none was sent. */
+  avatar: string;
+  connected: boolean;
+  /** True while a bot plays this seat. */
+  bot: boolean;
+  /** The latest gift given to this seat, while its player stays; absent when none. */
+  gift?: string;
+  /** This seat can be given a gift (see SeatInfo). */
+  seesGifts?: true;
+  /** This seat's player has an app that plays voice clips. */
+  hearsVoice?: true;
+}
+
+/**
+ * The decision the table is waiting on, and how long it has left: one seat on
+ * turn, or several at once (a betting window). Absent when nobody's clock runs.
+ */
+export interface WindowInfo {
+  seats: number[];
+  msLeft: number;
+  totalMs: number;
+}
+
+/** A table standing still (see HoldInfo), with seats as plain numbers. */
+export interface GameHoldInfo {
+  paused?: { by: number; msLeft: number };
+  waiting: { seat: number; msLeft: number }[];
+}
+
+/** Server -> everyone at a table of any game but Bela: who is there, what just happened. */
+export interface GameRoomMessage {
+  game: GameId;
+  players: PlayerInfo[];
+  seatCount: number;
+  status: 'waiting' | 'playing' | 'finished';
+  /** That game's own events, already filtered to the public ones. */
+  events: unknown[];
+  window?: WindowInfo;
+  /** The table's decision clock in seconds; a private table's host may change it before the start. */
+  turnSeconds: number;
+  hostSeat?: number;
+  /** Matches won per winner (team, or seat when the game has no teams) since this roster sat down. */
+  series: number[];
+  matchNumber: number;
+  rematchVotes?: number[];
+  /** Between rounds: milliseconds until the next starts by itself, and who is ready. */
+  nextMsLeft?: number;
+  nextVotes?: number[];
+  hold?: GameHoldInfo;
+  private?: true;
+  voice?: true;
+  botLevel: BotLevel;
+  /** That game's table rules as its host set them (a match target, blinds...). */
+  rules: Record<string, unknown>;
+}
+
+/** Server -> one client at a table of any game: everything that seat may see. */
+export interface GameViewMessage {
+  seat: number;
+  view: unknown;
+}
+
+/** Sent with a join or a create at a table of any game. */
+export interface JoinGame {
+  game?: GameId;
+}

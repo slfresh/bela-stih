@@ -133,8 +133,8 @@ describe('receipts', () => {
   });
 
   it("reach the speaker only if the speaker's app reads them, and never call a player back", () => {
-    const room = server('BelaRoom.ts');
-    const heard = room.slice(room.indexOf("if (packet.type === 'heard') {"), room.indexOf("if (packet.type === 'hears') {"));
+    const room = server('BelaRoom.ts') + server('room/GameRoom.ts');
+    const heard = room.slice(room.indexOf("if (type === 'heard') {"), room.indexOf("if (type === 'hears') {"));
     expect(heard).toMatch(/const speakerId = this\.voiceLedger\.heard\(/);
     expect(heard).toMatch(/if \(speakerSeat === null \|\| !speaker \|\| !this\.occupants\[speakerSeat\]!\.receipts\) return;/);
     expect(heard).toMatch(/speaker\.send\(MSG\.voiceHeard, heard\);/);
@@ -146,8 +146,8 @@ describe('receipts', () => {
 });
 
 describe('the room', () => {
-  const room = server('BelaRoom.ts');
-  const relay = room.slice(room.indexOf("if (packet.type === 'voice') {"), room.indexOf("if (packet.type === 'gift') {"));
+  const room = server('BelaRoom.ts') + server('room/GameRoom.ts');
+  const relay = room.slice(room.indexOf("if (type === 'voice') {"), room.indexOf("if (type === 'gift') {"));
 
   it('relays only where voice is on, from an app that records, what checkClip takes, within the allowance', () => {
     expect(relay).toMatch(/if \(!this\.voiceOn \|\| !this\.occupants\[seat\]!\.voice\) return;/);
@@ -158,7 +158,7 @@ describe('the room', () => {
   it('sends the clip to the others whose apps play it, and the speaker only an echo without it', () => {
     expect(relay).toMatch(/if \(s === null \|\| s === seat \|\| !this\.hearsVoice\(s\)\) continue;\s*other\.send\(MSG\.voice, out\);/);
     expect(relay).toMatch(
-      /const echo: VoiceMessage = \{ from: seat, id, ms: clip\.ms, mime: clip\.mime, to, \.\.\.\(noReceipt\.length > 0 \? \{ noReceipt \} : \{\}\) \};\s*client\.send\(MSG\.voice, echo\);/,
+      /const echo = \{ from: seat, id, ms: clip\.ms, mime: clip\.mime, to, \.\.\.\(noReceipt\.length > 0 \? \{ noReceipt \} : \{\}\) \} as VoiceMessage;\s*client\.send\(MSG\.voice, echo\);/,
     );
     expect(relay).not.toMatch(/broadcast/);
     // Nothing keeps it, nothing prints it.
@@ -167,7 +167,7 @@ describe('the room', () => {
   });
 
   it("hears a player's Settings switch, from an app that can do voice, without calling them back", () => {
-    const hears = room.slice(room.indexOf("if (packet.type === 'hears') {"), room.indexOf("if (packet.type === 'gift') {"));
+    const hears = room.slice(room.indexOf("if (type === 'hears') {"), room.indexOf("if (type === 'gift') {"));
     expect(hears).toMatch(/if \(typeof on !== 'boolean'\) return;\s*if \(on && !o\.speaksVoice\) return;\s*o\.voice = on;\s*return;/);
     // Nothing published: a toggling client costs the table nothing.
     expect(hears).not.toMatch(/this\.(publish|broadcast)\(/);
@@ -176,14 +176,14 @@ describe('the room', () => {
   });
 
   it('lets a private table\'s host switch voice off before the start, and quick play keep it', () => {
-    expect(room).toMatch(/private voiceOn = true;/);
-    const rules = room.slice(room.indexOf("if (packet.type === 'rules') {"), room.indexOf("if (packet.type === 'pause') {"));
-    expect(rules).toMatch(/if \(this\.started \|\| this\.isPublic \|\| seat !== this\.actingHostSeat\(\)\) return;\s*\/\/[^\n]*\n\s*const voiceChanged = typeof m\?\.voice === 'boolean'/);
+    expect(room).toMatch(/protected voiceOn = true;/);
+    const rules = room.slice(room.indexOf("if (type !== 'rules') return false;"), room.indexOf('/** The room message as the shipped apps read it'));
+    expect(rules).toMatch(/if \(this\.started \|\| this\.isPublic \|\| seat !== this\.actingHostSeat\(\)\) return true;\s*\/\/[^\n]*\n\s*const voiceChanged = typeof m\?\.voice === 'boolean'/);
     expect(room).toMatch(/\.\.\.\(this\.voiceOn \? \{ voice: true as const \} : \{\}\),/);
   });
 
   it('forgets a connection that has gone for good, voice allowance and all', () => {
-    expect(room).toMatch(/private release\(seat: Seat\): void \{\s*const wasHost = [^\n]*\n\s*this\.forget\(this\.occupants\[seat\]!\.sessionId\);/);
+    expect(room).toMatch(/private release\(seat: number\): void \{\s*const wasHost = [^\n]*\n\s*this\.forget\(this\.occupants\[seat\]!\.sessionId\);/);
     const forget = room.slice(room.indexOf('private forget('), room.indexOf('private forget(') + 500);
     for (const map of ['lastEmoteAt', 'lastSitAt', 'lastVoteAt', 'lastGiftAt', 'voiceLimits']) expect(forget).toContain(`this.${map}.delete(sessionId)`);
   });

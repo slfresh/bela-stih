@@ -36,7 +36,7 @@ describe('the wire generation', () => {
   });
 
   it('is refused at the door, and the app says to update', () => {
-    const room = readFileSync(join(here, '../../server/src/BelaRoom.ts'), 'utf8');
+    const room = readFileSync(join(here, '../../server/src/BelaRoom.ts'), 'utf8') + readFileSync(join(here, '../../server/src/room/GameRoom.ts'), 'utf8');
     expect(room).toMatch(/override onAuth\(_client: Client, options: unknown, context: AuthContext\)[\s\S]{0,300}if \(protoOf\(options\) < MIN_PROTO\) throw new ServerError\(UPDATE_APP_CODE, 'update the app'\);/);
     expect(room).toMatch(/proto: protoOf\(options\),/);
     expect(troubleOf({ code: 4301, message: 'update the app' })).toBe('appTooOld');

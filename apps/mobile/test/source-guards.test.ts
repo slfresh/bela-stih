@@ -900,8 +900,8 @@ describe('table gifts', () => {
   });
 
   it('the server takes gifts only at a table that plays, and on its own clock', () => {
-    const room = readFileSync(join(here, '../../server/src/BelaRoom.ts'), 'utf8');
-    const branch = room.slice(room.indexOf("if (packet.type === 'gift')"));
+    const room = readFileSync(join(here, '../../server/src/BelaRoom.ts'), 'utf8') + readFileSync(join(here, '../../server/src/room/GameRoom.ts'), 'utf8');
+    const branch = room.slice(room.indexOf("if (type === 'gift')"));
     // The first statement after its comment is the start gate.
     const firstStatement = branch
       .split('\n')

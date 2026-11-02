@@ -39,7 +39,7 @@ describe('table codes friends can read out', () => {
   });
 
   it('are what a private table is called on the server', () => {
-    const room = server('BelaRoom.ts');
+    const room = server('BelaRoom.ts') + server('room/GameRoom.ts');
     expect(room).toMatch(/this\.roomId = tableCode\(\(c\) => liveCodes\.has\(c\)\);/);
     expect(room).toMatch(/liveCodes\.delete\(this\.roomId\);/);
   });
@@ -146,12 +146,12 @@ describe('joining by code and being away', () => {
     const hook = src('src/net/useNetGame.ts');
     expect(hook).toMatch(/roomRef\.current\?\.send\('away', \{\}\);\s*return;/);
     expect(hook).toMatch(/roomRef\.current\?\.send\('back', \{\}\);/);
-    const room = server('BelaRoom.ts');
-    expect(room).toMatch(/if \(packet\.type === 'away'\) \{/);
+    const room = server('BelaRoom.ts') + server('room/GameRoom.ts');
+    expect(room).toMatch(/if \(type === 'away'\) \{/);
     // Any word from a waited-for player means back, in case "back" was lost -
     // except the app's own Settings switch, which is not the player at the table.
     expect(room).toMatch(
-      /if \(packet\.type !== 'away' && packet\.type !== 'hears' && packet\.type !== 'heard' && this\.waiting\.has\(seat\) && this\.occupants\[seat\]!\.connected\)/,
+      /if \(type !== 'away' && type !== 'hears' && type !== 'heard' && this\.waiting\.has\(seat\) && this\.occupants\[seat\]!\.connected\)/,
     );
   });
 });

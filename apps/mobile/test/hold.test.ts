@@ -58,7 +58,7 @@ describe('the app and the server agree', () => {
   it('on how long a dropped seat is kept once the match is under way', () => {
     // The app retries for exactly as long as the server holds the seat: less,
     // and a long call still ends in the lobby; the old pair was 60 s / 60 s.
-    const room = server('BelaRoom.ts');
+    const room = server('room/GameRoom.ts');
     const secs = Number(/const TABLE_RECONNECT_SECONDS = ([\d* ]+);/.exec(room)![1]!.split('*').reduce((a, x) => a * Number(x), 1));
     const hook = src('src/net/useNetGame.ts');
     const ms = /const RECONNECT_HOLD_MS = ([\d_* ]+);/.exec(hook)![1]!.replace(/_/g, '').split('*').reduce((a, x) => a * Number(x), 1);

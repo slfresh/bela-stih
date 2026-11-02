@@ -39,19 +39,21 @@ describe('a private table-s rules, in one place', () => {
   });
 
   it('are the host-s, before the start, at a private table - and reach the game', () => {
-    const room = server('BelaRoom.ts');
-    const rules = room.slice(room.indexOf("if (packet.type === 'rules')"), room.indexOf("if (packet.type === 'pause')"));
-    expect(rules).toMatch(/if \(this\.started \|\| this\.isPublic \|\| seat !== this\.actingHostSeat\(\)\) return;/);
+    const room = server('BelaRoom.ts') + server('room/GameRoom.ts');
+    const rules = room.slice(room.indexOf("if (type !== 'rules') return false;"), room.indexOf('/** The room message as the shipped apps read it'));
+    expect(rules).toMatch(/if \(this\.started \|\| this\.isPublic \|\| seat !== this\.actingHostSeat\(\)\) return true;/);
     expect(rules).toMatch(/MATCH_TARGETS\.includes\(m\.target\)/);
-    expect(rules).toMatch(/this\.buildTable\(\);/);
+    expect(rules).toMatch(/this\.buildSession\(\);/);
     // The table is built with them (the smoke plays a 501 match to its end).
-    expect(room).toMatch(/config: \{ \.\.\.MODE_CONFIG\[this\.mode\], matchTarget: this\.target, doubleWinBelow500: this\.doubleWin \}/);
+    expect(room).toMatch(/return \{ \.\.\.MODE_CONFIG\[this\.mode\], matchTarget: this\.target, doubleWinBelow500: this\.doubleWin \};/);
+    expect(room).toMatch(/config: this\.sessionConfig\(\),/);
     // The double win rides only on the full game: a shorter match drops it, and the series counts it twice.
     expect(rules).toMatch(/if \(this\.target !== DOUBLE_WIN_TARGET && this\.doubleWin\) \{/);
     expect(rules).toMatch(/typeof m\?\.doubleWin === 'boolean' && this\.target === DOUBLE_WIN_TARGET/);
-    expect(room).toMatch(/this\.series\[this\.table\.winner\(\)!\] \+= this\.table\.matchWins\(\);/);
+    expect(room).toMatch(/for \(const w of this\.session\.winners\(\) \?\? \[\]\) this\.series\[w\] = \(this\.series\[w\] \?\? 0\) \+ credit;/);
+    expect(room).toMatch(/protected override matchCredit\(\): number \{\s*return matchWins\(this\.session\.state\);/);
     // The strength of the bots that fill a seat: the host's, built into the table, told to everyone.
-    expect(room).toMatch(/botLevel: this\.botLevel,\s*config: \{/);
+    expect(room).toMatch(/botLevel: this\.botLevel,\s*config: this\.sessionConfig\(\),/);
     expect(rules).toMatch(/if \(isBotLevel\(m\?\.botLevel\) && m\.botLevel !== this\.botLevel\) \{/);
     expect(room).toMatch(/if \(options\.private === true && isBotLevel\(options\.botLevel\)\) this\.botLevel = options\.botLevel;/);
     expect(room).toMatch(/\.\.\.\(this\.doubleWin \? \{ doubleWin: true as const \} : \{\}\),/);
@@ -100,7 +102,7 @@ describe('the lobby', () => {
   });
 
   it('gives every table a code friends can read, quick play too', () => {
-    const room = server('BelaRoom.ts');
+    const room = server('room/GameRoom.ts');
     const assigned = room.indexOf('this.roomId = tableCode((c) => liveCodes.has(c));');
     expect(assigned).toBeGreaterThan(-1);
     expect(assigned).toBeLessThan(room.indexOf('if (options.private) {'));
