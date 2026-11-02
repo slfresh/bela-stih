@@ -23,6 +23,7 @@ import { Check, Coin, Crown, Gear, Robot } from './ui/icons';
 import { Panel } from './ui/Panel';
 import { TableHero } from './home/TableHero';
 import { MoreGames, type OtherGame } from './home/MoreGames';
+import { RulesSheet } from './games/RulesSheet';
 import type { NetHow } from './games/useNetSession';
 import { Wordmark } from './home/Wordmark';
 import { PressScale } from './ui/PressScale';
@@ -99,6 +100,8 @@ export function HomeScreen({
   const motion = useMotionPolicy(settings.motion);
 
   // Every pressable clicks and gives for itself now (PressScale / Button).
+  // How to play one of the other games, over the home screen.
+  const [rulesFor, setRulesFor] = useState<OtherGame | null>(null);
   const go = (l: Launch) => onLaunch(l);
 
   // Scrolling moves the anchors without any layout changing, so ask them to
@@ -311,6 +314,7 @@ export function HomeScreen({
               lang={lang}
               onPlay={(game, players) => go({ mode: 'game', game, players })}
               onOnline={(game, how) => go({ mode: 'online', game, how })}
+              onRules={setRulesFor}
             />
 
             {/* For whoever has never played bela, or plays it differently at
@@ -332,6 +336,7 @@ export function HomeScreen({
           </ScrollView>
 
           <EffectsOverlay bus={fxBus} />
+          {rulesFor ? <RulesSheet lang={lang} game={rulesFor} onClose={() => setRulesFor(null)} /> : null}
         </View>
       </SafeAreaView>
     </AnchorHost>

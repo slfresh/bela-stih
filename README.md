@@ -3,6 +3,13 @@
 A modern, fair, authentically-localized **Balkan Belot (Bela)** — 4-player partnership card game.
 Online multiplayer first; on-device vs-AI play shares the exact same rules engine.
 
+**And now more games at the same table.** Behind one game contract (`packages/game-core`) the app
+also plays **Osmice** (a shedding game of the Crazy Eights family, with its own deck), and three
+casino games for play chips only: **Texas Hold'em**, **Blackjack** and **Baccarat**. Each is a pure
+engine with bots, tests and a golden corpus, plays offline against bots and online through the same
+shared server room; see [docs/multi-game-plan.md](docs/multi-game-plan.md) for the plan and its
+status, and the games section below.
+
 > **Status: playable on a real Android device, offline and online.** The mađarice deck, sound,
 > haptics, levels, coins, daily bonus and quests are in; four clients play a real match through the
 > authoritative server, whose hidden-hand guarantee is verified over websockets. What is left before
@@ -38,7 +45,12 @@ packages/
   i18n/           the words AND the deck: madarice suits, ranks, hr / sr-Cyrl / en
   progression/    levels, coins, daily bonus, quests — pure, no storage, no clock
   game-core/      the contract every card game implements (GameDefinition) and the Session that drives any of them
+  cards/          the French 52-card deck and shoes the casino games share
   games/bela/     Bela as a game module: the untouched engine and bots behind that contract
+  games/osmice/   Osmice: a shedding game with its own 108-card deck
+  games/holdem/   Texas Hold'em, no-limit sit-and-go for 2-9
+  games/blackjack/ Blackjack, 1-5 against the dealer
+  games/baccarat/ Baccarat (punto banco), 1-7 against the house
 apps/
   cli/            playable terminal Bela — a real client for the engine, not a mock
   mobile/         Expo client (SDK 57, RN 0.86) — Android locally, iOS through EAS (docs/ios-eas.md)
@@ -141,6 +153,40 @@ The app is growing into several card games; the plan is in
 The **same engine** runs on-device and on the authoritative server. The **same bot** is the offline
 opponent and the online disconnect-fill. The **same `Table`** backs the terminal client, the Expo
 app, and the server's seat-filling. Nothing in `packages/` imports a UI or does any IO.
+
+## The games beyond Bela
+
+| Game | Seats | Engine | Bots (measured head to head) |
+|---|---|---|---|
+| Osmice | 2–6 | `packages/games/osmice` | medium beats easy 87%; hard (looks ahead) beats medium 53.1% ± 2.4 two-handed, level at four |
+| Texas Hold'em | 2–9 | `packages/games/holdem` | medium beats easy 60.8% ± 4.8; hard (reads the bet) beats medium 56.8% ± 4.9 heads up |
+| Blackjack | 1–5 | `packages/games/blackjack` | return per unit staked: easy −5.31%, medium (basic strategy) −0.30%, hard (counts cards) +0.52% |
+| Baccarat | 1–7 | `packages/games/baccarat` | every bet loses to the house; the levels differ in how they bet |
+
+Every engine is pure and deterministic like Bela's, and pinned the same way: self-play with
+conservation invariants after every move (every card, every chip), the hidden-information check
+(`findLeaks` in `packages/game-core`) over whole matches, the rules case by case, the wire
+normaliser, and a golden corpus that names the round a rules change moves. Hold'em's evaluator is
+checked against all 2,598,960 five-card hands; Baccarat's tableau against the published odds over
+200,000 coups.
+
+The casino games stake **play chips**, never coins: a balance that cannot be bought, cannot be
+exchanged for coins or money, and tops up to 2,000 every day. See the compliance checklist before a
+build with them reaches a store track.
+
+Online, every new game is served by the shared `GameRoom` (`apps/server/src/room/GameRoom.ts`).
+With a server running:
+
+```bash
+npm run smoke:osmice -w @belot/server
+```
+
+```bash
+npm run smoke:casino -w @belot/server
+```
+
+The casino smoke also proves a betting window's clock: a seat that never answers is closed out
+one clock after the window opened, however late anyone else answers.
 
 ## Commands
 

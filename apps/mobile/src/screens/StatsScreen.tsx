@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { Lang } from '@belot/i18n';
-import type { PlayerProfile } from '@belot/progression';
+import { chipBalance, gameStats, type PlayerProfile } from '@belot/progression';
 import { people, totals, type MatchRecord } from '../net/history';
 import { seriesNames } from '../net/series';
 import type { SeriesBook } from '../storage';
@@ -124,6 +124,27 @@ export function StatsScreen({
         </View>
       </Panel>
 
+      {/* The games beyond Bela: rounds and matches won, and the play-chip balance. */}
+      <Panel label={lang.games.statsHeading}>
+        {(['osmice', 'holdem', 'blackjack', 'baccarat'] as const).map((game) => {
+          const g = gameStats(profile, game);
+          const name = game === 'osmice' ? lang.osmice.name : game === 'holdem' ? lang.holdem.name : game === 'blackjack' ? lang.blackjack.name : lang.baccarat.name;
+          return (
+            <View key={game} style={styles.gameRow}>
+              <Text style={styles.line}>{name}</Text>
+              {g.roundsPlayed === 0 ? (
+                <Text style={styles.sub}>{lang.games.notPlayed}</Text>
+              ) : (
+                <Text style={[styles.sub, num]}>
+                  {lang.games.roundsWon(g.roundsWon, g.roundsPlayed)} · {lang.games.matchesWon(g.matchesWon, g.matchesPlayed)}
+                </Text>
+              )}
+            </View>
+          );
+        })}
+        <Text style={[styles.sub, num]}>{lang.casino.balance(chipBalance(profile))}</Text>
+      </Panel>
+
       <Button label={ui.historyOpen} tone="plain" onPress={onOpenHistory} />
       <Text style={styles.local}>{ui.historyLocal}</Text>
     </ScreenShell>
@@ -131,6 +152,7 @@ export function StatsScreen({
 }
 
 const styles = StyleSheet.create({
+  gameRow: { marginBottom: space.sm },
   line: { color: ink.hi, ...type.body },
   sub: { color: ink.mid, ...type.sub, marginTop: space.xs },
   row: { flexDirection: 'row', gap: space.sm },

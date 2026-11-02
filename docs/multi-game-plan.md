@@ -1,5 +1,33 @@
 # Plan: Bela Štih → one app for many card games
 
+## Status (2026-11-02)
+
+Done, on `claude/optimistic-hypatia-1wslqf`, each step verified by its tests, the typechecks, the
+server smokes and a drive of the web build in Chromium:
+
+- **Phase 0** — `packages/game-core` (GameDefinition, Session, windows, leak check), Bela behind it
+  (`packages/games/bela`, `Table` a shim pinned step for step against the old one), the server's shared
+  `GameRoom` with Bela's room on top (wire unchanged), protocol additions (snapshot grew only).
+- **Phase 1** — Osmice: engine, bots, golden corpus, offline table, Home's game list, per-game progression.
+- **Phase 2** — Osmice online; Baccarat and Blackjack engines; play chips; casino tables in the app;
+  casino rooms online with the betting-window clock proven over websockets.
+- **Phase 3** — Texas Hold'em engine (evaluator checked against all 2,598,960 five-card hands), bots,
+  table, online.
+- **Online in the app** for all four new games: quick play, private tables by code, start with bots.
+- **Phase 4 (part)** — rules sheet per game, per-game stats, compliance notes for the casino games.
+
+Left:
+
+- **The rebrand** — needs the new name from the owner: then the app id, `belastih.com/join` links and
+  `deploy/site`, the web shell, icons (`scripts/make-icons.mjs`), store listings.
+- **The store questionnaires** — re-answer IARC and Play Console as `docs/compliance-checklist.md` now says,
+  before a build with the casino games reaches any track.
+- Online polish for the new games: reconnecting after a dropped connection (Bela's client does; the new
+  one does not yet), emotes, gifts and voice at their tables (the room relays them already).
+- Bela's offline screen and `useGame` still use their own director; moving them onto `useLocalSession`
+  is optional and not needed for anything above.
+
+
 ## Context
 
 Bela Štih is a finished, well-layered Belot app: a pure deterministic rules engine

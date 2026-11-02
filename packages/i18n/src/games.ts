@@ -25,6 +25,11 @@ export interface GamesStrings {
   quickPlay: string;
   seated: (n: number, of: number) => string;
   codeIs: string;
+  /** The Stats screen's panel for the games beyond Bela. */
+  statsHeading: string;
+  roundsWon: (won: number, played: number) => string;
+  matchesWon: (won: number, played: number) => string;
+  notPlayed: string;
 }
 
 export interface OsmiceStrings {
@@ -151,6 +156,10 @@ const GAMES: Record<LocaleId, GamesStrings> = {
     quickPlay: 'Brza igra',
     seated: (n, of) => `Za stolom: ${n} / ${of}`,
     codeIs: 'Šifra stola',
+    statsHeading: 'Ostale igre',
+    roundsWon: (w, p) => `Runde: ${w} / ${p}`,
+    matchesWon: (w, p) => `Partije: ${w} / ${p}`,
+    notPlayed: 'Još nije igrano',
   },
   'sr-Cyrl': {
     moreGames: 'Још игара',
@@ -164,6 +173,10 @@ const GAMES: Record<LocaleId, GamesStrings> = {
     quickPlay: 'Брза игра',
     seated: (n, of) => `За столом: ${n} / ${of}`,
     codeIs: 'Шифра стола',
+    statsHeading: 'Остале игре',
+    roundsWon: (w, p) => `Рунде: ${w} / ${p}`,
+    matchesWon: (w, p) => `Партије: ${w} / ${p}`,
+    notPlayed: 'Још није играно',
   },
   en: {
     moreGames: 'More games',
@@ -177,6 +190,10 @@ const GAMES: Record<LocaleId, GamesStrings> = {
     quickPlay: 'Quick play',
     seated: (n, of) => `At the table: ${n} / ${of}`,
     codeIs: 'Table code',
+    statsHeading: 'Other games',
+    roundsWon: (w, p) => `Rounds won: ${w} / ${p}`,
+    matchesWon: (w, p) => `Matches won: ${w} / ${p}`,
+    notPlayed: 'Not played yet',
   },
 };
 

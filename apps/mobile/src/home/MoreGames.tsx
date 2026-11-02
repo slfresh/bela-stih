@@ -31,8 +31,9 @@ interface Row {
 }
 
 type OnOnline = (game: OtherGame | null, how: NetHow) => void;
+type OnRules = (game: OtherGame) => void;
 
-function GameRow({ row, lang, onPlay, onOnline }: { row: Row; lang: Lang; onPlay: (game: OtherGame, players: number) => void; onOnline: OnOnline }) {
+function GameRow({ row, lang, onPlay, onOnline, onRules }: { row: Row; lang: Lang; onPlay: (game: OtherGame, players: number) => void; onOnline: OnOnline; onRules: OnRules }) {
   const g = lang.games;
   const [players, setPlayers] = useState(row.initial);
   return (
@@ -46,6 +47,7 @@ function GameRow({ row, lang, onPlay, onOnline }: { row: Row; lang: Lang; onPlay
           </Text>
           <Text style={styles.line}>{g.vsBots(players)}</Text>
         </View>
+        <Button label={lang.s.rules.title} compact accessibilityLabel={`${lang.s.rules.title}: ${row.name}`} onPress={() => onRules(row.game)} />
       </View>
       <View style={styles.pickRow}>
         <Text style={styles.pickLabel}>{g.players}</Text>
@@ -83,7 +85,7 @@ function GameRow({ row, lang, onPlay, onOnline }: { row: Row; lang: Lang; onPlay
 
 const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
 
-export function MoreGames({ lang, onPlay, onOnline }: { lang: Lang; onPlay: (game: OtherGame, players: number) => void; onOnline: OnOnline }) {
+export function MoreGames({ lang, onPlay, onOnline, onRules }: { lang: Lang; onPlay: (game: OtherGame, players: number) => void; onOnline: OnOnline; onRules: OnRules }) {
   const [code, setCode] = useState('');
   const osmice: Row = {
     game: 'osmice',
@@ -102,7 +104,7 @@ export function MoreGames({ lang, onPlay, onOnline }: { lang: Lang; onPlay: (gam
   return (
     <>
       <Panel label={lang.games.moreGames}>
-        <GameRow row={osmice} lang={lang} onPlay={onPlay} onOnline={onOnline} />
+        <GameRow row={osmice} lang={lang} onPlay={onPlay} onOnline={onOnline} onRules={onRules} />
         {/* A friend's table of any of these games: the code says which. */}
         <View style={[styles.divider, styles.joinRow]}>
           <TextInput
@@ -131,7 +133,7 @@ export function MoreGames({ lang, onPlay, onOnline }: { lang: Lang; onPlay: (gam
         <Text style={styles.note}>{lang.casino.playMoney}</Text>
         {casino.map((row, i) => (
           <View key={row.game} style={i > 0 ? styles.divider : undefined}>
-            <GameRow row={row} lang={lang} onPlay={onPlay} onOnline={onOnline} />
+            <GameRow row={row} lang={lang} onPlay={onPlay} onOnline={onOnline} onRules={onRules} />
           </View>
         ))}
       </Panel>

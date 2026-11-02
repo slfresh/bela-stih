@@ -196,3 +196,36 @@ the new certificate before promoting 1.3.0. If the rating would cost the
 6. Hiding is device-local and a report is the player's own e-mail: neither
    ever reaches the game server. A server-side report endpoint would re-open
    the Data safety form and the privacy page.
+
+## Casino tables (Texas Hold'em, Blackjack, Baccarat) — re-answer BEFORE they reach any track
+
+Decided with the owner (2026-11): the casino games ship, and the app accepts
+the rating that comes with them. What changes, and what must stay true:
+
+- **Chips are staked; coins never are.** The casino games stake *play chips*
+  (`packages/progression`: `chipBalance`, `buyIn`, `cashOut`,
+  `refillChips`). They cannot be bought, cannot be converted to or from
+  coins, carry no prize, and top back up to 2,000 once a day. Tests pin both
+  directions (`packages/progression/test/progression.test.ts`, "play-money
+  chips"). Coins keep every invariant above. Do not add a chip purchase, a
+  chip-for-coin exchange or a prize of any kind: that is the line between
+  simulated gambling and gambling.
+- **The app says so where it matters.** Home's casino panel, every casino
+  table's header and each casino game's rules sheet carry the same line:
+  play chips only, never bought, never exchanged for coins or money, topped
+  up every day.
+- **IARC: answer "simulated gambling" = YES** (the games let players bet
+  play currency on games of chance and skill). Expect a higher age rating
+  with a Simulated Gambling descriptor in every IARC region; read the
+  certificate the questionnaire returns rather than assuming a number.
+- **Play Console:** declare the app's target audience as adults only
+  (simulated gambling must not target children), keep it out of the
+  Families programme, and say "play chips, no real money, no prizes" in the
+  store description. The Data safety form does not change: chips live on the
+  device like coins, and the server stores nothing.
+- **Online casino tables** use each table's own stack; the server knows no
+  balance (there are no accounts). A seat's app settles its own balance on
+  standing up, exactly as offline.
+- **Osmice** (the shedding game) stakes nothing and changes no answer. Its
+  deck, names and art are this app's own; keep the store text from naming or
+  comparing it to any trademarked card game.
