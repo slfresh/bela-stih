@@ -13,7 +13,9 @@
       "@belot/table": ["../../packages/table/src/index.ts"],
       "@belot/game-core": ["../../packages/game-core/src/index.ts"],
       "@belot/games-bela": ["../../packages/games/bela/src/index.ts"],
-      "@belot/games-osmice": ["../../packages/games/osmice/src/index.ts"]
+      "@belot/games-osmice": ["../../packages/games/osmice/src/index.ts"],
+      "@belot/cards": ["../../packages/cards/src/index.ts"],
+      "@belot/games-baccarat": ["../../packages/games/baccarat/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts"]

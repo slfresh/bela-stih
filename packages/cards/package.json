@@ -1,0 +1,15 @@
+{
+  "name": "@belot/cards",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The French 52-card deck and multi-deck shoes the casino games share.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@belot/game-core": "*"
+  }
+}

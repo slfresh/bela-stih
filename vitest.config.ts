@@ -15,6 +15,8 @@ export default defineConfig({
       '@belot/game-core': r('./packages/game-core/src/index.ts'),
       '@belot/games-bela': r('./packages/games/bela/src/index.ts'),
       '@belot/games-osmice': r('./packages/games/osmice/src/index.ts'),
+      '@belot/cards': r('./packages/cards/src/index.ts'),
+      '@belot/games-baccarat': r('./packages/games/baccarat/src/index.ts'),
     },
   },
   test: {
