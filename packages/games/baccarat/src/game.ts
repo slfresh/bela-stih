@@ -203,6 +203,7 @@ export const BACCARAT: BaccaratDefinition = {
   normalize,
   // The window closed on you: no (more) bets.
   defaultAction: (_s, seat) => ({ type: 'READY', seat }),
+  windowKey: (s) => (s.phase === 'BETTING' ? `coup:${s.coupNumber}` : null),
   apply: applyAction,
   view: publicView,
   secrets: (s): Secret[] => [{ tokens: s.shoe.map((c) => c.id), visibleTo: [] }],

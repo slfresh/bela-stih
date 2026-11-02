@@ -4,6 +4,7 @@ import { matchMaker, Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { BelaRoom } from './BelaRoom';
 import { OsmiceRoom } from './OsmiceRoom';
+import { BaccaratRoom, BlackjackRoom, HoldemRoom } from './CasinoRooms';
 import { MAX_FRAME_BYTES, MIN_PROTO, PROTO, ROOM_NAME, ROOM_NAME_MODES, ROOM_NAMES, type GameId } from './protocol';
 
 /**
@@ -45,7 +46,7 @@ const app = express();
 // names a table or a player.
 const STARTED_AT = Date.now();
 /** The games this build serves a table for. */
-const SERVED_GAMES: GameId[] = ['bela', 'osmice'];
+const SERVED_GAMES: GameId[] = ['bela', 'osmice', 'baccarat', 'blackjack', 'holdem'];
 const SHA = process.env.GIT_SHA ?? 'dev';
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
@@ -73,6 +74,9 @@ gameServer.define(ROOM_NAME, BelaRoom);
 gameServer.define(ROOM_NAME_MODES, BelaRoom, { modes: true });
 // The games beyond Bela, each under its own name (protocol.ts ROOM_NAMES), all on GameRoom.
 gameServer.define(ROOM_NAMES.osmice, OsmiceRoom);
+gameServer.define(ROOM_NAMES.baccarat, BaccaratRoom);
+gameServer.define(ROOM_NAMES.blackjack, BlackjackRoom);
+gameServer.define(ROOM_NAMES.holdem, HoldemRoom);
 
 gameServer
   .listen(PORT)

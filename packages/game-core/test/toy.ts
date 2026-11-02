@@ -100,6 +100,7 @@ export const TOY: GameDefinition<ToyState, ToyAction, ToyView, ToyEvent, ToyConf
   normalize(s, seat, raw) {
     return looksLikeAction(raw, seat) ? matchLegal(TOY.legalActions(s, seat), raw) : null;
   },
+  windowKey: (s) => (s.phase === 'ANTE' ? `ante:${s.rounds}` : null),
   defaultAction(s, seat) {
     return s.phase === 'ANTE' ? { type: 'READY', seat } : { type: 'TAKE', seat, n: 1 };
   },

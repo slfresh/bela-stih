@@ -111,10 +111,16 @@ export class Session<D extends AnyGame> {
     return this.actors().filter((seat) => this.humans.has(seat));
   }
 
-  /** Stable id of the decision in front of the table, or null when nobody acts. */
+  /**
+   * Stable id of the decision in front of the table, or null when nobody acts:
+   * the open window's own name while one is open (it outlives the moves made
+   * in it), otherwise the seat on turn and the move count.
+   */
   decisionId(): string | null {
     const actors = this.actors();
-    return actors.length === 0 ? null : `${actors.join(',')}:${this.moves}`;
+    if (actors.length === 0) return null;
+    const window = this.def.windowKey?.(this.s);
+    return window ? `window:${window}` : `${actors.join(',')}:${this.moves}`;
   }
 
   /** The hidden-hand-safe view for one seat. This is what crosses the wire. */

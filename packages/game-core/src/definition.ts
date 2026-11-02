@@ -92,6 +92,15 @@ export interface GameDefinition<
   normalize(s: S, seat: number, raw: unknown): A | null;
   /** The action a seat takes when its clock runs out. */
   defaultAction(s: S, seat: number, rng: Rng, level: BotLevel): A;
+  /**
+   * While a window several seats answer at once is open (a betting round), a
+   * name for it that stays the same however many moves are made in it — a
+   * bet placed is still the same window — and changes when the next one
+   * opens. Null when no window is open. A clock keys on this, so answering
+   * early or late never restarts it for the others. Games without windows
+   * leave it out.
+   */
+  windowKey?(s: S): string | null;
   /** Pure: returns a new state, never mutates. Throws on an illegal action. */
   apply(s: S, a: A): S;
 

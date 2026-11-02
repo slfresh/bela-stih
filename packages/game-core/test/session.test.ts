@@ -163,3 +163,19 @@ describe('normalize helpers', () => {
     expect(matchLegal(legal, { n: 3, seat: 0, type: 'TAKE' })).toBeNull();
   });
 });
+
+describe('a window clock', () => {
+  it('keeps one name for the whole window, whoever answers in it, and a new one for the next', () => {
+    const s = new Session(TOY, { seats: 3, seed: 3, humanSeats: [0, 1, 2] });
+    const first = s.decisionId();
+    expect(first).toMatch(/^window:/);
+    s.submit({ type: 'READY', seat: 1 });
+    expect(s.decisionId()).toBe(first);
+    s.submit({ type: 'READY', seat: 0 });
+    expect(s.decisionId()).toBe(first);
+    s.submit({ type: 'READY', seat: 2 });
+    // Out of the window, into turns: one seat and a move count.
+    expect(s.decisionId()).not.toBe(first);
+    expect(s.decisionId()).not.toMatch(/^window:/);
+  });
+});

@@ -209,6 +209,7 @@ export const BLACKJACK: BlackjackDefinition = {
     const legal = legalActions(s, seat);
     return legal.find((a) => a.type === 'READY') ?? legal.find((a) => a.type === 'CLEAR') ?? legal.find((a) => a.type === 'STAND') ?? legal[0]!;
   },
+  windowKey: (s) => (s.phase === 'BETTING' ? `round:${s.roundNumber}` : null),
   apply: applyAction,
   view: publicView,
   secrets(s): Secret[] {

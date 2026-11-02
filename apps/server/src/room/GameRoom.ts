@@ -189,7 +189,6 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
    */
   private turnDecision: string | null = null;
   private turnActors: number[] = [];
-  private turnMoves = 0;
   protected started = false;
   /**
    * Rate limits, keyed by CONNECTION rather than by seat: pre-start a client can
@@ -1028,23 +1027,13 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
 
   /**
    * Is the decision in front of the table still the one the running clock was
-   * armed for? For one seat on turn: the same seat at the same move count.
-   * For a window several seats answer at once: every move since it opened was
-   * one of its seats answering, so answering early never restarts the clock
-   * for the others.
+   * armed for? Session.decisionId names it: for one seat on turn, the seat and
+   * the move count; for a betting window, the window's own name, which stays
+   * the same while seats bet and answer in it — so answering early or late
+   * never restarts the clock for the others.
    */
   private sameDecision(): boolean {
-    if (this.turnTimer === null) return false;
-    if (this.turnDecision === this.session.decisionId()) return true;
-    if (!this.def.meta.simultaneous) return false;
-    const now = this.humanActors();
-    const answered = this.turnActors.length - now.length;
-    return (
-      now.length > 0 &&
-      answered > 0 &&
-      now.every((s) => this.turnActors.includes(s)) &&
-      this.session.moveCount - this.turnMoves === answered
-    );
+    return this.turnTimer !== null && this.turnDecision === this.session.decisionId();
   }
 
   /** Nobody waits forever: a seat that stalls is played by its bot (or takes the game's default). */
@@ -1072,7 +1061,6 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     this.turnEndsAt = Date.now() + this.turnMs;
     this.turnDecision = this.session.decisionId();
     this.turnActors = this.humanActors();
-    this.turnMoves = this.session.moveCount;
     this.turnTimer = setTimeout(() => {
       // Spend the handle FIRST: everything below re-enters armTimer, and a
       // stale non-null handle there reads as "a clock is already running".

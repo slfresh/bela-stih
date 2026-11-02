@@ -9,7 +9,8 @@
     "start": "tsx src/index.ts",
     "smoke": "tsx src/smoke.ts",
     "fill": "tsx src/fill.ts",
-    "smoke:osmice": "tsx src/smoke-osmice.ts"
+    "smoke:osmice": "tsx src/smoke-osmice.ts",
+    "smoke:casino": "tsx src/smoke-casino.ts"
   },
   "dependencies": {
     "@belot/shared-types": "*",
@@ -22,7 +23,11 @@
     "@colyseus/core": "0.16.22",
     "express": "^5.1.0",
     "tsx": "^4.23.12",
-    "@belot/games-osmice": "*"
+    "@belot/games-osmice": "*",
+    "@belot/cards": "*",
+    "@belot/games-baccarat": "*",
+    "@belot/games-blackjack": "*",
+    "@belot/games-holdem": "*"
   },
   "devDependencies": {
     "colyseus.js": "0.16.22",
