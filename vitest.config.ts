@@ -17,6 +17,7 @@ export default defineConfig({
       '@belot/games-osmice': r('./packages/games/osmice/src/index.ts'),
       '@belot/cards': r('./packages/cards/src/index.ts'),
       '@belot/games-baccarat': r('./packages/games/baccarat/src/index.ts'),
+      '@belot/games-blackjack': r('./packages/games/blackjack/src/index.ts'),
     },
   },
   test: {

@@ -1,0 +1,16 @@
+{
+  "name": "@belot/games-blackjack",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Blackjack as a game module: a shoe, a betting window, hit, stand, double and split, the dealer by the house rules.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@belot/game-core": "*",
+    "@belot/cards": "*"
+  }
+}

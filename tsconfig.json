@@ -14,7 +14,8 @@
       "@belot/games-bela": ["packages/games/bela/src/index.ts"],
       "@belot/games-osmice": ["packages/games/osmice/src/index.ts"],
       "@belot/cards": ["packages/cards/src/index.ts"],
-      "@belot/games-baccarat": ["packages/games/baccarat/src/index.ts"]
+      "@belot/games-baccarat": ["packages/games/baccarat/src/index.ts"],
+      "@belot/games-blackjack": ["packages/games/blackjack/src/index.ts"]
     }
   },
   "include": [
