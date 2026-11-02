@@ -15,6 +15,8 @@
     "@belot/engine": "*",
     "@belot/bots": "*",
     "@belot/table": "*",
+    "@belot/game-core": "*",
+    "@belot/games-bela": "*",
     "@colyseus/ws-transport": "0.16.5",
     "@colyseus/core": "0.16.22",
     "express": "^5.1.0",

@@ -1,0 +1,18 @@
+{
+  "name": "@belot/games-bela",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Bela as a game module: the untouched @belot/engine and @belot/bots behind the @belot/game-core contract.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@belot/shared-types": "*",
+    "@belot/engine": "*",
+    "@belot/bots": "*",
+    "@belot/game-core": "*"
+  }
+}

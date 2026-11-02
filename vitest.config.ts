@@ -12,6 +12,8 @@ export default defineConfig({
       '@belot/table': r('./packages/table/src/index.ts'),
       '@belot/i18n': r('./packages/i18n/src/index.ts'),
       '@belot/progression': r('./packages/progression/src/index.ts'),
+      '@belot/game-core': r('./packages/game-core/src/index.ts'),
+      '@belot/games-bela': r('./packages/games/bela/src/index.ts'),
     },
   },
   test: {

@@ -1,9 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import { Room, ServerError, type AuthContext, type Client } from '@colyseus/core';
 import type { Action, Seat } from '@belot/engine';
-import { DEFAULT_CONFIG, DOUBLE_WIN_TARGET, HARD_CONFIG_OVERRIDES, RANKS, SEATS, SUITS, type EngineConfig } from '@belot/engine';
-import type { Card, Rank, Rng, Suit } from '@belot/engine';
+import { DEFAULT_CONFIG, DOUBLE_WIN_TARGET, HARD_CONFIG_OVERRIDES, SEATS, type EngineConfig } from '@belot/engine';
+import type { Rng } from '@belot/engine';
 import { Table } from '@belot/table';
+// Rebuilds a client's action from checked primitives (the Bela module's normaliser).
+import { cleanAction } from '@belot/games-bela';
 import { isBotLevel, type BotLevel } from '@belot/bots';
 import { EMOTE_GAP_MS, EMOTE_IDS, GIFT_GAP_MS, GIFT_IDS, MATCH_TARGETS, MIN_PROTO, MSG, NEXT_DEAL_MS, PAUSE_MAX_MS, TURN_CHOICES, UPDATE_APP_CODE, WAIT_FOR_DROPPED_MS, type ClientMessage, type HoldInfo, type EmoteMessage, type GiftMessage, type JoinGifts, type JoinProto, type JoinVoice, type RoomMessage, type SeatInfo, type VoiceHeardMessage, type VoiceMessage, isPlayMode, modeFromLegacy, type PlayMode } from './protocol';
 import { checkClip, VoiceLedger, VoiceLimiter } from './voice';
@@ -47,64 +49,6 @@ function cryptoRng(): Rng {
     at += 4;
     return v / 4294967296;
   };
-}
-
-const isSuit = (v: unknown): v is Suit => typeof v === 'string' && SUITS.includes(v as Suit);
-const isRank = (v: unknown): v is Rank => typeof v === 'string' && RANKS.includes(v as Rank);
-
-/**
- * Rebuild an action from a client message using only values this server names
- * itself.
- *
- * Validating in place is not enough: the engine stores what it is given, and a
- * `structuredClone` or a msgpack encode of an attacker-shaped object throws far
- * away from any handler that could catch it. Everything below is a fresh
- * literal built from checked primitives, so the client's object is dropped on
- * the floor whatever it contained.
- */
-function cleanAction(raw: unknown, seat: Seat): Action | null {
-  if (typeof raw !== 'object' || raw === null) return null;
-  const a = raw as Record<string, unknown>;
-  // A client may only ever move its own seat.
-  if (a.seat !== seat) return null;
-  switch (a.type) {
-    case 'BID_PASS':
-    case 'DOUBLE_KONTRA':
-    case 'DOUBLE_REKONTRA':
-    case 'DOUBLE_PASS':
-    case 'DECLARE_SKIP':
-      return { type: a.type, seat };
-    case 'DECLARE_ANNOUNCE': {
-      // The marked cards must survive the rebuild, or the engine cannot check
-      // the claim against the hand — and in blind mode a wrong marking would
-      // then succeed online while failing offline. Rebuilt card by card like
-      // any other, so nothing the client sent arrives by reference.
-      if (a.cards === undefined) return { type: 'DECLARE_ANNOUNCE', seat };
-      if (!Array.isArray(a.cards) || a.cards.length > 8) return null;
-      const cards: Card[] = [];
-      for (const raw of a.cards) {
-        if (typeof raw !== 'object' || raw === null) return null;
-        const { suit, rank } = raw as Record<string, unknown>;
-        if (!isSuit(suit) || !isRank(rank)) return null;
-        cards.push({ suit, rank });
-      }
-      return { type: 'DECLARE_ANNOUNCE', seat, cards };
-    }
-    case 'BID_CALL':
-      return isSuit(a.suit) ? { type: 'BID_CALL', seat, suit: a.suit } : null;
-    case 'PLAY_CARD': {
-      const c = a.card;
-      if (typeof c !== 'object' || c === null) return null;
-      const { suit, rank } = c as Record<string, unknown>;
-      if (!isSuit(suit) || !isRank(rank)) return null;
-      const card: Card = { suit, rank };
-      return a.announceBela === true
-        ? { type: 'PLAY_CARD', seat, card, announceBela: true }
-        : { type: 'PLAY_CARD', seat, card };
-    }
-    default:
-      return null;
-  }
 }
 
 /** Quick play's turn clock, and a private table's until its host picks another. */

@@ -1,72 +1,27 @@
-import type {
-  Action,
-  Card,
-  DealScoreResult,
-  Declaration,
-  DeclarationSummary,
-  EngineConfig,
-  GameState,
-  Phase,
-  PublicView,
-  Seat,
-  Suit,
-  TeamId,
-} from '@belot/engine';
-import {
-  applyAction,
-  createMatch,
-  currentActor,
-  legalActions,
-  makeRng,
-  matchWinner,
-  matchWins,
-  pointValue,
-  publicView,
-  startDeal,
-  teamOf,
-  type Rng,
-} from '@belot/engine';
-import { decideAction, type BotLevel, type BotMemory } from '@belot/bots';
+import type { Action, EngineConfig, GameState, Phase, PublicView, Seat, TeamId } from '@belot/engine';
+import { legalActions, matchWins, teamOf, type Rng } from '@belot/engine';
+import { Session } from '@belot/game-core';
+import { BELA, type TableEvent } from '@belot/games-bela';
+import type { BotLevel } from '@belot/bots';
 
 /**
- * @belot/table — the seat-aware session layer.
+ * @belot/table — the seat-aware session layer for Bela.
  *
  * The engine is pure and turn-by-turn; a UI wants something that plays the bot
  * seats by itself, stops when it needs a person, and says what just happened so
  * the table can be animated. That is all this is.
  *
+ * Since the app grew more games this is Bela's face of `Session` from
+ * `@belot/game-core`: the same object every game uses, driving the `BELA`
+ * definition from `@belot/games-bela`. The API below is unchanged, so the CLI,
+ * the Expo client, the server and the golden corpus all keep calling it as
+ * before — and a differential test pins it against the old implementation.
+ *
  * It is deliberately UI-free, so the same object backs the offline Expo client
  * AND the server's disconnect-fill: a dropped player simply becomes a bot seat.
  */
 
-// ---------------------------------------------------------------------------
-// Events — the animation script
-// ---------------------------------------------------------------------------
-
-export type TableEvent =
-  | { kind: 'dealStarted'; dealNumber: number; dealer: Seat }
-  | { kind: 'bidPassed'; seat: Seat }
-  | { kind: 'bidCalled'; seat: Seat; suit: Suit }
-  | { kind: 'doubled'; seat: Seat; multiplier: 2 | 4 }
-  | { kind: 'doublePassed'; seat: Seat }
-  /** The last two cards are out; zvanja are now fixed and play begins. */
-  | { kind: 'handsCompleted'; trumpSuit: Suit; callerSeat: Seat; multiplier: 1 | 2 | 4 }
-  | { kind: 'declared'; seat: Seat; declarations: DeclarationSummary[] }
-  | { kind: 'declarationSkipped'; seat: Seat }
-  /**
-   * The asking is over and the winning side lays its combinations face up —
-   * cards and all, which is the one place cards legitimately leave a hand
-   * before being played. Only the winner's; the losing side keeps theirs.
-   */
-  | { kind: 'declarationsRevealed'; team: TeamId; declarations: Declaration[] }
-  | { kind: 'belaCalled'; seat: Seat }
-  | { kind: 'cardPlayed'; seat: Seat; card: Card }
-  | { kind: 'trickWon'; seat: Seat; trickNumber: number; points: number; isLastTrick: boolean }
-  | { kind: 'dealScored'; result: DealScoreResult; matchScores: [number, number] }
-  /** `double` only under the optional rule, when the win counts for two matches (engine matchWins). */
-  | { kind: 'matchOver'; winner: TeamId; matchScores: [number, number]; double?: true }
-  /** A fresh match at the same table, same seats. */
-  | { kind: 'matchStarted'; matchNumber: number };
+export type { TableEvent };
 
 export interface TableOptions {
   /**
@@ -85,41 +40,29 @@ export interface TableOptions {
 }
 
 export class Table {
-  private s: GameState;
-  private readonly rng: Rng;
-  private queued: TableEvent[] = [];
-
-  private readonly humans: Set<Seat>;
-  private matchNumber = 0;
-  private moves = 0;
-  /** Injected randomness, kept so a rematch is seeded the same way. */
-  private readonly injected: Rng | null;
-  readonly botLevel: BotLevel;
+  private readonly session: Session<typeof BELA>;
 
   constructor(opts: TableOptions = {}) {
-    const seed = opts.seed ?? (Date.now() & 0x7fffffff);
-    this.humans = new Set(opts.humanSeats ?? []);
-    this.botLevel = opts.botLevel ?? 'medium';
-    this.injected = opts.rng ?? null;
-    // Bot choices are as predictable as the deck when both come from one seed.
-    this.rng = this.injected ?? makeRng(seed ^ 0x9e3779b9);
-
-    this.s = createMatch({
-      seed,
-      rng: this.injected ?? undefined,
-      dealer: opts.dealer,
+    this.session = new Session(BELA, {
+      seats: 4,
+      rng: opts.rng,
+      humanSeats: opts.humanSeats,
+      botLevel: opts.botLevel,
       config: opts.config,
+      seed: opts.seed,
+      dealer: opts.dealer,
     });
-    this.s = startDeal(this.s);
-    this.queued.push({ kind: 'dealStarted', dealNumber: this.s.dealNumber, dealer: this.s.dealer });
-    this.runBots();
+  }
+
+  get botLevel(): BotLevel {
+    return this.session.botLevel;
   }
 
   // --- seats ---------------------------------------------------------------
 
   /** Seats currently played by a person; everything else is a bot. */
   get humanSeats(): ReadonlySet<Seat> {
-    return this.humans;
+    return this.session.humanSeats as ReadonlySet<Seat>;
   }
 
   /**
@@ -130,15 +73,13 @@ export class Table {
    * to a bot immediately runs it, in case the table was waiting on that player.
    */
   setSeatHuman(seat: Seat, human: boolean): void {
-    if (human) this.humans.add(seat);
-    else this.humans.delete(seat);
-    if (!human) this.runBots();
+    this.session.setSeatHuman(seat, human);
   }
 
   // --- reading -------------------------------------------------------------
 
   get state(): Readonly<GameState> {
-    return this.s;
+    return this.session.state;
   }
 
   /**
@@ -150,41 +91,39 @@ export class Table {
    * decisions and each deserves its own full clock.
    */
   get moveCount(): number {
-    return this.moves;
+    return this.session.moveCount;
   }
 
   get phase(): Phase {
-    return this.s.phase;
+    return this.state.phase;
   }
 
   get matchScores(): readonly [number, number] {
-    return this.s.matchScores;
+    return this.state.matchScores;
   }
 
   /** The hidden-hand-safe view for one seat. This is what crosses the wire. */
   view(seat: Seat): PublicView {
-    return publicView(this.s, seat);
+    return this.session.view(seat);
   }
 
   actor(): Seat | null {
-    return currentActor(this.s);
+    return (this.session.actors()[0] as Seat | undefined) ?? null;
   }
 
   isHumanTurn(): boolean {
     const seat = this.actor();
-    return seat !== null && this.humans.has(seat);
+    return seat !== null && this.humanSeats.has(seat);
   }
 
   /** Legal actions for whoever is on turn (empty when the deal is between hands). */
   legal(): Action[] {
-    return legalActions(this.s);
+    return legalActions(this.state);
   }
 
   /** Take the events since the last drain. The UI animates them, then renders state. */
   drainEvents(): TableEvent[] {
-    const out = this.queued;
-    this.queued = [];
-    return out;
+    return this.session.drainEvents();
   }
 
   // --- driving -------------------------------------------------------------
@@ -192,12 +131,10 @@ export class Table {
   /** Submit a human action, then let the bots run up to the next human decision. */
   submit(action: Action): void {
     const seat = this.actor();
-    if (seat === null) throw new Error(`no action is expected in phase ${this.s.phase}`);
-    if (!this.humans.has(seat)) throw new Error(`seat ${seat} is played by a bot`);
+    if (seat === null) throw new Error(`no action is expected in phase ${this.phase}`);
+    if (!this.humanSeats.has(seat)) throw new Error(`seat ${seat} is played by a bot`);
     if (action.seat !== seat) throw new Error(`it is seat ${seat}'s turn, not ${action.seat}'s`);
-
-    this.applyAndRecord(action);
-    this.runBots();
+    this.session.submit(action);
   }
 
   /**
@@ -209,49 +146,23 @@ export class Table {
    * Legal only once a match is over — a live match is never silently discarded.
    */
   newMatch(opts: { seed?: number; dealer?: Seat } = {}): void {
-    if (this.s.phase !== 'MATCH_OVER') {
-      throw new Error(`cannot start a new match from phase ${this.s.phase}`);
+    if (this.phase !== 'MATCH_OVER') {
+      throw new Error(`cannot start a new match from phase ${this.phase}`);
     }
-    // Anything still undrained belongs to the finished match; it must not be
-    // replayed into the new one.
-    this.queued = [];
-    this.matchNumber += 1;
-    this.s = createMatch({
-      seed: opts.seed ?? (Date.now() & 0x7fffffff),
-      rng: this.injected ?? undefined,
-      dealer: opts.dealer ?? this.s.dealer,
-      config: this.s.config,
-    });
-    this.s = startDeal(this.s);
-    this.queued.push({ kind: 'matchStarted', matchNumber: this.matchNumber });
-    this.queued.push({ kind: 'dealStarted', dealNumber: this.s.dealNumber, dealer: this.s.dealer });
-    this.runBots();
+    this.session.newMatch(opts);
   }
 
   /** Deal again after a scored hand. */
   startNextDeal(): void {
-    if (this.s.phase !== 'DEAL_OVER') {
-      throw new Error(`cannot deal from phase ${this.s.phase}`);
+    if (this.phase !== 'DEAL_OVER') {
+      throw new Error(`cannot deal from phase ${this.phase}`);
     }
-    this.s = startDeal(this.s);
-    this.queued.push({ kind: 'dealStarted', dealNumber: this.s.dealNumber, dealer: this.s.dealer });
-    this.runBots();
+    this.session.startNextRound();
   }
 
   /** Advance while it is a bot's turn. Stops at a human decision or a scored deal. */
   runBots(): void {
-    let guard = 0;
-    while (true) {
-      if (guard++ > 4096) throw new Error('bot loop failed to make progress');
-      const seat = this.actor();
-      if (seat === null || this.humans.has(seat)) return;
-      this.applyAndRecord(decideAction(this.view(seat), this.rng, this.botLevel, this.memory()));
-    }
-  }
-
-  /** What a bot may remember of the deal: its tricks so far, public to all four (the hard bot plays to them). */
-  private memory(): BotMemory {
-    return { completedTricks: this.s.completedTricks };
+    this.session.runBots();
   }
 
   /**
@@ -264,144 +175,21 @@ export class Table {
    * entire deal. That is right for a disconnect and wrong for a turn timeout.
    */
   botMoveFor(seat: Seat): void {
-    if (this.actor() !== seat) return;
-    this.applyAndRecord(decideAction(this.view(seat), this.rng, this.botLevel, this.memory()));
-    // Whoever is next may also be a bot; advancing to the next human decision
-    // is the same thing a normal submit() does.
-    this.runBots();
+    this.session.botMoveFor(seat);
   }
 
   /** Play an all-bot table through to a winner. Used by the demo and the tests. */
   playWholeMatch(maxDeals = 500): void {
-    if (this.humans.size > 0) throw new Error('playWholeMatch expects an all-bot table');
-    let dealt = 0;
-    while (this.s.phase !== 'MATCH_OVER') {
-      if (dealt++ > maxDeals) throw new Error('match failed to finish');
-      this.runBots();
-      if (this.s.phase === 'DEAL_OVER') this.startNextDeal();
-    }
+    this.session.playWholeMatch(maxDeals);
   }
 
   winner(): TeamId | null {
-    return matchWinner(this.s);
+    return (this.session.winners()?.[0] as TeamId | undefined) ?? null;
   }
 
   /** How many matches the winner is credited with (1, or 2 under the double-win rule). */
   matchWins(): 1 | 2 {
-    return matchWins(this.s);
-  }
-
-  // --- event derivation ----------------------------------------------------
-
-  /** Did this action end the asking? Then the winner's cards go on the table. */
-  private pushRevealIfRoundClosed(before: GameState, after: GameState): void {
-    if (before.declareTurn === null || after.declareTurn !== null) return;
-    if (after.declarationWinner === null) return; // cancelled tie: nobody shows
-    this.queued.push({
-      kind: 'declarationsRevealed',
-      team: after.declarationWinner,
-      declarations: after.revealedDeclarations.map((d) => ({ ...d, cards: d.cards.slice() })),
-    });
-  }
-
-  private applyAndRecord(action: Action): void {
-    const before = this.s;
-    const after = applyAction(before, action);
-    // Belt and braces behind applyAction's own `default:`. Assigning first and
-    // validating later is what turned one malformed socket message into a Table
-    // whose state was permanently `undefined`.
-    if (!after) throw new Error('engine returned no state');
-    this.s = after;
-    this.moves += 1;
-    const push = (e: TableEvent) => this.queued.push(e);
-
-    switch (action.type) {
-      case 'BID_PASS':
-        push({ kind: 'bidPassed', seat: action.seat });
-        break;
-      case 'BID_CALL':
-        push({ kind: 'bidCalled', seat: action.seat, suit: action.suit });
-        break;
-      case 'DOUBLE_KONTRA':
-      case 'DOUBLE_REKONTRA':
-        push({ kind: 'doubled', seat: action.seat, multiplier: after.multiplier as 2 | 4 });
-        break;
-      case 'DOUBLE_PASS':
-        push({ kind: 'doublePassed', seat: action.seat });
-        break;
-      case 'DECLARE_ANNOUNCE':
-        push({
-          kind: 'declared',
-          seat: action.seat,
-          declarations: after.announcedDeclarations[action.seat]!.map((d) => ({
-            kind: d.kind,
-            value: d.value,
-            length: d.length,
-            topRank: d.topRank,
-            seat: d.seat,
-          })),
-        });
-        this.pushRevealIfRoundClosed(before, after);
-        break;
-      case 'DECLARE_SKIP':
-        push({ kind: 'declarationSkipped', seat: action.seat });
-        this.pushRevealIfRoundClosed(before, after);
-        break;
-      case 'PLAY_CARD':
-        // The call lands before the card, exactly as it is said at the table.
-        if (before.belaAnnouncedSeat === null && after.belaAnnouncedSeat !== null) {
-          push({ kind: 'belaCalled', seat: action.seat });
-        }
-        push({ kind: 'cardPlayed', seat: action.seat, card: action.card });
-        break;
-    }
-
-    // A void deal (everyone passed) restarts the bidding on a fresh hand.
-    if (before.phase === 'BID' && after.phase === 'BID' && after.passCount === 0) {
-      push({ kind: 'dealStarted', dealNumber: after.dealNumber, dealer: after.dealer });
-    }
-
-    // The contract is settled, the last two cards are out, play begins. This
-    // fires from BID directly when the table plays no kontra, and from DOUBLE
-    // when it does.
-    if (before.phase !== 'PLAY' && after.phase === 'PLAY') {
-      push({
-        kind: 'handsCompleted',
-        trumpSuit: after.context.trumpSuit!,
-        callerSeat: after.callerSeat!,
-        multiplier: after.multiplier,
-      });
-    }
-
-    if (after.completedTricks.length > before.completedTricks.length) {
-      const trick = after.completedTricks[after.completedTricks.length - 1]!;
-      const trickNumber = after.completedTricks.length;
-      push({
-        kind: 'trickWon',
-        seat: trick.winnerSeat,
-        trickNumber,
-        points: trick.cards.reduce((sum, c) => sum + pointValue(c, after.context), 0),
-        isLastTrick: trickNumber === 8,
-      });
-    }
-
-    if (before.phase === 'PLAY' && after.phase !== 'PLAY' && after.lastDealResult) {
-      push({
-        kind: 'dealScored',
-        result: after.lastDealResult,
-        matchScores: [after.matchScores[0], after.matchScores[1]],
-      });
-    }
-
-    if (after.phase === 'MATCH_OVER') {
-      push({
-        kind: 'matchOver',
-        winner: matchWinner(after)!,
-        matchScores: [after.matchScores[0], after.matchScores[1]],
-        // Absent unless earned, so the golden corpus's hashes stay put.
-        ...(matchWins(after) === 2 ? { double: true as const } : {}),
-      });
-    }
+    return matchWins(this.state);
   }
 }
 

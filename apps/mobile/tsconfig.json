@@ -10,6 +10,7 @@
     // checkout ran npm install, which is not always this one (git worktrees).
     "baseUrl": ".",
     "paths": {
+      "@belot/games-*": ["../../packages/games/*/src/index.ts"],
       "@belot/*": ["../../packages/*/src/index.ts"]
     }
   }

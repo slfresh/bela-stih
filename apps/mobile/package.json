@@ -5,6 +5,8 @@
   "dependencies": {
     "@belot/bots": "*",
     "@belot/engine": "*",
+    "@belot/game-core": "*",
+    "@belot/games-bela": "*",
     "@belot/i18n": "*",
     "@belot/progression": "*",
     "@belot/shared-types": "*",

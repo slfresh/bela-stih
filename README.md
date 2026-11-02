@@ -37,6 +37,8 @@ packages/
   table/          session layer: plays the bot seats, emits the events a UI animates from
   i18n/           the words AND the deck: madarice suits, ranks, hr / sr-Cyrl / en
   progression/    levels, coins, daily bonus, quests — pure, no storage, no clock
+  game-core/      the contract every card game implements (GameDefinition) and the Session that drives any of them
+  games/bela/     Bela as a game module: the untouched engine and bots behind that contract
 apps/
   cli/            playable terminal Bela — a real client for the engine, not a mock
   mobile/         Expo client (SDK 57, RN 0.86) — Android locally, iOS through EAS (docs/ios-eas.md)
@@ -131,6 +133,10 @@ cd apps/mobile && eas build -p ios --profile preview
 What the iOS build is made of, and the one placeholder to fill before invite links open the app
 (the Apple Team ID in `deploy/site/.well-known/apple-app-site-association`), is in
 [docs/ios-eas.md](docs/ios-eas.md).
+
+The app is growing into several card games; the plan is in
+[docs/multi-game-plan.md](docs/multi-game-plan.md). `Table` is now Bela's face of the shared
+`Session`, pinned step for step against its old implementation by `packages/table/test/shim.test.ts`.
 
 The **same engine** runs on-device and on the authoritative server. The **same bot** is the offline
 opponent and the online disconnect-fill. The **same `Table`** backs the terminal client, the Expo

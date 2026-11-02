@@ -1,0 +1,12 @@
+{
+  "name": "@belot/game-core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The game-agnostic contract every card game in the app implements, and the session layer that drives any of them: seats, bots, events, timed windows.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

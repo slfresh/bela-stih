@@ -1,4 +1,5 @@
 import type { Action, PublicView } from '@belot/shared-types';
+import type { BotLevel } from '@belot/game-core';
 import { detectDeclarations } from '@belot/engine';
 import { decideEasy } from './easy';
 import { decideHard, type BotMemory } from './hard';
@@ -18,12 +19,8 @@ import { decideBid, decidePlay, preferBela, type PlayCardAction } from './medium
  *     `BotMemory` by whoever owns the game state (the table).
  */
 
-export type BotLevel = 'easy' | 'medium' | 'hard';
-export const BOT_LEVELS: readonly BotLevel[] = ['easy', 'medium', 'hard'];
-
-export function isBotLevel(x: unknown): x is BotLevel {
-  return x === 'easy' || x === 'medium' || x === 'hard';
-}
+/** One strength scale for every game in the app; it lives in the shared game core. */
+export { BOT_LEVELS, isBotLevel, type BotLevel } from '@belot/game-core';
 
 export type { BotMemory } from './hard';
 

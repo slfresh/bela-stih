@@ -11,6 +11,8 @@
   "dependencies": {
     "@belot/shared-types": "*",
     "@belot/engine": "*",
-    "@belot/bots": "*"
+    "@belot/bots": "*",
+    "@belot/game-core": "*",
+    "@belot/games-bela": "*"
   }
 }

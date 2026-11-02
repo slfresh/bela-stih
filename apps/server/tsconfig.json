@@ -10,7 +10,9 @@
       "@belot/shared-types": ["../../packages/shared-types/src/index.ts"],
       "@belot/engine": ["../../packages/engine/src/index.ts"],
       "@belot/bots": ["../../packages/bots/src/index.ts"],
-      "@belot/table": ["../../packages/table/src/index.ts"]
+      "@belot/table": ["../../packages/table/src/index.ts"],
+      "@belot/game-core": ["../../packages/game-core/src/index.ts"],
+      "@belot/games-bela": ["../../packages/games/bela/src/index.ts"]
     }
   },
   "include": ["src/**/*.ts"]
