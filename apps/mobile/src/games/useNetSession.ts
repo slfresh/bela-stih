@@ -27,10 +27,12 @@ export type NetHow = { kind: 'quick' } | { kind: 'create'; seats: number } | { k
 
 /**
  * Why there is no table: the reasons net/trouble.ts reads off a refused join,
- * plus 'dropped' — this device was at the table, lost the line, and could not
- * get its seat back.
+ * plus two ways of losing a seat this device had. 'dropped': the line went and
+ * the seat could not be got back in time, but the table may still be there.
+ * 'gone': the server said the table itself is gone (disposed, or closed under
+ * us by a restart or a deploy), so going back to it by its code cannot work.
  */
-export type NetTrouble = Trouble | 'dropped';
+export type NetTrouble = Trouble | 'dropped' | 'gone';
 
 export interface NetPlayer {
   seat: number;
@@ -69,6 +71,12 @@ export interface NetSession<D extends AnyGame> extends Omit<LocalSession<D>, 'vi
   reconnecting: boolean;
   /** The code friends type to sit at this table. */
   code: string | null;
+  /**
+   * The table has been dealt (the room has said 'playing' at least once). It
+   * locks then: after a drop the reconnection token is the only way back, and
+   * the code no longer seats anybody, this device included.
+   */
+  started: boolean;
   /** Which game this room plays, once it has said (a table joined by code learns it here). */
   game: string | null;
   mySeat: number | null;
@@ -147,6 +155,7 @@ export function useNetSession<D extends AnyGame>(
   const [trouble, setTrouble] = useState<NetTrouble | null>(null);
   const [reconnecting, setReconnecting] = useState(false);
   const [code, setCode] = useState<string | null>(null);
+  const [started, setStarted] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
@@ -199,6 +208,10 @@ export function useNetSession<D extends AnyGame>(
         setMsg(m);
         setReceivedAt(Date.now());
         setStatus(m.status);
+        if (m.status !== 'waiting') setStarted(true);
+        // The view came first (publish sends it ahead of this), so even the
+        // first round's deal, which arrives with the message that starts the
+        // table, has one to go with it.
         const v = viewRef.current;
         if (v) for (const e of m.events) onEventRef.current?.(e as EventOf<D>, v);
       });
@@ -208,11 +221,13 @@ export function useNetSession<D extends AnyGame>(
         if (roomRef.current !== room) return; // we left on purpose
         roomRef.current = null;
         if (!alive) return;
-        // Sent away by the room itself (a full table turns the last joiner
-        // out): nothing to walk back into.
+        // Sent away by the room itself: nothing to walk back into. Joining,
+        // that is a full table turning the last joiner out; once seated, it is
+        // the room closing on everybody (a server shutting down for a deploy
+        // closes its rooms this way), so the table is gone.
         if (closeCode === SENT_AWAY_CODE) {
           if (statusRef.current === 'finished') tokenRef.current = null;
-          else fail(statusRef.current === 'connecting' ? 'tableClosed' : 'dropped');
+          else fail(statusRef.current === 'connecting' ? 'tableClosed' : 'gone');
           return;
         }
         // The line dropped: the room holds the seat (a bot, or the friends
@@ -233,6 +248,9 @@ export function useNetSession<D extends AnyGame>(
       setReconnecting(true);
       const startedAt = Date.now();
       const deadline = startedAt + (statusRef.current === 'waiting' || statusRef.current === 'connecting' ? LOBBY_HOLD_MS : TABLE_HOLD_MS);
+      // Why the loop gave up: out of time, which leaves the table perhaps still
+      // there, or told by the server that the table itself is gone.
+      let why: NetTrouble = 'dropped';
       try {
         for (let wait = 0; Date.now() < deadline; wait = Math.min(5000, wait + 1000)) {
           // Jittered: a whole cafe's phones coming back on one router would
@@ -252,15 +270,20 @@ export function useNetSession<D extends AnyGame>(
             setError(null);
             return;
           } catch (err) {
-            // The table is gone: no number of retries brings it back. "Token
-            // expired" is also what Colyseus answers before the server has
-            // noticed the old socket died, so early on it means "not yet".
+            // The table is gone: no number of retries brings it back, and the
+            // panel says so, rather than offer to go back to it by its code.
+            // "Token expired" is also what Colyseus answers before the server
+            // has noticed the old socket died, so early on it means "not yet";
+            // later, only this seat has lapsed, and the table may be there.
             const c = (err as { code?: number } | null)?.code;
-            if (c === ROOM_GONE_CODE) break;
+            if (c === ROOM_GONE_CODE) {
+              why = 'gone';
+              break;
+            }
             if (c === TOKEN_EXPIRED_CODE && Date.now() - startedAt > TOKEN_GRACE_MS) break;
           }
         }
-        if (alive && tokenRef.current === token) fail('dropped');
+        if (alive && tokenRef.current === token) fail(why);
       } finally {
         retrying = false;
       }
@@ -350,6 +373,7 @@ export function useNetSession<D extends AnyGame>(
     trouble,
     reconnecting,
     code,
+    started,
     game: msg?.game ?? null,
     mySeat: seat,
     players: msg?.players ?? [],

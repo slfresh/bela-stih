@@ -333,6 +333,11 @@ export function OsmiceTable({
   const [area, setArea] = useState<{ w: number; h: number } | null>(null);
   const [middle, setMiddle] = useState<{ w: number; h: number } | null>(null);
   const [stripW, setStripW] = useState<number | null>(null);
+  // Where the header and the online strip under it end. The sheets and the
+  // colour picker darken the table from there down, not the whole screen: the
+  // header's Leave table stays in reach, and online the clock, the countdown
+  // and a rematch vote's "start anyway" stay readable and pressable.
+  const [headerBottom, setHeaderBottom] = useState(0);
   const measure = (set: (v: { w: number; h: number }) => void) => (e: LayoutChangeEvent) => {
     const { width: w, height: h } = e.nativeEvent.layout;
     set({ w: Math.round(w), h: Math.round(h) });
@@ -340,14 +345,25 @@ export function OsmiceTable({
   const areaW = area?.w ?? win.width;
   const areaH = area?.h ?? win.height - 60;
   const landscape = areaW > areaH;
-  const sideW = landscape ? Math.round(Math.min(220, Math.max(156, areaW * 0.2))) : 0;
+  // The rail is wide enough for a three-digit score with its unit ("147 bodova")
+  // beside the card count; scores run past 500 through most of a match.
+  const sideW = landscape ? Math.round(Math.min(220, Math.max(184, areaW * 0.22))) : 0;
+  // A tablet held upright has room to spare: bigger tiles for the others, a
+  // bigger hand and pile, so the table fills the screen instead of floating
+  // in a field of empty felt. Told by the height: in a browser the app sits
+  // in a phone-wide frame, as tall as the tablet but no wider.
+  const roomy = !landscape && areaH >= 900;
+  // Their tiles share the width, four to a row (five on a wide screen), never
+  // smaller than a phone's nor so big a row holds only two.
+  const perRow = Math.max(1, Math.min(players - 1, areaW >= 700 ? 5 : 4));
+  const tileW = roomy ? Math.round(Math.max(92, Math.min(128, (areaW - space.lg * 2 - space.md * (perRow - 1)) / perRow))) : undefined;
 
   // The hand: one card size for the whole round, whatever the hand's length,
   // so the table does not jump as cards come and go. As wide as seven cards
   // fanned at 40% each fill the strip, and never taller than the hand's share
   // of the height: the rest is the pile's.
   const inner = (stripW ?? areaW - sideW) - space.lg * 2;
-  const handCard = Math.round(Math.max(40, Math.min(120, inner / (1 + 6 * 0.4), (areaH * (landscape ? 0.34 : 0.18)) / 1.5)));
+  const handCard = Math.round(Math.max(40, Math.min(roomy ? 170 : 120, inner / (1 + 6 * 0.4), (areaH * (landscape ? 0.34 : roomy ? 0.21 : 0.18)) / 1.5)));
 
   const ground = room();
   const order = othersAfter(me, players);
@@ -374,10 +390,13 @@ export function OsmiceTable({
   }, [firstLive, view.drawn?.id, step, reduced]);
 
   // The pile from what the middle has left once the words under it are placed.
-  const words = landscape ? 56 : 180;
+  const words = landscape ? 56 : roomy ? 210 : 180;
   const pileFromH = middle ? (middle.h - words) / 1.5 : landscape ? 64 : 88;
-  const pileFromW = landscape ? 130 : middle ? (middle.w - space.lg * 2 - space.xxl - 32) / 2 : 88;
-  const pileCard = Math.round(Math.max(44, Math.min(landscape ? 110 : 150, pileFromH, pileFromW)));
+  // Across: the middle's and the felt's padding, the felt's rim, the gap
+  // between the two, and each card's own frame (the pile's ring, the deck's
+  // edge). Counted in full, now that a tall screen lets the cap stop binding.
+  const pileFromW = landscape ? 130 : middle ? (middle.w - space.lg * 2 - space.md * 2 - 6 - space.xxl - 20) / 2 : 88;
+  const pileCard = Math.round(Math.max(44, Math.min(landscape ? 110 : roomy ? 240 : 150, pileFromH, pileFromW)));
 
   const status = game.myTurn
     ? hint
@@ -395,6 +414,7 @@ export function OsmiceTable({
     <OpponentTile
       key={seat}
       compact={landscape}
+      tileW={tileW}
       person={people[seat]!}
       cards={view.handCounts[seat]!}
       score={view.scores[seat]!}
@@ -407,7 +427,7 @@ export function OsmiceTable({
 
   const felt = (
     <View style={[styles.middle, landscape && styles.middleLand]} onLayout={measure(setMiddle)}>
-      <View style={[styles.felt, landscape && styles.feltLand, { backgroundColor: ground.felt, borderColor: ground.rim }]}>
+      <View style={[styles.felt, landscape && styles.feltLand, roomy && styles.feltRoomy, { backgroundColor: ground.felt, borderColor: ground.rim }]}>
         <View style={styles.piles}>
           <PressScale
             onPress={() => canDraw && game.myTurn && game.submit({ type: 'DRAW', seat: me })}
@@ -434,7 +454,7 @@ export function OsmiceTable({
           <Text style={[styles.remark, landscape && styles.textLand]} numberOfLines={2} accessibilityLiveRegion="polite">
             {remark}
           </Text>
-          <Text style={[styles.status, landscape && styles.textLand]} numberOfLines={2}>
+          <Text style={[styles.status, landscape ? styles.textLand : styles.statusTwoLines]} numberOfLines={2}>
             {status}
           </Text>
         </View>
@@ -503,13 +523,20 @@ export function OsmiceTable({
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: ground.page }]}>
-      {/* header */}
-      <View style={styles.header}>
-        <Button label={lang.s.ui.leaveTable} compact onPress={leave} />
-        <Text style={styles.title}>{t.name}</Text>
-        <Text style={styles.target}>{t.target(view.matchTarget)}</Text>
+      {/* header, and the online strip under it */}
+      <View
+        onLayout={(e) => {
+          const { y, height } = e.nativeEvent.layout;
+          setHeaderBottom(Math.round(y + height));
+        }}
+      >
+        <View style={styles.header}>
+          <Button label={lang.s.ui.leaveTable} compact onPress={leave} />
+          <Text style={styles.title}>{t.name}</Text>
+          <Text style={styles.target}>{t.target(view.matchTarget)}</Text>
+        </View>
+        <TableBanner />
       </View>
-      <TableBanner />
 
       <View style={[styles.body, landscape && styles.bodyLand]} onLayout={measure(setArea)}>
         {landscape ? (
@@ -525,7 +552,7 @@ export function OsmiceTable({
           </>
         ) : (
           <>
-            <View style={styles.opponents}>{opponents}</View>
+            <View style={[styles.opponents, roomy && styles.opponentsRoomy]}>{opponents}</View>
             {felt}
             {mine}
           </>
@@ -534,7 +561,7 @@ export function OsmiceTable({
 
       {/* a wild's colour */}
       {wildFor ? (
-        <View style={styles.scrim}>
+        <View style={[styles.scrim, { top: headerBottom }]}>
           <Animated.View entering={reduced ? undefined : FadeIn.duration(140)} style={[styles.sheet, { backgroundColor: ground.page }]}>
             <Text style={styles.sheetTitle}>{t.pickColour}</Text>
             <View style={styles.colourPick}>
@@ -553,40 +580,54 @@ export function OsmiceTable({
 
       {/* between rounds, and the end */}
       {game.roundOver || game.matchOver ? (
-        <View style={styles.scrim}>
-          <Animated.View entering={reduced ? undefined : FadeInDown.duration(200)} style={[styles.sheet, styles.sheetTall, { backgroundColor: ground.page }]}>
+        // In landscape the sheet starts under the header (and online under the
+        // strip too), which leaves a phone about 250px: too little for six rows
+        // stacked over the award and the button. So it goes wide instead, the
+        // scores on the left and the award and buttons beside them, and every
+        // player's row is in view without a scroll.
+        <View style={[styles.scrim, landscape && styles.scrimLand, { top: headerBottom }]}>
+          <Animated.View
+            entering={reduced ? undefined : FadeInDown.duration(200)}
+            style={[styles.sheet, styles.sheetTall, landscape && styles.sheetWide, { backgroundColor: ground.page }]}
+          >
             <Text style={styles.sheetTitle}>{sheetTitle(t, view.lastRound, game.matchOver, me, name)}</Text>
-            <RoundScores t={t} people={people} me={me} scores={view.scores} last={view.lastRound} />
-            {award && (award.xp > 0 || award.coins > 0 || award.levelUp !== null) ? (
-              <View style={styles.award}>
-                {award.xp > 0 ? (
-                  <>
-                    <Star size={16} />
-                    <Text style={[styles.awardText, num]}>+{award.xp} XP</Text>
-                  </>
+            <View style={landscape ? styles.sheetCols : styles.sheetStack}>
+              <RoundScores t={t} people={people} me={me} scores={view.scores} last={view.lastRound} wide={landscape} />
+              <View style={landscape ? styles.sheetSide : styles.sheetFoot}>
+                {award && (award.xp > 0 || award.coins > 0 || award.levelUp !== null) ? (
+                  <View style={styles.award}>
+                    {award.xp > 0 ? (
+                      <>
+                        <Star size={16} />
+                        <Text style={[styles.awardText, num]}>+{award.xp} XP</Text>
+                      </>
+                    ) : null}
+                    {award.coins > 0 ? (
+                      <>
+                        <Coin size={14} />
+                        <Text style={[styles.awardText, num]}>+{award.coins}</Text>
+                      </>
+                    ) : null}
+                    {/* A new level, the way Bela's sheet says it. */}
+                    {award.levelUp !== null ? (
+                      <Text style={[styles.levelText, num]}>
+                        {lang.s.ui.level} {award.levelUp}
+                      </Text>
+                    ) : null}
+                  </View>
                 ) : null}
-                {award.coins > 0 ? (
-                  <>
-                    <Coin size={14} />
-                    <Text style={[styles.awardText, num]}>+{award.coins}</Text>
-                  </>
-                ) : null}
-                {/* A new level, the way Bela's sheet says it. */}
-                {award.levelUp !== null ? (
-                  <Text style={[styles.levelText, num]}>
-                    {lang.s.ui.level} {award.levelUp}
-                  </Text>
-                ) : null}
+                {game.matchOver ? (
+                  // Beside the scores the column is too narrow for two buttons
+                  // side by side ("Nova partija"), so there they stack.
+                  <View style={landscape ? styles.sheetButtonsSide : styles.sheetButtons}>
+                    <Button label={g.back} onPress={onExit} />
+                    <Button label={t.newMatch} tone="strong" onPress={game.newMatch} />
+                  </View>
+                ) : (
+                  <Button label={t.nextRound} tone="strong" onPress={game.nextRound} />
+                )}
               </View>
-            ) : null}
-            {game.matchOver ? (
-              <View style={styles.sheetButtons}>
-                <Button label={g.back} onPress={onExit} />
-                <Button label={t.newMatch} tone="strong" onPress={game.newMatch} />
-              </View>
-            ) : (
-              <Button label={t.nextRound} tone="strong" onPress={game.nextRound} />
-            )}
+            </View>
           </Animated.View>
         </View>
       ) : null}
@@ -626,16 +667,27 @@ function RoundScores({
   me,
   scores,
   last,
+  wide,
 }: {
   t: Lang['osmice'];
   people: Person[];
   me: number;
   scores: number[];
   last: { winner: number; points: number; left: number[] } | null;
+  /** Beside the award and buttons (landscape) rather than above them. */
+  wide: boolean;
 }) {
   const rows = scores.map((_, seat) => seat).sort((a, b) => (last ? Number(b === last.winner) - Number(a === last.winner) : 0) || scores[b]! - scores[a]!);
+  // On a screen too short for every row the list scrolls; its bar shows for a
+  // moment when the sheet opens (and stays, on Android), so a row below the
+  // edge is never silently out of sight.
+  const list = useRef<ScrollView>(null);
+  useEffect(() => {
+    const id = setTimeout(() => list.current?.flashScrollIndicators?.(), 250);
+    return () => clearTimeout(id);
+  }, []);
   return (
-    <ScrollView style={styles.scores} contentContainerStyle={styles.scoresInner}>
+    <ScrollView ref={list} style={[styles.scores, wide && styles.scoresWide]} contentContainerStyle={styles.scoresInner} persistentScrollbar>
       <View style={styles.scoreRow} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
         <View style={styles.scoreAvatar} />
         <Text style={styles.scoreName} />
@@ -647,7 +699,7 @@ function RoundScores({
         const left = last ? last.left[seat]! : 0;
         const said = won ? `+${last!.points}` : last ? t.leftInHand(left) : '';
         return (
-          <View key={seat} style={styles.scoreRow} accessible accessibilityLabel={`${people[seat]!.name}, ${said}, ${t.score} ${scores[seat]}`}>
+          <View key={seat} style={styles.scoreRow} accessible accessibilityLabel={`${people[seat]!.name}, ${said}, ${t.totalColumn}: ${t.points(scores[seat]!)}`}>
             <Avatar id={people[seat]!.avatar} size={22} />
             <Text style={[styles.scoreName, seat === me && styles.scoreMe, won && styles.scoreWinner]} numberOfLines={1}>
               {people[seat]!.name}
@@ -670,11 +722,13 @@ function RoundScores({
   );
 }
 
-/** "Zadnja!": over a tile's corner, or in line beside a name. */
+/** "Zadnja!": over a tile's corner, or in line under a name or beside my own. */
 function LastCard({ text, reduced, over = false }: { text: string; reduced: boolean; over?: boolean }) {
   return (
     <Animated.View entering={reduced ? undefined : FadeInDown.duration(160)} style={[styles.bubble, over && styles.bubbleOver]}>
-      <Text style={styles.bubbleText}>{text}</Text>
+      <Text style={styles.bubbleText} numberOfLines={1}>
+        {text}
+      </Text>
     </Animated.View>
   );
 }
@@ -682,7 +736,8 @@ function LastCard({ text, reduced, over = false }: { text: string; reduced: bool
 /**
  * One of the others: who, how many cards, and their score — the score with
  * its unit ("188 bodova"), so the two numbers are not mistaken for each other.
- * In landscape a compact row, so five fit down the side of a phone.
+ * In landscape a compact row, so five fit down the side of a phone; on a
+ * tablet held upright a bigger tile, `tileW` wide.
  */
 function OpponentTile({
   person,
@@ -691,6 +746,7 @@ function OpponentTile({
   onTurn,
   lastCard,
   compact,
+  tileW,
   reduced,
   t,
 }: {
@@ -700,14 +756,16 @@ function OpponentTile({
   onTurn: boolean;
   lastCard: boolean;
   compact: boolean;
+  tileW?: number;
   reduced: boolean;
   t: Lang['osmice'];
 }) {
   const label = `${person.name}, ${t.cardsLeft(cards)}, ${t.points(score)}`;
+  const big = tileW !== undefined;
   const count = (
     <View style={styles.oppRow}>
-      <OsmiceCard card={null} width={compact ? 12 : 14} />
-      <Text style={[styles.oppCount, num]}>{cards}</Text>
+      <OsmiceCard card={null} width={compact ? 12 : big ? 20 : 14} />
+      <Text style={[big ? styles.oppCountBig : styles.oppCount, num]}>{cards}</Text>
     </View>
   );
   if (compact) {
@@ -720,24 +778,28 @@ function OpponentTile({
           </Text>
           <View style={styles.oppLine}>
             {count}
-            <Text style={[styles.oppScore, num]} numberOfLines={1}>
-              {t.points(score)}
-            </Text>
+            {/* "Zadnja!" stands in for the score for its moment, under the name: in
+                the row beside it, it squeezed the name down to one letter. */}
+            {lastCard ? (
+              <LastCard text={t.lastCard} reduced={reduced} />
+            ) : (
+              <Text style={[styles.oppScore, num]} numberOfLines={1}>
+                {t.points(score)}
+              </Text>
+            )}
           </View>
         </View>
-        {/* Beside the name, not over the corner: in the narrow rail a corner bubble sat on the name. */}
-        {lastCard ? <LastCard text={t.lastCard} reduced={reduced} /> : null}
       </View>
     );
   }
   return (
-    <View style={[styles.opponent, onTurn && styles.onTurn]} accessible accessibilityLabel={label}>
-      <Avatar id={person.avatar} size={34} />
-      <Text style={[styles.oppName, styles.oppNameTile]} numberOfLines={1}>
+    <View style={[styles.opponent, big && [styles.opponentBig, { width: tileW }], onTurn && styles.onTurn]} accessible accessibilityLabel={label}>
+      <Avatar id={person.avatar} size={big ? 48 : 34} />
+      <Text style={[styles.oppName, styles.oppNameTile, big && [styles.oppNameBig, { maxWidth: tileW - space.sm * 2 }]]} numberOfLines={1}>
         {person.name}
       </Text>
       {count}
-      <Text style={[styles.oppScore, num]} numberOfLines={1}>
+      <Text style={[big ? styles.oppScoreBig : styles.oppScore, num]} numberOfLines={1}>
         {t.points(score)}
       </Text>
       {lastCard ? <LastCard text={t.lastCard} reduced={reduced} over /> : null}
@@ -762,6 +824,8 @@ const styles = StyleSheet.create({
   sideRail: { flexGrow: 0, flexShrink: 0 },
   side: { paddingLeft: space.md, paddingTop: space.sm, paddingBottom: space.md, gap: space.sm },
   opponents: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: space.sm, paddingHorizontal: space.md, paddingTop: space.sm },
+  // On a tablet the others spread across the top rather than huddle in the middle.
+  opponentsRoomy: { justifyContent: 'space-evenly', gap: space.md, paddingHorizontal: space.lg, paddingTop: space.md },
   opponent: {
     alignItems: 'center',
     width: 92,
@@ -771,16 +835,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: stroke.hair,
   },
+  opponentBig: { paddingVertical: space.sm },
   opponentCompact: { width: '100%', flexDirection: 'row', gap: space.sm, paddingHorizontal: space.sm },
   onTurn: { borderColor: signal.turn, backgroundColor: surface.raised },
   oppText: { flex: 1, minWidth: 0 },
   oppName: { ...type.caption, color: ink.hi, maxWidth: 140 },
   oppNameTile: { marginTop: 2, maxWidth: 84 },
+  oppNameBig: { ...type.sub, marginTop: space.xs },
   oppLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginTop: 2 },
   oppRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   oppCount: { ...type.sub, color: ink.hi },
+  oppCountBig: { ...type.body, color: ink.hi },
   oppScore: { ...type.caption, color: ink.mid, marginTop: 1 },
-  bubble: { backgroundColor: theme.accent, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 2 },
+  oppScoreBig: { ...type.sub, color: ink.mid, marginTop: 2 },
+  bubble: { flexShrink: 1, backgroundColor: theme.accent, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 2 },
   bubbleOver: { position: 'absolute', top: -8, right: -4 },
   bubbleText: { ...type.caption, color: garb.ink, fontFamily: font.bold },
   // The middle can only ever have what is left: it never paints over the others or the hand.
@@ -788,6 +856,9 @@ const styles = StyleSheet.create({
   middleLand: { paddingHorizontal: space.md, paddingVertical: space.xs },
   felt: { alignItems: 'center', paddingVertical: space.md, paddingHorizontal: space.md, borderRadius: radius.lg, borderWidth: 3 },
   feltLand: { flexDirection: 'row', paddingVertical: space.sm, gap: space.lg },
+  // On a tall screen the table takes the whole middle, the piles and the words
+  // spread down it, rather than a small felt with a band of bare page above and below.
+  feltRoomy: { flex: 1, justifyContent: 'space-evenly', marginVertical: space.md },
   piles: { flexDirection: 'row', alignItems: 'center', gap: space.xxl },
   deck: { borderRadius: radius.card, borderWidth: 2, borderColor: 'transparent' },
   deckLive: { borderColor: signal.turn },
@@ -802,6 +873,8 @@ const styles = StyleSheet.create({
   direction: { ...type.h3, color: ink.mid },
   remark: { ...type.sub, color: ink.mid, marginTop: 6, minHeight: type.sub.lineHeight * 2, textAlign: 'center', paddingHorizontal: space.sm },
   status: { ...type.body, color: ink.hi, fontFamily: font.bold, marginTop: 2, textAlign: 'center', paddingHorizontal: space.sm },
+  // Two lines' room whether it says one or two, so the felt under it never jumps as it wraps.
+  statusTwoLines: { minHeight: type.body.lineHeight * 2 },
   textLand: { textAlign: 'left', paddingHorizontal: 0 },
   me: { paddingTop: space.sm, paddingBottom: space.sm, borderTopWidth: 1, borderTopColor: stroke.hair },
   meOnTurn: { borderTopColor: signal.turn },
@@ -825,13 +898,26 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: space.lg,
   },
+  // Landscape: every pixel of height goes to the rows.
+  scrimLand: { paddingVertical: space.sm },
   sheet: { width: '100%', maxWidth: 420, borderRadius: radius.panel, padding: space.lg, gap: space.md, borderWidth: 1, borderColor: stroke.edge },
   sheetTall: { maxHeight: '100%' },
+  sheetWide: { maxWidth: 620, paddingVertical: space.md, gap: space.sm },
+  // The portrait sheet's one column; the scores in it may shrink and scroll.
+  sheetStack: { gap: space.md, flexShrink: 1, minHeight: 0 },
+  sheetFoot: { gap: space.md },
+  sheetCols: { flexDirection: 'row', alignItems: 'center', gap: space.lg, flexShrink: 1, minHeight: 0 },
+  sheetSide: { width: 200, gap: space.md, justifyContent: 'center' },
+  sheetButtonsSide: { gap: space.sm },
   sheetTitle: { ...type.h2, color: ink.hi, textAlign: 'center' },
   colourPick: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, justifyContent: 'center' },
   swatch: { width: 140, paddingVertical: space.md, borderRadius: radius.md, alignItems: 'center', borderWidth: 1, borderColor: stroke.edge },
   swatchText: { ...type.h3, color: garb.cream },
   scores: { flexGrow: 0, flexShrink: 1 },
+  // Beside the award and buttons it takes the rest of the width, and the row's
+  // full height. Spelled out rather than `flex: 1`: the `flexGrow: 0` above
+  // would win over the shorthand, and the list would shrink to no width at all.
+  scoresWide: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0, alignSelf: 'stretch' },
   scoresInner: { gap: space.xs },
   scoreRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   scoreAvatar: { width: 22 },

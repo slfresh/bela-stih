@@ -26,14 +26,26 @@ export function RulesSheet({ lang, game, onClose }: { lang: Lang; game: OtherGam
   const strings = game === 'osmice' ? lang.osmice : game === 'holdem' ? lang.holdem : game === 'blackjack' ? lang.blackjack : lang.baccarat;
   return (
     <View style={styles.scrim} accessibilityViewIsModal>
-      {/* The tap beside the sheet. Out of a screen reader's way: it has the
-          sheet's own Back button, and the label is for anything that lists it anyway. */}
+      {/* The tap beside the sheet. A Pressable, because on the web its onPress
+          runs on the click itself: a plain View closing on touchend unmounted
+          at once, and the click a phone browser sends after the tap then
+          landed on whatever home control was under the finger (a Play, a
+          quick-play table, the rules again). The scrim takes that click now.
+          It is no button for a keyboard or a screen reader, though: without
+          tabIndex -1 react-native-web makes it a tab stop the size of the
+          screen, and aria-hidden (the web) with the two native flags keeps it
+          out of every screen reader's list, so its label (there for anything
+          that lists it anyway) is never a second "Back". The sheet's own Back
+          button, the Back key and Escape close it without a pointer. */}
       <Pressable
         style={StyleSheet.absoluteFill}
         onPress={onClose}
+        tabIndex={-1}
         accessible={false}
-        importantForAccessibility="no"
         accessibilityLabel={lang.games.back}
+        aria-hidden
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
       />
       <View style={[styles.sheet, { backgroundColor: room().page }]}>
         <Text style={styles.title}>{strings.name}</Text>

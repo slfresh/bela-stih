@@ -158,6 +158,7 @@ const BACCARAT: Record<LocaleId, BaccaratStrings> = {
       'Svaka strana dobiva dvije karte; računa se samo zadnja znamenka zbroja: as 1, desetka i slike 0.',
       'Treća karta vuče se po stalnim pravilima — nitko ništa ne bira.',
       'Bliže devetki pobjeđuje. Igrač plaća 1:1, bankar 1:1 manje 5 %, neriješeno 8:1.',
+      'Provizija na bankara vodi se za svako mjesto posebno i uzima se samo u cijelim žetonima, čim se duguje cijeli žeton; ostatak čeka sljedeći dobitak na bankaru, a manje od žetona na kraju partije se ne naplaćuje.',
     ],
   },
   'sr-Cyrl': {
@@ -177,6 +178,7 @@ const BACCARAT: Record<LocaleId, BaccaratStrings> = {
       'Свака страна добија две карте; рачуна се само последња цифра збира: ас 1, десетка и слике 0.',
       'Трећа карта вуче се по сталним правилима — нико ништа не бира.',
       'Ближе деветки побеђује. Играч плаћа 1:1, банкар 1:1 мање 5 %, нерешено 8:1.',
+      'Провизија на банкара води се за свако место посебно и узима се само у целим жетонима, чим се дугује цео жетон; остатак чека следећи добитак на банкару, а мање од жетона на крају партије се не наплаћује.',
     ],
   },
   en: {
@@ -196,6 +198,7 @@ const BACCARAT: Record<LocaleId, BaccaratStrings> = {
       'Each side gets two cards; only the last digit of the total counts: an ace is 1, tens and courts 0.',
       'A third card is drawn by fixed rules — nobody chooses anything.',
       'Closest to nine wins. Player pays 1:1, banker 1:1 less 5%, a tie 8:1.',
+      "The banker commission is kept per seat and taken in whole chips once a whole chip is owed; the rest waits for that seat's next banker win, and less than a chip still owed when the match ends is let go.",
     ],
   },
 };

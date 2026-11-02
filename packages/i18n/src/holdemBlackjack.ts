@@ -43,7 +43,7 @@ export interface HoldemStrings {
   youWin: (amount: number, hand: string | null) => string;
   /** A pot shared between several players: "Grandma and Moustache split 60". */
   split: (names: readonly string[], amount: number, hand: string | null) => string;
-  /** A pot the person shares with the others named: "You and Grandma split 60". */
+  /** A pot the person shares with the others named, the person first: "You and Grandma split 60", "You, Grandma and Moustache split 90". */
   youSplit: (others: readonly string[], amount: number, hand: string | null) => string;
   /** Which pot a line is about, once a hand has side pots: "Main pot: …", "Side pot 2: …". */
   mainPot: (line: string) => string;
@@ -51,7 +51,8 @@ export interface HoldemStrings {
   /** A bet nobody called, handed back: not a win. */
   returned: (name: string, amount: number) => string;
   youReturned: (amount: number) => string;
-  eliminated: (name: string) => string;
+  /** Everyone else who went out this hand, in one line: "Grandma is out", "Grandma and Student are out". */
+  eliminated: (names: readonly string[]) => string;
   /** The person is out of chips: their match is over. */
   youOut: string;
   /** Under a seat (mine included) that has folded this hand. */
@@ -140,12 +141,12 @@ const HOLDEM: Record<LocaleId, HoldemStrings> = {
     wins: (name, amount, hand) => (hand ? `${name} uzima ${amount} (${hand})` : `${name} uzima ${amount}`),
     youWin: (amount, hand) => (hand ? `Uzimaš ${amount} (${hand})` : `Uzimaš ${amount}`),
     split: (names, amount, hand) => `${list(names, 'i')} dijele ${amount}${hand ? ` (${hand})` : ''}`,
-    youSplit: (others, amount, hand) => `Ti i ${list(others, 'i')} dijelite ${amount}${hand ? ` (${hand})` : ''}`,
+    youSplit: (others, amount, hand) => `${list(['Ti', ...others], 'i')} dijelite ${amount}${hand ? ` (${hand})` : ''}`,
     mainPot: (line) => `Glavni pot: ${line}`,
     sidePot: (n, line) => `Sporedni pot${n === null ? '' : ` ${n}`}: ${line}`,
     returned: (name, amount) => `${name} dobiva natrag ${amount} koje nitko nije pratio`,
     youReturned: (amount) => `Dobivaš natrag ${amount} koje nitko nije pratio`,
-    eliminated: (name) => `${name} ispada`,
+    eliminated: (names) => `${list(names, 'i')} ${names.length === 1 ? 'ispada' : 'ispadaju'}`,
     youOut: 'Ispadaš: nemaš više žetona',
     folded: 'Izvan ruke',
     handOf: (n) => `Ruka ${n}`,
@@ -175,12 +176,12 @@ const HOLDEM: Record<LocaleId, HoldemStrings> = {
     wins: (name, amount, hand) => (hand ? `${name} узима ${amount} (${hand})` : `${name} узима ${amount}`),
     youWin: (amount, hand) => (hand ? `Узимаш ${amount} (${hand})` : `Узимаш ${amount}`),
     split: (names, amount, hand) => `${list(names, 'и')} деле ${amount}${hand ? ` (${hand})` : ''}`,
-    youSplit: (others, amount, hand) => `Ти и ${list(others, 'и')} делите ${amount}${hand ? ` (${hand})` : ''}`,
+    youSplit: (others, amount, hand) => `${list(['Ти', ...others], 'и')} делите ${amount}${hand ? ` (${hand})` : ''}`,
     mainPot: (line) => `Главни пот: ${line}`,
     sidePot: (n, line) => `Споредни пот${n === null ? '' : ` ${n}`}: ${line}`,
     returned: (name, amount) => `${name} добија назад ${amount} које нико није пратио`,
     youReturned: (amount) => `Добијаш назад ${amount} које нико није пратио`,
-    eliminated: (name) => `${name} испада`,
+    eliminated: (names) => `${list(names, 'и')} ${names.length === 1 ? 'испада' : 'испадају'}`,
     youOut: 'Испадаш: немаш више жетона',
     folded: 'Ван руке',
     handOf: (n) => `Рука ${n}`,
@@ -210,12 +211,12 @@ const HOLDEM: Record<LocaleId, HoldemStrings> = {
     wins: (name, amount, hand) => (hand ? `${name} wins ${amount} with ${hand}` : `${name} wins ${amount}`),
     youWin: (amount, hand) => (hand ? `You win ${amount} with ${hand}` : `You win ${amount}`),
     split: (names, amount, hand) => `${list(names, 'and')} split ${amount}${hand ? ` with ${hand}` : ''}`,
-    youSplit: (others, amount, hand) => `You and ${list(others, 'and')} split ${amount}${hand ? ` with ${hand}` : ''}`,
+    youSplit: (others, amount, hand) => `${list(['You', ...others], 'and')} split ${amount}${hand ? ` with ${hand}` : ''}`,
     mainPot: (line) => `Main pot: ${line}`,
     sidePot: (n, line) => `Side pot${n === null ? '' : ` ${n}`}: ${line}`,
     returned: (name, amount) => `${name} gets back ${amount} nobody called`,
     youReturned: (amount) => `You get back ${amount} nobody called`,
-    eliminated: (name) => `${name} is out`,
+    eliminated: (names) => `${list(names, 'and')} ${names.length === 1 ? 'is' : 'are'} out`,
     youOut: 'You are out of chips',
     folded: 'Folded',
     handOf: (n) => `Hand ${n}`,

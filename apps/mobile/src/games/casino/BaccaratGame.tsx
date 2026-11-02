@@ -32,6 +32,8 @@ import { font, ink, num, radius, signal, space, stroke, surface, theme, type } f
  */
 
 const STACK = 1000;
+/** A bead and the gap under it. */
+const BEAD_STEP = 18;
 
 export function BaccaratGame({ settings, players, level, onExit }: { settings: Settings; players: number; level: BotLevel; onExit: () => void }) {
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
@@ -66,6 +68,10 @@ export function BaccaratTable({ stack, report, finish, lang, settings, leave, pl
   const reduced = useMotionPolicy(settings.motion) === 'reduced';
   const { width, height } = useWindowDimensions();
   const landscape = width > height;
+  // A tablet has the height for the full six-row road and the table's usual
+  // spacing; a phone, upright or on its side, is kept tight enough that the
+  // road shows whole above the footer.
+  const roomy = height >= 900;
   const [chip, setChip] = useState(25);
 
   // What the person has on the table this coup, from their own events: the
@@ -77,8 +83,38 @@ export function BaccaratTable({ stack, report, finish, lang, settings, leave, pl
   const [shown, setShown] = useState(Number.POSITIVE_INFINITY);
   // The person bet in at least one coup: only then is the match theirs to count.
   const played = useRef(false);
+  // The table as it stood at "no more bets": every stack and every bet, and
+  // who was out. The engine pays a coup the moment it is dealt, so while the
+  // cards turn one by one the live stacks would already tell how it ended;
+  // the deal shows this instead, and the live figures once the last card lands.
+  const lastBetting = useRef<Pick<BaccaratView, 'coupNumber' | 'stacks' | 'bets' | 'out'> | null>(null);
+  const [held, setHeld] = useState<Pick<BaccaratView, 'coupNumber' | 'stacks' | 'bets' | 'out'> | null>(null);
 
   const game = source((e: BaccaratEvent, view: BaccaratView) => {
+    // Every event of the betting comes with the table after it, so the last
+    // one before the deal holds the final bets; the deal's own events come
+    // with the table already paid.
+    if (view.phase === 'BETTING') lastBetting.current = { coupNumber: view.coupNumber, stacks: view.stacks, bets: view.bets, out: view.out };
+    else if ((e.kind === 'betPlaced' || e.kind === 'betsCleared') && lastBetting.current?.coupNumber === view.coupNumber) {
+      // The bets of the move that closed the betting come in one batch with
+      // the deal, every event with the table already paid: a bot that answers
+      // after the person taps Deal sends its chips, its READY and the deal
+      // together. Its bets are played onto the betting table by hand, so the
+      // deal shows its chips down and its stack less them, like everyone else's.
+      const was = lastBetting.current;
+      const stacks = was.stacks.slice();
+      const bets = was.bets.slice();
+      const seat = e.seat;
+      const had = bets[seat]!;
+      if (e.kind === 'betPlaced') {
+        stacks[seat] = stacks[seat]! - e.amount;
+        bets[seat] = { ...had, [e.spot]: had[e.spot] + e.amount };
+      } else {
+        stacks[seat] = stacks[seat]! + betTotal(had);
+        bets[seat] = { player: 0, banker: 0, tie: 0 };
+      }
+      lastBetting.current = { ...was, stacks, bets };
+    }
     if (e.kind === 'coupStarted') {
       staking.current = { player: 0, banker: 0, tie: 0 };
       setStaked(null);
@@ -89,6 +125,10 @@ export function BaccaratTable({ stack, report, finish, lang, settings, leave, pl
     }
     if (e.kind === 'betsCleared' && e.seat === me) staking.current = { player: 0, banker: 0, tie: 0 };
     if (e.kind === 'dealt') {
+      // Only this coup's betting will do: a coup nobody could bet on is dealt
+      // at once, and the last betting seen is then an earlier coup's.
+      const before = lastBetting.current;
+      setHeld(before && before.coupNumber === view.coupNumber ? before : null);
       // A card at a time, as a croupier deals them; all at once when motion is reduced.
       if (reduced) {
         playSfx('deal');
@@ -112,6 +152,9 @@ export function BaccaratTable({ stack, report, finish, lang, settings, leave, pl
   const coup = v.lastCoup;
   const dealCount = coup?.order.length ?? 0;
   const dealing = coup !== null && shown < dealCount;
+  // What the table shows: as it stood at "no more bets" while the deal plays,
+  // live otherwise (and at once when motion is reduced: there is no deal to wait for).
+  const table = dealing && held && held.coupNumber === v.coupNumber ? held : v;
 
   // The deal, one beat per card.
   useEffect(() => {
@@ -178,7 +221,11 @@ export function BaccaratTable({ stack, report, finish, lang, settings, leave, pl
 
   const net = v.lastNet?.[me] ?? 0;
   const stake = staked ? betTotal(staked) : 0;
-  const netText = net > 0 ? c.won(net) : net < 0 ? c.lost(-net) : c.pushed;
+  // "Bets returned" only when they were: a tie hands back the player and
+  // banker bets. Any other coup that comes to nothing (500 on the player and
+  // 500 on the tie, one lost and one paid) returned nothing; it came out even.
+  const pushed = resolved && coup.outcome === 'tie' && staked !== null && staked.tie === 0;
+  const netText = net > 0 ? c.won(net) : net < 0 ? c.lost(-net) : pushed ? c.pushed : c.even;
   const netStyle = [styles.net, num, net > 0 ? styles.netWin : net < 0 ? styles.netLose : null];
 
   // The coup's win or loss sounds as its last card lands, not as the deal starts.
@@ -205,10 +252,10 @@ export function BaccaratTable({ stack, report, finish, lang, settings, leave, pl
           <Text style={styles.seatName} numberOfLines={1}>
             {people[seat]!.name}
           </Text>
-          <Text style={[styles.seatStack, num]}>{v.out[seat] ? c.out : v.stacks[seat]}</Text>
+          <Text style={[styles.seatStack, num]}>{table.out[seat] ? c.out : table.stacks[seat]}</Text>
           {/* The pile's room is kept when it is empty, so the table does not jump as bets come and go. */}
           <View style={styles.seatPile}>
-            <ChipPile amount={betTotal(v.bets[seat]!)} size={16} />
+            <ChipPile amount={betTotal(table.bets[seat]!)} size={16} />
           </View>
         </View>
       ))}
@@ -250,34 +297,55 @@ export function BaccaratTable({ stack, report, finish, lang, settings, leave, pl
   const roadSoFar = dealing ? v.road.slice(0, -1) : v.road;
   const counts = { player: 0, banker: 0, tie: 0 };
   for (const o of roadSoFar) counts[o] += 1;
-  const recent = roadSoFar.slice(-36);
-  const columns = Array.from({ length: Math.ceil(recent.length / 6) }, (_, x) => recent.slice(x * 6, x * 6 + 6));
+  // Six rows where the screen has the height for them. A phone, upright or
+  // on its side, gets three, with the caption and the key beside them rather
+  // than over them, so the whole road shows above the footer without
+  // scrolling the table; it keeps as many columns as its width holds. Old
+  // columns drop off whole, so a column never reshuffles as a coup joins it.
+  const rows = roomy ? 6 : 3;
+  const [roadW, setRoadW] = useState(0);
+  const maxColumns = roomy ? 6 : Math.max(1, Math.floor((roadW + 2) / BEAD_STEP));
+  const allColumns = Math.ceil(roadSoFar.length / rows);
+  const recent = roadSoFar.slice(Math.max(0, allColumns - maxColumns) * rows);
+  const columns = Array.from({ length: Math.ceil(recent.length / rows) }, (_, x) => recent.slice(x * rows, x * rows + rows));
   const bead = (o: Spot) => [styles.bead, o === 'player' ? styles.beadP : o === 'banker' ? styles.beadB : styles.beadT];
-  const road = (
+  const legendItems = (['player', 'banker', 'tie'] as const).map((o) => (
+    <View key={o} style={styles.legendItem}>
+      <View style={bead(o)}>
+        <Text style={styles.beadText}>{t.bead[o]}</Text>
+      </View>
+      <Text style={styles.legendText} numberOfLines={1}>
+        {label[o]}
+      </Text>
+    </View>
+  ));
+  // Columns, oldest first, read down and then across, as a bead road is.
+  const beads = (
+    <View style={[styles.road, { minHeight: rows * BEAD_STEP }, !roomy && styles.roadFit]} onLayout={roomy ? undefined : (e) => setRoadW(e.nativeEvent.layout.width)}>
+      {columns.map((col, x) => (
+        <View key={x} style={styles.roadCol}>
+          {col.map((o, y) => (
+            <View key={y} style={bead(o)}>
+              <Text style={styles.beadText}>{t.bead[o]}</Text>
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  );
+  const road = roomy ? (
     <View style={styles.roadBox} accessible accessibilityLabel={t.roadSummary(counts.player, counts.banker, counts.tie)}>
       <View style={styles.legend}>
         <Text style={styles.legendTitle}>{t.road}</Text>
-        {(['player', 'banker', 'tie'] as const).map((o) => (
-          <View key={o} style={styles.legendItem}>
-            <View style={bead(o)}>
-              <Text style={styles.beadText}>{t.bead[o]}</Text>
-            </View>
-            <Text style={styles.legendText}>{label[o]}</Text>
-          </View>
-        ))}
+        {legendItems}
       </View>
-      {/* Columns of six, oldest first, read down and then across, as a bead road is. */}
-      <View style={styles.road}>
-        {columns.map((col, x) => (
-          <View key={x} style={styles.roadCol}>
-            {col.map((o, y) => (
-              <View key={y} style={bead(o)}>
-                <Text style={styles.beadText}>{t.bead[o]}</Text>
-              </View>
-            ))}
-          </View>
-        ))}
-      </View>
+      {beads}
+    </View>
+  ) : (
+    <View style={styles.roadLine} accessible accessibilityLabel={t.roadSummary(counts.player, counts.banker, counts.tie)}>
+      <Text style={[styles.legendTitle, styles.roadTitle]}>{t.road}</Text>
+      <View style={styles.legendColumn}>{legendItems}</View>
+      {beads}
     </View>
   );
 
@@ -324,7 +392,7 @@ export function BaccaratTable({ stack, report, finish, lang, settings, leave, pl
         <Text style={styles.meName} numberOfLines={1}>
           {people[me]!.name}
         </Text>
-        <Text style={[styles.meStack, num]}>{out ? c.out : c.balance(myStack)}</Text>
+        <Text style={[styles.meStack, num]}>{table.out[me] ? c.out : c.balance(table.stacks[me]!)}</Text>
       </View>
       {/* One height for betting and the result alike. */}
       <View style={styles.controls}>
@@ -355,7 +423,7 @@ export function BaccaratTable({ stack, report, finish, lang, settings, leave, pl
       <CasinoHeader lang={lang} title={t.name} round={c.roundOf(v.coupNumber, v.coups)} onLeave={leave} />
       {landscape ? (
         <View style={styles.land}>
-          <ScrollView style={styles.fill} contentContainerStyle={styles.scroll}>
+          <ScrollView style={styles.fill} contentContainerStyle={[styles.scroll, !roomy && styles.scrollTight]}>
             {seatsStrip}
             {coupPanels}
             <Text style={styles.line}>{resultLine}</Text>
@@ -368,7 +436,7 @@ export function BaccaratTable({ stack, report, finish, lang, settings, leave, pl
         </View>
       ) : (
         <>
-          <ScrollView style={styles.fill} contentContainerStyle={styles.scroll}>
+          <ScrollView style={styles.fill} contentContainerStyle={[styles.scroll, !roomy && styles.scrollTight]}>
             {seatsStrip}
             {coupPanels}
             <Text style={styles.line}>{resultLine}</Text>
@@ -386,6 +454,8 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
   // Grows to the screen and centres, so a tablet's table sits in the middle rather than the top.
   scroll: { padding: space.lg, gap: space.md, flexGrow: 1, justifyContent: 'center' },
+  // A phone's height is the table's scarcest room: every row of it closer together.
+  scrollTight: { paddingVertical: space.sm, gap: space.sm },
   land: { flex: 1, flexDirection: 'row' },
   landRight: { width: '44%', justifyContent: 'flex-end', paddingTop: space.sm, gap: space.sm },
   // A horizontal scroller grows by default: on a tall screen it took the whole column.
@@ -435,7 +505,12 @@ const styles = StyleSheet.create({
   legendTitle: { ...type.caption, color: ink.mid },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendText: { ...type.caption, color: ink.mid },
-  road: { flexDirection: 'row', gap: 2, minHeight: 6 * 18 },
+  road: { flexDirection: 'row', gap: 2 },
+  // On a phone: the caption, the key down the side, and the beads in what is left.
+  roadLine: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  roadTitle: { maxWidth: 72 },
+  legendColumn: { gap: 2 },
+  roadFit: { flex: 1 },
   roadCol: { gap: 2 },
   bead: { width: 16, height: 16, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
   beadText: { ...type.caption, lineHeight: 16, color: ink.hi, fontFamily: font.bold },

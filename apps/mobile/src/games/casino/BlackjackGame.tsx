@@ -25,14 +25,20 @@ import { font, ink, num, radius, signal, space, stroke, surface, theme, type } f
  * box, deal, then hit, stand, double or split; the dealer plays by the house
  * rules and the round is paid.
  *
- * The dealer along the top and my box along the bottom stay put, with the
- * chips and the moves in a bar pinned under them; only the other boxes
- * scroll. The dealer's up-card is what every decision hangs on, so it never
- * scrolls away to reach a button. Cards are sized from the screen, so a
- * tablet fills its room; a phone on its side puts my box beside the dealer.
+ * The dealer along the top stays put, with the chips and the moves in a bar
+ * pinned under the table; only the other boxes scroll. The dealer's up-card
+ * is what every decision hangs on, so it never scrolls away to reach a
+ * button. Every box keeps the height a hand will need from before the first
+ * chip, so a bet, the deal and the payout never shift the table. Cards are
+ * sized from the screen, so a tablet fills its room; a phone on its side
+ * puts my box beside the dealer.
  */
 
 const STACK = 1000;
+/** The width a chip pile beside my hand takes, its amount under it included. */
+const PILE_W = 36;
+/** Upright, the header (with its play-money line) and the bar with the chips in it, together. */
+const TALL_CHROME = 200;
 
 export function BlackjackGame({ settings, players, level, onExit }: { settings: Settings; players: number; level: BotLevel; onExit: () => void }) {
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
@@ -61,16 +67,34 @@ export function BlackjackGame({ settings, players, level, onExit }: { settings: 
   );
 }
 
-function Cards({ cards, width }: { cards: (Card52 | null)[]; width: number }) {
+/**
+ * A hand of cards, each after the first showing 55% of itself. Given the
+ * `room` across, a long hand closes up instead of running out of its box:
+ * the cards overlap more, down to showing a little over a fifth of each, where
+ * the rank in the corner still reads; only a hand too long even for that
+ * takes smaller cards. The usual two to four cards keep their full size.
+ */
+function Cards({ cards, width, room }: { cards: (Card52 | null)[]; width: number; room?: number }) {
+  const { w, step } = closeUp(cards.length, width, room);
   return (
     <View style={styles.cards}>
       {cards.map((c, i) => (
-        <View key={c ? c.id : `down-${i}`} style={i > 0 ? { marginLeft: -width * 0.45 } : undefined}>
-          <Card52View card={c} width={width} />
+        <View key={c ? c.id : `down-${i}`} style={i > 0 ? { marginLeft: step - w } : undefined}>
+          <Card52View card={c} width={w} />
         </View>
       ))}
     </View>
   );
+}
+
+/** How wide each card is and how far along the next one starts, for `n` cards in `room`. */
+function closeUp(n: number, width: number, room?: number): { w: number; step: number } {
+  const open = width * 0.55;
+  if (n < 2 || room === undefined || width + open * (n - 1) <= room) return { w: width, step: open };
+  const least = 0.22;
+  if (width * (1 + least * (n - 1)) <= room) return { w: width, step: (room - width) / (n - 1) };
+  const w = Math.floor(room / (1 + least * (n - 1)));
+  return { w, step: w * least };
 }
 
 /** What a settled hand made or lost, as the engine pays it: an odd half chip on a blackjack goes to the player. */
@@ -172,15 +196,74 @@ export function BlackjackTable({ stack, report, finish, lang, settings, leave, p
   const tablet = Math.min(win.width, win.height) >= 600;
   // The room between the header and the bar, roughly.
   const roomH = win.height - 160;
-  const myW = landscape ? clamp(36, roomH * 0.25, 100) : clamp(48, win.height * 0.08, 110);
+  const contentW = win.width - 2 * space.md;
+  const others = othersAfter(me, players);
+  // The other boxes take the row's width, all four to a row at most (five
+  // players), and their cards grow with the tile and, upright, with the
+  // height there is.
+  const perRow = Math.min(Math.max(others.length, 1), 4);
+  const tileW = landscape ? (tablet ? 132 : 96) : clamp(tablet ? 132 : 72, (contentW - (perRow - 1) * space.sm) / perRow, tablet ? 180 : 150);
+  const botW = landscape ? Math.round(tileW * 0.3) : clamp(29, Math.min((tileW - 2 * space.xs - 2) / 2.65, roomH * 0.05), 60);
+
+  // Every panel is as tall from the first chip as it will be in play: the
+  // dealer's with room for its cards, my box and each bot's with room for a
+  // hand, its total and its call (a bot's chips too). So a chip, the deal and
+  // the payout fill places already there, and nothing on the table moves.
+  const botHandH = Math.round(botW * 1.5) + 3 * type.caption.lineHeight + 14 + 2 + 2 * 2;
+  // A bot's tile: its padding and border, the face, the stack and the hand.
+  const botTileH = 2 * space.xs + 2 + 22 + 2 + type.caption.lineHeight + 2 + botHandH;
+
+  // Upright, the cards are as big as the room allows while the bar is at its
+  // tallest, with the chips in it: a tall phone alone with the dealer gets
+  // big cards, not a band of empty felt, and a full table shares the height
+  // with the other boxes. The dealer's panel is its cards (90% of mine) and
+  // its title; my box is a hand with its total and call, under my name.
+  // Never wider than a split pair of hands can sit side by side.
+  // A hand of mine past its cards: its padding and border, and the total and
+  // the call under the cards with their gaps.
+  const handExtra = 2 * space.xs + 2 + 2 * 4 + 2 * type.h3.lineHeight;
+  const dealerExtra = type.h3.lineHeight + space.xs + 2 * space.md + 2;
+  const boxExtra = 26 + space.sm + 2 * space.md + 2 + handExtra;
+  const boxRows = others.length === 0 ? 0 : Math.ceil(others.length / perRow);
+  const rowsH = boxRows > 0 ? boxRows * botTileH + (boxRows - 1) * space.sm + space.md : 0;
+  // What is left for the cards themselves: my hand at 1.5 card widths tall, the dealer's at 0.9 of that.
+  const spare = win.height - TALL_CHROME - 3 * space.md - rowsH - dealerExtra - boxExtra;
+  const myW = landscape ? clamp(36, roomH * 0.25, 100) : clamp(48, Math.min(spare / 2.85, contentW * 0.28), 140);
   const dealerW = landscape ? clamp(32, roomH * 0.2, 90) : Math.round(myW * 0.9);
-  const tileW = tablet ? 132 : 96;
-  const botW = Math.round(tileW * 0.3);
+
+  // A split pair sits side by side: each hand's cards a size down, so the two
+  // fit across the box instead of wrapping past the bar.
+  const handW = !landscape && myHands.length > 1 ? Math.min(myW, clamp(36, myW * 0.7, 80)) : myW;
+
+  const dealerCardsH = Math.round(dealerW * 1.5);
+  const myHandH = Math.round(myW * 1.5) + handExtra;
+
+  // The width each hand has, so a long one closes up rather than running out
+  // of its box (see Cards). The dealer's panel and my box are a column's
+  // width less their padding and border; a hand of mine also gives up its own
+  // padding and the chip pile beside it, and split hands share the row two at
+  // a time. A bot's hand has its tile.
+  const columnW = landscape ? (win.width - 3 * space.md) / 2 : contentW;
+  const panelIn = columnW - 2 * space.md - 2;
+  const dealerRoom = panelIn;
+  const pairs = Math.min(Math.max(myHands.length, 1), 2);
+  const handRoom = (panelIn - space.lg * (pairs - 1)) / pairs - 2 * space.xs - 2 - space.sm - PILE_W;
+  const botRoom = tileW - 2 * space.xs - 2;
+
+  // The room under the dealer upright, at its smallest: while the bar holds
+  // the chips. The boxes are spread over that much and no more, so the bar
+  // folding down to the moves at the deal leaves felt under my box rather
+  // than moving it. Measured again when the window changes. A full table on
+  // a small phone does not fit that room even with the smallest cards: there
+  // the boxes take the room the deal frees, so the other hands show.
+  const sizeKey = `${Math.round(win.width)}x${Math.round(win.height)}`;
+  const [under, setUnder] = useState<{ key: string; h: number } | null>(null);
+  const holdRoom = !landscape && spare >= 2.85 * 48;
+  const underH = holdRoom && under && under.key === sizeKey ? under.h : null;
 
   const betting = v.phase === 'BETTING' && !v.ready[me];
   const playing = v.phase === 'PLAYING' && v.turn?.seat === me;
   const has = (type: string) => v.legalActions.some((a) => a.type === type);
-  const others = othersAfter(me, players);
   const net = myHands.reduce((a, h) => a + handNet(h, v.blackjackPays), 0);
   const dealerBust = v.dealerTotal !== null && v.dealerTotal > 21;
 
@@ -191,33 +274,38 @@ export function BlackjackTable({ stack, report, finish, lang, settings, leave, p
         {v.dealerTotal !== null ? `  ${v.dealerTotal}` : ''}
         {dealerBust ? `  ${t.bust}` : ''}
       </Text>
-      <Cards cards={v.dealer} width={dealerW} />
+      <View style={[styles.slot, { minHeight: dealerCardsH }]}>
+        <Cards cards={v.dealer} width={dealerW} room={dealerRoom} />
+      </View>
     </View>
   );
 
   const boxes = (
     <View style={styles.seats}>
       {others.map((seat) => (
-        <View key={seat} style={[styles.seat, { minWidth: tileW }, v.turn?.seat === seat && styles.onTurn]}>
+        <View key={seat} style={[styles.seat, { width: tileW }, v.turn?.seat === seat && styles.onTurn]}>
           <View style={styles.seatHead}>
             <Avatar id={people[seat]!.avatar} size={22} />
-            <Text style={styles.seatName} numberOfLines={1}>
+            <Text style={[styles.seatName, { maxWidth: tileW - 2 * space.xs - 2 - 22 - space.xs }]} numberOfLines={1}>
               {people[seat]!.name}
             </Text>
           </View>
           <Text style={[styles.seatStack, num]}>{v.out[seat] ? c.out : v.stacks[seat]}</Text>
-          {v.hands[seat]!.map((h, i) => {
-            const call = handCall(h, t);
-            return (
-              <View key={i} style={styles.miniHand}>
-                <Cards cards={h.cards} width={botW} />
-                <Text style={[styles.mini, num, handValue(h.cards).total > 21 && styles.bad]}>{totalLabel(h, t)}</Text>
-                {call ? <Text style={[styles.miniCall, outcomeStyle(call.outcome)]}>{call.text}</Text> : null}
-              </View>
-            );
-          })}
-          {/* Chips still riding: a paid hand's stake is already back in (or gone from) the stack. */}
-          <ChipPile amount={v.bets[seat]! + v.hands[seat]!.reduce((a, h) => a + (h.result === null ? h.bet : 0), 0)} size={14} />
+          {/* On its side the boxes scroll under the dealer by themselves, so a box that grows moves nothing: no room held there. */}
+          <View style={[styles.slot, styles.miniSlot, !landscape && { minHeight: botHandH }]}>
+            {v.hands[seat]!.map((h, i) => {
+              const call = handCall(h, t);
+              return (
+                <View key={i} style={styles.miniHand}>
+                  <Cards cards={h.cards} width={botW} room={botRoom} />
+                  <Text style={[styles.mini, num, handValue(h.cards).total > 21 && styles.bad]}>{totalLabel(h, t)}</Text>
+                  {call ? <Text style={[styles.miniCall, outcomeStyle(call.outcome)]}>{call.text}</Text> : null}
+                </View>
+              );
+            })}
+            {/* Chips still riding: a paid hand's stake is already back in (or gone from) the stack. */}
+            <ChipPile amount={v.bets[seat]! + v.hands[seat]!.reduce((a, h) => a + (h.result === null ? h.bet : 0), 0)} size={14} />
+          </View>
         </View>
       ))}
     </View>
@@ -238,25 +326,29 @@ export function BlackjackTable({ stack, report, finish, lang, settings, leave, p
           <Text style={[styles.meStack, num]}>{myStack}</Text>
         </View>
       </View>
-      {myHands.length === 0 ? <ChipPile amount={v.bets[me]!} size={30} /> : null}
-      {out ? <Text style={[styles.call, styles.bad]}>{c.out}</Text> : null}
-      <View style={styles.hands}>
-        {myHands.map((h, i) => {
-          const call = handCall(h, t);
-          return (
-            <View key={i} style={[styles.hand, v.turn?.seat === me && v.turn.hand === i && styles.handLive]}>
-              <View style={styles.handRow}>
-                <Cards cards={h.cards} width={myW} />
-                {/* Once paid, the stake is in the stack (or gone): only the net says how it went. */}
-                <ChipPile amount={h.result === null ? h.bet : 0} size={20} />
-              </View>
-              <Text style={[styles.total, num, handValue(h.cards).total > 21 && styles.bad]}>{totalLabel(h, t)}</Text>
-              <Text style={[styles.call, call ? outcomeStyle(call.outcome) : null]} accessibilityLiveRegion="polite">
-                {call?.text ?? ''}
-              </Text>
-            </View>
-          );
-        })}
+      <View style={[styles.slot, styles.mySlot, { minHeight: myHandH }]}>
+        {myHands.length === 0 ? <ChipPile amount={v.bets[me]!} size={30} /> : null}
+        {out ? <Text style={[styles.call, styles.bad]}>{c.out}</Text> : null}
+        {myHands.length > 0 ? (
+          <View style={styles.hands}>
+            {myHands.map((h, i) => {
+              const call = handCall(h, t);
+              return (
+                <View key={i} style={[styles.hand, v.turn?.seat === me && v.turn.hand === i && styles.handLive]}>
+                  <View style={styles.handRow}>
+                    <Cards cards={h.cards} width={handW} room={handRoom} />
+                    {/* Once paid, the stake is in the stack (or gone): only the net says how it went. */}
+                    <ChipPile amount={h.result === null ? h.bet : 0} size={20} />
+                  </View>
+                  <Text style={[styles.total, num, handValue(h.cards).total > 21 && styles.bad]}>{totalLabel(h, t)}</Text>
+                  <Text style={[styles.call, call ? outcomeStyle(call.outcome) : null]} accessibilityLiveRegion="polite">
+                    {call?.text ?? ''}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
       </View>
     </View>
   );
@@ -314,12 +406,28 @@ export function BlackjackTable({ stack, report, finish, lang, settings, leave, p
           <View style={styles.meWide}>{myBox}</View>
         </View>
       ) : (
+        // The dealer pinned along the top, where its up-card never moves; the
+        // other boxes and mine spread evenly down the room under it. Only the
+        // other boxes scroll, and only when a full table outgrows it.
         <View style={styles.tall}>
           {dealer}
-          <ScrollView style={styles.fill} contentContainerStyle={styles.othersScroll}>
-            {boxes}
-          </ScrollView>
-          {myBox}
+          <View
+            style={styles.fill}
+            onLayout={(e) => {
+              const h = Math.round(e.nativeEvent.layout.height);
+              if (!under || under.key !== sizeKey || h < under.h) setUnder({ key: sizeKey, h });
+            }}
+          >
+            <View style={[styles.below, underH !== null ? { height: underH } : styles.fill]}>
+              {others.length > 0 ? (
+                // No scroll bar: on the web one would take its width from the row and drop the fourth box to a row of its own.
+                <ScrollView style={styles.othersTall} contentContainerStyle={styles.othersScroll} showsVerticalScrollIndicator={false}>
+                  {boxes}
+                </ScrollView>
+              ) : null}
+              {myBox}
+            </View>
+          </View>
         </View>
       )}
       {bar}
@@ -332,22 +440,29 @@ const outcomeStyle = (o: Outcome) => (o === 'good' ? styles.good : o === 'bad' ?
 const styles = StyleSheet.create({
   fill: { flex: 1 },
   tall: { flex: 1, padding: space.md, gap: space.md },
+  below: { gap: space.md, justifyContent: 'space-evenly' },
+  othersTall: { flexGrow: 0, flexShrink: 1 },
   wide: { flex: 1, flexDirection: 'row', padding: space.md, gap: space.md },
   left: { flex: 1, flexBasis: 0 },
   meWide: { flex: 1, flexBasis: 0, justifyContent: 'center' },
   othersScroll: { flexGrow: 1, justifyContent: 'center', paddingVertical: space.xs },
   cards: { flexDirection: 'row' },
+  // The room a hand will take, held open before the cards come.
+  slot: { justifyContent: 'center', alignItems: 'center' },
+  mySlot: { alignSelf: 'stretch', gap: space.sm },
+  miniSlot: { gap: 2 },
   dealer: { alignItems: 'center', gap: space.xs, padding: space.md, borderRadius: radius.md, backgroundColor: theme.felt, borderWidth: 1, borderColor: stroke.hair },
   dealerTitle: { ...type.h3, color: ink.hi },
   seats: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, justifyContent: 'center' },
   seat: { alignItems: 'center', padding: space.xs, borderRadius: radius.md, backgroundColor: surface.panel, borderWidth: 1, borderColor: stroke.hair, gap: 2 },
   onTurn: { borderColor: signal.turn },
   seatHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
-  seatName: { ...type.caption, color: ink.hi, maxWidth: 70 },
+  seatName: { ...type.caption, color: ink.hi },
   seatStack: { ...type.caption, color: ink.mid },
   miniHand: { alignItems: 'center' },
   mini: { ...type.caption, color: ink.hi },
-  miniCall: { ...type.caption, fontFamily: font.bold },
+  // A tile is as wide as its row allows and no wider: a long call ("Blackjack 3:2") wraps under the hand instead of widening it.
+  miniCall: { ...type.caption, fontFamily: font.bold, textAlign: 'center', maxWidth: '100%' },
   box: { padding: space.md, borderRadius: radius.md, backgroundColor: surface.panel, borderWidth: 1, borderColor: stroke.hair, gap: space.sm, alignItems: 'center' },
   boxHead: { alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.sm },
   who: { flexDirection: 'row', alignItems: 'center', gap: space.xs, flexShrink: 1 },

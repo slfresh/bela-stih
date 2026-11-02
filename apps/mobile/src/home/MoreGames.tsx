@@ -49,6 +49,8 @@ function GameRow({ row, lang, onPlay, onOnline, onRules }: { row: Row; lang: Lan
     chosen.set(row.game, n);
     setPlayersState(n);
   };
+  // A table of one is the house and you: online it needs a second player.
+  const seatsPrivate = Math.max(2, players);
   return (
     <View style={styles.game}>
       <View style={styles.row}>
@@ -92,22 +94,43 @@ function GameRow({ row, lang, onPlay, onOnline, onRules }: { row: Row; lang: Lan
           button says how many: the picker above does not reach it), or a
           private table for as many as picked, to share by code. */}
       <View style={styles.onlineRow}>
-        <View style={styles.fill}>
-          <Button
-            label={g.quickPlaySeats(row.quick)}
-            accessibilityLabel={`${g.quickPlaySeats(row.quick)}: ${row.name}`}
-            onPress={() => onOnline(row.game, { kind: 'quick' })}
-          />
-        </View>
-        <View style={styles.fill}>
-          <Button
-            label={lang.s.ui.privateTable}
-            accessibilityLabel={`${lang.s.ui.privateTable}: ${row.name}`}
-            onPress={() => onOnline(row.game, { kind: 'create', seats: Math.max(2, players) })}
-          />
-        </View>
+        <OnlineButton
+          title={g.quickPlay}
+          size={g.tableOf(row.quick)}
+          accessibilityLabel={`${g.quickPlaySeats(row.quick)}: ${row.name}`}
+          onPress={() => onOnline(row.game, { kind: 'quick' })}
+        />
+        <OnlineButton
+          title={g.privateShort}
+          size={g.tableOf(seatsPrivate)}
+          accessibilityLabel={`${lang.s.ui.privateTable}: ${row.name}, ${g.tableOf(seatsPrivate)}`}
+          onPress={() => onOnline(row.game, { kind: 'create', seats: seatsPrivate })}
+        />
       </View>
     </View>
+  );
+}
+
+/**
+ * One of a row's two online buttons, half the row each: the button's short
+ * name over a smaller line with the table's size, both centred. As one
+ * phrase on Button ("Quick play · table of 4") the label wrapped at 360 to
+ * 400 px wherever the words ran out, left-aligned, in every language; two
+ * lines of their own fit each part whole. Button's plain tone and feel, from
+ * the same tokens.
+ */
+function OnlineButton({ title, size, accessibilityLabel, onPress }: { title: string; size: string; accessibilityLabel: string; onPress: () => void }) {
+  return (
+    <PressScale
+      onPress={onPress}
+      pressSound="press"
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={styles.onlineBtn}
+    >
+      <Text style={styles.onlineTitle}>{title}</Text>
+      <Text style={[styles.onlineSize, num]}>{size}</Text>
+    </PressScale>
   );
 }
 
@@ -221,7 +244,21 @@ const styles = StyleSheet.create({
   note: { ...type.caption, color: ink.lo, marginTop: space.xs, marginBottom: space.md },
   divider: { borderTopWidth: 1, borderTopColor: stroke.hair, paddingTop: space.md, marginTop: space.md },
   onlineRow: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
-  fill: { flex: 1 },
+  // minWidth 0: on the web a flex child will not shrink below its text without it.
+  onlineBtn: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: space.sm,
+    paddingVertical: space.xs + 2,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: theme.line,
+    backgroundColor: surface.chip,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  onlineTitle: { ...type.sub, color: theme.text, fontFamily: font.medium, textAlign: 'center' },
+  onlineSize: { ...type.caption, color: ink.mid, textAlign: 'center' },
   joinSub: { ...type.sub, color: ink.mid },
   joinRow: { flexDirection: 'row', gap: space.sm, alignItems: 'center' },
   // minWidth 0 lets the field give way inside its row: without it the web

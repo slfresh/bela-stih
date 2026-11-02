@@ -59,7 +59,11 @@ export interface OsmiceStrings {
   /** The round sheet's two columns: what this round did, and the match total. */
   roundColumn: string;
   totalColumn: string;
-  /** A loser's row on the round sheet, for a screen reader: what their cards were worth. */
+  /**
+   * A loser's row on the round sheet, for a screen reader: what the cards
+   * left in their hand were worth, with the unit, so "62" is not heard as
+   * sixty-two cards.
+   */
   leftInHand: (points: number) => string;
   target: (n: number) => string;
   activeColour: (colour: string) => string;
@@ -119,7 +123,7 @@ const OSMICE: Record<LocaleId, OsmiceStrings> = {
     points: (n) => `${n} ${slavic(n, 'bod', 'boda', 'bodova')}`,
     roundColumn: 'Runda',
     totalColumn: 'Ukupno',
-    leftInHand: (points) => `u ruci ostalo ${points}`,
+    leftInHand: (points) => `karte u ruci: ${points} ${slavic(points, 'bod', 'boda', 'bodova')}`,
     target: (n) => `do ${n}`,
     activeColour: (colour) => `Boja: ${colour}`,
     cardsLeft: (n) => `${n} ${slavic(n, 'karta', 'karte', 'karata')}`,
@@ -168,7 +172,7 @@ const OSMICE: Record<LocaleId, OsmiceStrings> = {
     points: (n) => `${n} ${slavic(n, 'бод', 'бода', 'бодова')}`,
     roundColumn: 'Рунда',
     totalColumn: 'Укупно',
-    leftInHand: (points) => `у руци остало ${points}`,
+    leftInHand: (points) => `карте у руци: ${points} ${slavic(points, 'бод', 'бода', 'бодова')}`,
     target: (n) => `до ${n}`,
     activeColour: (colour) => `Боја: ${colour}`,
     cardsLeft: (n) => `${n} ${slavic(n, 'карта', 'карте', 'карата')}`,
@@ -217,7 +221,7 @@ const OSMICE: Record<LocaleId, OsmiceStrings> = {
     points: (n) => (n === 1 ? '1 point' : `${n} points`),
     roundColumn: 'Round',
     totalColumn: 'Total',
-    leftInHand: (points) => `${points} left in hand`,
+    leftInHand: (points) => `cards in hand: ${points === 1 ? '1 point' : `${points} points`}`,
     target: (n) => `to ${n}`,
     activeColour: (colour) => `Colour: ${colour}`,
     cardsLeft: (n) => (n === 1 ? '1 card' : `${n} cards`),

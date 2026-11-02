@@ -71,13 +71,23 @@ type Result = NonNullable<HoldemView['lastResult']>;
  * went out. Said to the person in the second person. Built from the hand's
  * result rather than event by event, so a side pot never hides the main one
  * and an elimination is added to the news instead of replacing it.
+ *
+ * Kept as short as the news allows, because it sits on the board: pots that
+ * all went to the same players are one line with their sum (the labels only
+ * matter when the pots went different ways), and a bet handed back to the
+ * player who took the hand uncontested is left out — everyone else folded,
+ * so "Grandma wins 80" already says it all. Handed back to someone who lost
+ * a contested pot, or at a showdown, it still gets its line.
  */
 export function handLines(r: Result, players: HoldemView['players'], me: number, name: (seat: number) => string, t: HoldemStrings): string[] {
   const handOf = (seat: number) => {
     const shown = r.shown.find((x) => x.seat === seat);
     return shown ? t.category[shown.category] : null;
   };
-  const lines = r.pots.map((pot, i) => {
+  const same = (a: readonly number[], b: readonly number[]) => a.length === b.length && a.every((x) => b.includes(x));
+  const first = r.pots[0];
+  const pots = first && r.pots.every((p) => same(p.winners, first.winners)) ? [{ ...first, amount: r.pots.reduce((a, p) => a + p.amount, 0) }] : r.pots;
+  const lines = pots.map((pot, i) => {
     const hand = handOf(pot.winners[0]!);
     const line =
       pot.winners.length === 1
@@ -91,16 +101,22 @@ export function handLines(r: Result, players: HoldemView['players'], me: number,
               hand,
             )
           : t.split(pot.winners.map(name), pot.amount, hand);
-    if (r.pots.length === 1) return line;
+    if (pots.length === 1) return line;
     // Side pots are numbered only when there is more than one of them.
-    return i === 0 ? t.mainPot(line) : t.sidePot(r.pots.length > 2 ? i : null, line);
+    return i === 0 ? t.mainPot(line) : t.sidePot(pots.length > 2 ? i : null, line);
   });
-  for (const x of r.returned) lines.push(x.seat === me ? t.youReturned(x.amount) : t.returned(name(x.seat), x.amount));
+  const uncontested = r.shown.length === 0 && pots.length === 1 && pots[0]!.winners.length === 1;
+  for (const x of r.returned) {
+    if (uncontested && pots[0]!.winners[0] === x.seat) continue;
+    lines.push(x.seat === me ? t.youReturned(x.amount) : t.returned(name(x.seat), x.amount));
+  }
   // Out this hand: no chips left, and chips lost in it (a seat out from
-  // before put nothing in, so its net is 0).
-  players.forEach((p, seat) => {
-    if (p.status === 'out' && (r.net[seat] ?? 0) < 0) lines.push(seat === me ? t.youOut : t.eliminated(name(seat)));
-  });
+  // before put nothing in, so its net is 0). The others in one line, however
+  // many went at once; the person's own news on a line of its own.
+  const outNow = players.map((p, seat) => (p.status === 'out' && (r.net[seat] ?? 0) < 0 ? seat : -1)).filter((seat) => seat >= 0);
+  const othersOut = outNow.filter((seat) => seat !== me);
+  if (outNow.includes(me)) lines.push(t.youOut);
+  if (othersOut.length > 0) lines.push(t.eliminated(othersOut.map(name)));
   return lines;
 }
 
@@ -194,11 +210,34 @@ export function HoldemTable({ report, finish, lang, settings, leave, players, me
   const contentW = win.width - 2 * space.md;
   // The room the table has between the header and the action bar, roughly.
   const roomH = win.height - 160;
+  // A phone held upright shows every other seat, never a strip that hides
+  // some off the edge: one row up to four, past that two rows (3+2 up to
+  // 4+4). On a short phone those are compact tiles, with the board and my
+  // cards a little smaller to leave them the room; a tall one has the room
+  // for full tiles, a little wider.
+  const upright = !landscape && !tablet;
+  const perRow = upright ? (others.length <= 4 ? Math.max(1, others.length) : Math.ceil(others.length / 2)) : 0;
+  // A phone on its side has the others' pane, five twelfths of the row, and
+  // the height between the header and the bar: two rows of tiles, no more.
+  // Three to a row put a ninth player's tile in a third row under the bar,
+  // with the hand it won hidden there, so past six others they go four to a
+  // row, compact.
+  const sideCrowd = landscape && !tablet && others.length > 6;
+  const paneW = ((contentW - 2 * space.md) * 5) / 12;
+  const compact = (upright && others.length > 4 && win.height < 860) || sideCrowd;
   const boardW = landscape
     ? clamp(30, Math.min(((contentW * 4) / 12 - 2 * space.md - 4 * space.xs) / 5, roomH * 0.28), 88)
-    : clamp(36, Math.min((contentW - 2 * space.md - 4 * space.xs) / 5, win.height * 0.07), 88);
-  const myW = landscape ? clamp(36, Math.min(((contentW * 3) / 12 - 2 * space.md - space.sm) / 2, roomH * 0.32), 110) : clamp(52, win.height * 0.085, 120);
-  const tileW = tablet ? clamp(92, win.width * (landscape ? 0.1 : 0.15), 140) : !landscape && others.length <= 3 ? 92 : 76;
+    : clamp(36, Math.min((contentW - 2 * space.md - 4 * space.xs) / 5, win.height * (compact ? 0.064 : 0.07)), 88);
+  const myW = landscape
+    ? clamp(36, Math.min(((contentW * 3) / 12 - 2 * space.md - space.sm) / 2, roomH * 0.32), 110)
+    : clamp(48, win.height * (compact ? 0.07 : 0.085), 120);
+  const tileW = tablet
+    ? clamp(92, win.width * (landscape ? 0.1 : 0.15), 140)
+    : upright
+      ? Math.min(roomH > 900 ? 112 : 92, Math.floor((contentW - (perRow - 1) * space.sm) / perRow))
+      : sideCrowd
+        ? Math.min(76, Math.floor((paneW - 3 * space.sm) / 4))
+        : 76;
   const seatCardW = Math.round(tileW * 0.28);
 
   const myTurn = game.myTurn;
@@ -223,7 +262,23 @@ export function HoldemTable({ report, finish, lang, settings, leave, players, me
     // 'All in' is about the hand in play: gone once it is over.
     if (!handOver && p.status === 'allIn') return <Text style={[styles.tag, styles.allIn]}>{t.allIn}</Text>;
     if (p.status === 'folded') return <Text style={[styles.tag, styles.folded]}>{t.folded}</Text>;
+    if (p.status === 'out' && compact && seat !== me) return <Text style={[styles.tag, styles.folded]}>{c.out}</Text>;
     return null;
+  };
+
+  const stackOf = (seat: number) => {
+    const p = v.players[seat]!;
+    // A compact tile has no room for the word beside the face: it goes under the cards instead.
+    if (p.status === 'out' && compact) return null;
+    return p.status === 'out' ? (
+      <Text style={styles.seatStack}>{c.out}</Text>
+    ) : (
+      <View style={styles.stackRow} accessible accessibilityLabel={c.balance(p.stack)}>
+        {/* A narrow compact tile has the face and the number beside it, and no room for the chip as well. */}
+        {compact && tileW < 68 ? null : <ChipDisc value={100} size={11} />}
+        <Text style={[styles.seatStack, num]}>{p.stack}</Text>
+      </View>
+    );
   };
 
   const seatTiles = others.map((seat) => {
@@ -242,20 +297,33 @@ export function HoldemTable({ report, finish, lang, settings, leave, players, me
           (p.status === 'folded' || (p.status === 'out' && !shown)) && styles.dim,
         ]}
       >
-        <View style={styles.seatHead}>
-          <Avatar id={people[seat]!.avatar} size={22} />
-          {v.button === seat ? <Text style={styles.button}>{t.button}</Text> : null}
-        </View>
-        <Text style={styles.seatName} numberOfLines={1}>
-          {people[seat]!.name}
-        </Text>
-        {p.status === 'out' ? (
-          <Text style={styles.seatStack}>{c.out}</Text>
+        {compact ? (
+          // Two rows of these have to fit above the board on a small phone,
+          // or above the bar on one on its side: the stack goes up beside the
+          // face, a line saved on every tile.
+          <>
+            <View style={styles.seatHead}>
+              <Avatar id={people[seat]!.avatar} size={18} />
+              {stackOf(seat)}
+            </View>
+            <View style={[styles.seatHead, styles.narrow]}>
+              {v.button === seat ? <Text style={styles.button}>{t.button}</Text> : null}
+              <Text style={[styles.seatName, styles.shrink]} numberOfLines={1}>
+                {people[seat]!.name}
+              </Text>
+            </View>
+          </>
         ) : (
-          <View style={styles.stackRow} accessible accessibilityLabel={c.balance(p.stack)}>
-            <ChipDisc value={100} size={11} />
-            <Text style={[styles.seatStack, num]}>{p.stack}</Text>
-          </View>
+          <>
+            <View style={styles.seatHead}>
+              <Avatar id={people[seat]!.avatar} size={22} />
+              {v.button === seat ? <Text style={styles.button}>{t.button}</Text> : null}
+            </View>
+            <Text style={styles.seatName} numberOfLines={1}>
+              {people[seat]!.name}
+            </Text>
+            {stackOf(seat)}
+          </>
         )}
         <View style={styles.seatCards}>
           <View style={styles.cards}>
@@ -271,16 +339,11 @@ export function HoldemTable({ report, finish, lang, settings, leave, players, me
     );
   });
 
-  const othersPane =
-    landscape || tablet ? (
-      <View style={styles.seats}>{seatTiles}</View>
-    ) : (
-      // A phone held upright: one row of the others, swiped sideways when it
-      // will not fit, so the board and my hand keep their place on screen.
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.stripBox} contentContainerStyle={styles.strip}>
-        {seatTiles}
-      </ScrollView>
-    );
+  // Upright, the rows are held to their count of tiles, so five others sit
+  // three and two rather than four and a lone one.
+  const othersPane = (
+    <View style={[styles.seats, upright && { maxWidth: perRow * tileW + (perRow - 1) * space.sm, alignSelf: 'center' }]}>{seatTiles}</View>
+  );
 
   const boardPane = (
     <View style={[styles.board, landscape && styles.paneFill]}>
@@ -356,7 +419,12 @@ export function HoldemTable({ report, finish, lang, settings, leave, players, me
               {othersPane}
             </ScrollView>
           </View>
-          <View style={styles.boardWide}>{boardPane}</View>
+          {/* Scrolls rather than grows: a busy all-in hand's lines never push the board over the header or under the bar. */}
+          <View style={styles.boardWide}>
+            <ScrollView style={styles.fill} contentContainerStyle={styles.paneScroll}>
+              {boardPane}
+            </ScrollView>
+          </View>
           <View style={styles.meWide}>{myBox}</View>
         </View>
       ) : (
@@ -407,19 +475,17 @@ const styles = StyleSheet.create({
   wide: { flex: 1, flexDirection: 'row', padding: space.md, gap: space.md },
   othersWide: { flex: 5, flexBasis: 0 },
   paneScroll: { flexGrow: 1, justifyContent: 'center' },
-  boardWide: { flex: 4, flexBasis: 0, justifyContent: 'center' },
+  boardWide: { flex: 4, flexBasis: 0 },
   meWide: { flex: 3, flexBasis: 0, justifyContent: 'center' },
   paneFill: { alignSelf: 'stretch' },
   seats: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm, justifyContent: 'center', alignItems: 'flex-start' },
-  // Tiles keep their own height: the strip is as tall as the tallest, not the room.
-  // Only as tall as its tiles: a sideways scroll otherwise grows into the room the board needs.
-  stripBox: { flexGrow: 0 },
-  strip: { flexGrow: 1, justifyContent: 'center', alignItems: 'flex-start', gap: space.sm },
   seat: { alignItems: 'center', padding: space.xs, borderRadius: radius.md, backgroundColor: surface.panel, borderWidth: 1, borderColor: stroke.hair, gap: 2 },
   onTurn: { borderColor: signal.turn },
   won: { borderColor: theme.okInk },
   dim: { opacity: 0.45 },
   seatHead: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  narrow: { maxWidth: '100%' },
+  shrink: { flexShrink: 1 },
   seatName: { ...type.caption, color: ink.hi, maxWidth: '100%' },
   stackRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   seatStack: { ...type.caption, color: ink.mid },

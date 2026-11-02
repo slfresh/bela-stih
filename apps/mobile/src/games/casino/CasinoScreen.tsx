@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Lang } from '@belot/i18n';
@@ -92,57 +92,63 @@ export function CasinoScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table, tableStack, minimum]);
 
+  // Where this seat stands, one record per seat: what is in front of the
+  // person now, whether the buy-in went through, and whether they have stood
+  // up. Per seat so a fresh table never inherits the last one's "stood up",
+  // and so a report can arrive before the buy-in without being lost: a
+  // child's effects run before its parent's, so a table that starts with a
+  // blind already posted reports 1490 before this frame's buy-in runs, and
+  // only reports again when its chips change.
+  const hold = useMemo(() => (seat ? { chips: seat.stack, seated: false, settled: false } : null), [seat]);
+  const [finished, setFinished] = useState<number | null>(null);
+  const standUp = useCallback(() => {
+    if (!hold || hold.settled) return;
+    hold.settled = true;
+    hold.seated = false;
+    saveProfile(cashOut(loadProfile(), hold.chips));
+  }, [hold]);
   // The buy-in is an effect and the cash-out is its cleanup, so they always
   // pair up — a remount or a fast refresh never takes chips twice.
-  const chipsNow = useRef(seat?.stack ?? 0);
-  const settled = useRef(false);
-  // Bought in and not yet stood up: only then are the table's reports saved.
-  // A fresh table reports its stack before this frame's buy-in runs (a
-  // child's effects run before its parent's), and a finished one may still
-  // report after its cash-out; neither may touch the profile.
-  const seated = useRef(false);
-  const [finished, setFinished] = useState<number | null>(null);
-  const standUp = useCallback((chips: number) => {
-    if (settled.current) return;
-    settled.current = true;
-    seated.current = false;
-    saveProfile(cashOut(loadProfile(), chips));
-  }, []);
   useEffect(() => {
-    if (!seat) return;
+    if (!seat || !hold) return;
     const bought = buyIn(loadProfile(), seat.stack);
-    if (bought) saveProfile(bought);
+    // A report that came first is what is in front of the person, not the
+    // stack they sat down with: it is what a closed app must give back.
+    if (bought) saveProfile(hold.chips === seat.stack ? bought : holdAtTable(bought, hold.chips));
     // A buy-in that did not go through has nothing to stand up with: settled
     // from the start, so leaving can never pay out chips that were not taken.
-    settled.current = bought === null;
-    seated.current = bought !== null;
-    chipsNow.current = seat.stack;
+    hold.settled = bought === null;
+    hold.seated = bought !== null;
     setFinished(null);
-    return () => standUp(chipsNow.current);
-  }, [seat, standUp]);
+    return standUp;
+  }, [seat, hold, standUp]);
 
-  // Stable, so a table's effect on them runs when its chips change, not on every render.
-  const report = useCallback((chips: number) => {
-    if (settled.current) return;
-    if (chipsNow.current === chips && seated.current) return;
-    chipsNow.current = chips;
-    if (seated.current) saveProfile(holdAtTable(loadProfile(), chips));
-  }, []);
+  // Stable per seat, so a table's effect on them runs when its chips change,
+  // not on every render. Before the buy-in a report is only kept; after the
+  // stand-up (a finished table may still report) it is ignored.
+  const report = useCallback(
+    (chips: number) => {
+      if (!hold || hold.settled || hold.chips === chips) return;
+      hold.chips = chips;
+      if (hold.seated) saveProfile(holdAtTable(loadProfile(), chips));
+    },
+    [hold],
+  );
   const finish = useCallback(
     (chips: number) => {
-      if (settled.current) return;
-      chipsNow.current = chips;
-      standUp(chips);
+      if (!hold || hold.settled) return;
+      hold.chips = chips;
+      standUp();
       setFinished(chips);
     },
-    [standUp],
+    [hold, standUp],
   );
 
   const [confirmLeave, setConfirmLeave] = useState(false);
   const exit = useCallback(() => {
-    if (seat) standUp(chipsNow.current);
+    standUp();
     onExit();
-  }, [seat, standUp, onExit]);
+  }, [standUp, onExit]);
   const leave = useCallback(() => {
     if (finished !== null || !seat) exit();
     else setConfirmLeave(true);
@@ -206,7 +212,7 @@ export function CasinoScreen({
       {confirmLeave ? (
         <ConfirmDialog
           title={lang.s.ui.leaveConfirm}
-          body={c.cashOut(chipsNow.current)}
+          body={c.cashOut(hold?.chips ?? 0)}
           confirmLabel={lang.s.ui.leaveConfirmYes}
           cancelLabel={lang.s.ui.leaveConfirmNo}
           onConfirm={exit}

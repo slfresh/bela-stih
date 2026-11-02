@@ -29,6 +29,14 @@ export interface GamesStrings {
    * size, whatever the picker above says, so the button names it.
    */
   quickPlaySeats: (seats: number) => string;
+  /**
+   * A game row's two online buttons, each a short name over a smaller line
+   * with the table's size: half a phone's width holds "Quick play" and
+   * "table of 4" on a line each, where the whole phrase wrapped at a random
+   * word. `quickPlaySeats` stays the button's spoken label.
+   */
+  privateShort: string;
+  tableOf: (seats: number) => string;
   /** The home's one join-by-code box for the games beyond Bela: its heading and the line under it. */
   joinOther: string;
   /** `belaBox`: the heading of Bela's own code box near the top, which a Bela code goes in. */
@@ -71,6 +79,8 @@ const GAMES: Record<LocaleId, GamesStrings> = {
     online: 'Online',
     quickPlay: 'Brza igra',
     quickPlaySeats: (n) => `Brza igra · stol za ${n}`,
+    privateShort: 'Privatni stol',
+    tableOf: (n) => `stol za ${n}`,
     joinOther: 'Stol prijatelja',
     joinOtherSub: (g, box) => `Šifra stola za ${list(g, 'ili')}. Šifra za Belu ide gore, u „${box}”.`,
     belaSection: 'Bela',
@@ -94,6 +104,8 @@ const GAMES: Record<LocaleId, GamesStrings> = {
     online: 'Онлајн',
     quickPlay: 'Брза игра',
     quickPlaySeats: (n) => `Брза игра · сто за ${n}`,
+    privateShort: 'Приватни сто',
+    tableOf: (n) => `сто за ${n}`,
     joinOther: 'Сто пријатеља',
     joinOtherSub: (g, box) => `Шифра стола за ${list(g, 'или')}. Шифра за Белу иде горе, у „${box}”.`,
     belaSection: 'Бела',
@@ -117,6 +129,8 @@ const GAMES: Record<LocaleId, GamesStrings> = {
     online: 'Online',
     quickPlay: 'Quick play',
     quickPlaySeats: (n) => `Quick play · table of ${n}`,
+    privateShort: 'Private table',
+    tableOf: (n) => `table of ${n}`,
     joinOther: "A friend's table",
     joinOtherSub: (g, box) => `A table code for ${list(g, 'or')}. A Bela code goes in “${box}” at the top.`,
     belaSection: 'Bela',
