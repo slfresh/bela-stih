@@ -11,6 +11,9 @@ import { WebShell } from './src/WebShell';
 import { OfflineGame } from './src/OfflineGame';
 import { OnlineGame } from './src/net/OnlineGame';
 import { OsmiceGame } from './src/games/osmice/OsmiceGame';
+import { BaccaratGame } from './src/games/casino/BaccaratGame';
+import { BlackjackGame } from './src/games/casino/BlackjackGame';
+import { HoldemGame } from './src/games/casino/HoldemGame';
 import { ProfileScreen } from './src/screens/ProfileScreen';
 import { RulesScreen } from './src/screens/RulesScreen';
 import { HistoryScreen } from './src/screens/HistoryScreen';
@@ -227,7 +230,15 @@ export default function App() {
     ) : launch.mode === 'offline' ? (
       <OfflineGame settings={settings} onSettingsChange={updateSettings} onExit={exitToHome} />
     ) : launch.mode === 'game' ? (
-      <OsmiceGame settings={settings} players={launch.players} level={settings.botLevel} onExit={exitToHome} />
+      launch.game === 'holdem' ? (
+        <HoldemGame settings={settings} players={launch.players} level={settings.botLevel} onExit={exitToHome} />
+      ) : launch.game === 'blackjack' ? (
+        <BlackjackGame settings={settings} players={launch.players} level={settings.botLevel} onExit={exitToHome} />
+      ) : launch.game === 'baccarat' ? (
+        <BaccaratGame settings={settings} players={launch.players} level={settings.botLevel} onExit={exitToHome} />
+      ) : (
+        <OsmiceGame settings={settings} players={launch.players} level={settings.botLevel} onExit={exitToHome} />
+      )
     ) : (
       <OnlineGame
         settings={settings}

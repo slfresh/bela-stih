@@ -20,6 +20,8 @@ export interface LocalSessionOptions<D extends AnyGame> {
   mySeat?: number;
   botLevel: BotLevel;
   config?: Partial<ConfigOf<D>>;
+  /** Starting stacks for a betting game, one per seat (the person's is their buy-in). */
+  stacks?: number[];
   seed?: number;
   /** How long a bot seems to think, in ms; 0 plays at once (tests, reduced motion). */
   thinkMs?: (seat: number) => number;
@@ -52,6 +54,7 @@ export function useLocalSession<D extends AnyGame>(def: D, opts: LocalSessionOpt
       humanSeats: Array.from({ length: opts.seats }, (_, i) => i),
       botLevel: opts.botLevel,
       config: opts.config,
+      stacks: opts.stacks,
       seed,
     });
   }
@@ -76,15 +79,15 @@ export function useLocalSession<D extends AnyGame>(def: D, opts: LocalSessionOpt
     settle();
   }, [settle]);
 
-  // The bots, one move per beat.
+  // The bots, one move per beat — in a betting window too, while the person is still deciding.
   useEffect(() => {
     if (session.roundOver() || session.matchOver()) return;
-    const seat = session.actors()[0];
-    if (seat === undefined || seat === mySeat) return;
+    const seat = session.actors().find((s) => s !== mySeat);
+    if (seat === undefined) return;
     const delay = thinkRef.current?.(seat) ?? 700;
     const h = setTimeout(() => {
-      // The session may have moved on (a remount, a new match): only act if it is still this seat's go.
-      if (session.actors()[0] !== seat) return;
+      // The session may have moved on (a remount, a new match): only act if this seat is still owed a move.
+      if (!session.actors().includes(seat)) return;
       const memory = def.bot.memory?.(session.state);
       session.submit(def.bot.decide(session.view(seat), botRng, opts.botLevel, memory));
       settle();
@@ -94,7 +97,7 @@ export function useLocalSession<D extends AnyGame>(def: D, opts: LocalSessionOpt
 
   const submit = useCallback(
     (action: ActionOf<D>): boolean => {
-      if (session.actors()[0] !== mySeat) return false;
+      if (!session.actors().includes(mySeat)) return false;
       try {
         session.submit(action);
       } catch {
@@ -118,10 +121,11 @@ export function useLocalSession<D extends AnyGame>(def: D, opts: LocalSessionOpt
     settle();
   }, [session, settle]);
 
-  const actor = session.actors()[0] ?? null;
+  const actors = session.actors();
+  const actor = actors.includes(mySeat) ? mySeat : (actors[0] ?? null);
   return {
     view: session.view(mySeat),
-    myTurn: actor === mySeat,
+    myTurn: actors.includes(mySeat),
     actor,
     roundOver: session.roundOver(),
     matchOver: session.matchOver(),
