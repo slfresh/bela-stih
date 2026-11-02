@@ -56,6 +56,13 @@ export interface PlayerProfile {
    * it always has; a profile from before the other games simply has none.
    */
   games?: Partial<Record<string, GameStats>>;
+
+  /**
+   * Play-money chips for the casino-style games. Absent until first used.
+   * Never bought, never won with coins and never turned into coins: a free
+   * balance that tops itself up once a day, so nobody is ever out of play.
+   */
+  chips?: { balance: number; refillDay: string | null };
 }
 
 /** One game's tally: rounds (a hand, a coup) and matches, played and won. */
@@ -302,6 +309,44 @@ export function applyGameMatchOutcome(
     [won ? 'matchWon' : 'matchLost'],
   );
   return { profile: bumpQuests(result.profile, null, won), award: result.award };
+}
+
+// ---------------------------------------------------------------------------
+// Play-money chips
+//
+// The casino games stake chips, never coins. Chips cannot be bought, cannot
+// be converted to or from coins, and come back every day: the only things
+// that move them are a table's buy-in and what is left to cash out when you
+// stand up. No function here takes coins or gives them.
+// ---------------------------------------------------------------------------
+
+/** What a new player starts with, and what the daily top-up restores. */
+export const CHIPS_FLOOR = 2000;
+
+export function chipBalance(profile: PlayerProfile): number {
+  return profile.chips?.balance ?? CHIPS_FLOOR;
+}
+
+/** Once a day, a balance under the floor is topped back up to it. */
+export function refillChips(profile: PlayerProfile, today: string): { profile: PlayerProfile; added: number } {
+  const balance = chipBalance(profile);
+  if (profile.chips?.refillDay === today || balance >= CHIPS_FLOOR) {
+    return { profile: profile.chips ? profile : { ...profile, chips: { balance, refillDay: null } }, added: 0 };
+  }
+  return { profile: { ...profile, chips: { balance: CHIPS_FLOOR, refillDay: today } }, added: CHIPS_FLOOR - balance };
+}
+
+/** Sit down at a table with `amount` chips from the balance; null when it does not cover them. */
+export function buyIn(profile: PlayerProfile, amount: number): PlayerProfile | null {
+  const balance = chipBalance(profile);
+  if (!Number.isInteger(amount) || amount <= 0 || amount > balance) return null;
+  return { ...profile, chips: { balance: balance - amount, refillDay: profile.chips?.refillDay ?? null } };
+}
+
+/** Stand up with `amount` chips: they go back on the balance. */
+export function cashOut(profile: PlayerProfile, amount: number): PlayerProfile {
+  const balance = chipBalance(profile);
+  return { ...profile, chips: { balance: balance + Math.max(0, Math.floor(amount)), refillDay: profile.chips?.refillDay ?? null } };
 }
 
 // ---------------------------------------------------------------------------

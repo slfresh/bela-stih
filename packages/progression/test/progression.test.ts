@@ -513,3 +513,35 @@ describe('the games beyond Bela', () => {
     expect(p.quests.find((q) => q.kind === 'winMatch')!.progress).toBe(before + 1);
   });
 });
+
+describe('play-money chips', () => {
+  it('start at the floor, buy in and cash out, and top up once a day', async () => {
+    const { chipBalance, buyIn, cashOut, refillChips, CHIPS_FLOOR, emptyProfile } = await import('@belot/progression');
+    let p = emptyProfile();
+    expect(chipBalance(p)).toBe(CHIPS_FLOOR);
+    p = buyIn(p, 1500)!;
+    expect(chipBalance(p)).toBe(CHIPS_FLOOR - 1500);
+    expect(buyIn(p, 600)).toBeNull();
+    p = cashOut(p, 100);
+    expect(chipBalance(p)).toBe(600);
+    const r = refillChips(p, '2026-11-02');
+    expect(r.added).toBe(CHIPS_FLOOR - 600);
+    p = buyIn(r.profile, 2000)!;
+    // The same day: no second top-up.
+    expect(refillChips(p, '2026-11-02').added).toBe(0);
+    expect(refillChips(p, '2026-11-03').added).toBe(CHIPS_FLOOR);
+  });
+
+  it('never touch coins, and coins never touch them', async () => {
+    const { buyIn, cashOut, refillChips, applyRoundOutcome, emptyProfile } = await import('@belot/progression');
+    let p = emptyProfile();
+    const coins = p.coins;
+    p = buyIn(p, 500)!;
+    p = cashOut(p, 9999);
+    p = refillChips(p, '2026-01-01').profile;
+    expect(p.coins).toBe(coins);
+    const chips = p.chips;
+    p = applyRoundOutcome(p, 'holdem', true).profile;
+    expect(p.chips).toEqual(chips);
+  });
+});

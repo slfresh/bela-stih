@@ -6,7 +6,20 @@ import type {
   Suit,
   TeamId,
 } from '@belot/shared-types';
-import { gamesStrings, osmiceStrings, type GamesStrings, type OsmiceStrings } from './games';
+import {
+  baccaratStrings,
+  blackjackStrings,
+  casinoStrings,
+  gamesStrings,
+  holdemStrings,
+  osmiceStrings,
+  type BaccaratStrings,
+  type BlackjackStrings,
+  type CasinoStrings,
+  type GamesStrings,
+  type HoldemStrings,
+  type OsmiceStrings,
+} from './games';
 
 /**
  * @belot/i18n — the words, and the deck.
@@ -2411,6 +2424,23 @@ export class Lang {
     return osmiceStrings(this.id);
   }
 
+  /** What every casino table says: chips, bets, the buy-in. */
+  get casino(): CasinoStrings {
+    return casinoStrings(this.id);
+  }
+
+  get baccarat(): BaccaratStrings {
+    return baccaratStrings(this.id);
+  }
+
+  get blackjack(): BlackjackStrings {
+    return blackjackStrings(this.id);
+  }
+
+  get holdem(): HoldemStrings {
+    return holdemStrings(this.id);
+  }
+
   /** The mađarice name: žir, list, srce, bundeva. */
   suitName(suit: Suit): string {
     return this.t.suit[suit];
@@ -2488,9 +2518,17 @@ export class Lang {
 export const LOCALE_IDS: LocaleId[] = ['hr', 'sr-Cyrl', 'en'];
 
 export {
+  baccaratStrings,
+  blackjackStrings,
+  casinoStrings,
   gamesStrings,
+  holdemStrings,
   osmiceStrings,
+  type BaccaratStrings,
+  type BlackjackStrings,
+  type CasinoStrings,
   type GamesStrings,
+  type HoldemStrings,
   type OsmiceActionKey,
   type OsmiceColourKey,
   type OsmiceStrings,

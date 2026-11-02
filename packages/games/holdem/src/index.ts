@@ -1,4 +1,4 @@
-export { HOLDEM, decideHoldem, equity, publicView, type HoldemDefinition, type HoldemView, type SeatView } from './game';
+export { HOLDEM, decideHoldem, equity, publicView, rangeFloor, startingScore, type HoldemDefinition, type HoldemView, type SeatView } from './game';
 export { CATEGORIES, bestFive, categoryOf, evaluate, type Category } from './evaluate';
 export {
   DEFAULT_HOLDEM_CONFIG,

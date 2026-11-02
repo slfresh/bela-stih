@@ -1,5 +1,5 @@
 import { type BotLevel, type Cause, type GameDefinition, type Rng, type Secret } from '@belot/game-core';
-import { makeDeck52, type Card52 } from '@belot/cards';
+import { makeDeck52, rankValue, type Card52 } from '@belot/cards';
 import { evaluate } from './evaluate';
 import {
   actors,
@@ -110,27 +110,77 @@ export function deriveEvents(_before: HoldemState, after: HoldemState, cause: Ca
 //    or folds when short-stacked, and semi-bluffs when checked to.
 // ---------------------------------------------------------------------------
 
-/** How often `hole` wins against `opponents` random hands, the board completed at random. */
-export function equity(hole: Card52[], board: Card52[], opponents: number, iterations: number, rng: Rng): number {
+/**
+ * A quick starting-hand score: high card, half the low card, a pair worth a
+ * lot, suited and connected worth a little. Only used to say which hands an
+ * opponent would plausibly be playing.
+ */
+export function startingScore(a: Card52, b: Card52): number {
+  const ra = rankValue(a.rank);
+  const rb = rankValue(b.rank);
+  const hi = Math.max(ra, rb);
+  const lo = Math.min(ra, rb);
+  let s = hi + lo / 2;
+  if (ra === rb) s += 10;
+  if (a.suit === b.suit) s += 2;
+  s -= Math.max(0, hi - lo - 1) * 0.5;
+  return s;
+}
+
+/** The score a starting hand needs to be in the top `fraction` of all 1,326. */
+const RANGE_CACHE = new Map<number, number>();
+export function rangeFloor(fraction: number): number {
+  const hit = RANGE_CACHE.get(fraction);
+  if (hit !== undefined) return hit;
+  const deck = makeDeck52();
+  const scores: number[] = [];
+  for (let i = 0; i < deck.length; i++) for (let j = i + 1; j < deck.length; j++) scores.push(startingScore(deck[i]!, deck[j]!));
+  scores.sort((x, y) => y - x);
+  const floor = scores[Math.floor(scores.length * fraction)]!;
+  RANGE_CACHE.set(fraction, floor);
+  return floor;
+}
+
+/**
+ * How often `hole` wins against `opponents`, the board completed at random.
+ * Opponents hold random hands — or, given `floor`, hands at least that good
+ * by `startingScore` (a player who bets big rarely holds junk).
+ */
+export function equity(hole: Card52[], board: Card52[], opponents: number, iterations: number, rng: Rng, floor = -Infinity): number {
   if (opponents <= 0) return 1;
   const known = new Set([...hole, ...board].map((c) => c.id));
   const pool = makeDeck52().filter((c) => !known.has(c.id));
-  const need = 2 * opponents + (5 - board.length);
   let score = 0;
+  const opp: Card52[][] = Array.from({ length: opponents }, () => []);
   for (let it = 0; it < iterations; it++) {
-    // A partial Fisher-Yates: only the cards this deal needs.
-    for (let i = 0; i < need; i++) {
-      const j = i + Math.floor(rng() * (pool.length - i));
-      const t = pool[i]!;
-      pool[i] = pool[j]!;
+    // A partial Fisher-Yates over the pool: only the cards this deal needs.
+    let k = 0;
+    const take = () => {
+      const j = k + Math.floor(rng() * (pool.length - k));
+      const t = pool[k]!;
+      pool[k] = pool[j]!;
       pool[j] = t;
+      return pool[k++]!;
+    };
+    for (let o = 0; o < opponents; o++) {
+      for (let tries = 0; ; tries++) {
+        const a = take();
+        const b = take();
+        if (startingScore(a, b) >= floor || tries >= 30) {
+          opp[o] = [a, b];
+          break;
+        }
+        // Not a hand they would play: put both back and deal again.
+        k -= 2;
+      }
     }
-    const full = board.concat(pool.slice(2 * opponents, need));
+    const full = board.slice();
+    while (full.length < 5) full.push(take());
     const mine = evaluate(hole.concat(full));
     let best = 0;
     let ties = 0;
     for (let o = 0; o < opponents; o++) {
-      const theirs = evaluate([pool[2 * o]!, pool[2 * o + 1]!, ...full]);
+      const theirs = evaluate(opp[o]!.concat(full));
       if (theirs > best) {
         best = theirs;
         ties = 0;
@@ -160,8 +210,12 @@ export function decideHoldem(view: HoldemView, rng: Rng, level: BotLevel): Holde
 
   const opponents = view.players.filter((p, i) => i !== seat && (p.status === 'active' || p.status === 'allIn')).length;
   const iterations = level === 'easy' ? 60 : level === 'medium' ? 200 : 400;
-  let eq = equity(me.hole, view.board, opponents, iterations, rng);
   const toCall = view.toCall;
+  // Hard reads the bet: facing one, the opponent's hand is from the top half;
+  // facing a big one (two thirds of the pot or more), from the top third.
+  const floor =
+    level === 'hard' && toCall > view.bigBlind ? rangeFloor(toCall * 1.5 >= view.pot ? 0.33 : 0.5) : -Infinity;
+  let eq = equity(me.hole, view.board, opponents, iterations, rng, floor);
   const potOdds = toCall / (view.pot + toCall);
   const bb = view.bigBlind;
 
@@ -180,17 +234,15 @@ export function decideHoldem(view: HoldemView, rng: Rng, level: BotLevel): Holde
     }
   }
 
-  const strong = level === 'hard' ? 0.62 + 0.03 * Math.max(0, opponents - 1) : 0.68;
+  const strong = 0.68;
   const valueBet = 0.58;
   if (toCall === 0) {
     if (eq > valueBet) return raise(view.currentBet + (view.pot * 2) / 3);
-    // A bluff, or for hard a semi-bluff when checked to after the flop.
-    const bluff = level === 'hard' ? (view.board.length >= 3 && view.board.length < 5 ? 0.22 : 0.08) : 0.06;
-    if (rng() < bluff) return raise(view.currentBet + view.pot / 2);
+    if (rng() < 0.06) return raise(view.currentBet + view.pot / 2);
     return check ?? fold;
   }
   if (eq > strong) return raise(view.currentBet + view.pot);
-  if (eq > potOdds + (level === 'hard' ? 0.02 : 0.05)) return call ?? fold;
+  if (eq > potOdds + 0.05) return call ?? fold;
   return fold;
 }
 
