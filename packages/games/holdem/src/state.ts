@@ -9,10 +9,13 @@ import { categoryOf, evaluate, type Category } from './evaluate';
  *
  * The rules a home game gets wrong are the ones kept exactly here: the
  * heads-up blinds (the button posts the small blind and acts first before the
- * flop), the minimum raise (at least the size of the last full raise), a
- * short all-in that does not reopen the betting for whoever already acted,
- * the big blind's option, side pots built from what each player committed,
- * and odd chips to the first winner left of the button.
+ * flop), the big blind moving on one live seat a hand even as players bust
+ * (nobody pays it twice running or skips it), the minimum raise (at least the
+ * size of the last full raise), a short all-in that does not reopen the
+ * betting for whoever already acted (though several that add up to a full
+ * raise do), the big blind's option, uncalled chips handed back rather than
+ * "won", side pots built from what each player committed, and odd chips to
+ * the first winner left of the button.
  *
  * Like Blackjack, the engine writes what each move did into `log` as it
  * applies it; hole cards appear there only when shown down.
@@ -65,7 +68,10 @@ export interface Shown {
 }
 
 export interface HandResult {
+  /** Only chips somebody else put in too: what was actually contested. */
   pots: PotResult[];
+  /** A bet nobody matched, handed back to whoever made it (empty when none). Never counted as won. */
+  returned: { seat: number; amount: number }[];
   /** Hands shown at a showdown; empty when everyone else folded. */
   shown: Shown[];
   /** Per seat, chips won minus chips put in this hand. */
@@ -83,6 +89,8 @@ export type HoldemEvent =
   | { kind: 'street'; street: Street; cards: Card52[] }
   | { kind: 'showdown'; shown: Shown[] }
   | { kind: 'potWon'; amount: number; winners: number[]; uncontested: boolean }
+  /** The part of a bet nobody matched goes back to its owner: not a pot, and not a win. */
+  | { kind: 'returned'; seat: number; amount: number }
   | { kind: 'eliminated'; seat: number }
   | { kind: 'matchOver'; winners: number[]; stacks: number[] };
 
@@ -106,8 +114,17 @@ export interface HoldemState {
   minRaise: number;
   /** Seats that still owe an answer on this street. */
   pending: boolean[];
-  /** Seats that may only call or fold: a short all-in did not reopen the betting for them. */
-  raiseClosed: boolean[];
+  /**
+   * Per seat, the bet to call when it last acted on this street (null: not yet).
+   * A seat that already acted may raise again only once the bet has gone up a
+   * full raise since: one short all-in does not reopen the betting, but
+   * several that add up to a full raise do.
+   */
+  actedAt: (number | null)[];
+  /** The seat that posted the big blind last hand: the next live seat after it posts this one. */
+  bigBlindSeat: number | null;
+  /** Uncalled chips handed back so far this hand, for `lastResult`. */
+  returned: { seat: number; amount: number }[];
   lastResult: HandResult | null;
   startStacks: number[];
   log: HoldemEvent[];
@@ -143,7 +160,9 @@ export function createMatch(o: { seats: number; seed: number; rng?: Rng; config?
     currentBet: 0,
     minRaise: config.bigBlind,
     pending: Array<boolean>(o.seats).fill(false),
-    raiseClosed: Array<boolean>(o.seats).fill(false),
+    actedAt: Array<number | null>(o.seats).fill(null),
+    bigBlindSeat: null,
+    returned: [],
     lastResult: null,
     startStacks: stacks.slice(),
     log: [],
@@ -156,7 +175,8 @@ const clone = (s: HoldemState): HoldemState => ({
   board: s.board.slice(),
   players: s.players.map((p) => ({ ...p, hole: p.hole.slice() })),
   pending: s.pending.slice(),
-  raiseClosed: s.raiseClosed.slice(),
+  actedAt: s.actedAt.slice(),
+  returned: s.returned.slice(),
   log: [],
 });
 
@@ -164,6 +184,15 @@ const clone = (s: HoldemState): HoldemState => ({
 function nextSeat(s: HoldemState, from: number, ok: (p: Player, seat: number) => boolean): number | null {
   for (let i = 1; i <= s.seats; i++) {
     const seat = (from + i) % s.seats;
+    if (ok(s.players[seat]!, seat)) return seat;
+  }
+  return null;
+}
+
+/** The seat before `from` (counter-clockwise) that satisfies `ok`. */
+function prevSeat(s: HoldemState, from: number, ok: (p: Player, seat: number) => boolean): number | null {
+  for (let i = 1; i <= s.seats; i++) {
+    const seat = (from - i + s.seats * 2) % s.seats;
     if (ok(s.players[seat]!, seat)) return seat;
   }
   return null;
@@ -200,15 +229,33 @@ export function startRound(prev: HoldemState): HoldemState {
   }
   s.board = [];
   s.lastResult = null;
+  s.returned = [];
   s.deck = shuffle(makeDeck52(), s.rng);
-  s.button = nextSeat(s, s.button, (p) => p.status !== 'out')!;
-  const live = s.players.filter((p) => p.status !== 'out').length;
-  // Heads up the button is the small blind; otherwise the next two seats post.
-  const sb = live === 2 ? s.button : nextSeat(s, s.button, (p) => p.status !== 'out')!;
-  const bb = nextSeat(s, sb, (p) => p.status !== 'out')!;
+  const isLive = (p: Player) => p.status !== 'out';
+  const live = s.players.filter(isLive).length;
+  let sb: number;
+  let bb: number;
+  if (s.bigBlindSeat === null) {
+    // The first hand: the button on the dealer, the blinds after it (heads
+    // up the button is the small blind).
+    s.button = nextSeat(s, s.button, isLive)!;
+    sb = live === 2 ? s.button : nextSeat(s, s.button, isLive)!;
+    bb = nextSeat(s, sb, isLive)!;
+  } else {
+    // After that the big blind leads: it moves on to the next live seat, so
+    // when someone busts nobody pays it twice running or skips it — going
+    // heads up included. The small blind and the button are the live seats
+    // just before it (heads up the button posts the small blind).
+    bb = nextSeat(s, s.bigBlindSeat, isLive)!;
+    sb = prevSeat(s, bb, isLive)!;
+    s.button = live === 2 ? sb : prevSeat(s, sb, isLive)!;
+  }
+  s.bigBlindSeat = bb;
   s.log.push({ kind: 'handStarted', handNumber: s.handNumber, button: s.button, smallBlind: s.smallBlind, bigBlind: s.bigBlind });
-  s.log.push({ kind: 'blind', seat: sb, amount: put(s, sb, s.smallBlind), big: false });
-  s.log.push({ kind: 'blind', seat: bb, amount: put(s, bb, s.bigBlind), big: true });
+  const sbPosted = put(s, sb, s.smallBlind);
+  s.log.push({ kind: 'blind', seat: sb, amount: sbPosted, big: false });
+  const bbPosted = put(s, bb, s.bigBlind);
+  s.log.push({ kind: 'blind', seat: bb, amount: bbPosted, big: true });
   const dealt: number[] = [];
   for (let round = 0; round < 2; round++) {
     for (let i = 1; i <= s.seats; i++) {
@@ -220,10 +267,14 @@ export function startRound(prev: HoldemState): HoldemState {
   }
   s.log.push({ kind: 'holeDealt', seats: dealt });
   s.phase = 'PREFLOP';
-  s.currentBet = s.bigBlind;
+  // The bet to call is what the blinds actually put in: a blind all in for
+  // less never makes anyone call chips it could not cover (a small blind
+  // facing a big blind all in for 5 has nothing to call). A raise is still
+  // measured from the big blind.
+  s.currentBet = Math.max(sbPosted, bbPosted);
   s.minRaise = s.bigBlind;
   s.pending = s.players.map(canAct);
-  s.raiseClosed = Array<boolean>(s.seats).fill(false);
+  s.actedAt = Array<number | null>(s.seats).fill(null);
   // First to act: after the big blind (heads up, that is the button).
   s.toAct = nextSeat(s, bb, (p, seat) => canAct(p) && s.pending[seat]!);
   if (s.toAct === null || everyoneButOneIsAllIn(s)) closeStreet(s);
@@ -237,7 +288,7 @@ export function actors(s: HoldemState): number[] {
 /** The range a raise may go TO: [min, max]; null when this seat may not raise. */
 export function raiseRange(s: HoldemState, seat: number): [number, number] | null {
   const p = s.players[seat]!;
-  if (!canAct(p) || s.raiseClosed[seat]) return null;
+  if (!canAct(p) || raiseClosedFor(s, seat)) return null;
   const max = p.bet + p.stack;
   if (max <= s.currentBet) return null; // can only call (all-in or not)
   // Nobody left to raise against: everyone else is all in or folded.
@@ -245,6 +296,16 @@ export function raiseRange(s: HoldemState, seat: number): [number, number] | nul
   if (others === 0) return null;
   const min = Math.min(max, s.currentBet + s.minRaise);
   return [min, max];
+}
+
+/**
+ * A seat that already acted on this street may raise again only if the bet
+ * has gone up by at least a full raise since: a short all-in alone leaves it
+ * call or fold, but short all-ins that add up to a full raise reopen it.
+ */
+function raiseClosedFor(s: HoldemState, seat: number): boolean {
+  const at = s.actedAt[seat];
+  return at !== null && at !== undefined && s.currentBet - at < s.minRaise;
 }
 
 export function legalActions(s: HoldemState, seat: number): HoldemAction[] {
@@ -301,16 +362,16 @@ export function applyAction(prev: HoldemState, a: HoldemAction): HoldemState {
     const full = raisedBy >= s.minRaise;
     s.log.push({ kind: 'acted', seat: a.seat, action: p.status === 'allIn' ? 'allIn' : before === 0 ? 'bet' : 'raise', to: p.bet, amount });
     s.currentBet = p.bet;
+    // Everyone left must answer the new bet; whether they may raise it is
+    // `raiseClosedFor`, from the bet each last acted at.
     for (let seat = 0; seat < s.seats; seat++) {
       if (seat === a.seat || !canAct(s.players[seat]!)) continue;
-      // Everyone left must answer the new bet...
-      const hadActed = !s.pending[seat];
       s.pending[seat] = true;
-      // ...but a short all-in does not give those who already acted a new right to raise.
-      s.raiseClosed[seat] = full ? false : hadActed || s.raiseClosed[seat]!;
     }
     if (full) s.minRaise = raisedBy;
   }
+  // Whatever it did, this seat has now answered the bet as it stands.
+  s.actedAt[a.seat] = s.currentBet;
   advance(s, a.seat);
   return s;
 }
@@ -347,10 +408,13 @@ const STREETS: Street[] = ['PREFLOP', 'FLOP', 'TURN', 'RIVER'];
 
 /** The street is over: next one, or run the board out, or the showdown. */
 function closeStreet(s: HoldemState): void {
+  // A bet nobody could match (everyone else all in for less, or folded) goes
+  // back before any more cards: those chips were never in contention.
+  returnUncalled(s);
   for (const p of s.players) p.bet = 0;
   s.currentBet = 0;
   s.minRaise = s.bigBlind;
-  s.raiseClosed = Array<boolean>(s.seats).fill(false);
+  s.actedAt = Array<number | null>(s.seats).fill(null);
   s.toAct = null;
   const runOut = everyoneButOneIsAllIn(s);
   while (true) {
@@ -373,14 +437,35 @@ function closeStreet(s: HoldemState): void {
   }
 }
 
+/**
+ * Hand back the part of the biggest commitment nobody else matched — the
+ * chips above the second-biggest, folded players included (what a folder put
+ * in did match it that far). Only one seat can have such chips.
+ */
+function returnUncalled(s: HoldemState): void {
+  const order = s.players.map((_, seat) => seat).sort((a, b) => s.players[b]!.committed - s.players[a]!.committed);
+  const top = order[0]!;
+  const p = s.players[top]!;
+  const amount = p.committed - s.players[order[1]!]!.committed;
+  if (amount <= 0) return;
+  p.committed -= amount;
+  p.bet -= amount;
+  p.stack += amount;
+  // Shoved more than anyone could call: with chips back, not all in after all.
+  if (p.status === 'allIn') p.status = 'active';
+  s.returned = [...s.returned, { seat: top, amount }];
+  s.log.push({ kind: 'returned', seat: top, amount });
+}
+
 function awardUncontested(s: HoldemState): void {
+  returnUncalled(s);
   const winner = s.players.findIndex(inHand);
   const pot = s.players.reduce((a, p) => a + p.committed, 0);
   const net = s.players.map((p) => -p.committed);
   s.players[winner]!.stack += pot;
   net[winner]! += pot;
   s.log.push({ kind: 'potWon', amount: pot, winners: [winner], uncontested: true });
-  s.lastResult = { pots: [{ amount: pot, winners: [winner], eligible: [winner] }], shown: [], net };
+  s.lastResult = { pots: [{ amount: pot, winners: [winner], eligible: [winner] }], returned: s.returned.slice(), shown: [], net };
   endHand(s);
 }
 
@@ -427,13 +512,20 @@ function showdown(s: HoldemState): void {
     results.push({ amount: pot.amount, winners, eligible: pot.eligible });
     s.log.push({ kind: 'potWon', amount: pot.amount, winners, uncontested: false });
   }
-  s.lastResult = { pots: results, shown, net };
+  s.lastResult = { pots: results, returned: s.returned.slice(), shown, net };
   endHand(s);
 }
 
 function endHand(s: HoldemState): void {
   s.toAct = null;
-  for (const p of s.players) p.committed = 0;
+  // The pot is paid: no bet stays in front of anyone, however the hand ended.
+  for (const p of s.players) {
+    p.committed = 0;
+    p.bet = 0;
+  }
+  s.currentBet = 0;
+  s.pending = Array<boolean>(s.seats).fill(false);
+  s.actedAt = Array<number | null>(s.seats).fill(null);
   s.players.forEach((p, seat) => {
     if (p.stack === 0 && p.status !== 'out') {
       p.status = 'out';

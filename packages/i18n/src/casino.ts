@@ -22,6 +22,21 @@ export interface CasinoStrings {
   lost: (n: number) => string;
   push: string;
   out: string;
+  /** The cash-out sheet's label for what the match came to, and its word for coming out exactly even. */
+  result: string;
+  even: string;
+  /** Deal with nothing on the table: sit this round out. */
+  noBet: string;
+  /** A chip in the chip picker, to a screen reader. */
+  chip: (n: number) => string;
+  /** Under the chip picker: the chip chosen and what is on the table. */
+  chipAndBet: (chip: number, bet: number) => string;
+  /** On a spot that cannot take the chosen chip: it has reached the table's limit. */
+  limit: (n: number) => string;
+  /** What is left off the table is less than the smallest chip: nothing more to add. */
+  allDown: string;
+  /** A round whose bets all came back. */
+  pushed: string;
 }
 
 export interface BaccaratStrings {
@@ -34,6 +49,10 @@ export interface BaccaratStrings {
   outcome: (winner: 'player' | 'banker' | 'tie', p: number, b: number) => string;
   natural: string;
   pays: (spot: 'player' | 'banker' | 'tie', commission: number, tiePays: number) => string;
+  /** The bead road's caption, its one-letter beads, and what it says to a screen reader. */
+  road: string;
+  bead: Record<'player' | 'banker' | 'tie', string>;
+  roadSummary: (player: number, banker: number, tie: number) => string;
   rules: string[];
 }
 
@@ -56,6 +75,14 @@ const CASINO: Record<LocaleId, CasinoStrings> = {
     lost: (n) => `−${n}`,
     push: 'Neriješeno',
     out: 'Bez žetona',
+    result: 'Ishod stola',
+    even: 'Na nuli',
+    noBet: 'Bez uloga',
+    chip: (n) => `Žeton ${n}`,
+    chipAndBet: (chip, bet) => `Žeton ${chip} · Na stolu ${bet}`,
+    limit: (n) => `Najviše ${n}`,
+    allDown: 'Nema više žetona za dodati: dijeli ili poništi.',
+    pushed: 'Ulozi su vraćeni',
   },
   'sr-Cyrl': {
     heading: 'Казино сто',
@@ -75,6 +102,14 @@ const CASINO: Record<LocaleId, CasinoStrings> = {
     lost: (n) => `−${n}`,
     push: 'Нерешено',
     out: 'Без жетона',
+    result: 'Исход стола',
+    even: 'На нули',
+    noBet: 'Без улога',
+    chip: (n) => `Жетон ${n}`,
+    chipAndBet: (chip, bet) => `Жетон ${chip} · На столу ${bet}`,
+    limit: (n) => `Највише ${n}`,
+    allDown: 'Нема више жетона за додавање: дели или поништи.',
+    pushed: 'Улози су враћени',
   },
   en: {
     heading: 'Casino table',
@@ -94,6 +129,14 @@ const CASINO: Record<LocaleId, CasinoStrings> = {
     lost: (n) => `−${n}`,
     push: 'Push',
     out: 'Out of chips',
+    result: 'Table result',
+    even: 'Even',
+    noBet: 'No bet',
+    chip: (n) => `Chip ${n}`,
+    chipAndBet: (chip, bet) => `Chip ${chip} · On the table ${bet}`,
+    limit: (n) => `Limit ${n}`,
+    allDown: 'No chip left to add: deal or clear.',
+    pushed: 'Bets returned',
   },
 };
 
@@ -107,6 +150,9 @@ const BACCARAT: Record<LocaleId, BaccaratStrings> = {
     outcome: (w, p, b) => (w === 'tie' ? `Neriješeno, ${p} : ${b}` : w === 'player' ? `Igrač dobiva, ${p} : ${b}` : `Bankar dobiva, ${b} : ${p}`),
     natural: 'Prirodna!',
     pays: (spot, c, t) => (spot === 'player' ? 'plaća 1:1' : spot === 'banker' ? `plaća 1:1, minus ${c}%` : `plaća ${t}:1`),
+    road: 'Zadnja dijeljenja',
+    bead: { player: 'I', banker: 'B', tie: 'N' },
+    roadSummary: (p, b, t) => `Zadnja dijeljenja: igrač ${p}, bankar ${b}, neriješeno ${t}`,
     rules: [
       'Prije dijeljenja ulažeš na igrača, bankara ili neriješeno.',
       'Svaka strana dobiva dvije karte; računa se samo zadnja znamenka zbroja: as 1, desetka i slike 0.',
@@ -123,6 +169,9 @@ const BACCARAT: Record<LocaleId, BaccaratStrings> = {
     outcome: (w, p, b) => (w === 'tie' ? `Нерешено, ${p} : ${b}` : w === 'player' ? `Играч добија, ${p} : ${b}` : `Банкар добија, ${b} : ${p}`),
     natural: 'Природна!',
     pays: (spot, c, t) => (spot === 'player' ? 'плаћа 1:1' : spot === 'banker' ? `плаћа 1:1, минус ${c}%` : `плаћа ${t}:1`),
+    road: 'Последња дељења',
+    bead: { player: 'И', banker: 'Б', tie: 'Н' },
+    roadSummary: (p, b, t) => `Последња дељења: играч ${p}, банкар ${b}, нерешено ${t}`,
     rules: [
       'Пре дељења улажеш на играча, банкара или нерешено.',
       'Свака страна добија две карте; рачуна се само последња цифра збира: ас 1, десетка и слике 0.',
@@ -139,6 +188,9 @@ const BACCARAT: Record<LocaleId, BaccaratStrings> = {
     outcome: (w, p, b) => (w === 'tie' ? `Tie, ${p} to ${b}` : w === 'player' ? `Player wins, ${p} to ${b}` : `Banker wins, ${b} to ${p}`),
     natural: 'A natural!',
     pays: (spot, c, t) => (spot === 'player' ? 'pays 1:1' : spot === 'banker' ? `pays 1:1 less ${c}%` : `pays ${t}:1`),
+    road: 'Last coups',
+    bead: { player: 'P', banker: 'B', tie: 'T' },
+    roadSummary: (p, b, t) => `Last coups: player ${p}, banker ${b}, tie ${t}`,
     rules: [
       'Before the deal, bet on the player, the banker or a tie.',
       'Each side gets two cards; only the last digit of the total counts: an ace is 1, tens and courts 0.',

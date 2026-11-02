@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Lang } from '@belot/i18n';
 import type { AnyGame } from '@belot/game-core';
 import type { SessionSource } from '../source';
 import type { Person } from './people';
-import { buyIn, cashOut, chipBalance, isoDay, refillChips } from '@belot/progression';
+import { buyIn, cashOut, chipBalance, holdAtTable, isoDay, refillChips } from '@belot/progression';
 import { Button } from '../../ui/Button';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { Panel } from '../../ui/Panel';
 import { clearBackGuard, setBackGuard } from '../../ui/backGuard';
 import { room } from '../../cosmetics';
 import { loadProfile, saveProfile, type Settings } from '../../storage';
-import { ink, num, space, type } from '../../theme';
+import { ink, num, space, surface, theme, type } from '../../theme';
+import { TableBanner } from '../TableBanner';
 
 /**
  * The frame every casino table sits in: the buy-in, the cash-out, the
@@ -20,11 +21,15 @@ import { ink, num, space, type } from '../../theme';
  *
  * Sitting down takes the table's stack (or what the balance holds, if less)
  * from the player's play chips; standing up — the match over, or leaving it —
- * puts back whatever is in front of them. If the app is closed mid-table the
- * cash-out still runs as the screen unmounts. A balance that cannot cover the
+ * puts back whatever is in front of them. While they sit, what is in front of
+ * them is saved on the profile as the table reports it (`holdAtTable`): a
+ * closed or crashed app runs no cash-out, and the next table's top-up
+ * (`refillChips`) puts those chips back. A balance that cannot cover the
  * table's minimum gets an honest panel: they top up tomorrow.
  *
- * A fresh table after a match is a remount (`playAgain`), so it buys in anew.
+ * A fresh table after a match is a fresh seat AND a fresh table: the child is
+ * keyed on the seat, so its session, its stack and its "finished" flag all
+ * start over instead of showing the last match's end with a new buy-in under it.
  */
 
 /** Who sits where at a casino table, and where its game comes from (on the device, or online). */
@@ -41,7 +46,7 @@ export interface TableProps {
   stack: number;
   /** Report the chips in front of the person now, as the table changes: what a cash-out would return. */
   report: (chips: number) => void;
-  /** The match is over: stand up with what the person has. */
+  /** The match is over for the person (the last round, or out of chips): stand up with what they have. */
   finish: (chips: number) => void;
   lang: Lang;
   settings: Settings;
@@ -88,24 +93,50 @@ export function CasinoScreen({
   }, [table, tableStack, minimum]);
 
   // The buy-in is an effect and the cash-out is its cleanup, so they always
-  // pair up — a remount, a fast refresh, or a closed app never takes chips twice.
+  // pair up — a remount or a fast refresh never takes chips twice.
   const chipsNow = useRef(seat?.stack ?? 0);
   const settled = useRef(false);
+  // Bought in and not yet stood up: only then are the table's reports saved.
+  // A fresh table reports its stack before this frame's buy-in runs (a
+  // child's effects run before its parent's), and a finished one may still
+  // report after its cash-out; neither may touch the profile.
+  const seated = useRef(false);
   const [finished, setFinished] = useState<number | null>(null);
   const standUp = useCallback((chips: number) => {
     if (settled.current) return;
     settled.current = true;
+    seated.current = false;
     saveProfile(cashOut(loadProfile(), chips));
   }, []);
   useEffect(() => {
     if (!seat) return;
     const bought = buyIn(loadProfile(), seat.stack);
     if (bought) saveProfile(bought);
-    settled.current = false;
+    // A buy-in that did not go through has nothing to stand up with: settled
+    // from the start, so leaving can never pay out chips that were not taken.
+    settled.current = bought === null;
+    seated.current = bought !== null;
     chipsNow.current = seat.stack;
     setFinished(null);
     return () => standUp(chipsNow.current);
   }, [seat, standUp]);
+
+  // Stable, so a table's effect on them runs when its chips change, not on every render.
+  const report = useCallback((chips: number) => {
+    if (settled.current) return;
+    if (chipsNow.current === chips && seated.current) return;
+    chipsNow.current = chips;
+    if (seated.current) saveProfile(holdAtTable(loadProfile(), chips));
+  }, []);
+  const finish = useCallback(
+    (chips: number) => {
+      if (settled.current) return;
+      chipsNow.current = chips;
+      standUp(chips);
+      setFinished(chips);
+    },
+    [standUp],
+  );
 
   const [confirmLeave, setConfirmLeave] = useState(false);
   const exit = useCallback(() => {
@@ -140,30 +171,30 @@ export function CasinoScreen({
     );
   }
 
+  const net = finished === null ? 0 : finished - seat.stack;
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: ground.page }]}>
-      {children({
-        stack: seat.stack,
-        report: (chips) => {
-          chipsNow.current = chips;
-        },
-        finish: (chips) => {
-          chipsNow.current = chips;
-          standUp(chips);
-          setFinished(chips);
-        },
-        lang,
-        settings,
-        leave,
-        ground: ground.page,
-      })}
+      <Fragment key={table}>
+        {children({
+          stack: seat.stack,
+          report,
+          finish,
+          lang,
+          settings,
+          leave,
+          ground: ground.page,
+        })}
+      </Fragment>
       {finished !== null ? (
-        <View style={styles.scrim}>
+        // Dimmed like every other sheet, and held to the bottom so the table's
+        // last round (the final board, the last coup) still shows above it.
+        <View style={styles.scrim} accessibilityViewIsModal>
           <Panel label={title} style={[styles.sheet, { backgroundColor: ground.page }]}>
             <Text style={[styles.title, num]}>{c.cashOut(finished)}</Text>
-            <Text style={[styles.body, num]}>
-              {finished >= seat.stack ? c.won(finished - seat.stack) : c.lost(seat.stack - finished)}
-            </Text>
+            <View style={styles.resultRow}>
+              <Text style={styles.resultLabel}>{c.result}</Text>
+              <Text style={[styles.result, num, net > 0 ? styles.win : net < 0 ? styles.lose : null]}>{net > 0 ? c.won(net) : net < 0 ? c.lost(-net) : c.even}</Text>
+            </View>
             <Text style={[styles.note, num]}>{c.balance(chipBalance(loadProfile()))}</Text>
             <View style={styles.buttons}>
               <Button label={lang.games.back} onPress={onExit} />
@@ -199,6 +230,7 @@ export function CasinoHeader({ lang, title, round, onLeave }: { lang: Lang; titl
       <Text style={styles.playMoney} numberOfLines={2}>
         {lang.casino.playMoney}
       </Text>
+      <TableBanner />
     </View>
   );
 }
@@ -212,7 +244,12 @@ const styles = StyleSheet.create({
   playMoney: { ...type.caption, color: ink.lo, textAlign: 'center', paddingHorizontal: space.lg, marginTop: 2 },
   body: { ...type.body, color: ink.hi, textAlign: 'center', marginVertical: space.sm },
   note: { ...type.sub, color: ink.mid, textAlign: 'center', marginBottom: space.md },
-  scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', padding: space.lg },
-  sheet: { gap: space.sm },
+  scrim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'flex-end', padding: space.lg, backgroundColor: surface.scrim },
+  sheet: { gap: space.sm, width: '100%', maxWidth: 480, alignSelf: 'center' },
+  resultRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'baseline', gap: space.sm, marginVertical: space.xs },
+  resultLabel: { ...type.body, color: ink.mid },
+  result: { ...type.h2, color: ink.hi },
+  win: { color: theme.okInk },
+  lose: { color: theme.dangerInk },
   buttons: { flexDirection: 'row', justifyContent: 'center', gap: space.md },
 });

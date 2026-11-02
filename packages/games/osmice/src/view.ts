@@ -16,6 +16,7 @@ export interface OsmiceView {
   /** Whose turn it is; null between rounds. */
   toAct: number | null;
   pendingDraw: number;
+  /** Cards still drawable: the draw pile and the discard under the top card. */
   drawPileCount: number;
   /** The card I just drew and may still play (only ever my own). */
   drawn: OCard | null;
@@ -41,7 +42,10 @@ export function publicView(s: OsmiceState, seat: number): OsmiceView {
     direction: s.direction,
     toAct: s.phase === 'PLAY' ? s.turn : null,
     pendingDraw: s.pendingDraw,
-    drawPileCount: s.drawPile.length,
+    // What can still be drawn: the pile, plus the discard under the top card,
+    // which is shuffled back in when the pile runs out. The pile alone read 0
+    // on a deck that could still be tapped.
+    drawPileCount: s.drawPile.length + Math.max(0, s.discard.length - 1),
     drawn: s.turn === seat && s.drawn ? { ...s.drawn } : null,
     scores: s.scores.slice(),
     matchTarget: s.config.matchTarget,

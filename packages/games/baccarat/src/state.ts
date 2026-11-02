@@ -74,6 +74,14 @@ export interface BaccaratState {
   house: number;
   /** The stacks the match started with, for its settlement. */
   startStacks: number[];
+  /**
+   * Per seat, banker commission owed but not yet taken, in hundredths of a
+   * chip. Chips are whole, so 5% of a 10 or 25 bet cannot be taken exactly;
+   * the house takes a whole chip only once a whole chip is owed and carries
+   * the rest to the seat's next banker win. Not chips: nothing here is on the
+   * table, so it plays no part in the chip count.
+   */
+  commissionOwed: number[];
 }
 
 export type BaccaratAction =
@@ -102,6 +110,7 @@ export function createMatch(o: { seats: number; seed: number; rng?: Rng; config?
     shuffled: true,
     house: 0,
     startStacks: stacks.slice(),
+    commissionOwed: Array<number>(o.seats).fill(0),
   };
 }
 
@@ -112,6 +121,7 @@ const clone = (s: BaccaratState): BaccaratState => ({
   bets: s.bets.map((b) => ({ ...b })),
   ready: s.ready.slice(),
   road: s.road.slice(),
+  commissionOwed: s.commissionOwed.slice(),
 });
 
 /** A seat that cannot cover the smallest bet sits the coup out. */
@@ -189,7 +199,17 @@ function resolve(s: BaccaratState): BaccaratState {
     const b = s.bets[seat]!;
     let back = 0;
     if (coup.outcome === 'player') back += b.player * 2;
-    if (coup.outcome === 'banker') back += b.banker + Math.floor((b.banker * (100 - s.config.commissionPct)) / 100);
+    if (coup.outcome === 'banker' && b.banker > 0) {
+      // 1:1 less the commission, exact over the match rather than per bet:
+      // flooring each payout took 10% of a 10 bet and 8% of a 25. What is
+      // owed builds up in hundredths and only whole chips are taken, so the
+      // house never takes a chip before it is owed; the fraction still owed
+      // when the match ends (under one chip) is let go.
+      const owed = s.commissionOwed[seat]! + b.banker * s.config.commissionPct;
+      const taken = Math.floor(owed / 100);
+      s.commissionOwed[seat] = owed - taken * 100;
+      back += b.banker * 2 - taken;
+    }
     if (coup.outcome === 'tie') back += b.player + b.banker + b.tie * (1 + s.config.tiePays);
     s.stacks[seat] = s.stacks[seat]! + back;
     net.push(back - betTotal(b));

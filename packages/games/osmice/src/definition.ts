@@ -57,8 +57,11 @@ export const OSMICE: OsmiceDefinition = {
   seatStatus: () => 'active',
   legalActions,
   normalize,
-  // A player who runs out of time draws (or, having drawn, keeps the card).
-  defaultAction: (s, seat) => (s.drawn ? { type: 'PASS', seat } : (legalActions(s, seat).find((a) => a.type === 'DRAW') ?? legalActions(s, seat)[0]!)),
+  // A player who runs out of time gets the medium bot's move, as in Bela: it
+  // plays a card when one goes and draws only when stuck. Always drawing
+  // instead left an idle player's hand growing all round, and every playable
+  // draw kept them on turn for a second full clock.
+  defaultAction: (s, seat, rng) => decideOsmice(publicView(s, seat), rng, 'medium'),
   apply: applyAction,
 
   view: publicView,

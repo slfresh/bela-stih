@@ -2,6 +2,11 @@ import type { LocaleId } from './index';
 
 /** Blackjack's and Texas Hold'em's words, in all three languages. */
 
+/** "A", "A and B", "A, B and C". */
+function list(names: readonly string[], and: string): string {
+  return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} ${and} ${names[names.length - 1]}`;
+}
+
 export interface BlackjackStrings {
   name: string;
   tagline: string;
@@ -34,7 +39,23 @@ export interface HoldemStrings {
   min: string;
   category: Record<'highCard' | 'pair' | 'twoPair' | 'trips' | 'straight' | 'flush' | 'fullHouse' | 'quads' | 'straightFlush', string>;
   wins: (name: string, amount: number, hand: string | null) => string;
+  /** The same, said to the person: "You win 120 with a pair". */
+  youWin: (amount: number, hand: string | null) => string;
+  /** A pot shared between several players: "Grandma and Moustache split 60". */
+  split: (names: readonly string[], amount: number, hand: string | null) => string;
+  /** A pot the person shares with the others named: "You and Grandma split 60". */
+  youSplit: (others: readonly string[], amount: number, hand: string | null) => string;
+  /** Which pot a line is about, once a hand has side pots: "Main pot: …", "Side pot 2: …". */
+  mainPot: (line: string) => string;
+  sidePot: (n: number | null, line: string) => string;
+  /** A bet nobody called, handed back: not a win. */
+  returned: (name: string, amount: number) => string;
+  youReturned: (amount: number) => string;
   eliminated: (name: string) => string;
+  /** The person is out of chips: their match is over. */
+  youOut: string;
+  /** Under a seat (mine included) that has folded this hand. */
+  folded: string;
   handOf: (n: number) => string;
   rules: string[];
 }
@@ -117,7 +138,16 @@ const HOLDEM: Record<LocaleId, HoldemStrings> = {
     min: 'Min',
     category: { highCard: 'visoka karta', pair: 'par', twoPair: 'dva para', trips: 'tris', straight: 'skala', flush: 'boja', fullHouse: 'full house', quads: 'poker', straightFlush: 'skala u boji' },
     wins: (name, amount, hand) => (hand ? `${name} uzima ${amount} (${hand})` : `${name} uzima ${amount}`),
+    youWin: (amount, hand) => (hand ? `Uzimaš ${amount} (${hand})` : `Uzimaš ${amount}`),
+    split: (names, amount, hand) => `${list(names, 'i')} dijele ${amount}${hand ? ` (${hand})` : ''}`,
+    youSplit: (others, amount, hand) => `Ti i ${list(others, 'i')} dijelite ${amount}${hand ? ` (${hand})` : ''}`,
+    mainPot: (line) => `Glavni pot: ${line}`,
+    sidePot: (n, line) => `Sporedni pot${n === null ? '' : ` ${n}`}: ${line}`,
+    returned: (name, amount) => `${name} dobiva natrag ${amount} koje nitko nije pratio`,
+    youReturned: (amount) => `Dobivaš natrag ${amount} koje nitko nije pratio`,
     eliminated: (name) => `${name} ispada`,
+    youOut: 'Ispadaš: nemaš više žetona',
+    folded: 'Izvan ruke',
     handOf: (n) => `Ruka ${n}`,
     rules: [
       'Svatko dobiva dvije karte. Na stol dolaze tri, pa jedna, pa još jedna zajednička karta, s krugom ulaganja prije i poslije svake.',
@@ -143,7 +173,16 @@ const HOLDEM: Record<LocaleId, HoldemStrings> = {
     min: 'Мин',
     category: { highCard: 'висока карта', pair: 'пар', twoPair: 'два пара', trips: 'трилинг', straight: 'кента', flush: 'боја', fullHouse: 'фул хаус', quads: 'покер', straightFlush: 'кента у боји' },
     wins: (name, amount, hand) => (hand ? `${name} узима ${amount} (${hand})` : `${name} узима ${amount}`),
+    youWin: (amount, hand) => (hand ? `Узимаш ${amount} (${hand})` : `Узимаш ${amount}`),
+    split: (names, amount, hand) => `${list(names, 'и')} деле ${amount}${hand ? ` (${hand})` : ''}`,
+    youSplit: (others, amount, hand) => `Ти и ${list(others, 'и')} делите ${amount}${hand ? ` (${hand})` : ''}`,
+    mainPot: (line) => `Главни пот: ${line}`,
+    sidePot: (n, line) => `Споредни пот${n === null ? '' : ` ${n}`}: ${line}`,
+    returned: (name, amount) => `${name} добија назад ${amount} које нико није пратио`,
+    youReturned: (amount) => `Добијаш назад ${amount} које нико није пратио`,
     eliminated: (name) => `${name} испада`,
+    youOut: 'Испадаш: немаш више жетона',
+    folded: 'Ван руке',
     handOf: (n) => `Рука ${n}`,
     rules: [
       'Свако добија две карте. На сто долазе три, па једна, па још једна заједничка карта, са кругом улагања пре и после сваке.',
@@ -169,7 +208,16 @@ const HOLDEM: Record<LocaleId, HoldemStrings> = {
     min: 'Min',
     category: { highCard: 'high card', pair: 'a pair', twoPair: 'two pair', trips: 'three of a kind', straight: 'a straight', flush: 'a flush', fullHouse: 'a full house', quads: 'four of a kind', straightFlush: 'a straight flush' },
     wins: (name, amount, hand) => (hand ? `${name} wins ${amount} with ${hand}` : `${name} wins ${amount}`),
+    youWin: (amount, hand) => (hand ? `You win ${amount} with ${hand}` : `You win ${amount}`),
+    split: (names, amount, hand) => `${list(names, 'and')} split ${amount}${hand ? ` with ${hand}` : ''}`,
+    youSplit: (others, amount, hand) => `You and ${list(others, 'and')} split ${amount}${hand ? ` with ${hand}` : ''}`,
+    mainPot: (line) => `Main pot: ${line}`,
+    sidePot: (n, line) => `Side pot${n === null ? '' : ` ${n}`}: ${line}`,
+    returned: (name, amount) => `${name} gets back ${amount} nobody called`,
+    youReturned: (amount) => `You get back ${amount} nobody called`,
     eliminated: (name) => `${name} is out`,
+    youOut: 'You are out of chips',
+    folded: 'Folded',
     handOf: (n) => `Hand ${n}`,
     rules: [
       'Everyone gets two cards. Three shared cards come to the table, then one, then one more, with a round of betting before and after each.',

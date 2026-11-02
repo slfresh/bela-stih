@@ -61,8 +61,13 @@ export interface PlayerProfile {
    * Play-money chips for the casino-style games. Absent until first used.
    * Never bought, never won with coins and never turned into coins: a free
    * balance that tops itself up once a day, so nobody is ever out of play.
+   *
+   * `atTable` is what is in front of the player at a table they are sitting
+   * at right now, kept up to date as the table plays. A closed app or a crash
+   * runs no cash-out, so this is how those chips survive it: the next
+   * `refillChips` (every table calls it before seating) puts them back.
    */
-  chips?: { balance: number; refillDay: string | null };
+  chips?: { balance: number; refillDay: string | null; atTable?: number };
 }
 
 /** One game's tally: rounds (a hand, a coup) and matches, played and won. */
@@ -323,27 +328,60 @@ export function applyGameMatchOutcome(
 /** What a new player starts with, and what the daily top-up restores. */
 export const CHIPS_FLOOR = 2000;
 
+/** The chips to sit down with: the balance, not counting any still in front of the player at a table. */
 export function chipBalance(profile: PlayerProfile): number {
   return profile.chips?.balance ?? CHIPS_FLOOR;
 }
 
-/** Once a day, a balance under the floor is topped back up to it. */
-export function refillChips(profile: PlayerProfile, today: string): { profile: PlayerProfile; added: number } {
-  const balance = chipBalance(profile);
-  if (profile.chips?.refillDay === today || balance >= CHIPS_FLOOR) {
-    return { profile: profile.chips ? profile : { ...profile, chips: { balance, refillDay: null } }, added: 0 };
-  }
-  return { profile: { ...profile, chips: { balance: CHIPS_FLOOR, refillDay: today } }, added: CHIPS_FLOOR - balance };
+/** The chips in front of the player at a table they have not stood up from (0 when none). */
+export function chipsAtTable(profile: PlayerProfile): number {
+  return profile.chips?.atTable ?? 0;
 }
 
-/** Sit down at a table with `amount` chips from the balance; null when it does not cover them. */
+/**
+ * Chips left at a table nobody stood up from (the app was closed or crashed
+ * mid-table) go back on the balance. A no-op for a profile without any.
+ */
+export function settleChips(profile: PlayerProfile): PlayerProfile {
+  if (!profile.chips || profile.chips.atTable === undefined) return profile;
+  const left = Math.max(0, Math.floor(profile.chips.atTable));
+  return { ...profile, chips: { balance: chipBalance(profile) + left, refillDay: profile.chips.refillDay } };
+}
+
+/**
+ * Once a day, a balance under the floor is topped back up to it. Chips left
+ * at a table first go back on the balance, so they count towards the floor
+ * and a crash never costs a player their stack.
+ */
+export function refillChips(profile: PlayerProfile, today: string): { profile: PlayerProfile; added: number } {
+  const settled = settleChips(profile);
+  const balance = chipBalance(settled);
+  if (settled.chips?.refillDay === today || balance >= CHIPS_FLOOR) {
+    return { profile: settled.chips ? settled : { ...settled, chips: { balance, refillDay: null } }, added: 0 };
+  }
+  return { profile: { ...settled, chips: { balance: CHIPS_FLOOR, refillDay: today } }, added: CHIPS_FLOOR - balance };
+}
+
+/**
+ * Sit down at a table with `amount` chips from the balance; null when it does
+ * not cover them. The chips are held as `atTable` until the player stands up.
+ */
 export function buyIn(profile: PlayerProfile, amount: number): PlayerProfile | null {
   const balance = chipBalance(profile);
   if (!Number.isInteger(amount) || amount <= 0 || amount > balance) return null;
-  return { ...profile, chips: { balance: balance - amount, refillDay: profile.chips?.refillDay ?? null } };
+  return { ...profile, chips: { balance: balance - amount, refillDay: profile.chips?.refillDay ?? null, atTable: chipsAtTable(profile) + amount } };
 }
 
-/** Stand up with `amount` chips: they go back on the balance. */
+/**
+ * What is in front of the player at the table now, as the table reports it:
+ * what a cash-out would return. Saved as the table plays, so a closed app
+ * loses nothing. Not a cash-out: the balance does not move.
+ */
+export function holdAtTable(profile: PlayerProfile, amount: number): PlayerProfile {
+  return { ...profile, chips: { balance: chipBalance(profile), refillDay: profile.chips?.refillDay ?? null, atTable: Math.max(0, Math.floor(amount)) } };
+}
+
+/** Stand up with `amount` chips: they go back on the balance, and the player no longer has any at a table. */
 export function cashOut(profile: PlayerProfile, amount: number): PlayerProfile {
   const balance = chipBalance(profile);
   return { ...profile, chips: { balance: balance + Math.max(0, Math.floor(amount)), refillDay: profile.chips?.refillDay ?? null } };

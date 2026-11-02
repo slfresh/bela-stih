@@ -1,7 +1,7 @@
 import './ws-polyfill';
 import { Client, type Room } from 'colyseus.js';
 import { makeDeck, type OsmiceAction, type OsmiceEvent, type OsmiceView } from '@belot/games-osmice';
-import { MSG, ROOM_NAMES, type GameRoomMessage } from './protocol';
+import { MSG, ROOM_NAME_MODES, ROOM_NAMES, WRONG_GAME_CODE, type GameId, type GameRoomMessage } from './protocol';
 
 /**
  * Osmice over real websockets, against a running server (`npm run server`):
@@ -21,6 +21,19 @@ import { MSG, ROOM_NAMES, type GameRoomMessage } from './protocol';
 
 const ENDPOINT = process.env.SERVER_URL ?? 'ws://localhost:2567';
 const SEATS = 3;
+/** What the 'More games' app says it can seat its player at (JoinGame `games`). */
+const GAMES: GameId[] = ['osmice', 'baccarat', 'blackjack', 'holdem'];
+
+/** The code a join was refused with, or null when it was let in (and then left again). */
+async function refusal(join: () => Promise<Room>): Promise<number | null> {
+  try {
+    const room = await join();
+    await room.leave(true);
+    return null;
+  } catch (err) {
+    return (err as { code?: number }).code ?? -1;
+  }
+}
 const ALL_IDS = new Set(makeDeck().map((c) => c.id));
 const ID = /"((?:red|gold|green|blue)-(?:\d|skip|reverse|draw2)-\d|wild4?-\d)"/g;
 
@@ -127,7 +140,7 @@ async function main(): Promise<void> {
   };
 
   const clients = Array.from({ length: SEATS }, () => new Client(ENDPOINT));
-  const host = await clients[0]!.create(ROOM_NAMES.osmice, { private: true, seats: SEATS, target: 200, name: 'A' });
+  const host = await clients[0]!.create(ROOM_NAMES.osmice, { private: true, seats: SEATS, target: 200, name: 'A', games: GAMES });
   // Alone in the lobby, walk every free seat: no hand may be read before the table fills.
   const lobbyViews: unknown[] = [];
   host.onMessage(MSG.view, (msg: { view: unknown }) => lobbyViews.push(msg.view));
@@ -141,8 +154,24 @@ async function main(): Promise<void> {
   for (const v of lobbyViews) if (v !== null) problems.push(`a lobby seat was sent a view before the table filled: ${JSON.stringify(v).slice(0, 80)}`);
   console.log(`[smoke-osmice] lobby walk: ${lobbyViews.length} seats visited, every view withheld`);
   host.removeAllListeners();
+
+  // Every game's codes come from one pool, so a code reaches any table: the
+  // room must turn away an app that cannot play its game, before it sits.
+  const belaApp = await refusal(() => clients[1]!.joinById(host.roomId, { name: 'Bela', gifts: true, voice: false, receipts: true, proto: 1 }));
+  if (belaApp !== WRONG_GAME_CODE) problems.push(`a Bela app joining an Osmice code got ${belaApp}, expected ${WRONG_GAME_CODE}`);
+  const bela = await clients[2]!.create(ROOM_NAME_MODES, { private: true, name: 'BelaHost' });
+  bela.onMessage('*', () => {});
+  const otherApp = await refusal(() => clients[1]!.joinById(bela.roomId, { name: 'Other', proto: 1, games: GAMES }));
+  if (otherApp !== WRONG_GAME_CODE) problems.push(`a 'More games' join of a Bela code got ${otherApp}, expected ${WRONG_GAME_CODE}`);
+  const oldApp = await refusal(() => clients[1]!.joinById(bela.roomId, { name: 'Old' }));
+  if (oldApp !== null) problems.push(`a Bela app joining a Bela code was refused with ${oldApp}`);
+  const bothApp = await refusal(() => clients[1]!.joinById(bela.roomId, { name: 'Both', games: ['bela', ...GAMES] }));
+  if (bothApp !== null) problems.push(`an app that plays Bela too was refused a Bela code with ${bothApp}`);
+  await bela.leave(true);
+  console.log('[smoke-osmice] a code for another game is refused both ways; Bela apps still join Bela tables');
+
   sit(host);
-  for (let i = 1; i < SEATS; i++) sit(await clients[i]!.joinById(host.roomId, { name: String.fromCharCode(65 + i) }));
+  for (let i = 1; i < SEATS; i++) sit(await clients[i]!.joinById(host.roomId, { name: String.fromCharCode(65 + i), games: GAMES }));
   console.log(`[smoke-osmice] room ${host.roomId}: ${SEATS} clients`);
 
   const deadline = Date.now() + 120_000;

@@ -467,4 +467,15 @@ export interface GameViewMessage {
 /** Sent with a join or a create at a table of any game. */
 export interface JoinGame {
   game?: GameId;
+  /**
+   * The games this app can seat its player at. Every code is drawn from one
+   * pool and a code reaches a table of any game, so the room checks it: a
+   * table beyond Bela refuses a join that does not name its game, and a Bela
+   * table refuses one that names games but not Bela (WRONG_GAME_CODE). Bela's
+   * own apps send nothing, and are seated at Bela tables as they always were.
+   */
+  games?: GameId[];
 }
+
+/** Refused at the door: this table plays a game the joining app did not ask for (JoinGame `games`). */
+export const WRONG_GAME_CODE = 4302;

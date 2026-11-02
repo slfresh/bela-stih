@@ -124,9 +124,27 @@ export function deriveEvents(before: BaccaratState, after: BaccaratState, cause:
 // ---------------------------------------------------------------------------
 // Bots. Every bet in baccarat loses to the house in the long run, so the
 // levels differ in how they play rather than how well: easy is impulsive,
-// medium flat-bets the banker (the best bet on the table), hard flat-bets
-// the banker sized to its stack and never touches the tie.
+// medium flat-bets one even-money spot (mostly the banker, the best bet on
+// the table), hard flat-bets the banker sized to its stack and never touches
+// the tie. Each seat has its own habits — its spot, its size, and now and
+// then a coup it sits out — so the bots' stacks part ways instead of moving
+// as one: with one shared bet every bot seat showed the same number all match.
 // ---------------------------------------------------------------------------
+
+/** A seat's betting habits, fixed by its place at the table. */
+function habitsOf(seat: number): { spot: Spot; units: number; pct: number } {
+  return {
+    // One seat in four backs the player.
+    spot: seat % 4 === 1 ? 'player' : 'banker',
+    // Medium: one, two or three minimums.
+    units: 1 + ((seat + 1) % 3),
+    // Hard: 2%, 3% or 4% of the stack.
+    pct: [0.03, 0.02, 0.04][seat % 3]!,
+  };
+}
+
+/** How often a medium or hard bot sits a coup out. */
+const SIT_OUT = 0.1;
 
 /** The largest chip that fits `amount` and the stack, for building a bet chip by chip. */
 function chipFor(view: BaccaratView, amount: number): number | null {
@@ -155,11 +173,14 @@ export function decideBaccarat(view: BaccaratView, rng: Rng, level: BotLevel): B
     return chip <= stack ? bet(spot, chip) : ready;
   }
 
-  // Medium: twice the minimum; hard: about 3% of the stack, never under the minimum.
-  const target = level === 'medium' ? view.minBet * 2 : Math.max(view.minBet, Math.floor((stack + placed) * 0.03));
+  const habits = habitsOf(view.seat);
+  // Decided once a coup: the first call, before any chip is down.
+  if (placed === 0 && rng() < SIT_OUT) return ready;
+  // Medium: its own number of minimums; hard: its own share of the stack, never under the minimum.
+  const target = level === 'medium' ? view.minBet * habits.units : Math.max(view.minBet, Math.floor((stack + placed) * habits.pct));
   if (placed >= target) return ready;
   const chip = chipFor(view, target - placed);
-  return chip === null ? ready : bet('banker', chip);
+  return chip === null ? ready : bet(level === 'medium' ? habits.spot : 'banker', chip);
 }
 
 // ---------------------------------------------------------------------------

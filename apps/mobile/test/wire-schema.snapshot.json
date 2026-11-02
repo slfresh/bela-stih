@@ -306,7 +306,8 @@
  "apps/server/src/protocol.ts:JoinGame": {
   "kind": "object",
   "props": {
-   "game?": "GameId | undefined"
+   "game?": "GameId | undefined",
+   "games?": "GameId[] | undefined"
   }
  },
  "packages/table/src/index.ts:TableEvent": {

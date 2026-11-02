@@ -153,6 +153,163 @@ describe('the betting rules', () => {
   });
 });
 
+describe('the review fixes', () => {
+  const legal = (s: HoldemState, seat: number) => HOLDEM.legalActions(s, seat).map((a) => a.type);
+  const bets = (s: HoldemState) => s.players.map((p) => p.bet);
+
+  it('a big blind all in for less than the small blind does not make the small blind call it', () => {
+    // Heads up, the button (seat 0) posts 10 and the big blind has only 5.
+    const s = HOLDEM.startRound(HOLDEM.createMatch({ seats: 2, seed: 1, stacks: [1000, 5], dealer: 0, config: { blindsUpEvery: 0 } }));
+    // Nothing to decide: the 5 nobody covered goes back and the board runs out.
+    const back = s.log.find((e) => e.kind === 'returned');
+    expect(back).toEqual({ kind: 'returned', seat: 0, amount: 5 });
+    expect(s.phase === 'HAND_OVER' || s.phase === 'MATCH_OVER').toBe(true);
+    expect(s.lastResult!.pots.reduce((a, p) => a + p.amount, 0)).toBe(10);
+    expect(s.lastResult!.returned).toEqual([{ seat: 0, amount: 5 }]);
+    // Whoever won, nobody won or lost more than the 5 the big blind risked.
+    expect(s.lastResult!.net.map(Math.abs)).toEqual([5, 5]);
+    expect(chipsInPlay(s)).toBe(1005);
+  });
+
+  it('three-handed, a short big blind makes the call the small blind, and the folds give it back', () => {
+    // Button 0, small blind 1 (10), big blind 2 all in for 5.
+    let s = table([1000, 1000, 5], 0);
+    expect(s.currentBet).toBe(10);
+    expect(s.toAct).toBe(0);
+    expect(HOLDEM.legalActions(s, 0).find((a) => a.type === 'RAISE')).toEqual({ type: 'RAISE', seat: 0, to: 30 });
+    s = act(s, { type: 'FOLD', seat: 0 });
+    // The small blind has matched everything: it is not asked to call or fold.
+    expect(s.phase === 'HAND_OVER' || s.phase === 'MATCH_OVER').toBe(true);
+    expect(s.lastResult!.returned).toEqual([{ seat: 1, amount: 5 }]);
+    expect(s.lastResult!.net[2]!).toBeLessThanOrEqual(5);
+    expect(s.lastResult!.net.reduce((a, b) => a + b, 0)).toBe(0);
+  });
+
+  it('a bet nobody could call goes back to its owner and is not reported as a pot won', () => {
+    let s = table([1000, 200], 0);
+    s = act(s, { type: 'RAISE', seat: 0, to: 1000 });
+    s = act(s, { type: 'CALL', seat: 1 });
+    const kinds = s.log.map((e) => e.kind);
+    // Handed back before the board runs out, then only the contested 400 is won.
+    expect(kinds.indexOf('returned')).toBeLessThan(kinds.indexOf('street'));
+    expect(s.log.filter((e) => e.kind === 'returned')).toEqual([{ kind: 'returned', seat: 0, amount: 800 }]);
+    const won = s.log.filter((e) => e.kind === 'potWon');
+    expect(won.map((e) => (e.kind === 'potWon' ? e.amount : 0))).toEqual([400]);
+    expect(s.lastResult!.pots.map((p) => p.amount)).toEqual([400]);
+    expect(s.lastResult!.returned).toEqual([{ seat: 0, amount: 800 }]);
+    expect(s.players.map((p) => p.stack).reduce((a, b) => a + b, 0)).toBe(1200);
+    expect(s.lastResult!.net.map(Math.abs)).toEqual([200, 200]);
+  });
+
+  it('an uncontested raise gets its uncalled part back, and only the rest counts as won', () => {
+    let s = table([1500, 1500, 1500], 0);
+    s = act(s, { type: 'RAISE', seat: 0, to: 60 });
+    s = act(s, { type: 'FOLD', seat: 1 });
+    s = act(s, { type: 'FOLD', seat: 2 });
+    expect(s.log.filter((e) => e.kind === 'returned' || e.kind === 'potWon')).toEqual([
+      { kind: 'returned', seat: 0, amount: 40 },
+      { kind: 'potWon', amount: 50, winners: [0], uncontested: true },
+    ]);
+    expect(s.lastResult!.net).toEqual([30, -10, -20]);
+    expect(s.players.map((p) => p.stack)).toEqual([1530, 1490, 1480]);
+  });
+
+  it('no bet stays in front of anyone once the hand is over, however it ended', () => {
+    let s = table([1500, 1500, 1500], 0);
+    s = act(s, { type: 'RAISE', seat: 0, to: 60 });
+    s = act(s, { type: 'FOLD', seat: 1 });
+    s = act(s, { type: 'FOLD', seat: 2 });
+    expect(s.phase).toBe('HAND_OVER');
+    expect(bets(s)).toEqual([0, 0, 0]);
+    const v = HOLDEM.view(s, 1);
+    expect([v.pot, v.currentBet, v.toCall]).toEqual([0, 0, 0]);
+    expect(v.players.map((p) => p.bet)).toEqual([0, 0, 0]);
+    // A walk for the big blind too.
+    let w = table([1500, 1500, 1500], 0);
+    w = act(w, { type: 'FOLD', seat: 0 });
+    w = act(w, { type: 'FOLD', seat: 1 });
+    expect(bets(w)).toEqual([0, 0, 0]);
+    expect(w.currentBet).toBe(0);
+  });
+
+  it('short all-ins that add up to a full raise reopen the betting for whoever already acted', () => {
+    // Button 3: seat 0 small blind, seat 1 big blind, seat 2 opens preflop.
+    let s = table([1000, 170, 230, 1000], 3);
+    // Everyone calls 20 to see a flop.
+    s = act(s, { type: 'CALL', seat: 2 });
+    s = act(s, { type: 'CALL', seat: 3 });
+    s = act(s, { type: 'CALL', seat: 0 });
+    s = act(s, { type: 'CHECK', seat: 1 });
+    expect(s.phase).toBe('FLOP');
+    expect(s.toAct).toBe(0);
+    s = act(s, { type: 'RAISE', seat: 0, to: 100 }); // a bet of 100
+    s = act(s, { type: 'RAISE', seat: 1, to: 150 }); // all in, 50 more: short
+    expect(s.players[1]!.status).toBe('allIn');
+    s = act(s, { type: 'RAISE', seat: 2, to: 210 }); // all in, 60 more: short again
+    expect(s.players[2]!.status).toBe('allIn');
+    // Seat 3 has not acted yet: it may raise.
+    expect(legal(s, 3)).toContain('RAISE');
+    s = act(s, { type: 'CALL', seat: 3 });
+    // Seat 0 bet 100 and now faces 210: 110 more, a full raise in all.
+    expect(s.toAct).toBe(0);
+    expect(legal(s, 0)).toEqual(['FOLD', 'CALL', 'RAISE', 'RAISE']);
+  });
+
+  it('one short all-in still does not reopen it, and a seat that called it may not raise later short ones', () => {
+    let s = table([1000, 170, 1000, 1000], 3);
+    s = act(s, { type: 'CALL', seat: 2 });
+    s = act(s, { type: 'CALL', seat: 3 });
+    s = act(s, { type: 'CALL', seat: 0 });
+    s = act(s, { type: 'CHECK', seat: 1 });
+    s = act(s, { type: 'RAISE', seat: 0, to: 100 });
+    s = act(s, { type: 'RAISE', seat: 1, to: 150 }); // all in, short
+    s = act(s, { type: 'CALL', seat: 2 });
+    s = act(s, { type: 'CALL', seat: 3 });
+    expect(s.toAct).toBe(0);
+    expect(legal(s, 0)).toEqual(['FOLD', 'CALL']);
+  });
+
+  it('going heads up, the player who just paid the big blind does not pay it again', () => {
+    const SEED = 5; // a deal seat 0 loses
+    // Button 0, small blind 1, big blind 2; seat 0 has 20 and goes all in.
+    let s = HOLDEM.startRound(HOLDEM.createMatch({ seats: 3, seed: SEED, stacks: [20, 1000, 1000], dealer: 0, config: { blindsUpEvery: 0 } }));
+    expect([s.button, s.bigBlindSeat]).toEqual([0, 2]);
+    s = act(s, { type: 'CALL', seat: 0 }); // all in
+    s = act(s, { type: 'CALL', seat: 1 });
+    s = act(s, { type: 'CHECK', seat: 2 });
+    while (s.phase !== 'HAND_OVER' && s.phase !== 'MATCH_OVER') s = act(s, { type: 'CHECK', seat: s.toAct! });
+    // This deal (the seed) has seat 0 lose and bust.
+    expect(s.players[0]!.status).toBe('out');
+    s = HOLDEM.startRound(s);
+    const blinds = s.log.filter((e) => e.kind === 'blind');
+    // Seat 1 posts the big blind; seat 2, who just did, has the button and the small blind.
+    expect(blinds.map((e) => (e.kind === 'blind' ? [e.seat, e.big] : null))).toEqual([
+      [2, false],
+      [1, true],
+    ]);
+    expect(s.button).toBe(2);
+    expect(s.toAct).toBe(2);
+  });
+
+  it('when the big blind busts, the next seat still pays the big blind next hand', () => {
+    // Four seats; follow the big blind over a run of hands in which seat 2 is out.
+    let s = HOLDEM.createMatch({ seats: 4, seed: 9, stacks: [1000, 1000, 0, 1000], dealer: 0, config: { blindsUpEvery: 0 } });
+    s = { ...s, bigBlindSeat: 1 }; // seat 1 paid the big blind last hand; seat 2 busted then
+    const bigs: number[] = [];
+    const buttons: number[] = [];
+    for (let hand = 0; hand < 6; hand++) {
+      s = HOLDEM.startRound(s);
+      bigs.push(s.bigBlindSeat!);
+      buttons.push(s.button);
+      // Everyone folds to the big blind.
+      while (s.phase !== 'HAND_OVER') s = act(s, { type: 'FOLD', seat: s.toAct! });
+    }
+    expect(bigs).toEqual([3, 0, 1, 3, 0, 1]);
+    // The button and the small blind are the live seats just before it.
+    expect(buttons).toEqual([0, 1, 3, 0, 1, 3]);
+  });
+});
+
 describe('a hold’em table', () => {
   it('conserves every chip and hides every hole card, over random play to a winner', () => {
     for (let seed = 1; seed <= 25; seed++) {
@@ -162,9 +319,18 @@ describe('a hold’em table', () => {
       const pick = makeRng(seed * 31);
       const total = seats * 300;
       let guard = 0;
+      let lastBig = session.state.bigBlindSeat;
       while (!session.matchOver() && guard++ < 50_000) {
-        if (session.roundOver()) session.startNextRound();
-        else {
+        if (session.roundOver()) {
+          // A hand over leaves no bet out, and what was won is what was lost.
+          const st = session.state;
+          if (st.players.some((p) => p.bet !== 0) || st.currentBet !== 0) throw new Error(`seed ${seed}: bets left out at hand over`);
+          if (st.lastResult!.net.reduce((a, b) => a + b, 0) !== 0) throw new Error(`seed ${seed}: net does not add up`);
+          session.startNextRound();
+          // Nobody pays the big blind twice running.
+          if (session.state.bigBlindSeat === lastBig) throw new Error(`seed ${seed}: seat ${lastBig} paid the big blind twice`);
+          lastBig = session.state.bigBlindSeat;
+        } else {
           const seat = session.actors()[0]!;
           const legal = session.legal(seat);
           let a = legal[Math.floor(pick() * legal.length)]!;

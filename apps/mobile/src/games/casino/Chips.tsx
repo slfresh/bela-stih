@@ -49,17 +49,46 @@ export function ChipPile({ amount, size = 22 }: { amount: number; size?: number 
   );
 }
 
-/** The chips to bet with: tap one to add it to the bet. Chips the stack cannot cover are dimmed and inert. */
-export function ChipRow({ chips, canAdd, onAdd }: { chips: readonly number[]; canAdd: (value: number) => boolean; onAdd: (value: number) => void }) {
+/**
+ * The chips to bet with. Two ways to use it: tap one to add it to the bet
+ * (Blackjack), or, given `selected`, tap one to choose the chip the spots will
+ * take (Baccarat) — the chosen one is ringed in gold and lifted, and says so
+ * to a screen reader. Chips the stack cannot cover are dimmed and inert.
+ */
+export function ChipRow({
+  chips,
+  canAdd,
+  onAdd,
+  selected,
+  label,
+}: {
+  chips: readonly number[];
+  canAdd: (value: number) => boolean;
+  onAdd: (value: number) => void;
+  /** Picker mode: the chip chosen now. */
+  selected?: number;
+  /** Picker mode: what a chip is called ("Chip 25"); adding mode says "+25". */
+  label?: (value: number) => string;
+}) {
+  const picker = selected !== undefined;
   return (
     <View style={styles.row}>
       {chips.map((v) => {
         const ok = canAdd(v);
+        const on = picker && v === selected;
         return (
-          <PressScale key={v} onPress={() => ok && onAdd(v)} disabled={!ok} accessibilityRole="button" accessibilityLabel={`+${v}`} sound="arm">
-            <View style={[styles.chip, !ok && styles.dim]}>
+          <PressScale
+            key={v}
+            onPress={() => ok && onAdd(v)}
+            disabled={!ok}
+            accessibilityRole="button"
+            accessibilityLabel={picker && label ? label(v) : `+${v}`}
+            accessibilityState={picker ? { selected: on, disabled: !ok } : { disabled: !ok }}
+            sound={picker ? 'tap' : 'arm'}
+          >
+            <View style={[styles.chip, on && styles.chipOn, !ok && styles.dim]}>
               <ChipDisc value={v} size={40} />
-              <Text style={[styles.chipText, num]}>{v}</Text>
+              <Text style={[styles.chipText, num, on && styles.chipTextOn]}>{v}</Text>
             </View>
           </PressScale>
         );
@@ -72,7 +101,10 @@ const styles = StyleSheet.create({
   pile: { alignItems: 'center', gap: 2 },
   pileText: { ...type.caption, color: ink.hi, fontFamily: font.bold },
   row: { flexDirection: 'row', gap: space.sm, justifyContent: 'center' },
-  chip: { alignItems: 'center', gap: 2, padding: 2, borderRadius: radius.pill, borderWidth: 1, borderColor: stroke.hair },
+  // A ring is always there, so choosing a chip never shifts the row.
+  chip: { alignItems: 'center', gap: 2, padding: 2, borderRadius: radius.pill, borderWidth: 2, borderColor: stroke.hair },
+  chipOn: { borderColor: garb.gold, transform: [{ translateY: -4 }] },
   chipText: { ...type.caption, color: theme.text },
+  chipTextOn: { fontFamily: font.bold },
   dim: { opacity: 0.35 },
 });

@@ -7,15 +7,16 @@ import {
   GIFT_IDS,
   MIN_PROTO,
   MSG,
-  NEXT_DEAL_MS,
   PAUSE_MAX_MS,
   TURN_CHOICES,
   UPDATE_APP_CODE,
   WAIT_FOR_DROPPED_MS,
+  WRONG_GAME_CODE,
   type EmoteMessage,
   type GameId,
   type GameRoomMessage,
   type GiftMessage,
+  type JoinGame,
   type JoinGifts,
   type JoinProto,
   type JoinVoice,
@@ -51,10 +52,33 @@ const liveCodes = new Set<string>();
  * room adds only its rules and the shape of the room message its apps read.
  */
 
-/** Quick play's turn clock, and a private table's until its host picks another. */
+/** Bela's turn clock at quick play, and at a private table until its host picks another. */
 export const TURN_MS = TURN_CHOICES[0]! * 1000;
 /** Shortest gap between two accepted seat changes from one connection. */
 const SIT_GAP_MS = 250;
+/**
+ * Moves one connection may make: a burst of MOVE_BURST, refilled at
+ * MOVE_PER_SECOND. Every accepted move republishes to every seat, and at the
+ * casino tables BET then CLEAR is a legal loop that can run for the whole
+ * betting window, so without a limit one client could make the room send
+ * thousands of views a second. Nobody playing - a person tapping chips as fast
+ * as they can, or a bot - comes anywhere near it.
+ */
+const MOVE_BURST = 30;
+const MOVE_PER_SECOND = 10;
+
+/** A per-connection token bucket: a burst, refilled at a steady rate. */
+class MoveBucket {
+  private tokens = MOVE_BURST;
+  private at = 0;
+  take(now: number): boolean {
+    if (this.at > 0) this.tokens = Math.min(MOVE_BURST, this.tokens + ((now - this.at) / 1000) * MOVE_PER_SECOND);
+    this.at = now;
+    if (this.tokens < 1) return false;
+    this.tokens -= 1;
+    return true;
+  }
+}
 /**
  * How long a dropped player's seat is kept for them. In the lobby, briefly: a
  * held chair nobody is behind blocks the table from filling. Once the match
@@ -106,6 +130,11 @@ function originOf(context: AuthContext): string {
   return String(first ?? '').split(',')[0]!.trim();
 }
 
+/** The games an app said it can seat its player at (JoinGame `games`): undefined when it said nothing. */
+export function gamesOf(options: unknown): unknown {
+  return (options as JoinGame | null)?.games;
+}
+
 /** The wire generation an app joined with: what it said, or 0 for an app from before the handshake. */
 function protoOf(options: unknown): number {
   const p = (options as JoinProto | null)?.proto;
@@ -155,7 +184,7 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
   /** Seats that have asked for another match; cleared on each restart. */
   protected readonly rematchVotes = new Set<number>();
   protected occupants: Occupant[] = [];
-  /** This table's turn clock: quick play's, or what a private table's host chose. */
+  /** This table's turn clock: the game's own (startTurnMs), or what a private table's host chose. */
   protected turnMs = TURN_MS;
   /**
    * A private table standing still. Two reasons, which can overlap: a player
@@ -198,6 +227,8 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
   private lastSitAt = new Map<string, number>();
   private lastVoteAt = new Map<string, number>();
   private lastGiftAt = new Map<string, number>();
+  private lastHoldAt = new Map<string, number>();
+  private moveBuckets = new Map<string, MoveBucket>();
   private voiceLimits = new Map<string, VoiceLimiter>();
   /** Numbers each relayed clip, so a client can tell its echo from another clip. */
   private voiceSeq = 0;
@@ -277,6 +308,28 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
   protected seatsFor(_options: CreateOptions): number {
     return this.def.meta.maxPlayers;
   }
+  /**
+   * The decision clock a table starts with: the game's own (meta.windowMs) -
+   * a blackjack bet wants less time than a hand of Osmice. A private table's
+   * host may still pick one of TURN_CHOICES before the start.
+   */
+  protected startTurnMs(): number {
+    return this.def.meta.windowMs;
+  }
+  /** The countdown between rounds when nobody presses: the game's own (meta.nextRoundMs). */
+  protected nextRoundMs(): number {
+    return this.def.meta.nextRoundMs;
+  }
+  /**
+   * Can this app play the game at this table? A code reaches a table of any
+   * game, so an app that typed a code meant for another game must be turned
+   * away before it takes a seat it cannot play. Every game but Bela needs the
+   * app to name it in `games`; Bela's room allows its own apps, which name
+   * nothing (BelaRoom).
+   */
+  protected playsThisGame(games: unknown): boolean {
+    return Array.isArray(games) && games.includes(this.def.meta.id);
+  }
 
   // --- creation ------------------------------------------------------------------
 
@@ -287,6 +340,7 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     this.gifts = this.seats().map(() => null);
     const teams = this.def.meta.teams;
     this.series = Array<number>(teams ? teams.count : this.seatCount).fill(0);
+    this.turnMs = this.startTurnMs();
     this.readOptions(options);
     this.buildSession();
 
@@ -387,6 +441,9 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     // An app too old for this wire is refused at the door, before it takes a
     // seat (protocol.ts: the generation, and why MIN_PROTO is 0 for now).
     if (protoOf(options) < MIN_PROTO) throw new ServerError(UPDATE_APP_CODE, 'update the app');
+    // A code for another game's table: refused, so the app can say so instead
+    // of seating a player who will never be shown a card they can play.
+    if (!this.playsThisGame(gamesOf(options))) throw new ServerError(WRONG_GAME_CODE, 'wrong game');
     const origin = originOf(context);
     const clash =
       this.isPublic &&
@@ -606,6 +663,13 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
       // third joiner can act before the fourth player exists, and the fourth
       // arrives bound to a contract they never saw.
       if (!this.started) return;
+      let bucket = this.moveBuckets.get(client.sessionId);
+      if (!bucket) this.moveBuckets.set(client.sessionId, (bucket = new MoveBucket()));
+      if (!bucket.take(Date.now())) {
+        // Only the sender hears about it, so a flood costs the others nothing.
+        client.send(MSG.error, { reason: 'too fast' });
+        return;
+      }
       // A table standing still takes no moves: the player who paused it is on
       // the phone, or a friend is being waited for.
       if (this.isHeld()) {
@@ -672,6 +736,10 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
 
     if (type === 'pause') {
       if (!this.canHold() || this.paused !== null) return;
+      // Pause and resume republish to every client each time, so a loop of
+      // them needs the gap a seat change has. Resume works only while paused,
+      // so gating the pause bounds the loop; 'away' and 'back' likewise.
+      if (!this.holdGap(client)) return;
       this.paused = { by: seat, until: Date.now() + PAUSE_MAX_MS };
       this.holdChanged();
       return;
@@ -687,6 +755,7 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     if (type === 'away') {
       // A call that did not drop the connection: wait for them as if it had.
       if (!this.waitsFor(seat) || this.waiting.has(seat)) return;
+      if (!this.holdGap(client)) return;
       this.waiting.set(seat, Date.now() + WAIT_FOR_DROPPED_MS);
       this.holdChanged();
       return;
@@ -744,6 +813,8 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
       // A vote, not a start: the first player to press used to deal again for
       // everyone, yanking the result sheet away from people still reading it.
       if (!this.betweenRounds()) return;
+      // Pressed again: nothing changed, so nothing is republished.
+      if (this.nextVotes.has(seat)) return;
       this.nextVotes.add(seat);
       if (!this.isHeld() && this.everyoneReady()) this.startNextRound();
       else this.publish();
@@ -859,6 +930,14 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     }
   }
 
+  /** At most one pause or 'away' per SIT_GAP_MS from one connection. */
+  private holdGap(client: Client): boolean {
+    const now = Date.now();
+    if (now - (this.lastHoldAt.get(client.sessionId) ?? 0) < SIT_GAP_MS) return false;
+    this.lastHoldAt.set(client.sessionId, now);
+    return true;
+  }
+
   protected afterMove(): void {
     // Score the series exactly once per match, however many publishes follow.
     if (this.session.matchOver() && this.lastRecordedMatch !== this.matchNumber) {
@@ -883,10 +962,27 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
 
   // --- the next round --------------------------------------------------------
 
-  /** Every player at the table who is on the line has said they are ready. */
+  /**
+   * Is this seat out of the match (a busted stack at Hold'em, too little left
+   * for the minimum at Blackjack or Baccarat)? It plays no more rounds, so
+   * nothing - the next-round vote, a private table's wait - waits on it.
+   * Never at Bela or Osmice, where every seat plays to the end.
+   */
+  protected isOut(seat: number): boolean {
+    return this.def.seatStatus(this.session.state, seat) === 'out';
+  }
+
+  /**
+   * Every player at the table who is on the line, and still in the match, has
+   * said they are ready. A busted player watching the bots play on does not
+   * hold up the others; when they are the only people left on the line, their
+   * own press still deals the next round (otherwise the countdown does).
+   */
   private everyoneReady(): boolean {
     const humans = this.seats().filter((s) => this.onLine(s) && this.session.humanSeats.has(s));
-    return humans.length > 0 && humans.every((s) => this.nextVotes.has(s));
+    const playing = humans.filter((s) => !this.isOut(s));
+    const voters = playing.length > 0 ? playing : humans;
+    return voters.length > 0 && voters.every((s) => this.nextVotes.has(s));
   }
 
   /** The finished round's countdown: armed once per round, however many publishes follow. */
@@ -903,7 +999,8 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     }
     if (this.nextTimer !== null) clearTimeout(this.nextTimer);
     this.nextFor = round;
-    this.nextEndsAt = Date.now() + NEXT_DEAL_MS;
+    const ms = this.nextRoundMs();
+    this.nextEndsAt = Date.now() + ms;
     this.nextTimer = setTimeout(() => {
       this.nextTimer = null;
       try {
@@ -911,7 +1008,7 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
       } catch (err) {
         console.error(`[${this.def.meta.id}] next-round timer failed:`, err);
       }
-    }, NEXT_DEAL_MS);
+    }, ms);
   }
 
   private stopNext(): void {
@@ -936,9 +1033,9 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     return !this.isPublic && this.started && !this.session.matchOver();
   }
 
-  /** Does the table stand still for this seat's dropped connection? */
+  /** Does the table stand still for this seat's dropped connection? Not for a seat out of the match: it has nothing to play. */
   private waitsFor(seat: number): boolean {
-    return this.canHold() && this.session.humanSeats.has(seat);
+    return this.canHold() && this.session.humanSeats.has(seat) && !this.isOut(seat);
   }
 
   protected isHeld(): boolean {
@@ -1106,6 +1203,8 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     this.lastSitAt.delete(sessionId);
     this.lastVoteAt.delete(sessionId);
     this.lastGiftAt.delete(sessionId);
+    this.lastHoldAt.delete(sessionId);
+    this.moveBuckets.delete(sessionId);
     this.voiceLimits.delete(sessionId);
   }
 

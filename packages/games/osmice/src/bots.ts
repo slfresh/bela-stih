@@ -97,8 +97,10 @@ const rolloutMoves = (seats: number) => seats * 5;
 /**
  * One way the hidden cards could lie, consistent with everything this seat
  * has seen: its own hand, the top card, and how many cards each other hand
- * and the draw pile hold. (Which cards went into the discard pile is not on
- * the view, so the unseen pool is everything else, spread over both.)
+ * holds. The view counts the discard under the top card as drawable (it is
+ * shuffled back in when the pile runs out), so the sample puts every other
+ * unseen card in the draw pile: which cards are buried and which are still
+ * in the deck is hidden anyway, and a reshuffle would mix them all.
  */
 function sampleState(view: OsmiceView, rng: Rng): OsmiceState {
   const known = new Set([...view.hand.map((c) => c.id), ...(view.top ? [view.top.id] : [])]);
@@ -108,7 +110,7 @@ function sampleState(view: OsmiceView, rng: Rng): OsmiceState {
   );
   const hands: OCard[][] = view.handCounts.map((n, seat) => (seat === view.seat ? view.hand.map((c) => ({ ...c })) : pool.splice(0, n)));
   const drawPile = pool.splice(0, view.drawPileCount);
-  // What is left was played earlier in the round; it sits under the top card.
+  // Nothing should be left over; anything that is sits under the top card.
   const discard = [...pool, ...(view.top ? [{ ...view.top }] : [])];
   if (hands.flat().length + drawPile.length + discard.length !== DECK_SIZE) throw new Error('sample lost a card');
   return {

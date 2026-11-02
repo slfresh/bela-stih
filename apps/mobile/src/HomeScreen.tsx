@@ -5,12 +5,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Lang } from '@belot/i18n';
 import {
   canClaimDaily,
+  chipBalance,
   claimDaily,
   claimQuest,
   isoDay,
   isQuestComplete,
   levelProgress,
   previewDaily,
+  refillChips,
   type PlayerProfile,
 } from '@belot/progression';
 import { AnchorMap, Anchor, AnchorHost } from './anim/AnchorRegistry';
@@ -67,6 +69,9 @@ export function HomeScreen({
   onOpenRules,
   onOpenHistory,
   onOpenStats,
+  rulesFor,
+  onOpenGameRules,
+  onCloseGameRules,
 }: {
   lang: Lang;
   profile: PlayerProfile;
@@ -83,6 +88,15 @@ export function HomeScreen({
   onOpenHistory: () => void;
   /** ...and what they add up to. */
   onOpenStats: () => void;
+  /**
+   * How to play one of the other games, as a sheet over the home screen.
+   * App holds which one is open, so Back (Android's, or the browser's) knows
+   * the home screen is not the root while it is: it closes the sheet instead
+   * of leaving the app.
+   */
+  rulesFor: OtherGame | null;
+  onOpenGameRules: (game: OtherGame) => void;
+  onCloseGameRules: () => void;
 }) {
   const ui = lang.s.ui;
   const [code, setCode] = useState('');
@@ -100,8 +114,10 @@ export function HomeScreen({
   const motion = useMotionPolicy(settings.motion);
 
   // Every pressable clicks and gives for itself now (PressScale / Button).
-  // How to play one of the other games, over the home screen.
-  const [rulesFor, setRulesFor] = useState<OtherGame | null>(null);
+  // The chips as a casino table would seat them today: the daily top-up is
+  // in it, so a player who went broke yesterday is not shown 0 when the very
+  // next table gives them the floor. Worked out, not saved: App saves it.
+  const chips = chipBalance(refillChips(profile, today).profile);
   const go = (l: Launch) => onLaunch(l);
 
   // Scrolling moves the anchors without any layout changing, so ask them to
@@ -230,10 +246,12 @@ export function HomeScreen({
                   autoCapitalize="characters"
                   autoCorrect={false}
                   style={styles.input}
+                  accessibilityLabel={ui.joinByCode}
                 />
                 <Button
                   label={ui.enter}
                   tone={code.trim() ? 'strong' : 'plain'}
+                  style={styles.noShrink}
                   onPress={() => code.trim() && go({ mode: 'join', code: code.trim() })}
                 />
               </View>
@@ -312,9 +330,10 @@ export function HomeScreen({
             {/* The other tables in the room: the games beyond Bela. */}
             <MoreGames
               lang={lang}
+              chips={chips}
               onPlay={(game, players) => go({ mode: 'game', game, players })}
               onOnline={(game, how) => go({ mode: 'online', game, how })}
-              onRules={setRulesFor}
+              onRules={onOpenGameRules}
             />
 
             {/* For whoever has never played bela, or plays it differently at
@@ -336,7 +355,7 @@ export function HomeScreen({
           </ScrollView>
 
           <EffectsOverlay bus={fxBus} />
-          {rulesFor ? <RulesSheet lang={lang} game={rulesFor} onClose={() => setRulesFor(null)} /> : null}
+          {rulesFor ? <RulesSheet lang={lang} game={rulesFor} onClose={onCloseGameRules} /> : null}
         </View>
       </SafeAreaView>
     </AnchorHost>
@@ -443,8 +462,12 @@ const styles = StyleSheet.create({
   rule: { height: 1, backgroundColor: stroke.hair, marginVertical: space.xs },
 
   joinRow: { flexDirection: 'row', gap: space.sm + 2, alignItems: 'center' },
+  // minWidth 0 lets the field give way inside its row: on the web it kept its
+  // own width (about 245 px) and pushed Enter past the panel's edge on a
+  // 360 px phone, and off the screen at 320.
   input: {
     flex: 1,
+    minWidth: 0,
     color: ink.hi,
     backgroundColor: surface.chip,
     borderRadius: radius.pill,
@@ -452,6 +475,8 @@ const styles = StyleSheet.create({
     paddingVertical: space.sm + 2,
     ...type.body,
   },
+
+  noShrink: { flexShrink: 0 },
 
   questRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm + 2, minHeight: 40 },
   questLeft: { flex: 1, gap: 5 },

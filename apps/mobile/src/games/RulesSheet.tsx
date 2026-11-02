@@ -1,4 +1,5 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { Lang } from '@belot/i18n';
 import type { OtherGame } from '../home/MoreGames';
 import { Button } from '../ui/Button';
@@ -8,10 +9,32 @@ import { ink, radius, space, stroke, surface, type } from '../theme';
 
 /** How to play one of the games beyond Bela: its rules, numbered, over the home screen. */
 export function RulesSheet({ lang, game, onClose }: { lang: Lang; game: OtherGame; onClose: () => void }) {
+  // Back closes the sheet (App counts it as a step off the home screen, so
+  // Back reaches this guard instead of leaving the app), as do a tap beside
+  // it and, on the web, Escape: the ways any sheet is put away.
   useBackCloses(true, onClose);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const strings = game === 'osmice' ? lang.osmice : game === 'holdem' ? lang.holdem : game === 'blackjack' ? lang.blackjack : lang.baccarat;
   return (
     <View style={styles.scrim} accessibilityViewIsModal>
+      {/* The tap beside the sheet. Out of a screen reader's way: it has the
+          sheet's own Back button, and the label is for anything that lists it anyway. */}
+      <Pressable
+        style={StyleSheet.absoluteFill}
+        onPress={onClose}
+        accessible={false}
+        importantForAccessibility="no"
+        accessibilityLabel={lang.games.back}
+      />
       <View style={[styles.sheet, { backgroundColor: room().page }]}>
         <Text style={styles.title}>{strings.name}</Text>
         <Text style={styles.tagline}>{strings.tagline}</Text>

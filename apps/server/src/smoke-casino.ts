@@ -1,6 +1,6 @@
 import './ws-polyfill';
 import { Client, type Room } from 'colyseus.js';
-import type { BaccaratView } from '@belot/games-baccarat';
+import { BACCARAT, type BaccaratView } from '@belot/games-baccarat';
 import type { BlackjackView } from '@belot/games-blackjack';
 import type { HoldemView } from '@belot/games-holdem';
 import { CARD52_ID } from '@belot/cards';
@@ -18,8 +18,8 @@ import { MSG, ROOM_NAMES, type GameId, type GameRoomMessage } from './protocol';
  *
  * Baccarat also proves the clock on a betting window: one seat never answers
  * the first coup and another answers late, and the window must still close
- * for everyone about one clock after it opened — answering early or late
- * never restarts it.
+ * for everyone about one clock (Baccarat's own windowMs) after it opened —
+ * answering early or late never restarts it.
  *
  *   npm run server
  *   npm run smoke:casino -w @belot/server
@@ -30,6 +30,8 @@ const SEATS = 3;
 const ROUNDS = 3;
 const problems: string[] = [];
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** When the late seat answers the first coup: well inside the window, late enough that a restart would show. */
+const LATE_MS = 12_000;
 
 function idsIn(x: unknown): string[] {
   return [...JSON.stringify(x).matchAll(CARD52_ID)].map((m) => m[1]!);
@@ -101,7 +103,7 @@ async function play(game: GameId, opts: { sleepy?: boolean } = {}): Promise<void
       // The clock test: in the first coup, the third seat sleeps and the second answers late.
       const firstCoup = game === 'baccarat' && v.coupNumber === 1;
       if (opts.sleepy && firstCoup && index === 2) return;
-      const delay = opts.sleepy && firstCoup && index === 1 ? 12_000 : 20;
+      const delay = opts.sleepy && firstCoup && index === 1 ? LATE_MS : 20;
       setTimeout(() => room.send('move', { action: a }), delay);
     });
     room.onMessage(MSG.room, (msg: GameRoomMessage) => {
@@ -116,9 +118,11 @@ async function play(game: GameId, opts: { sleepy?: boolean } = {}): Promise<void
     room.onMessage('*', () => {});
   };
 
-  const host = await clients[0]!.create(ROOM_NAMES[game], { private: true, seats: SEATS, name: 'A' });
+  // The 'More games' app names the games it plays (JoinGame `games`); a casino table refuses one that does not.
+  const games: GameId[] = ['osmice', 'baccarat', 'blackjack', 'holdem'];
+  const host = await clients[0]!.create(ROOM_NAMES[game], { private: true, seats: SEATS, name: 'A', games });
   sit(host, 0);
-  for (let i = 1; i < SEATS; i++) sit(await clients[i]!.joinById(host.roomId, { name: String.fromCharCode(65 + i) }), i);
+  for (let i = 1; i < SEATS; i++) sit(await clients[i]!.joinById(host.roomId, { name: String.fromCharCode(65 + i), games }), i);
 
   const deadline = Date.now() + 90_000;
   while (rounds < ROUNDS && Date.now() < deadline) await wait(100);
@@ -128,8 +132,12 @@ async function play(game: GameId, opts: { sleepy?: boolean } = {}): Promise<void
   if (opts.sleepy) {
     const w = firstWindow as { opened: number; closed: number | null } | null;
     const took = w && w.closed !== null ? w.closed - w.opened : null;
-    // The clock is quick play's 30 s. Restarted by the late answer at 12 s it would close near 42 s.
-    if (took === null || took < 28_000 || took > 36_000) problems.push(`baccarat: the first window closed after ${took} ms, expected about 30 s`);
+    // The clock is Baccarat's own window (meta.windowMs, 20 s). Restarted by the late answer at 12 s it
+    // would close near 32 s, so anything past the window plus a little slack fails.
+    const windowMs = BACCARAT.meta.windowMs;
+    if (took === null || took < windowMs - 2_000 || took > windowMs + 5_000) {
+      problems.push(`baccarat: the first window closed after ${took} ms, expected about ${windowMs / 1000} s`);
+    }
     else console.log(`[smoke-casino] baccarat: a seat that never answered was closed out after ${(took / 1000).toFixed(1)} s; a late answer did not restart the clock`);
   }
   console.log(`[smoke-casino] ${game}: ${rounds} rounds over websockets`);

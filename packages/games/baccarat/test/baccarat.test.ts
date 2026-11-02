@@ -107,6 +107,34 @@ describe('a baccarat table', () => {
     expect(seen.size).toBe(3);
   });
 
+  it('takes the banker commission at exactly 5% over a match, in whole chips', () => {
+    // Flooring each payout took 10% of a 10 bet and 8% of a 25. The fraction
+    // owed is carried instead, and a whole chip is taken once one is owed.
+    for (const chipsDown of [[10], [25], [25, 10]]) {
+      const amount = chipsDown.reduce((a, b) => a + b, 0);
+      let s = BACCARAT.createMatch({ seats: 1, seed: amount, stacks: [100_000], config: { coups: 400 } });
+      let wins = 0;
+      let taken = 0;
+      while (s.phase !== 'MATCH_OVER') {
+        s = BACCARAT.startRound(s);
+        for (const chip of chipsDown) s = BACCARAT.apply(s, { type: 'BET', seat: 0, spot: 'banker', amount: chip });
+        s = BACCARAT.apply(s, { type: 'READY', seat: 0 });
+        if (s.lastCoup!.outcome === 'banker') {
+          wins++;
+          const net = s.lastNet![0]!;
+          // Never more than one chip under 1:1 less the exact 5%.
+          expect(net).toBeGreaterThanOrEqual(Math.floor(amount * 0.95) - 1);
+          expect(net).toBeLessThanOrEqual(amount);
+          taken += amount - net;
+        }
+      }
+      const owedTotal = wins * amount * 5; // hundredths of a chip
+      expect(wins).toBeGreaterThan(100);
+      expect(taken, `${amount}: whole chips taken`).toBe(Math.floor(owedTotal / 100));
+      expect(s.commissionOwed[0], `${amount}: carried fraction`).toBe(owedTotal % 100);
+    }
+  });
+
   it('is a betting window: everyone at once, and the clock closes it', () => {
     const session = new Session(BACCARAT, { seats: 3, seed: 5, humanSeats: [0, 2] });
     // The bot at seat 1 has bet and said no more bets; both people are still owed.
@@ -152,6 +180,19 @@ describe('a baccarat table', () => {
         const legal = session.legal(seat);
         session.submit(legal[Math.floor(pick() * legal.length)]!);
       }
+    }
+  });
+
+  it('bots bet differently seat by seat, so their stacks part ways', () => {
+    for (const level of ['medium', 'hard'] as BotLevel[]) {
+      const session = new Session(BACCARAT, { seats: 7, seed: 23, botLevel: level, config: { coups: 6 } });
+      session.playWholeMatch();
+      const stacks = session.state.stacks;
+      expect(new Set(stacks).size, `${level}: ${stacks.join(' ')}`).toBeGreaterThan(3);
+      // And the same seed plays the same way.
+      const again = new Session(BACCARAT, { seats: 7, seed: 23, botLevel: level, config: { coups: 6 } });
+      again.playWholeMatch();
+      expect(again.state.stacks).toEqual(stacks);
     }
   });
 

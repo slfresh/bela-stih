@@ -3,8 +3,8 @@ import type { Seat } from '@belot/engine';
 import { DEFAULT_CONFIG, DOUBLE_WIN_TARGET, HARD_CONFIG_OVERRIDES, matchWins, type EngineConfig, type PublicView } from '@belot/engine';
 import { BELA, type TableEvent } from '@belot/games-bela';
 import { isBotLevel } from '@belot/bots';
-import { MATCH_TARGETS, type HoldInfo, type RoomMessage, type SeatInfo, isPlayMode, modeFromLegacy, type PlayMode } from './protocol';
-import { GameRoom, type CreateOptions } from './room/GameRoom';
+import { MATCH_TARGETS, NEXT_DEAL_MS, type HoldInfo, type RoomMessage, type SeatInfo, isPlayMode, modeFromLegacy, type PlayMode } from './protocol';
+import { GameRoom, TURN_MS, type CreateOptions } from './room/GameRoom';
 
 export { SAME_ORIGIN_CODE } from './room/GameRoom';
 
@@ -59,6 +59,24 @@ export class BelaRoom extends GameRoom<typeof BELA> {
     }
     // And the strength of the bots that fill a seat; strangers get the middle one.
     if (options.private === true && isBotLevel(options.botLevel)) this.botLevel = options.botLevel;
+  }
+
+  /** Bela's clocks are the protocol's, as the shipped apps were built around them. */
+  protected override startTurnMs(): number {
+    return TURN_MS;
+  }
+  protected override nextRoundMs(): number {
+    return NEXT_DEAL_MS;
+  }
+
+  /**
+   * Bela's own apps name no games and are seated as they always were. An app
+   * that names the games it plays (the 'More games' join) is seated only if
+   * Bela is one of them: a code typed there for a Bela table is refused, not
+   * turned into a seat at a table it cannot show.
+   */
+  protected override playsThisGame(games: unknown): boolean {
+    return games === undefined || (Array.isArray(games) && games.includes('bela'));
   }
 
   protected override sessionConfig(): Partial<EngineConfig> {

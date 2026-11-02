@@ -46,7 +46,7 @@ describe('basic strategy', () => {
     expect(basicStrategy([C('T'), C('6')], 6)).toBe('S');
     expect(basicStrategy([C('T'), C('2')], 4)).toBe('S');
     expect(basicStrategy([C('T'), C('2')], 3)).toBe('H');
-    expect(basicStrategy([C('6'), C('5')], 11)).toBe('D');
+    expect(basicStrategy([C('6'), C('5')], 10)).toBe('D');
     expect(basicStrategy([C('A'), C('7')], 9)).toBe('H');
     expect(basicStrategy([C('A'), C('7')], 7)).toBe('S');
     expect(basicStrategy([C('A'), C('7')], 4)).toBe('Ds');
@@ -54,6 +54,31 @@ describe('basic strategy', () => {
     expect(basicStrategy([C('8'), C('8')], 6, false)).toBe('S');
     expect(basicStrategy([C('T'), C('T')], 6)).toBe('S');
     expect(basicStrategy([C('9'), C('9')], 7)).toBe('S');
+  });
+
+  it('is the stands-on-soft-17 chart, unless the table says the dealer hits it', () => {
+    // The three cells where the two charts differ (no surrender at this table).
+    expect(basicStrategy([C('A'), C('8')], 6)).toBe('S');
+    expect(basicStrategy([C('A'), C('7')], 2)).toBe('S');
+    expect(basicStrategy([C('6'), C('5')], 11)).toBe('H');
+    expect(basicStrategy([C('A'), C('8')], 6, true, true)).toBe('Ds');
+    expect(basicStrategy([C('A'), C('7')], 2, true, true)).toBe('Ds');
+    expect(basicStrategy([C('6'), C('5')], 11, true, true)).toBe('D');
+    // Their neighbours do not move.
+    expect(basicStrategy([C('A'), C('7')], 3)).toBe('Ds');
+    expect(basicStrategy([C('A'), C('8')], 5)).toBe('S');
+    expect(basicStrategy([C('6'), C('5')], 10)).toBe('D');
+  });
+
+  it('the bots read the table rule off the view', () => {
+    // Seat 0: 6, 5 (11) against a dealer ace: S17 hits, H17 doubles.
+    const cards = () => [C('6'), C('A'), C('5'), C('7')];
+    const move = (h17: boolean) => {
+      const s = betAll(rigged(1, cards(), { dealerHitsSoft17: h17 }));
+      return BLACKJACK.bot.decide(BLACKJACK.view(s, 0), makeRng(1), 'medium').type;
+    };
+    expect(move(false)).toBe('HIT');
+    expect(move(true)).toBe('DOUBLE');
   });
 });
 
@@ -65,6 +90,41 @@ describe('a round', () => {
     expect(s.phase).toBe('ROUND_OVER');
     expect(s.stacks[0]).toBe(1000 + 150);
     expect(s.hands[0]![0]!.result).toBe('blackjack');
+  });
+
+  it('3:2 on an odd bet rounds the half chip up for the player', () => {
+    // A 25 bet: 3:2 is 37.5, and there are no half chips.
+    let s = rigged(1, [C('A'), C('9'), C('K'), C('7')]);
+    s = act(s, { type: 'BET', seat: 0, amount: 25 });
+    s = act(s, { type: 'READY', seat: 0 });
+    expect(s.hands[0]![0]!.result).toBe('blackjack');
+    expect(s.stacks[0]).toBe(1000 + 38);
+    expect(s.log.find((e) => e.kind === 'settled')).toMatchObject({ net: 38 });
+  });
+
+  it('a seat with its whole stack on a hand in play is not out', () => {
+    // Seat 0 bets all 15 it has; it is dealt 5, 9 and is on turn.
+    let s = BLACKJACK.startRound(
+      (() => {
+        const m = BLACKJACK.createMatch({ seats: 2, seed: 1, stacks: [15, 1000] });
+        const filler = Array.from({ length: 80 }, () => C('5'));
+        return { ...m, shoe: [...filler, ...[C('5'), C('T'), C('7'), C('9'), C('T'), C('8')].reverse()] };
+      })(),
+    );
+    s = act(s, { type: 'BET', seat: 0, amount: 10 });
+    s = act(s, { type: 'READY', seat: 0 });
+    s = act(s, { type: 'BET', seat: 1, amount: 10 });
+    s = act(s, { type: 'READY', seat: 1 });
+    expect(s.phase).toBe('PLAYING');
+    expect(s.turn).toEqual({ seat: 0, hand: 0 });
+    expect(s.stacks[0]).toBe(5);
+    expect(BLACKJACK.view(s, 1).out[0]).toBe(false);
+    expect(BLACKJACK.seatStatus(s, 0)).toBe('active');
+    // Once it has lost the hand, it is out.
+    s = act(s, { type: 'STAND', seat: 0 });
+    s = act(s, { type: 'STAND', seat: 1 });
+    expect(s.hands[0]![0]!.result).toBe('lose');
+    expect(BLACKJACK.seatStatus(s, 0)).toBe('out');
   });
 
   it('a dealer blackjack under an ace ends the round before anyone plays', () => {

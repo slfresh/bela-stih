@@ -86,7 +86,7 @@ export function publicView(s: HoldemState, seat: number): HoldemView {
     pot: s.players.reduce((a, p) => a + p.committed, 0),
     raiseTo: s.toAct === seat && r ? { min: r[0], max: r[1] } : null,
     lastResult: s.lastResult
-      ? { ...s.lastResult, pots: s.lastResult.pots.map((p) => ({ ...p })), shown: s.lastResult.shown.map((x) => ({ ...x, hole: x.hole.slice() })), net: s.lastResult.net.slice() }
+      ? { ...s.lastResult, pots: s.lastResult.pots.map((p) => ({ ...p })), returned: s.lastResult.returned.map((r) => ({ ...r })), shown: s.lastResult.shown.map((x) => ({ ...x, hole: x.hole.slice() })), net: s.lastResult.net.slice() }
       : null,
     blindsUpIn: every > 0 ? every - ((s.handNumber - 1) % every) : 0,
     legalActions: legalActions(s, seat),

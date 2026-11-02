@@ -4,8 +4,9 @@ import { StatusBar } from 'expo-status-bar';
 import Animated, { FadeIn, ReduceMotion, ReducedMotionConfig } from 'react-native-reanimated';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Lang } from '@belot/i18n';
-import type { PlayerProfile } from '@belot/progression';
+import { isoDay, refillChips, type PlayerProfile } from '@belot/progression';
 import { HomeScreen, type Launch } from './src/HomeScreen';
+import type { OtherGame } from './src/home/MoreGames';
 import { DeckGallery } from './src/DeckGallery';
 import { WebShell } from './src/WebShell';
 import { OfflineGame } from './src/OfflineGame';
@@ -54,8 +55,12 @@ import { APP_VERSION } from './src/screens/common';
 import { useMotionPolicy } from './src/anim/useMotionPolicy';
 import { MotionProvider } from './src/anim/MotionHere';
 
-/** The menu stack, one level deep: home, or one of its satellite screens. */
-type MenuScreen = 'home' | 'shop' | 'settings' | 'profile' | 'rules' | 'history' | 'stats';
+/**
+ * The menu stack, one level deep: home, or one of its satellite screens.
+ * 'gameRules' is the home screen with how to play one of the other games
+ * open over it: a step of its own, so Back closes the sheet, not the app.
+ */
+type MenuScreen = 'home' | 'gameRules' | 'shop' | 'settings' | 'profile' | 'rules' | 'history' | 'stats';
 
 /**
  * A handful of screens and no router: the menu (home plus shop / settings /
@@ -71,6 +76,8 @@ export default function App() {
   const [profile, setProfile] = useState<PlayerProfile>(loadProfile);
   const [launch, setLaunch] = useState<Launch | null>(null);
   const [menu, setMenu] = useState<MenuScreen>('home');
+  /** Which game's rules the 'gameRules' step shows. */
+  const [rulesFor, setRulesFor] = useState<OtherGame | null>(null);
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
   const motion = useMotionPolicy(settings.motion);
 
@@ -128,6 +135,19 @@ export default function App() {
     setProfile(loadProfile());
   }, []);
 
+  // Back on the menus: the profile on screen is the one on disk, with today's
+  // chip top-up in it. A table cashes out as it unmounts, which is after
+  // exitToHome read the profile, and the top-up used to wait for the next
+  // casino table, so Home and Statistics showed yesterday's balance (0 for a
+  // player who went broke). An effect, so the table's cash-out has run first.
+  useEffect(() => {
+    if (launch !== null) return;
+    const stored = loadProfile();
+    const fresh = refillChips(stored, isoDay(new Date())).profile;
+    if (fresh !== stored) saveProfile(fresh);
+    setProfile((prev) => (JSON.stringify(prev) === JSON.stringify(fresh) ? prev : fresh));
+  }, [launch, menu]);
+
   // Back out of a game (or a menu screen) rather than out of the app. Without
   // this, Android's back button drops straight to whatever was behind and
   // takes the deal in progress with it — and people press back constantly.
@@ -146,6 +166,14 @@ export default function App() {
     });
     return () => sub.remove();
   }, [launch, menu, exitToHome]);
+  // At the root a back press still goes to a sheet or a question over the
+  // home screen first, and closes the app only when none takes it. The
+  // effect above stands down there, so the two never both listen.
+  useEffect(() => {
+    if (Platform.OS !== 'android' || !(launch === null && menu === 'home')) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => runBackGuard());
+    return () => sub.remove();
+  }, [launch, menu]);
   // The browser's Back does the same on the web, instead of leaving the page.
   useWebBack(launch === null && menu === 'home', () => {
     if (runBackGuard()) return;
@@ -224,6 +252,12 @@ export default function App() {
             onOpenRules={() => setMenu('rules')}
             onOpenHistory={() => setMenu('history')}
             onOpenStats={() => setMenu('stats')}
+            rulesFor={menu === 'gameRules' ? rulesFor : null}
+            onOpenGameRules={(game) => {
+              setRulesFor(game);
+              setMenu('gameRules');
+            }}
+            onCloseGameRules={toHome}
           />
         )
     ) : launch.mode === 'gallery' ? (
@@ -261,7 +295,8 @@ export default function App() {
       : launch.mode === 'online'
         ? `online:${launch.game ?? 'code'}:${launch.how.kind}`
         : `game:${launch.mode}`
-    : `menu:${menu}`;
+    : // The rules sheet opens over the home screen it belongs to: same key, no remount.
+      `menu:${menu === 'gameRules' ? 'home' : menu}`;
 
   // A render error anywhere below lands on a branded panel whose one button
   // leads home — not a blank page. The boundary sits inside the shell so the

@@ -192,7 +192,13 @@ const clone = (s: BlackjackState): BlackjackState => ({
   log: [],
 });
 
-export const isOut = (s: BlackjackState, seat: number): boolean => s.stacks[seat]! + s.bets[seat]! < s.config.minBet;
+/**
+ * A seat with too few chips to bet the minimum. Chips riding on a hand not yet
+ * settled count: the deal moves every bet off `bets` and onto the hands, and
+ * a seat that bet its whole stack is still in until its hands are paid.
+ */
+export const isOut = (s: BlackjackState, seat: number): boolean =>
+  s.stacks[seat]! + s.bets[seat]! + s.hands[seat]!.reduce((sum, h) => sum + (h.result === null ? h.bet : 0), 0) < s.config.minBet;
 
 function draw(s: BlackjackState, faceUp = true): Card52 {
   const c = s.shoe.pop();
@@ -409,7 +415,10 @@ function settle(s: BlackjackState): void {
       let back: number;
       if (isBlackjack(hand)) {
         result = dealerBj ? 'push' : 'blackjack';
-        back = dealerBj ? hand.bet : hand.bet + Math.floor((hand.bet * num) / den);
+        // 3:2 on an odd bet comes to half a chip, and there are no half
+        // chips: the half goes to the player, as tables without them do,
+        // rather than quietly to the house.
+        back = dealerBj ? hand.bet : hand.bet + Math.ceil((hand.bet * num) / den);
       } else if (mine > 21 || dealerBj) {
         result = 'lose';
         back = 0;

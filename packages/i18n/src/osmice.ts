@@ -29,18 +29,57 @@ export interface OsmiceStrings {
   /** The same two lines when it is the person themselves. */
   skippedMe: string;
   drewCardsMe: (n: number) => string;
+  /**
+   * A +2 or a +4 in one line: who takes how many, and that they lose their
+   * go. Said as one, because the two halves arrive together and the second
+   * used to wipe the first before anyone could read it.
+   */
+  drewAndSkipped: (name: string, n: number) => string;
+  drewAndSkippedMe: (n: number) => string;
+  /** Who put the card on the pile; a wild also says the colour it called. */
+  played: (name: string, card: string) => string;
+  playedWild: (name: string, card: string, colour: string) => string;
+  /** Kept the card they drew and passed. */
+  passed: (name: string) => string;
   reversed: string;
   roundWon: (name: string, points: number) => string;
   matchWon: (name: string) => string;
+  /** The same two lines about the person: "You win!", never "You wins!". */
+  roundWonMe: (points: number) => string;
+  matchWonMe: string;
+  /** Tapping a card that cannot go on your turn. */
+  cantPlay: string;
+  /** Said with the card you just drew, which is first in the hand. */
+  drawnTag: string;
   nextRound: string;
   newMatch: string;
   score: string;
+  /** A score with its unit, so it is not read as a card count: "188 bodova". */
+  points: (n: number) => string;
+  /** The round sheet's two columns: what this round did, and the match total. */
+  roundColumn: string;
+  totalColumn: string;
+  /** A loser's row on the round sheet, for a screen reader: what their cards were worth. */
+  leftInHand: (points: number) => string;
   target: (n: number) => string;
   activeColour: (colour: string) => string;
   cardsLeft: (n: number) => string;
   /** A card in words, for screen readers. */
   cardName: (value: string, colour: string | null) => string;
   rules: string[];
+}
+
+/**
+ * Croatian and Serbian count in three forms: 1, 21, 31 take the singular
+ * (karta), 2-4, 22-24 the paucal (karte), and 5-20, 25-30 and the teens the
+ * genitive (karata). "21 karata" was what a six-player hand read before.
+ */
+function slavic(n: number, one: string, few: string, many: string): string {
+  const d = n % 10;
+  const h = n % 100;
+  if (d === 1 && h !== 11) return one;
+  if (d >= 2 && d <= 4 && (h < 12 || h > 14)) return few;
+  return many;
 }
 
 const OSMICE: Record<LocaleId, OsmiceStrings> = {
@@ -62,15 +101,28 @@ const OSMICE: Record<LocaleId, OsmiceStrings> = {
     drewCards: (name, n) => `${name} vuče ${n}`,
     skippedMe: 'Preskočen si',
     drewCardsMe: (n) => `Vučeš ${n}`,
+    drewAndSkipped: (name, n) => `${name} vuče ${n} i propušta potez`,
+    drewAndSkippedMe: (n) => `Vučeš ${n} i propuštaš potez`,
+    played: (name, card) => `${name} igra: ${card}`,
+    playedWild: (name, card, colour) => `${name} igra: ${card} · boja ${colour}`,
+    passed: (name) => `${name} ide dalje`,
     reversed: 'Smjer se okreće',
     roundWon: (name, points) => `${name} je bez karata: +${points}`,
     matchWon: (name) => `${name} pobjeđuje!`,
+    roundWonMe: (points) => `Bez karata si: +${points}`,
+    matchWonMe: 'Pobjeđuješ!',
+    cantPlay: 'Ta karta sad ne ide.',
+    drawnTag: 'izvučena',
     nextRound: 'Sljedeća runda',
     newMatch: 'Nova partija',
     score: 'Bodovi',
+    points: (n) => `${n} ${slavic(n, 'bod', 'boda', 'bodova')}`,
+    roundColumn: 'Runda',
+    totalColumn: 'Ukupno',
+    leftInHand: (points) => `u ruci ostalo ${points}`,
     target: (n) => `do ${n}`,
     activeColour: (colour) => `Boja: ${colour}`,
-    cardsLeft: (n) => (n === 1 ? '1 karta' : n >= 2 && n <= 4 ? `${n} karte` : `${n} karata`),
+    cardsLeft: (n) => `${n} ${slavic(n, 'karta', 'karte', 'karata')}`,
     cardName: (value, colour) => (colour ? `${value}, ${colour}` : value),
     rules: [
       'Na kup igraš kartu iste boje ili istog broja, ili divlju kartu.',
@@ -98,15 +150,28 @@ const OSMICE: Record<LocaleId, OsmiceStrings> = {
     drewCards: (name, n) => `${name} вуче ${n}`,
     skippedMe: 'Прескочен си',
     drewCardsMe: (n) => `Вучеш ${n}`,
+    drewAndSkipped: (name, n) => `${name} вуче ${n} и пропушта потез`,
+    drewAndSkippedMe: (n) => `Вучеш ${n} и пропушташ потез`,
+    played: (name, card) => `${name} игра: ${card}`,
+    playedWild: (name, card, colour) => `${name} игра: ${card} · боја ${colour}`,
+    passed: (name) => `${name} иде даље`,
     reversed: 'Смер се окреће',
     roundWon: (name, points) => `${name} је без карата: +${points}`,
     matchWon: (name) => `${name} побеђује!`,
+    roundWonMe: (points) => `Без карата си: +${points}`,
+    matchWonMe: 'Побеђујеш!',
+    cantPlay: 'Та карта сад не иде.',
+    drawnTag: 'извучена',
     nextRound: 'Следећа рунда',
     newMatch: 'Нова партија',
     score: 'Бодови',
+    points: (n) => `${n} ${slavic(n, 'бод', 'бода', 'бодова')}`,
+    roundColumn: 'Рунда',
+    totalColumn: 'Укупно',
+    leftInHand: (points) => `у руци остало ${points}`,
     target: (n) => `до ${n}`,
     activeColour: (colour) => `Боја: ${colour}`,
-    cardsLeft: (n) => (n === 1 ? '1 карта' : n >= 2 && n <= 4 ? `${n} карте` : `${n} карата`),
+    cardsLeft: (n) => `${n} ${slavic(n, 'карта', 'карте', 'карата')}`,
     cardName: (value, colour) => (colour ? `${value}, ${colour}` : value),
     rules: [
       'На куп играш карту исте боје или истог броја, или дивљу карту.',
@@ -134,12 +199,25 @@ const OSMICE: Record<LocaleId, OsmiceStrings> = {
     drewCards: (name, n) => `${name} draws ${n}`,
     skippedMe: 'You are skipped',
     drewCardsMe: (n) => `You draw ${n}`,
+    drewAndSkipped: (name, n) => `${name} draws ${n} and misses a go`,
+    drewAndSkippedMe: (n) => `You draw ${n} and miss your go`,
+    played: (name, card) => `${name} plays ${card}`,
+    playedWild: (name, card, colour) => `${name} plays ${card} and calls ${colour}`,
+    passed: (name) => `${name} passes`,
     reversed: 'Direction turns round',
     roundWon: (name, points) => `${name} is out: +${points}`,
     matchWon: (name) => `${name} wins!`,
+    roundWonMe: (points) => `You're out of cards: +${points}`,
+    matchWonMe: 'You win!',
+    cantPlay: "That card can't go now.",
+    drawnTag: 'just drawn',
     nextRound: 'Next round',
     newMatch: 'New match',
     score: 'Score',
+    points: (n) => (n === 1 ? '1 point' : `${n} points`),
+    roundColumn: 'Round',
+    totalColumn: 'Total',
+    leftInHand: (points) => `${points} left in hand`,
     target: (n) => `to ${n}`,
     activeColour: (colour) => `Colour: ${colour}`,
     cardsLeft: (n) => (n === 1 ? '1 card' : `${n} cards`),

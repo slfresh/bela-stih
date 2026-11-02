@@ -97,9 +97,11 @@ type Move = 'H' | 'S' | 'D' | 'P' | 'Ds';
 
 /**
  * Basic strategy. `up` is the dealer's card value, 2..11 (11 = ace). With
- * `canSplit` false a pair is played as the total it makes.
+ * `canSplit` false a pair is played as the total it makes. `h17` is the
+ * table rule: the chart is the stands-on-soft-17 one unless the dealer hits
+ * soft 17, which changes three cells (soft 19 v 6, soft 18 v 2, 11 v ace).
  */
-export function basicStrategy(cards: Card52[], up: number, canSplit = true): Move {
+export function basicStrategy(cards: Card52[], up: number, canSplit = true, h17 = false): Move {
   const { total, soft } = handValue(cards);
   if (canSplit && cards.length === 2 && cards[0]!.rank === cards[1]!.rank) {
     const v = cardValue(cards[0]!);
@@ -112,8 +114,8 @@ export function basicStrategy(cards: Card52[], up: number, canSplit = true): Mov
   }
   if (soft) {
     if (total >= 20) return 'S';
-    if (total === 19) return up === 6 ? 'Ds' : 'S';
-    if (total === 18) return up <= 6 ? 'Ds' : up <= 8 ? 'S' : 'H';
+    if (total === 19) return h17 && up === 6 ? 'Ds' : 'S';
+    if (total === 18) return up >= 3 && up <= 6 ? 'Ds' : up === 2 ? (h17 ? 'Ds' : 'S') : up <= 8 ? 'S' : 'H';
     if (total === 17) return up >= 3 && up <= 6 ? 'D' : 'H';
     if (total === 15 || total === 16) return up >= 4 && up <= 6 ? 'D' : 'H';
     return up === 5 || up === 6 ? 'D' : 'H';
@@ -121,7 +123,7 @@ export function basicStrategy(cards: Card52[], up: number, canSplit = true): Mov
   if (total >= 17) return 'S';
   if (total >= 13) return up <= 6 ? 'S' : 'H';
   if (total === 12) return up >= 4 && up <= 6 ? 'S' : 'H';
-  if (total === 11) return 'D';
+  if (total === 11) return up === 11 && !h17 ? 'H' : 'D';
   if (total === 10) return up <= 9 ? 'D' : 'H';
   if (total === 9) return up >= 3 && up <= 6 ? 'D' : 'H';
   return 'H';
@@ -157,7 +159,7 @@ export function decideBlackjack(view: BlackjackView, rng: Rng, level: BotLevel):
   const hand = view.hands[seat]![turn.hand]!;
   if (level === 'easy') return handValue(hand.cards).total < 15 ? { type: 'HIT', seat } : { type: 'STAND', seat };
   const up = view.dealer[0] ? cardValue(view.dealer[0]) : 10;
-  const m = basicStrategy(hand.cards, up, has('SPLIT'));
+  const m = basicStrategy(hand.cards, up, has('SPLIT'), view.dealerHitsSoft17);
   if (m === 'P') return { type: 'SPLIT', seat };
   if ((m === 'D' || m === 'Ds') && has('DOUBLE')) return { type: 'DOUBLE', seat };
   // A double the table does not allow here: "Ds" stands, "D" hits.

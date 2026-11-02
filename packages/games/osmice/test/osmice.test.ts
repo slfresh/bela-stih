@@ -193,6 +193,19 @@ describe('the rules, one by one', () => {
     expect(() => play(t, { type: 'PASS', seat: 0 })).toThrow(/only after drawing/);
   });
 
+  it('the view counts what can still be drawn, the discard under the top card included', () => {
+    const s = position([[C('blue-1-0')], [C('gold-1-0')]], C('red-5-0'));
+    s.drawPile = [];
+    s.discard = [C('green-2-0'), C('green-3-0'), C('red-5-0')];
+    expect(OSMICE.legalActions(s, 0).some((a) => a.type === 'DRAW')).toBe(true);
+    expect(OSMICE.view(s, 0).drawPileCount).toBe(2);
+    const drew = play(s, { type: 'DRAW', seat: 0 });
+    expect(OSMICE.view(drew, 1).drawPileCount).toBe(1);
+    // Nothing under the top card and nothing in the pile: nothing to draw.
+    const dry = { ...s, discard: [C('red-5-0')] };
+    expect(OSMICE.view(dry, 0).drawPileCount).toBe(0);
+  });
+
   it('stacked draws pass the pile on, or the one who stops it takes it all', () => {
     const s = position([[C('red-draw2-0'), C('red-1-0')], [C('blue-draw2-0'), C('blue-1-0')], [C('gold-1-0'), C('gold-2-0')]], C('red-5-0'), {
       config: { ...OSMICE.defaultConfig, stackDraws: true },
@@ -251,6 +264,24 @@ describe('Osmice bots', () => {
     const session = new Session(OSMICE, { seats: 3, seed: 5, humanSeats: [0, 1, 2] });
     const seat = session.actors()[0]!;
     expect(session.legal(seat)).toContainEqual(OSMICE.defaultAction(session.state, seat, () => 0.5, 'medium'));
+  });
+
+  it('defaultAction plays a card when one goes, so a timed-out turn does not just draw', () => {
+    // Online, a timeout applies defaultAction. Always drawing grew an idle
+    // player's hand all round; the medium bot's move plays when it can.
+    let played = 0;
+    let drewWithAPlay = 0;
+    for (let seed = 1; seed <= 40; seed++) {
+      const s = OSMICE.startRound(OSMICE.createMatch({ seats: 3, seed }));
+      const seat = OSMICE.actors(s)[0]!;
+      const a = OSMICE.defaultAction(s, seat, makeRng(seed), 'medium');
+      expect(OSMICE.legalActions(s, seat)).toContainEqual(a);
+      const canPlay = OSMICE.legalActions(s, seat).some((x) => x.type === 'PLAY');
+      if (a.type === 'PLAY') played++;
+      if (a.type === 'DRAW' && canPlay) drewWithAPlay++;
+    }
+    expect(played).toBeGreaterThan(0);
+    expect(drewWithAPlay).toBe(0);
   });
 
   /** Two seats, every seed played from both sides so the deal cancels out. */

@@ -527,9 +527,50 @@ describe('play-money chips', () => {
     const r = refillChips(p, '2026-11-02');
     expect(r.added).toBe(CHIPS_FLOOR - 600);
     p = buyIn(r.profile, 2000)!;
+    // Lost the lot and stood up with nothing.
+    p = cashOut(p, 0);
     // The same day: no second top-up.
     expect(refillChips(p, '2026-11-02').added).toBe(0);
     expect(refillChips(p, '2026-11-03').added).toBe(CHIPS_FLOOR);
+  });
+
+  it('hold what is in front of the player at a table, and give it back on standing up', async () => {
+    const { chipBalance, chipsAtTable, buyIn, holdAtTable, cashOut, emptyProfile } = await import('@belot/progression');
+    let p = buyIn(emptyProfile(), 1000)!;
+    expect(chipBalance(p)).toBe(1000);
+    expect(chipsAtTable(p)).toBe(1000);
+    p = holdAtTable(p, 1350);
+    // Holding is not a cash-out: the balance does not move.
+    expect(chipBalance(p)).toBe(1000);
+    expect(chipsAtTable(p)).toBe(1350);
+    p = cashOut(p, 1350);
+    expect(chipBalance(p)).toBe(2350);
+    expect(chipsAtTable(p)).toBe(0);
+  });
+
+  it('survive a closed app: the next top-up puts the chips left at a table back first', async () => {
+    const { chipBalance, chipsAtTable, buyIn, holdAtTable, refillChips, CHIPS_FLOOR, emptyProfile } = await import('@belot/progression');
+    // Already topped up today, sat down with 1500 of 2000 and won to 2500, then the app was swiped away.
+    let p = refillChips(emptyProfile(), '2026-11-02').profile;
+    p = buyIn(p, 1500)!;
+    p = holdAtTable(p, 2500);
+    const r = refillChips(p, '2026-11-02');
+    expect(r.added).toBe(0);
+    expect(chipBalance(r.profile)).toBe(CHIPS_FLOOR - 1500 + 2500);
+    expect(chipsAtTable(r.profile)).toBe(0);
+    // Settled once: a second call gives nothing more.
+    expect(chipBalance(refillChips(r.profile, '2026-11-02').profile)).toBe(CHIPS_FLOOR + 1000);
+  });
+
+  it('count chips left at a table towards the floor before topping up', async () => {
+    const { chipBalance, buyIn, holdAtTable, refillChips, CHIPS_FLOOR, emptyProfile } = await import('@belot/progression');
+    // Sat down with everything yesterday and lost some: 1200 left at the table, 0 on the balance.
+    let p = buyIn(emptyProfile(), CHIPS_FLOOR)!;
+    p = holdAtTable(p, 1200);
+    const r = refillChips(p, '2026-11-03');
+    // The 1200 come back first; the top-up only makes up the rest of the floor.
+    expect(r.added).toBe(CHIPS_FLOOR - 1200);
+    expect(chipBalance(r.profile)).toBe(CHIPS_FLOOR);
   });
 
   it('never touch coins, and coins never touch them', async () => {
