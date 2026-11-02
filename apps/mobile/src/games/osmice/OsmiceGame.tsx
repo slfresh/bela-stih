@@ -9,7 +9,8 @@ import { applyGameMatchOutcome, applyRoundOutcome, type Award } from '@belot/pro
 import { useLocalSession } from '../useLocalSession';
 import { OsmiceCard, OSMICE_INK } from './OsmiceCard';
 import { Avatar } from '../../avatars';
-import { AVATAR_IDS } from '../../avatarIds';
+import { tablePeople, type Person } from '../casino/people';
+import { othersAfter, type SessionSource } from '../source';
 import { Button } from '../../ui/Button';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
 import { Coin, Star } from '../../ui/icons';
@@ -36,15 +37,33 @@ import { garb } from '../../deck/palette';
 const COLOURS: Colour[] = ['red', 'gold', 'green', 'blue'];
 const HAND_GAP = 4;
 
-export function OsmiceGame({
+/** Osmice against the bots, on the device. */
+export function OsmiceGame({ settings, players, level = 'medium', onExit }: { settings: Settings; players: number; level?: BotLevel; onExit: () => void }) {
+  const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
+  const reduced = useMotionPolicy(settings.motion) === 'reduced';
+  const people = useMemo(() => tablePeople(players, lang, settings.nickname, loadProfile().selectedAvatar), [players, lang, settings.nickname]);
+  const source: SessionSource<typeof OSMICE> = (onEvent) =>
+    useLocalSession(OSMICE, { seats: players, botLevel: level, thinkMs: () => (reduced ? 250 : 650 + Math.floor(Math.random() * 450)), onEvent });
+  return <OsmiceTable settings={settings} players={players} me={0} people={people} source={source} onExit={onExit} />;
+}
+
+/**
+ * The Osmice table, for any session: on the device or online. `me` is where
+ * the person sits — online, wherever the room put them.
+ */
+export function OsmiceTable({
   settings,
   players,
-  level = 'medium',
+  me,
+  people,
+  source,
   onExit,
 }: {
   settings: Settings;
   players: number;
-  level?: BotLevel;
+  me: number;
+  people: Person[];
+  source: SessionSource<typeof OSMICE>;
   onExit: () => void;
 }) {
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
@@ -53,18 +72,7 @@ export function OsmiceGame({
   const motion = useMotionPolicy(settings.motion);
   const reduced = motion === 'reduced';
   const { width, height } = useWindowDimensions();
-
-  // Who sits where: me at 0, then house characters other than my own face.
   const profileRef = useRef(loadProfile());
-  const people = useMemo(() => {
-    const mine = profileRef.current.selectedAvatar;
-    const others = AVATAR_IDS.filter((a) => a !== mine);
-    return Array.from({ length: players }, (_, seat) =>
-      seat === 0
-        ? { name: settings.nickname.trim() || g.you, avatar: mine }
-        : { name: lang.s.ui.cosmeticName(others[seat - 1]!), avatar: others[seat - 1]! },
-    );
-  }, [players, settings.nickname, lang, g.you]);
 
   const [line, setLine] = useState<string>('');
   const [award, setAward] = useState<Award | null>(null);
@@ -86,11 +94,12 @@ export function OsmiceGame({
           break;
         case 'drew':
           playSfx('deal');
-          if (e.seat !== 0 || e.penalty) setLine(t.drewCards(name(e.seat), e.count));
+          if (e.seat !== me) setLine(t.drewCards(name(e.seat), e.count));
+          else if (e.penalty) setLine(t.drewCardsMe(e.count));
           break;
         case 'skipped':
           playSfx('knock');
-          setLine(t.skipped(name(e.seat)));
+          setLine(e.seat === me ? t.skippedMe : t.skipped(name(e.seat)));
           break;
         case 'reversed':
           playSfx('sort');
@@ -101,7 +110,7 @@ export function OsmiceGame({
           setLastCardSeat(e.seat);
           break;
         case 'roundOver': {
-          const won = e.winner === 0;
+          const won = e.winner === me;
           playSfx(won ? 'win' : 'lose');
           if (won) buzz('medium');
           const r = applyRoundOutcome(profileRef.current, 'osmice', won);
@@ -112,7 +121,7 @@ export function OsmiceGame({
           break;
         }
         case 'matchOver': {
-          const won = e.winner === 0;
+          const won = e.winner === me;
           playSfx(won ? 'matchWon' : 'matchLost');
           const r = applyGameMatchOutcome(profileRef.current, 'osmice', won);
           profileRef.current = r.profile;
@@ -129,15 +138,10 @@ export function OsmiceGame({
           break;
       }
     },
-    [people, t],
+    [people, t, me],
   );
 
-  const game = useLocalSession(OSMICE, {
-    seats: players,
-    botLevel: level,
-    thinkMs: () => (reduced ? 250 : 650 + Math.floor(Math.random() * 450)),
-    onEvent,
-  });
+  const game = source(onEvent);
   const view = game.view;
 
   // "Zadnja!" shows for a moment over whoever said it.
@@ -187,11 +191,11 @@ export function OsmiceGame({
       setWildFor(c);
       return;
     }
-    game.submit({ type: 'PLAY', seat: 0, cardId: c.id });
+    game.submit({ type: 'PLAY', seat: me, cardId: c.id });
   };
   const pickColour = (colour: Colour) => {
     if (!wildFor) return;
-    const a: OsmiceAction = { type: 'PLAY', seat: 0, cardId: wildFor.id, colour };
+    const a: OsmiceAction = { type: 'PLAY', seat: me, cardId: wildFor.id, colour };
     setWildFor(null);
     game.submit(a);
   };
@@ -204,7 +208,7 @@ export function OsmiceGame({
   const pileCard = portrait ? 88 : 72;
 
   // Opponents in play order, from my left.
-  const order = Array.from({ length: players - 1 }, (_, i) => i + 1);
+  const order = othersAfter(me, players);
   const name = (seat: number) => people[seat]!.name;
 
   return (
@@ -246,7 +250,7 @@ export function OsmiceGame({
         <View style={[styles.felt, { backgroundColor: ground.felt, borderColor: ground.rim }]}>
           <View style={styles.piles}>
             <PressScale
-              onPress={() => canDraw && game.myTurn && game.submit({ type: 'DRAW', seat: 0 })}
+              onPress={() => canDraw && game.myTurn && game.submit({ type: 'DRAW', seat: me })}
               disabled={!canDraw || !game.myTurn}
               accessibilityLabel={`${t.draw} (${view.drawPileCount})`}
               accessibilityRole="button"
@@ -280,15 +284,15 @@ export function OsmiceGame({
       {/* me */}
       <View style={[styles.me, game.myTurn && styles.meOnTurn]}>
         <View style={styles.meRow}>
-          <Avatar id={people[0]!.avatar} size={28} />
+          <Avatar id={people[me]!.avatar} size={28} />
           <Text style={styles.meName} numberOfLines={1}>
-            {people[0]!.name}
+            {people[me]!.name}
           </Text>
           <Text style={[styles.meScore, num]}>
-            {t.score}: {view.scores[0]}
+            {t.score}: {view.scores[me]}
           </Text>
-          {canPass && game.myTurn ? <Button label={t.pass} compact onPress={() => game.submit({ type: 'PASS', seat: 0 })} /> : null}
-          {canDraw && game.myTurn && !view.drawn ? <Button label={t.draw} compact tone="strong" onPress={() => game.submit({ type: 'DRAW', seat: 0 })} /> : null}
+          {canPass && game.myTurn ? <Button label={t.pass} compact onPress={() => game.submit({ type: 'PASS', seat: me })} /> : null}
+          {canDraw && game.myTurn && !view.drawn ? <Button label={t.draw} compact tone="strong" onPress={() => game.submit({ type: 'DRAW', seat: me })} /> : null}
         </View>
         <ScrollView horizontal contentContainerStyle={styles.hand} showsHorizontalScrollIndicator={false}>
           {view.hand.map((c) => {
@@ -343,7 +347,7 @@ export function OsmiceGame({
                 .map((seat) => (
                   <View key={seat} style={styles.scoreRow}>
                     <Avatar id={people[seat]!.avatar} size={22} />
-                    <Text style={[styles.scoreName, seat === 0 && styles.scoreMe]} numberOfLines={1}>
+                    <Text style={[styles.scoreName, seat === me && styles.scoreMe]} numberOfLines={1}>
                       {name(seat)}
                     </Text>
                     <Text style={[styles.scoreLeft, num]}>{view.lastRound && seat !== view.lastRound.winner ? `−${view.lastRound.left[seat]}` : ''}</Text>

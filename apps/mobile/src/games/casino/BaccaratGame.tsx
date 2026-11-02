@@ -8,6 +8,8 @@ import { CasinoHeader, CasinoScreen, type TableProps } from './CasinoScreen';
 import { Card52View } from './Card52';
 import { ChipPile, ChipRow } from './Chips';
 import { tablePeople } from './people';
+import { othersAfter } from '../source';
+import type { TableSeats } from './CasinoScreen';
 import { Avatar } from '../../avatars';
 import { Button } from '../../ui/Button';
 import { PressScale } from '../../ui/PressScale';
@@ -27,52 +29,62 @@ const STACK = 1000;
 
 export function BaccaratGame({ settings, players, level, onExit }: { settings: Settings; players: number; level: BotLevel; onExit: () => void }) {
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
+  const reduced = useMotionPolicy(settings.motion) === 'reduced';
+  const people = useMemo(() => tablePeople(players, lang, settings.nickname, loadProfile().selectedAvatar), [players, lang, settings.nickname]);
   return (
     <CasinoScreen settings={settings} tableStack={STACK} minimum={BACCARAT.defaultConfig.minBet} title={lang.baccarat.name} onExit={onExit}>
-      {(p) => <BaccaratTable {...p} players={players} level={level} />}
+      {(p) => (
+        <BaccaratTable
+          {...p}
+          players={players}
+          me={0}
+          people={people}
+          source={(onEvent) =>
+            useLocalSession(BACCARAT, {
+              seats: players,
+              botLevel: level,
+              stacks: [p.stack, ...Array<number>(players - 1).fill(STACK)],
+              thinkMs: () => (reduced ? 150 : 350 + Math.floor(Math.random() * 400)),
+              onEvent,
+            })
+          }
+        />
+      )}
     </CasinoScreen>
   );
 }
 
-function BaccaratTable({ stack, report, finish, lang, settings, leave, players, level }: TableProps & { players: number; level: BotLevel }) {
+export function BaccaratTable({ report, finish, lang, settings, leave, players, me, people, source }: TableProps & TableSeats<typeof BACCARAT>) {
   const t = lang.baccarat;
   const c = lang.casino;
-  const reduced = useMotionPolicy(settings.motion) === 'reduced';
-  const people = useMemo(() => tablePeople(players, lang, settings.nickname, loadProfile().selectedAvatar), [players, lang, settings.nickname]);
   const [chip, setChip] = useState(25);
   const [line, setLine] = useState('');
 
-  const game = useLocalSession(BACCARAT, {
-    seats: players,
-    botLevel: level,
-    stacks: [stack, ...Array<number>(players - 1).fill(STACK)],
-    thinkMs: () => (reduced ? 150 : 350 + Math.floor(Math.random() * 400)),
-    onEvent: (e: BaccaratEvent) => {
-      if (e.kind === 'betPlaced' && e.seat === 0) playSfx('arm');
+  const game = source((e: BaccaratEvent) => {
+      if (e.kind === 'betPlaced' && e.seat === me) playSfx('arm');
       if (e.kind === 'dealt') playSfx('deal');
       if (e.kind === 'coupResolved') setLine(t.outcome(e.outcome, e.playerTotal, e.bankerTotal) + (e.natural ? ` · ${t.natural}` : ''));
-      if (e.kind === 'paid' && e.seat === 0) playSfx(e.net > 0 ? 'win' : 'lose');
+      if (e.kind === 'paid' && e.seat === me) playSfx(e.net > 0 ? 'win' : 'lose');
       if (e.kind === 'coupStarted') setLine('');
-    },
-  });
+    });
   const v = game.view;
-  const mine = v.bets[0]!;
+  const mine = v.bets[me]!;
 
   // What standing up now would return: the stack plus anything still on the table.
-  useEffect(() => report(v.stacks[0]! + betTotal(mine)), [v.stacks, mine, report]);
+  useEffect(() => report(v.stacks[me]! + betTotal(mine)), [v.stacks, mine, report]);
   const done = useRef(false);
   useEffect(() => {
     if (game.matchOver && !done.current) {
       done.current = true;
-      finish(v.stacks[0]!);
+      finish(v.stacks[me]!);
     }
   }, [game.matchOver, v.stacks, finish]);
 
-  const betting = v.phase === 'BETTING' && !v.ready[0];
+  const betting = v.phase === 'BETTING' && !v.ready[me];
   const canBet = (spot: Spot, amount: number) => v.legalActions.some((a) => a.type === 'BET' && a.spot === spot && a.amount === amount);
   const spots: Spot[] = ['player', 'tie', 'banker'];
   const label: Record<Spot, string> = { player: t.player, banker: t.banker, tie: t.tie };
-  const others = Array.from({ length: players - 1 }, (_, i) => i + 1);
+  const others = othersAfter(me, players);
 
   return (
     <View style={styles.fill}>
@@ -123,7 +135,7 @@ function BaccaratTable({ stack, report, finish, lang, settings, leave, players, 
             return (
               <PressScale
                 key={spot}
-                onPress={() => ok && game.submit({ type: 'BET', seat: 0, spot, amount: chip })}
+                onPress={() => ok && game.submit({ type: 'BET', seat: me, spot, amount: chip })}
                 disabled={!ok}
                 accessibilityRole="button"
                 accessibilityLabel={`${label[spot]}, ${t.pays(spot, v.commissionPct, v.tiePays)}`}
@@ -140,25 +152,25 @@ function BaccaratTable({ stack, report, finish, lang, settings, leave, players, 
 
         {/* me */}
         <View style={styles.me}>
-          <Avatar id={people[0]!.avatar} size={28} />
-          <Text style={styles.meName}>{people[0]!.name}</Text>
-          <Text style={[styles.meStack, num]}>{c.balance(v.stacks[0]!)}</Text>
+          <Avatar id={people[me]!.avatar} size={28} />
+          <Text style={styles.meName}>{people[me]!.name}</Text>
+          <Text style={[styles.meStack, num]}>{c.balance(v.stacks[me]!)}</Text>
         </View>
         {betting ? (
           <>
-            <ChipRow chips={v.chips} canAdd={(x) => x <= v.stacks[0]!} onAdd={setChip} />
+            <ChipRow chips={v.chips} canAdd={(x) => x <= v.stacks[me]!} onAdd={setChip} />
             <Text style={[styles.chipNote, num]}>{`${c.bet}: ${chip}`}</Text>
             <View style={styles.buttons}>
-              <Button label={c.clear} onPress={() => game.submit({ type: 'CLEAR', seat: 0 })} disabled={betTotal(mine) === 0} />
-              <Button label={c.deal} tone="strong" onPress={() => game.submit({ type: 'READY', seat: 0 })} disabled={betTotal(mine) === 0} />
+              <Button label={c.clear} onPress={() => game.submit({ type: 'CLEAR', seat: me })} disabled={betTotal(mine) === 0} />
+              <Button label={c.deal} tone="strong" onPress={() => game.submit({ type: 'READY', seat: me })} disabled={betTotal(mine) === 0} />
             </View>
           </>
         ) : null}
         {game.roundOver && !game.matchOver ? (
           <View style={styles.buttons}>
             {v.lastNet ? (
-              <Text style={[styles.net, num, v.lastNet[0]! > 0 ? styles.netWin : v.lastNet[0]! < 0 ? styles.netLose : null]}>
-                {v.lastNet[0]! > 0 ? c.won(v.lastNet[0]!) : v.lastNet[0]! < 0 ? c.lost(-v.lastNet[0]!) : ''}
+              <Text style={[styles.net, num, v.lastNet[me]! > 0 ? styles.netWin : v.lastNet[me]! < 0 ? styles.netLose : null]}>
+                {v.lastNet[me]! > 0 ? c.won(v.lastNet[me]!) : v.lastNet[me]! < 0 ? c.lost(-v.lastNet[me]!) : ''}
               </Text>
             ) : null}
             <Button label={lang.osmice.nextRound} tone="strong" onPress={game.nextRound} />

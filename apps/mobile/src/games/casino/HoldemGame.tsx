@@ -8,6 +8,8 @@ import { CasinoHeader, CasinoScreen, type TableProps } from './CasinoScreen';
 import { Card52View } from './Card52';
 import { ChipPile } from './Chips';
 import { tablePeople } from './people';
+import { othersAfter } from '../source';
+import type { TableSeats } from './CasinoScreen';
 import { Avatar } from '../../avatars';
 import { Button } from '../../ui/Button';
 import { playSfx } from '../../audio';
@@ -28,27 +30,38 @@ const STACK = 1500;
 
 export function HoldemGame({ settings, players, level, onExit }: { settings: Settings; players: number; level: BotLevel; onExit: () => void }) {
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
+  const reduced = useMotionPolicy(settings.motion) === 'reduced';
+  const people = useMemo(() => tablePeople(players, lang, settings.nickname, loadProfile().selectedAvatar), [players, lang, settings.nickname]);
   return (
     <CasinoScreen settings={settings} tableStack={STACK} minimum={HOLDEM.defaultConfig.bigBlind * 10} title={lang.holdem.name} onExit={onExit}>
-      {(p) => <HoldemTable {...p} players={players} level={level} />}
+      {(p) => (
+        <HoldemTable
+          {...p}
+          players={players}
+          me={0}
+          people={people}
+          source={(onEvent) =>
+            useLocalSession(HOLDEM, {
+              seats: players,
+              botLevel: level,
+              // Everyone sits with the same stack; the person's is their buy-in (less only if the balance was short).
+              stacks: [p.stack, ...Array<number>(players - 1).fill(STACK)],
+              thinkMs: () => (reduced ? 200 : 500 + Math.floor(Math.random() * 600)),
+              onEvent,
+            })
+          }
+        />
+      )}
     </CasinoScreen>
   );
 }
 
-function HoldemTable({ stack, report, finish, lang, settings, leave, players, level }: TableProps & { players: number; level: BotLevel }) {
+export function HoldemTable({ report, finish, lang, settings, leave, players, me, people, source }: TableProps & TableSeats<typeof HOLDEM>) {
   const t = lang.holdem;
   const c = lang.casino;
-  const reduced = useMotionPolicy(settings.motion) === 'reduced';
-  const people = useMemo(() => tablePeople(players, lang, settings.nickname, loadProfile().selectedAvatar), [players, lang, settings.nickname]);
   const [line, setLine] = useState('');
 
-  const game = useLocalSession(HOLDEM, {
-    seats: players,
-    botLevel: level,
-    // Everyone sits with the same stack; the person's is their buy-in (less only if the balance was short).
-    stacks: [stack, ...Array<number>(players - 1).fill(STACK)],
-    thinkMs: () => (reduced ? 200 : 500 + Math.floor(Math.random() * 600)),
-    onEvent: (e: HoldemEvent, after) => {
+  const game = source((e: HoldemEvent, after) => {
       if (e.kind === 'handStarted') {
         setLine('');
         playSfx('shuffle');
@@ -57,30 +70,29 @@ function HoldemTable({ stack, report, finish, lang, settings, leave, players, le
       if (e.kind === 'acted' && e.amount > 0) playSfx('stack');
       if (e.kind === 'acted' && e.action === 'check') playSfx('knock');
       if (e.kind === 'potWon') {
-        playSfx(e.winners.includes(0) ? 'win' : 'coin');
+        playSfx(e.winners.includes(me) ? 'win' : 'coin');
         // The view after this transition, not the last render's.
         const shown = after.lastResult?.shown;
         const hand = shown?.find((x) => x.seat === e.winners[0]);
         setLine(t.wins(people[e.winners[0]!]!.name, e.amount, hand ? t.category[hand.category] : null));
       }
       if (e.kind === 'eliminated') setLine(t.eliminated(people[e.seat]!.name));
-    },
-  });
+    });
   const v = game.view;
-  const me = v.players[0]!;
+  const mine = v.players[me]!;
 
-  useEffect(() => report(me.stack), [me.stack, report]);
+  useEffect(() => report(mine.stack), [mine.stack, report]);
   const done = useRef(false);
   useEffect(() => {
     if (game.matchOver && !done.current) {
       done.current = true;
-      finish(me.stack);
+      finish(mine.stack);
     }
-  }, [game.matchOver, me.stack, finish]);
+  }, [game.matchOver, mine.stack, finish]);
 
   const myTurn = game.myTurn;
   const has = (type: HoldemAction['type']) => v.legalActions.some((a) => a.type === type);
-  const raiseTo = (to: number): HoldemAction | null => (v.raiseTo ? { type: 'RAISE', seat: 0, to: Math.max(v.raiseTo.min, Math.min(v.raiseTo.max, Math.round(to))) } : null);
+  const raiseTo = (to: number): HoldemAction | null => (v.raiseTo ? { type: 'RAISE', seat: me, to: Math.max(v.raiseTo.min, Math.min(v.raiseTo.max, Math.round(to))) } : null);
   const betWord = v.currentBet === 0 ? t.bet : t.raiseTo;
   const presets = v.raiseTo
     ? [
@@ -90,7 +102,7 @@ function HoldemTable({ stack, report, finish, lang, settings, leave, players, le
         { label: t.allIn, a: raiseTo(v.raiseTo.max)! },
       ].filter((p, i, all) => all.findIndex((q) => (q.a as { to: number }).to === (p.a as { to: number }).to) === i)
     : [];
-  const others = Array.from({ length: players - 1 }, (_, i) => i + 1);
+  const others = othersAfter(me, players);
   const shownOf = (seat: number) => v.lastResult?.shown.find((x) => x.seat === seat);
 
   return (
@@ -139,26 +151,26 @@ function HoldemTable({ stack, report, finish, lang, settings, leave, players, le
         {/* me */}
         <View style={[styles.box, myTurn && styles.onTurn]}>
           <View style={styles.seatHead}>
-            <Avatar id={people[0]!.avatar} size={26} />
-            {v.button === 0 ? <Text style={styles.button}>{t.button}</Text> : null}
-            <Text style={styles.meName}>{people[0]!.name}</Text>
-            <Text style={[styles.meStack, num]}>{c.balance(me.stack)}</Text>
+            <Avatar id={people[me]!.avatar} size={26} />
+            {v.button === me ? <Text style={styles.button}>{t.button}</Text> : null}
+            <Text style={styles.meName}>{people[me]!.name}</Text>
+            <Text style={[styles.meStack, num]}>{c.balance(mine.stack)}</Text>
           </View>
           <View style={[styles.cards, styles.mine]}>
-            {me.hole.map((card) => (
+            {mine.hole.map((card) => (
               <Card52View key={card.id} card={card} width={78} />
             ))}
           </View>
-          {shownOf(0) ? <Text style={styles.cat}>{t.category[shownOf(0)!.category]}</Text> : null}
-          <ChipPile amount={me.bet} size={20} />
+          {shownOf(me) ? <Text style={styles.cat}>{t.category[shownOf(me)!.category]}</Text> : null}
+          <ChipPile amount={mine.bet} size={20} />
         </View>
 
         {myTurn ? (
           <>
             <View style={styles.buttons}>
-              {has('FOLD') ? <Button label={t.fold} onPress={() => game.submit({ type: 'FOLD', seat: 0 })} /> : null}
-              {has('CHECK') ? <Button label={t.check} tone="strong" onPress={() => game.submit({ type: 'CHECK', seat: 0 })} /> : null}
-              {has('CALL') ? <Button label={t.call(v.toCall)} tone="strong" onPress={() => game.submit({ type: 'CALL', seat: 0 })} /> : null}
+              {has('FOLD') ? <Button label={t.fold} onPress={() => game.submit({ type: 'FOLD', seat: me })} /> : null}
+              {has('CHECK') ? <Button label={t.check} tone="strong" onPress={() => game.submit({ type: 'CHECK', seat: me })} /> : null}
+              {has('CALL') ? <Button label={t.call(v.toCall)} tone="strong" onPress={() => game.submit({ type: 'CALL', seat: me })} /> : null}
             </View>
             {presets.length > 0 ? (
               <View style={styles.buttons}>

@@ -20,6 +20,11 @@ export interface GamesStrings {
   play: string;
   back: string;
   you: string;
+  /** Online: the heading, quick play with strangers, and the lobby's count of seats taken. */
+  online: string;
+  quickPlay: string;
+  seated: (n: number, of: number) => string;
+  codeIs: string;
 }
 
 export interface OsmiceStrings {
@@ -43,6 +48,9 @@ export interface OsmiceStrings {
   mustTake: (n: number) => string;
   skipped: (name: string) => string;
   drewCards: (name: string, n: number) => string;
+  /** The same two lines when it is the person themselves. */
+  skippedMe: string;
+  drewCardsMe: (n: number) => string;
   reversed: string;
   roundWon: (name: string, points: number) => string;
   matchWon: (name: string) => string;
@@ -139,6 +147,10 @@ const GAMES: Record<LocaleId, GamesStrings> = {
     play: 'Igraj',
     back: 'Natrag',
     you: 'Ti',
+    online: 'Online',
+    quickPlay: 'Brza igra',
+    seated: (n, of) => `Za stolom: ${n} / ${of}`,
+    codeIs: 'Šifra stola',
   },
   'sr-Cyrl': {
     moreGames: 'Још игара',
@@ -148,6 +160,10 @@ const GAMES: Record<LocaleId, GamesStrings> = {
     play: 'Играј',
     back: 'Назад',
     you: 'Ти',
+    online: 'Онлајн',
+    quickPlay: 'Брза игра',
+    seated: (n, of) => `За столом: ${n} / ${of}`,
+    codeIs: 'Шифра стола',
   },
   en: {
     moreGames: 'More games',
@@ -157,6 +173,10 @@ const GAMES: Record<LocaleId, GamesStrings> = {
     play: 'Play',
     back: 'Back',
     you: 'You',
+    online: 'Online',
+    quickPlay: 'Quick play',
+    seated: (n, of) => `At the table: ${n} / ${of}`,
+    codeIs: 'Table code',
   },
 };
 
@@ -177,6 +197,8 @@ const OSMICE: Record<LocaleId, OsmiceStrings> = {
     mustTake: (n) => `Vučeš ${n}`,
     skipped: (name) => `${name} preskače`,
     drewCards: (name, n) => `${name} vuče ${n}`,
+    skippedMe: 'Preskočen si',
+    drewCardsMe: (n) => `Vučeš ${n}`,
     reversed: 'Smjer se okreće',
     roundWon: (name, points) => `${name} je bez karata: +${points}`,
     matchWon: (name) => `${name} pobjeđuje!`,
@@ -211,6 +233,8 @@ const OSMICE: Record<LocaleId, OsmiceStrings> = {
     mustTake: (n) => `Вучеш ${n}`,
     skipped: (name) => `${name} прескаче`,
     drewCards: (name, n) => `${name} вуче ${n}`,
+    skippedMe: 'Прескочен си',
+    drewCardsMe: (n) => `Вучеш ${n}`,
     reversed: 'Смер се окреће',
     roundWon: (name, points) => `${name} је без карата: +${points}`,
     matchWon: (name) => `${name} побеђује!`,
@@ -245,6 +269,8 @@ const OSMICE: Record<LocaleId, OsmiceStrings> = {
     mustTake: (n) => `You draw ${n}`,
     skipped: (name) => `${name} is skipped`,
     drewCards: (name, n) => `${name} draws ${n}`,
+    skippedMe: 'You are skipped',
+    drewCardsMe: (n) => `You draw ${n}`,
     reversed: 'Direction turns round',
     roundWon: (name, points) => `${name} is out: +${points}`,
     matchWon: (name) => `${name} wins!`,

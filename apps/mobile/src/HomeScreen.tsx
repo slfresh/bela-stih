@@ -23,6 +23,7 @@ import { Check, Coin, Crown, Gear, Robot } from './ui/icons';
 import { Panel } from './ui/Panel';
 import { TableHero } from './home/TableHero';
 import { MoreGames, type OtherGame } from './home/MoreGames';
+import type { NetHow } from './games/useNetSession';
 import { Wordmark } from './home/Wordmark';
 import { PressScale } from './ui/PressScale';
 import type { Settings } from './storage';
@@ -48,7 +49,9 @@ export type Launch =
   | { mode: 'join'; code: string }
   | { mode: 'gallery' }
   /** One of the games beyond Bela, against the bots. */
-  | { mode: 'game'; game: OtherGame; players: number };
+  | { mode: 'game'; game: OtherGame; players: number }
+  /** One of the games beyond Bela, online (a table joined by code learns its game from the room). */
+  | { mode: 'online'; game: OtherGame | null; how: NetHow };
 
 export function HomeScreen({
   lang,
@@ -304,7 +307,11 @@ export function HomeScreen({
             </Panel>
 
             {/* The other tables in the room: the games beyond Bela. */}
-            <MoreGames lang={lang} onPlay={(game, players) => go({ mode: 'game', game, players })} />
+            <MoreGames
+              lang={lang}
+              onPlay={(game, players) => go({ mode: 'game', game, players })}
+              onOnline={(game, how) => go({ mode: 'online', game, how })}
+            />
 
             {/* For whoever has never played bela, or plays it differently at
                 home; the evenings with friends, match by match; and what they

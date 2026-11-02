@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Lang } from '@belot/i18n';
+import type { AnyGame } from '@belot/game-core';
+import type { SessionSource } from '../source';
+import type { Person } from './people';
 import { buyIn, cashOut, chipBalance, isoDay, refillChips } from '@belot/progression';
 import { Button } from '../../ui/Button';
 import { ConfirmDialog } from '../../ui/ConfirmDialog';
@@ -24,6 +27,15 @@ import { ink, num, space, type } from '../../theme';
  * A fresh table after a match is a remount (`playAgain`), so it buys in anew.
  */
 
+/** Who sits where at a casino table, and where its game comes from (on the device, or online). */
+export interface TableSeats<D extends AnyGame> {
+  players: number;
+  /** Where the person sits: 0 on the device, wherever the room put them online. */
+  me: number;
+  people: Person[];
+  source: SessionSource<D>;
+}
+
 export interface TableProps {
   /** What the person sat down with. */
   stack: number;
@@ -45,6 +57,7 @@ export function CasinoScreen({
   minimum,
   title,
   onExit,
+  online = false,
   children,
 }: {
   settings: Settings;
@@ -54,6 +67,8 @@ export function CasinoScreen({
   minimum: number;
   title: string;
   onExit: () => void;
+  /** At an online table a fresh match is a fresh room: no "play again" here. */
+  online?: boolean;
   children: (p: TableProps) => ReactNode;
 }) {
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
@@ -152,7 +167,7 @@ export function CasinoScreen({
             <Text style={[styles.note, num]}>{c.balance(chipBalance(loadProfile()))}</Text>
             <View style={styles.buttons}>
               <Button label={lang.games.back} onPress={onExit} />
-              <Button label={c.playAgain} tone="strong" onPress={() => setTable((t) => t + 1)} />
+              {online ? null : <Button label={c.playAgain} tone="strong" onPress={() => setTable((t) => t + 1)} />}
             </View>
           </Panel>
         </View>

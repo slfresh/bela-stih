@@ -9,6 +9,8 @@ import { CasinoHeader, CasinoScreen, type TableProps } from './CasinoScreen';
 import { Card52View } from './Card52';
 import { ChipPile, ChipRow } from './Chips';
 import { tablePeople } from './people';
+import { othersAfter } from '../source';
+import type { TableSeats } from './CasinoScreen';
 import { Avatar } from '../../avatars';
 import { Button } from '../../ui/Button';
 import { playSfx } from '../../audio';
@@ -27,9 +29,27 @@ const STACK = 1000;
 
 export function BlackjackGame({ settings, players, level, onExit }: { settings: Settings; players: number; level: BotLevel; onExit: () => void }) {
   const lang = useMemo(() => new Lang(settings.locale), [settings.locale]);
+  const reduced = useMotionPolicy(settings.motion) === 'reduced';
+  const people = useMemo(() => tablePeople(players, lang, settings.nickname, loadProfile().selectedAvatar), [players, lang, settings.nickname]);
   return (
     <CasinoScreen settings={settings} tableStack={STACK} minimum={BLACKJACK.defaultConfig.minBet} title={lang.blackjack.name} onExit={onExit}>
-      {(p) => <BlackjackTable {...p} players={players} level={level} />}
+      {(p) => (
+        <BlackjackTable
+          {...p}
+          players={players}
+          me={0}
+          people={people}
+          source={(onEvent) =>
+            useLocalSession(BLACKJACK, {
+              seats: players,
+              botLevel: level,
+              stacks: [p.stack, ...Array<number>(players - 1).fill(STACK)],
+              thinkMs: () => (reduced ? 150 : 400 + Math.floor(Math.random() * 400)),
+              onEvent,
+            })
+          }
+        />
+      )}
     </CasinoScreen>
   );
 }
@@ -46,56 +66,48 @@ function Cards({ cards, width }: { cards: (Card52 | null)[]; width: number }) {
   );
 }
 
-function BlackjackTable({ stack, report, finish, lang, settings, leave, players, level }: TableProps & { players: number; level: BotLevel }) {
+export function BlackjackTable({ report, finish, lang, settings, leave, players, me, people, source }: TableProps & TableSeats<typeof BLACKJACK>) {
   const t = lang.blackjack;
   const c = lang.casino;
-  const reduced = useMotionPolicy(settings.motion) === 'reduced';
-  const people = useMemo(() => tablePeople(players, lang, settings.nickname, loadProfile().selectedAvatar), [players, lang, settings.nickname]);
   const [line, setLine] = useState('');
 
-  const game = useLocalSession(BLACKJACK, {
-    seats: players,
-    botLevel: level,
-    stacks: [stack, ...Array<number>(players - 1).fill(STACK)],
-    thinkMs: () => (reduced ? 150 : 400 + Math.floor(Math.random() * 400)),
-    onEvent: (e: BlackjackEvent) => {
+  const game = source((e: BlackjackEvent) => {
       if (e.kind === 'dealt') playSfx('deal');
-      if (e.kind === 'betPlaced' && e.seat === 0) playSfx('arm');
-      if (e.kind === 'busted' && e.seat === 0) {
+      if (e.kind === 'betPlaced' && e.seat === me) playSfx('arm');
+      if (e.kind === 'busted' && e.seat === me) {
         setLine(t.bust);
         buzz('light');
       }
-      if (e.kind === 'blackjack' && e.seat === 0) {
+      if (e.kind === 'blackjack' && e.seat === me) {
         setLine(t.blackjack);
         playSfx('win');
       }
-      if (e.kind === 'settled' && e.seat === 0) {
+      if (e.kind === 'settled' && e.seat === me) {
         if (e.result === 'win' || e.result === 'blackjack') playSfx('win');
         else if (e.result === 'lose') playSfx('lose');
       }
       if (e.kind === 'roundStarted') setLine('');
-    },
-  });
+    });
   const v = game.view;
-  const myHands = v.hands[0]!;
+  const myHands = v.hands[me]!;
 
-  useEffect(() => report(v.stacks[0]! + v.bets[0]! + myHands.reduce((a, h) => a + (h.result === null ? h.bet : 0), 0)), [v.stacks, v.bets, myHands, report]);
+  useEffect(() => report(v.stacks[me]! + v.bets[me]! + myHands.reduce((a, h) => a + (h.result === null ? h.bet : 0), 0)), [v.stacks, v.bets, myHands, report]);
   const done = useRef(false);
   useEffect(() => {
     if (game.matchOver && !done.current) {
       done.current = true;
-      finish(v.stacks[0]!);
+      finish(v.stacks[me]!);
     }
   }, [game.matchOver, v.stacks, finish]);
 
-  const betting = v.phase === 'BETTING' && !v.ready[0];
-  const playing = v.phase === 'PLAYING' && v.turn?.seat === 0;
+  const betting = v.phase === 'BETTING' && !v.ready[me];
+  const playing = v.phase === 'PLAYING' && v.turn?.seat === me;
   const has = (type: string) => v.legalActions.some((a) => a.type === type);
   const totalOf = (h: Hand) => {
     const { total, soft } = handValue(h.cards);
     return t.total(total, soft && total <= 21);
   };
-  const others = Array.from({ length: players - 1 }, (_, i) => i + 1);
+  const others = othersAfter(me, players);
   const net = myHands.reduce((a, h) => a + (h.result === 'win' ? h.bet : h.result === 'blackjack' ? Math.floor((h.bet * 3) / 2) : h.result === 'lose' ? -h.bet : 0), 0);
 
   return (
@@ -136,14 +148,14 @@ function BlackjackTable({ stack, report, finish, lang, settings, leave, players,
         {/* my box */}
         <View style={[styles.box, (playing || betting) && styles.onTurn]}>
           <View style={styles.seatHead}>
-            <Avatar id={people[0]!.avatar} size={26} />
-            <Text style={styles.meName}>{people[0]!.name}</Text>
-            <Text style={[styles.meStack, num]}>{c.balance(v.stacks[0]!)}</Text>
+            <Avatar id={people[me]!.avatar} size={26} />
+            <Text style={styles.meName}>{people[me]!.name}</Text>
+            <Text style={[styles.meStack, num]}>{c.balance(v.stacks[me]!)}</Text>
           </View>
-          {myHands.length === 0 ? <ChipPile amount={v.bets[0]!} size={30} /> : null}
+          {myHands.length === 0 ? <ChipPile amount={v.bets[me]!} size={30} /> : null}
           <View style={styles.hands}>
             {myHands.map((h, i) => (
-              <View key={i} style={[styles.hand, v.turn?.seat === 0 && v.turn.hand === i && styles.handLive]}>
+              <View key={i} style={[styles.hand, v.turn?.seat === me && v.turn.hand === i && styles.handLive]}>
                 <Cards cards={h.cards} width={64} />
                 <Text style={[styles.total, num]}>{totalOf(h)}</Text>
                 <ChipPile amount={h.bet} size={20} />
@@ -156,21 +168,21 @@ function BlackjackTable({ stack, report, finish, lang, settings, leave, players,
 
         {betting ? (
           <>
-            <ChipRow chips={v.chips} canAdd={(x) => v.legalActions.some((a) => a.type === 'BET' && a.amount === x)} onAdd={(x) => game.submit({ type: 'BET', seat: 0, amount: x })} />
+            <ChipRow chips={v.chips} canAdd={(x) => v.legalActions.some((a) => a.type === 'BET' && a.amount === x)} onAdd={(x) => game.submit({ type: 'BET', seat: me, amount: x })} />
             <View style={styles.buttons}>
-              <Button label={c.clear} onPress={() => game.submit({ type: 'CLEAR', seat: 0 })} disabled={!has('CLEAR')} />
+              <Button label={c.clear} onPress={() => game.submit({ type: 'CLEAR', seat: me })} disabled={!has('CLEAR')} />
               {/* No bet, no deal: a Deal that silently sat the round out was a trap. */}
-              <Button label={c.deal} tone="strong" onPress={() => game.submit({ type: 'READY', seat: 0 })} disabled={!has('READY') || v.bets[0] === 0} />
+              <Button label={c.deal} tone="strong" onPress={() => game.submit({ type: 'READY', seat: me })} disabled={!has('READY') || v.bets[me] === 0} />
             </View>
           </>
         ) : null}
         {v.phase === 'BETTING' && !betting ? <Text style={styles.line}>{c.waitingForBets}</Text> : null}
         {playing ? (
           <View style={styles.buttons}>
-            <Button label={t.hit} tone="strong" onPress={() => game.submit({ type: 'HIT', seat: 0 })} />
-            <Button label={t.stand} onPress={() => game.submit({ type: 'STAND', seat: 0 })} />
-            {has('DOUBLE') ? <Button label={t.double} onPress={() => game.submit({ type: 'DOUBLE', seat: 0 })} /> : null}
-            {has('SPLIT') ? <Button label={t.split} onPress={() => game.submit({ type: 'SPLIT', seat: 0 })} /> : null}
+            <Button label={t.hit} tone="strong" onPress={() => game.submit({ type: 'HIT', seat: me })} />
+            <Button label={t.stand} onPress={() => game.submit({ type: 'STAND', seat: me })} />
+            {has('DOUBLE') ? <Button label={t.double} onPress={() => game.submit({ type: 'DOUBLE', seat: me })} /> : null}
+            {has('SPLIT') ? <Button label={t.split} onPress={() => game.submit({ type: 'SPLIT', seat: me })} /> : null}
           </View>
         ) : null}
         {game.roundOver && !game.matchOver ? (

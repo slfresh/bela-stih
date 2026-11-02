@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import type { NetHow } from '../games/useNetSession';
 import type { Lang } from '@belot/i18n';
 import { chipBalance } from '@belot/progression';
 import { OsmiceCard } from '../games/osmice/OsmiceCard';
@@ -29,7 +30,9 @@ interface Row {
   initial: number;
 }
 
-function GameRow({ row, lang, onPlay }: { row: Row; lang: Lang; onPlay: (game: OtherGame, players: number) => void }) {
+type OnOnline = (game: OtherGame | null, how: NetHow) => void;
+
+function GameRow({ row, lang, onPlay, onOnline }: { row: Row; lang: Lang; onPlay: (game: OtherGame, players: number) => void; onOnline: OnOnline }) {
   const g = lang.games;
   const [players, setPlayers] = useState(row.initial);
   return (
@@ -61,13 +64,27 @@ function GameRow({ row, lang, onPlay }: { row: Row; lang: Lang; onPlay: (game: O
         ))}
       </View>
       <Button label={g.play} tone="strong" accessibilityLabel={`${g.play}: ${row.name}`} onPress={() => onPlay(row.game, players)} />
+      {/* Online: strangers at quick play, or a private table for this many, to share by code. */}
+      <View style={styles.onlineRow}>
+        <View style={styles.fill}>
+          <Button label={g.quickPlay} accessibilityLabel={`${g.quickPlay}: ${row.name}`} onPress={() => onOnline(row.game, { kind: 'quick' })} />
+        </View>
+        <View style={styles.fill}>
+          <Button
+            label={lang.s.ui.privateTable}
+            accessibilityLabel={`${lang.s.ui.privateTable}: ${row.name}`}
+            onPress={() => onOnline(row.game, { kind: 'create', seats: Math.max(2, players) })}
+          />
+        </View>
+      </View>
     </View>
   );
 }
 
 const range = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
 
-export function MoreGames({ lang, onPlay }: { lang: Lang; onPlay: (game: OtherGame, players: number) => void }) {
+export function MoreGames({ lang, onPlay, onOnline }: { lang: Lang; onPlay: (game: OtherGame, players: number) => void; onOnline: OnOnline }) {
+  const [code, setCode] = useState('');
   const osmice: Row = {
     game: 'osmice',
     name: lang.osmice.name,
@@ -85,7 +102,26 @@ export function MoreGames({ lang, onPlay }: { lang: Lang; onPlay: (game: OtherGa
   return (
     <>
       <Panel label={lang.games.moreGames}>
-        <GameRow row={osmice} lang={lang} onPlay={onPlay} />
+        <GameRow row={osmice} lang={lang} onPlay={onPlay} onOnline={onOnline} />
+        {/* A friend's table of any of these games: the code says which. */}
+        <View style={[styles.divider, styles.joinRow]}>
+          <TextInput
+            value={code}
+            onChangeText={setCode}
+            placeholder={lang.s.ui.tableCode}
+            placeholderTextColor={ink.mid}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            style={styles.input}
+            accessibilityLabel={`${lang.s.ui.joinByCode}: ${lang.games.moreGames}`}
+          />
+          <Button
+            label={lang.s.ui.enter}
+            tone={code.trim() ? 'strong' : 'plain'}
+            accessibilityLabel={`${lang.s.ui.enter}: ${lang.games.moreGames}`}
+            onPress={() => code.trim() && onOnline(null, { kind: 'join', code: code.trim() })}
+          />
+        </View>
       </Panel>
       <Panel label={lang.casino.heading}>
         <View style={styles.casinoHead}>
@@ -95,7 +131,7 @@ export function MoreGames({ lang, onPlay }: { lang: Lang; onPlay: (game: OtherGa
         <Text style={styles.note}>{lang.casino.playMoney}</Text>
         {casino.map((row, i) => (
           <View key={row.game} style={i > 0 ? styles.divider : undefined}>
-            <GameRow row={row} lang={lang} onPlay={onPlay} />
+            <GameRow row={row} lang={lang} onPlay={onPlay} onOnline={onOnline} />
           </View>
         ))}
       </Panel>
@@ -119,4 +155,8 @@ const styles = StyleSheet.create({
   balance: { ...type.body, color: ink.hi },
   note: { ...type.caption, color: ink.lo, marginTop: space.xs, marginBottom: space.md },
   divider: { borderTopWidth: 1, borderTopColor: stroke.hair, paddingTop: space.md, marginTop: space.md },
+  onlineRow: { flexDirection: 'row', gap: space.sm, marginTop: space.sm },
+  fill: { flex: 1 },
+  joinRow: { flexDirection: 'row', gap: space.sm, alignItems: 'center' },
+  input: { flex: 1, ...type.body, color: ink.hi, backgroundColor: surface.sunk, borderRadius: radius.pill, paddingHorizontal: space.lg, paddingVertical: space.sm },
 });
