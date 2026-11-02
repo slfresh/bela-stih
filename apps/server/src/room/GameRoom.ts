@@ -260,9 +260,15 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
   protected handleGameMessage(_client: Client, _seat: number, _type: string, _message: unknown): boolean {
     return false;
   }
-  /** What a seat may see before the table locks; by default the view as it stands. */
-  protected preStartView(view: ViewOf<D>): ViewOf<D> {
-    return view;
+  /**
+   * What a seat may see before the table locks. The deck is dealt when the room
+   * is created while seats are still changing hands, so a client could walk
+   * the free seats and read each hand dealt to them: by default the lobby is
+   * sent no view at all. A game whose lobby draws something (Bela's, with the
+   * hand blanked) says what is safe to send.
+   */
+  protected preStartView(_view: ViewOf<D>): ViewOf<D> | null {
+    return null;
   }
   /** How many matches a finished match counts for (Bela's double win counts two). */
   protected matchCredit(): number {

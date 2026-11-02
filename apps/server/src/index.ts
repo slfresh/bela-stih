@@ -3,7 +3,8 @@ import express, { type Request, type Response } from 'express';
 import { matchMaker, Server } from '@colyseus/core';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { BelaRoom } from './BelaRoom';
-import { MAX_FRAME_BYTES, MIN_PROTO, PROTO, ROOM_NAME, ROOM_NAME_MODES } from './protocol';
+import { OsmiceRoom } from './OsmiceRoom';
+import { MAX_FRAME_BYTES, MIN_PROTO, PROTO, ROOM_NAME, ROOM_NAME_MODES, ROOM_NAMES, type GameId } from './protocol';
 
 /**
  * The Bela game server.
@@ -43,11 +44,14 @@ const app = express();
 // wire generations it serves, and how busy it is. Counts only: nothing here
 // names a table or a player.
 const STARTED_AT = Date.now();
+/** The games this build serves a table for. */
+const SERVED_GAMES: GameId[] = ['bela', 'osmice'];
 const SHA = process.env.GIT_SHA ?? 'dev';
 app.get('/health', (_req: Request, res: Response) => {
   res.json({
     ok: true,
     room: ROOM_NAME,
+    games: SERVED_GAMES,
     sha: SHA,
     proto: PROTO,
     minProto: MIN_PROTO,
@@ -67,6 +71,8 @@ const gameServer = new Server({
 gameServer.define(ROOM_NAME, BelaRoom);
 // Tables for apps that know the three versions (protocol.ts): they say so.
 gameServer.define(ROOM_NAME_MODES, BelaRoom, { modes: true });
+// The games beyond Bela, each under its own name (protocol.ts ROOM_NAMES), all on GameRoom.
+gameServer.define(ROOM_NAMES.osmice, OsmiceRoom);
 
 gameServer
   .listen(PORT)

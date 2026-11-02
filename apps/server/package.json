@@ -8,7 +8,8 @@
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
     "smoke": "tsx src/smoke.ts",
-    "fill": "tsx src/fill.ts"
+    "fill": "tsx src/fill.ts",
+    "smoke:osmice": "tsx src/smoke-osmice.ts"
   },
   "dependencies": {
     "@belot/shared-types": "*",
@@ -20,7 +21,8 @@
     "@colyseus/ws-transport": "0.16.5",
     "@colyseus/core": "0.16.22",
     "express": "^5.1.0",
-    "tsx": "^4.23.12"
+    "tsx": "^4.23.12",
+    "@belot/games-osmice": "*"
   },
   "devDependencies": {
     "colyseus.js": "0.16.22",
