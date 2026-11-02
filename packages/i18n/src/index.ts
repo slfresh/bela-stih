@@ -12,12 +12,14 @@ import {
   casinoStrings,
   gamesStrings,
   holdemStrings,
+  onlineStrings,
   osmiceStrings,
   type BaccaratStrings,
   type BlackjackStrings,
   type CasinoStrings,
   type GamesStrings,
   type HoldemStrings,
+  type OnlineStrings,
   type OsmiceStrings,
 } from './games';
 
@@ -2441,6 +2443,11 @@ export class Lang {
     return holdemStrings(this.id);
   }
 
+  /** An online table of the games beyond Bela: reconnecting, its clock, votes, waiting. */
+  get online(): OnlineStrings {
+    return onlineStrings(this.id);
+  }
+
   /** The mađarice name: žir, list, srce, bundeva. */
   suitName(suit: Suit): string {
     return this.t.suit[suit];
@@ -2523,12 +2530,14 @@ export {
   casinoStrings,
   gamesStrings,
   holdemStrings,
+  onlineStrings,
   osmiceStrings,
   type BaccaratStrings,
   type BlackjackStrings,
   type CasinoStrings,
   type GamesStrings,
   type HoldemStrings,
+  type OnlineStrings,
   type OsmiceActionKey,
   type OsmiceColourKey,
   type OsmiceStrings,
