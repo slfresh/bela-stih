@@ -62,6 +62,10 @@ export const OSMICE: OsmiceDefinition = {
   // instead left an idle player's hand growing all round, and every playable
   // draw kept them on turn for a second full clock.
   defaultAction: (s, seat, rng) => decideOsmice(publicView(s, seat), rng, 'medium'),
+  // Drawing a card that goes leaves the drawer on turn to play it or pass: the
+  // same turn, so the timeout that drew it finishes it too, instead of the
+  // idle player waiting out a second full clock (about one turn in eleven).
+  turnContinues: (s, seat) => s.drawn !== null && currentActor(s) === seat,
   apply: applyAction,
 
   view: publicView,

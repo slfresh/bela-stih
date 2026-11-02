@@ -179,3 +179,58 @@ describe('a window clock', () => {
     expect(s.decisionId()).not.toMatch(/^window:/);
   });
 });
+
+describe('a timeout that settles the whole turn', () => {
+  // TOY with a seat that keeps the turn after taking: like Bela's trick winner
+  // leading again, the next decision is the same seat's.
+  const STICKY: typeof TOY = {
+    ...TOY,
+    apply(s, a) {
+      const after = TOY.apply(s, a);
+      return a.type === 'TAKE' && after.phase === 'PLAY' ? { ...after, turn: a.seat } : after;
+    },
+  };
+  const inPlay = (def: typeof TOY) => {
+    const s = new Session(def, { seats: 2, seed: 1, humanSeats: [0, 1], config: { pile: 30 } });
+    s.submit({ type: 'READY', seat: 0 });
+    s.submit({ type: 'READY', seat: 1 });
+    expect(s.state.phase).toBe('PLAY');
+    s.drainEvents();
+    return s;
+  };
+  const took = (s: Session<typeof TOY>) => s.drainEvents().filter((e) => e.kind === 'took').length;
+
+  it('is one move when the game does not say the turn goes on, even with the same seat on turn again', () => {
+    const s = inPlay(STICKY);
+    const seat = s.actors()[0]!;
+    const before = s.decisionId();
+    s.closeWindow();
+    expect(took(s)).toBe(1);
+    // The same seat, but a new decision with its own clock.
+    expect(s.actors()).toEqual([seat]);
+    expect(s.decisionId()).not.toBe(before);
+  });
+
+  it('repeats the default while the game says the turn goes on, and stops when it does not', () => {
+    // The turn goes on while the pile is odd: a take of one from 29 leaves 28.
+    const s = inPlay({ ...STICKY, turnContinues: (st) => st.pile % 2 === 1 });
+    s.closeWindow(); // 30 -> 29 (odd, goes on) -> 28 (even, stops)
+    expect(took(s)).toBe(2);
+    expect(s.state.pile).toBe(28);
+  });
+
+  it('is bounded when the game says yes for ever', () => {
+    const s = inPlay({ ...STICKY, turnContinues: () => true });
+    s.closeWindow();
+    expect(took(s)).toBe(3);
+  });
+
+  it('asks only about the seat that timed out', () => {
+    // Plain TOY passes the turn on: the other seat is never moved for.
+    const s = inPlay({ ...TOY, turnContinues: () => true });
+    const seat = s.actors()[0]!;
+    s.closeWindow();
+    expect(took(s)).toBe(1);
+    expect(s.actors()).toEqual([1 - seat]);
+  });
+});

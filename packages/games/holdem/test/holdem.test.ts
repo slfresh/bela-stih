@@ -171,18 +171,61 @@ describe('the review fixes', () => {
     expect(chipsInPlay(s)).toBe(1005);
   });
 
-  it('three-handed, a short big blind makes the call the small blind, and the folds give it back', () => {
-    // Button 0, small blind 1 (10), big blind 2 all in for 5.
+  it('three-handed, a short big blind still leaves the full big blind to match, and the folds give the rest back', () => {
+    // Button 0, small blind 1 (10), big blind 2 all in for 5. Two players can
+    // still act, so the button faces the full 20 and a raise goes to 40.
     let s = table([1000, 1000, 5], 0);
-    expect(s.currentBet).toBe(10);
+    expect(s.currentBet).toBe(20);
     expect(s.toAct).toBe(0);
-    expect(HOLDEM.legalActions(s, 0).find((a) => a.type === 'RAISE')).toEqual({ type: 'RAISE', seat: 0, to: 30 });
+    expect(HOLDEM.legalActions(s, 0).find((a) => a.type === 'RAISE')).toEqual({ type: 'RAISE', seat: 0, to: 40 });
     s = act(s, { type: 'FOLD', seat: 0 });
-    // The small blind has matched everything: it is not asked to call or fold.
+    // Left alone against 5, the small blind has matched everything: it is not
+    // asked to complete or fold, and the 5 above the big blind goes back.
     expect(s.phase === 'HAND_OVER' || s.phase === 'MATCH_OVER').toBe(true);
     expect(s.lastResult!.returned).toEqual([{ seat: 1, amount: 5 }]);
     expect(s.lastResult!.net[2]!).toBeLessThanOrEqual(5);
     expect(s.lastResult!.net.reduce((a, b) => a + b, 0)).toBe(0);
+  });
+
+  it('a short big blind does not make limping cheaper: everyone after it calls the full big blind', () => {
+    // Four seats, button 0, small blind 1, big blind 2 all in for 5, UTG 3.
+    let s = table([1000, 1000, 5, 1000], 0);
+    expect(s.players[2]!.bet).toBe(5);
+    expect(s.currentBet).toBe(20);
+    expect(s.toAct).toBe(3);
+    expect(HOLDEM.legalActions(s, 3).find((a) => a.type === 'RAISE')).toEqual({ type: 'RAISE', seat: 3, to: 40 });
+    s = act(s, { type: 'CALL', seat: 3 });
+    expect(s.players[3]!.bet).toBe(20);
+    // The button may raise only to a full raise over the big blind.
+    expect(HOLDEM.legalActions(s, 0).find((a) => a.type === 'RAISE')).toEqual({ type: 'RAISE', seat: 0, to: 40 });
+    s = act(s, { type: 'CALL', seat: 0 });
+    // The small blind must complete; it may not check its 10.
+    expect(legal(s, 1)).toEqual(['FOLD', 'CALL', 'RAISE', 'RAISE']);
+    s = act(s, { type: 'CALL', seat: 1 });
+    expect(s.phase).toBe('FLOP');
+    // A main pot the big blind is in (4 x 5) and a side pot it is not (3 x 15).
+    expect(buildPots(s.players)).toEqual([
+      { amount: 20, eligible: [0, 1, 2, 3] },
+      { amount: 45, eligible: [0, 1, 3] },
+    ]);
+  });
+
+  it('heads up, a small blind all in for less leaves the big blind nothing to do', () => {
+    // The button (seat 0) has only 5 for its small blind; the big blind posts 20.
+    const s = HOLDEM.startRound(HOLDEM.createMatch({ seats: 2, seed: 1, stacks: [5, 1000], dealer: 0, config: { blindsUpEvery: 0 } }));
+    expect(s.phase === 'HAND_OVER' || s.phase === 'MATCH_OVER').toBe(true);
+    expect(s.lastResult!.returned).toEqual([{ seat: 1, amount: 15 }]);
+    expect(s.lastResult!.net.map(Math.abs)).toEqual([5, 5]);
+  });
+
+  it('when one player left with chips is short of the others, it still calls or folds', () => {
+    // Button 0 shoves 1000; the small blind (1) is all in for 200 calling it;
+    // the big blind (2) is the only one who can act and faces the full shove.
+    let s = table([1000, 200, 1000], 0);
+    s = act(s, { type: 'RAISE', seat: 0, to: 1000 });
+    s = act(s, { type: 'CALL', seat: 1 });
+    expect(s.toAct).toBe(2);
+    expect(legal(s, 2)).toEqual(['FOLD', 'CALL']);
   });
 
   it('a bet nobody could call goes back to its owner and is not reported as a pot won', () => {

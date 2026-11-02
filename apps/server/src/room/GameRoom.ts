@@ -219,6 +219,8 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
   private turnDecision: string | null = null;
   private turnActors: number[] = [];
   protected started = false;
+  /** The first deal's events, held until the table starts (buildSession). */
+  private opening: EventOf<D>[] = [];
   /**
    * Rate limits, keyed by CONNECTION rather than by seat: pre-start a client can
    * change seats freely, so a per-seat gap is one a seat-hopper multiplies.
@@ -227,7 +229,13 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
   private lastSitAt = new Map<string, number>();
   private lastVoteAt = new Map<string, number>();
   private lastGiftAt = new Map<string, number>();
-  private lastHoldAt = new Map<string, number>();
+  /**
+   * When each connection's last 'pause', 'away' and 'clock' was let through,
+   * keyed `${sessionId}:${kind}`: one each, so a pause never costs an 'away'
+   * its turn. And the latest of each that came inside its gap, waiting it out.
+   */
+  private lastGapAt = new Map<string, number>();
+  private deferred = new Map<string, ReturnType<typeof setTimeout>>();
   private moveBuckets = new Map<string, MoveBucket>();
   private voiceLimits = new Map<string, VoiceLimiter>();
   /** Numbers each relayed clip, so a client can tell its echo from another clip. */
@@ -364,16 +372,18 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     // prototype instead of an own key.
     Object.setPrototypeOf((this as unknown as { onMessageHandlers: object }).onMessageHandlers, null);
 
-    this.onMessage('*', (client: Client, type: string | number, message: unknown) => {
-      try {
-        this.handle(client, String(type), message);
-      } catch (err) {
-        // One malformed frame must cost the sender an error and nothing else.
-        // Every room on this host shares a process; an escape here ends them all.
-        console.error(`[${this.def.meta.id}] message ${String(type)} failed:`, err);
-        client.send(MSG.error, { reason: 'bad message' });
-      }
-    });
+    this.onMessage('*', (client: Client, type: string | number, message: unknown) => this.dispatch(client, String(type), message));
+  }
+
+  private dispatch(client: Client, type: string, message: unknown, replay = false): void {
+    try {
+      this.handle(client, type, message, replay);
+    } catch (err) {
+      // One malformed frame must cost the sender an error and nothing else.
+      // Every room on this host shares a process; an escape here ends them all.
+      console.error(`[${this.def.meta.id}] message ${type} failed:`, err);
+      client.send(MSG.error, { reason: 'bad message' });
+    }
   }
 
   /** Every chair, in seat order. */
@@ -399,7 +409,20 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
       // has 32 bits of state to hide in.
       rng: cryptoRng(),
     });
-    this.session.drainEvents();
+    // The first deal's events (a shuffle, the hole cards going round) are kept
+    // for the publish that takes the lobby down, so the first round gets the
+    // same cue as every later one. Nobody is sent them before then: the lobby
+    // is shown no cards, and the host may yet change the rules and deal again.
+    const opening = this.session.drainEvents();
+    this.opening = this.sendsOpeningEvents() ? opening : [];
+  }
+  /**
+   * Does the room message that starts the table carry the first deal's events?
+   * Every game but Bela: its shipped apps read that message field for field
+   * and have always drawn the first deal from the view (BelaRoom).
+   */
+  protected sendsOpeningEvents(): boolean {
+    return true;
   }
 
   // --- seating -------------------------------------------------------------
@@ -643,7 +666,8 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
 
   // --- messages ------------------------------------------------------------
 
-  private handle(client: Client, type: string, message: unknown): void {
+  /** `replay`: a message that waited out its gap (gap), sent before whatever came since. */
+  private handle(client: Client, type: string, message: unknown, replay = false): void {
     const seat = this.seatOf(client.sessionId);
     if (seat === null) return;
 
@@ -652,7 +676,13 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     // left waiting on someone who is playing would refuse their every move.
     // (Not a Settings switch flipped on the way, nor a clip's receipt: that is
     // the app, not the player at the table.)
-    if (type !== 'away' && type !== 'hears' && type !== 'heard' && this.waiting.has(seat) && this.occupants[seat]!.connected) {
+    // An 'away' still waiting out its gap is cancelled by the same messages.
+    // A replayed message (one that waited out its gap) says neither: the
+    // player sent it before whatever came since.
+    if (!replay && type !== 'away' && type !== 'hears' && type !== 'heard') this.cancelDeferred(client, 'away');
+    if (replay) {
+      // Nothing to undo: see above.
+    } else if (type !== 'away' && type !== 'hears' && type !== 'heard' && this.waiting.has(seat) && this.occupants[seat]!.connected) {
       this.waiting.delete(seat);
       this.holdChanged();
       if (type === 'back') return;
@@ -724,9 +754,15 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     if (type === 'clock') {
       // Only before the start, only at a private table, only the host, and
       // only one of the offered lengths: quick play stays the same for everyone.
+      // The latest choice wins, so one still waiting out its gap goes first.
+      this.cancelDeferred(client, 'clock');
       const seconds = (message as { seconds?: unknown } | undefined)?.seconds;
       if (this.started || this.isPublic || seat !== this.actingHostSeat()) return;
       if (typeof seconds !== 'number' || !TURN_CHOICES.includes(seconds)) return;
+      // Each accepted one republishes to every client: nothing to send for the
+      // length already set, and at most one per gap otherwise.
+      if (seconds * 1000 === this.turnMs) return;
+      if (!this.gap(client, 'clock', message)) return;
       this.turnMs = seconds * 1000;
       this.publish();
       return;
@@ -735,17 +771,19 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     if (this.handleGameMessage(client, seat, type, message)) return;
 
     if (type === 'pause') {
+      this.cancelDeferred(client, 'pause');
       if (!this.canHold() || this.paused !== null) return;
       // Pause and resume republish to every client each time, so a loop of
       // them needs the gap a seat change has. Resume works only while paused,
       // so gating the pause bounds the loop; 'away' and 'back' likewise.
-      if (!this.holdGap(client)) return;
+      if (!this.gap(client, 'pause', message)) return;
       this.paused = { by: seat, until: Date.now() + PAUSE_MAX_MS };
       this.holdChanged();
       return;
     }
 
     if (type === 'resume') {
+      this.cancelDeferred(client, 'pause');
       if (this.paused === null) return;
       this.paused = null;
       this.holdChanged();
@@ -754,8 +792,9 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
 
     if (type === 'away') {
       // A call that did not drop the connection: wait for them as if it had.
+      this.cancelDeferred(client, 'away');
       if (!this.waitsFor(seat) || this.waiting.has(seat)) return;
-      if (!this.holdGap(client)) return;
+      if (!this.gap(client, 'away', message)) return;
       this.waiting.set(seat, Date.now() + WAIT_FOR_DROPPED_MS);
       this.holdChanged();
       return;
@@ -930,12 +969,43 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     }
   }
 
-  /** At most one pause or 'away' per SIT_GAP_MS from one connection. */
-  private holdGap(client: Client): boolean {
+  /**
+   * At most one 'pause', 'away' or 'clock' of each kind per SIT_GAP_MS from one
+   * connection, without ever losing the latest: one that comes inside the gap
+   * is not dropped but waits it out, then goes through `handle` again, so every
+   * condition is checked afresh (a 'back' or 'resume' meanwhile cancels it, and
+   * so does a later message of the same kind). Dropping it lost state: away,
+   * back, away in a quarter of a second left the table not waiting for a
+   * player whose app was in the background.
+   */
+  private gap(client: Client, kind: string, message: unknown): boolean {
+    const key = `${client.sessionId}:${kind}`;
     const now = Date.now();
-    if (now - (this.lastHoldAt.get(client.sessionId) ?? 0) < SIT_GAP_MS) return false;
-    this.lastHoldAt.set(client.sessionId, now);
-    return true;
+    const at = this.lastGapAt.get(key) ?? 0;
+    if (now - at >= SIT_GAP_MS) {
+      this.lastGapAt.set(key, now);
+      return true;
+    }
+    this.cancelDeferred(client, kind);
+    const timer = setTimeout(
+      () => {
+        this.deferred.delete(key);
+        this.dispatch(client, kind, message, true);
+      },
+      // A millisecond over, so the retry is never a hair inside the gap.
+      at + SIT_GAP_MS - now + 1,
+    );
+    this.deferred.set(key, timer);
+    return false;
+  }
+
+  /** Drop a message of this kind still waiting out its gap (gap). */
+  private cancelDeferred(client: Client, kind: string): void {
+    const key = `${client.sessionId}:${kind}`;
+    const timer = this.deferred.get(key);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    this.deferred.delete(key);
   }
 
   protected afterMove(): void {
@@ -1203,9 +1273,15 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     this.lastSitAt.delete(sessionId);
     this.lastVoteAt.delete(sessionId);
     this.lastGiftAt.delete(sessionId);
-    this.lastHoldAt.delete(sessionId);
     this.moveBuckets.delete(sessionId);
     this.voiceLimits.delete(sessionId);
+    // The pause, away and clock gaps, and any of those still waiting one out.
+    for (const key of [...this.lastGapAt.keys()]) if (key.startsWith(`${sessionId}:`)) this.lastGapAt.delete(key);
+    for (const [key, timer] of [...this.deferred]) {
+      if (!key.startsWith(`${sessionId}:`)) continue;
+      clearTimeout(timer);
+      this.deferred.delete(key);
+    }
   }
 
   /** A seat a gift can reach: a person whose app draws gifts, or no person at all. */
@@ -1253,7 +1329,13 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     // A game may keep some events off the wire: at Bela `declarationSkipped`
     // is only ever emitted for a seat that HAD something to declare, so
     // broadcasting it would tell the table exactly what staying quiet hides.
-    const events = this.session.drainEvents().filter((e) => this.def.isEventPublic(e));
+    let drained = this.session.drainEvents();
+    if (this.started && this.opening.length > 0) {
+      // The deal comes before anything the bots did once the table locked.
+      drained = [...this.opening, ...drained];
+      this.opening = [];
+    }
+    const events = drained.filter((e) => this.def.isEventPublic(e));
     const room = this.roomMessage(events);
     // Views first: a client must know its own seat before the event stream
     // arrives, or the first batch cannot be attributed to anyone.
@@ -1276,5 +1358,7 @@ export abstract class GameRoom<D extends AnyGame> extends Room {
     this.stopNext();
     if (this.holdTimer !== null) clearTimeout(this.holdTimer);
     this.holdTimer = null;
+    for (const timer of this.deferred.values()) clearTimeout(timer);
+    this.deferred.clear();
   }
 }

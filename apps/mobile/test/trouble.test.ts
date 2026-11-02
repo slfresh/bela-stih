@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { Lang, LOCALE_IDS } from '@belot/i18n';
-import { retryHelps, troubleOf } from '../src/net/trouble';
+import { WRONG_GAME_CODE, retryHelps, troubleOf } from '../src/net/trouble';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = (f: string) => readFileSync(join(here, '..', f), 'utf8');
@@ -19,6 +19,14 @@ describe('a failed way to a table, in the player-s words', () => {
     // A public table refusing a second seat from one network (BelaRoom.onAuth).
     expect(troubleOf({ name: 'ServerError', code: 4300, message: 'seat already held from here' })).toBe('sameNetwork');
     expect(troubleOf(null)).toBe('offline');
+  });
+
+  it('a code for another game-s table is no table at all to Bela, and trying again does not help', () => {
+    // GameRoom.onAuth refuses an app that cannot play the table's game (4302).
+    const t = troubleOf({ name: 'ServerError', code: WRONG_GAME_CODE, message: 'wrong game' });
+    expect(WRONG_GAME_CODE).toBe(4302);
+    expect(t).toBe('noSuchTable');
+    expect(retryHelps(t)).toBe(false);
   });
 
   it('offers to try again only where that can help', () => {

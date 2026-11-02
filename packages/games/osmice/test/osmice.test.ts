@@ -284,6 +284,39 @@ describe('Osmice bots', () => {
     expect(drewWithAPlay).toBe(0);
   });
 
+  it('a timeout that draws a card that goes finishes the turn, with no second clock', () => {
+    // The seat stuck with nothing to play draws; a drawn card that goes keeps it
+    // on turn. One closeWindow must settle that turn (play it or pass).
+    let stuckAndDrewAPlay = 0;
+    for (let seed = 1; seed <= 400 && stuckAndDrewAPlay < 5; seed++) {
+      const session = new Session(OSMICE, { seats: 3, seed, humanSeats: [0, 1, 2] });
+      for (let move = 0; move < 60 && !session.roundOver(); move++) {
+        const seat = session.actors()[0]!;
+        const stuck = !session.legal(seat).some((a) => a.type === 'PLAY') && session.state.pendingDraw === 0;
+        session.drainEvents();
+        session.closeWindow();
+        const events = session.drainEvents();
+        // Either way the timed-out seat's turn is over.
+        expect(session.state.drawn).toBeNull();
+        if (!session.roundOver()) expect(session.actors()).not.toEqual([seat]);
+        // Drew, then played or passed, all on the one timeout.
+        const mine = events.filter((e) => 'seat' in e && e.seat === seat).map((e) => e.kind);
+        if (stuck && mine[0] === 'drew' && (mine[1] === 'cardPlayed' || mine[1] === 'passed')) stuckAndDrewAPlay++;
+      }
+    }
+    expect(stuckAndDrewAPlay).toBeGreaterThan(0);
+  });
+
+  it('says the turn goes on only for the drawer holding a card that goes', () => {
+    const s = OSMICE.startRound(OSMICE.createMatch({ seats: 3, seed: 2 }));
+    const seat = OSMICE.actors(s)[0]!;
+    expect(OSMICE.turnContinues!(s, seat)).toBe(false);
+    const card = s.hands[seat]![0]!;
+    const drawing = { ...s, drawn: card };
+    expect(OSMICE.turnContinues!(drawing, seat)).toBe(true);
+    expect(OSMICE.turnContinues!(drawing, (seat + 1) % 3)).toBe(false);
+  });
+
   /** Two seats, every seed played from both sides so the deal cancels out. */
   const winRate = (a: BotLevel, b: BotLevel, matches: number) => {
     let wins = 0;

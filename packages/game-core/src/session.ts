@@ -31,6 +31,9 @@ export interface SessionOptions<C> {
   stacks?: number[];
 }
 
+/** The most default actions one timeout applies to one seat (see `turnContinues`). */
+const MAX_TIMEOUT_STEPS = 3;
+
 export class Session<D extends AnyGame> {
   private s: StateOf<D>;
   private readonly rng: Rng;
@@ -241,13 +244,21 @@ export class Session<D extends AnyGame> {
 
   /**
    * The window closed: every human still owed a decision takes the game's
-   * default one (fold or check, "no more bets", draw). Then the bots settle.
+   * default one (fold or check, "no more bets", draw), and finishes the turn
+   * with it when the game says the turn goes on. Then the bots settle.
    */
   closeWindow(): void {
     for (const seat of this.humanActors()) {
-      if (!this.actors().includes(seat)) continue;
-      const action = this.def.defaultAction(this.s, seat, this.rng, this.botLevel) as ActionOf<D>;
-      this.applyAndRecord(action, { kind: 'closeWindow' });
+      // One timeout settles the seat's whole turn: a game whose turn has two
+      // halves (Osmice: draw, then play the drawn card) says the turn goes on,
+      // and the default applies again instead of a second full clock starting.
+      // Bounded, so a game that answers yes for ever cannot hang the table.
+      for (let step = 0; step < MAX_TIMEOUT_STEPS; step++) {
+        if (!this.actors().includes(seat)) break;
+        if (step > 0 && !this.def.turnContinues?.(this.s, seat)) break;
+        const action = this.def.defaultAction(this.s, seat, this.rng, this.botLevel) as ActionOf<D>;
+        this.applyAndRecord(action, { kind: 'closeWindow' });
+      }
     }
     this.runBots();
   }

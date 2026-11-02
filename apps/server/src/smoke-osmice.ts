@@ -136,6 +136,14 @@ async function main(): Promise<void> {
       // Between rounds, everyone votes for the next one.
       if (s.view && (s.view.phase === 'ROUND_OVER') && msg.status === 'playing') s.room.send('next', {});
     });
+    // The room takes about ten moves a second from one connection (GameRoom's
+    // move bucket), and this client plays far faster than any person, stale
+    // repeats included. A move refused as too fast is simply lost, and no new
+    // view comes to prompt another: try again once the bucket has refilled a
+    // little, as an app would, rather than leave the table on a 30 s clock.
+    s.room.onMessage(MSG.error, (m: { reason?: string }) => {
+      if (m?.reason === 'too fast') setTimeout(() => act(s), 150);
+    });
     s.room.onMessage('*', () => {});
   };
 

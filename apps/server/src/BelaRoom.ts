@@ -135,6 +135,11 @@ export class BelaRoom extends GameRoom<typeof BELA> {
     return true;
   }
 
+  /** Bela's first deal is drawn from the view, as it always was: its room messages stay as they were. */
+  protected override sendsOpeningEvents(): boolean {
+    return false;
+  }
+
   /** The room message as the shipped apps read it, field for field. */
   protected override roomMessage(events: TableEvent[]): RoomMessage {
     const votes = this.liveRematchVotes() as Seat[];

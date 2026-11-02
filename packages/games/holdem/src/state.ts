@@ -267,11 +267,13 @@ export function startRound(prev: HoldemState): HoldemState {
   }
   s.log.push({ kind: 'holeDealt', seats: dealt });
   s.phase = 'PREFLOP';
-  // The bet to call is what the blinds actually put in: a blind all in for
-  // less never makes anyone call chips it could not cover (a small blind
-  // facing a big blind all in for 5 has nothing to call). A raise is still
-  // measured from the big blind.
-  s.currentBet = Math.max(sbPosted, bbPosted);
+  // The bet to match is the full big blind, even when the big blind is all in
+  // for less: a short blind does not make limping cheaper for the others, and
+  // a raise is measured from the big blind. Only when a single player can
+  // still act is there nobody to match the full blind against, and then the
+  // bet is what the blinds actually put in (a small blind facing a big blind
+  // all in for 5 has nothing to call; whatever it put in above that goes back).
+  s.currentBet = s.players.filter(canAct).length >= 2 ? s.bigBlind : Math.max(sbPosted, bbPosted);
   s.minRaise = s.bigBlind;
   s.pending = s.players.map(canAct);
   s.actedAt = Array<number | null>(s.seats).fill(null);
@@ -376,11 +378,22 @@ export function applyAction(prev: HoldemState, a: HoldemAction): HoldemState {
   return s;
 }
 
+/**
+ * Nobody can still act, or only one player who has matched everyone else: the
+ * rest is just cards. "Matched" is against what the others actually have in,
+ * not the bet to match - preflop that is the full big blind even when the big
+ * blind is all in for less, and a small blind left alone against it has
+ * nothing more to put in (the excess goes back when the street closes).
+ */
 function everyoneButOneIsAllIn(s: HoldemState): boolean {
   const live = s.players.filter(inHand);
   const acting = live.filter(canAct);
-  // Nobody (or one player who has matched the bet) can still act: the rest is just cards.
-  return live.length >= 2 && (acting.length === 0 || (acting.length === 1 && acting[0]!.bet >= s.currentBet));
+  if (live.length < 2) return false;
+  if (acting.length === 0) return true;
+  if (acting.length > 1) return false;
+  const lone = acting[0]!;
+  const others = Math.max(...live.filter((p) => p !== lone).map((p) => p.bet));
+  return lone.bet >= others;
 }
 
 function advance(s: HoldemState, from: number): void {
@@ -391,13 +404,10 @@ function advance(s: HoldemState, from: number): void {
     awardUncontested(s);
     return;
   }
+  // The one player left with chips who is short of the others still has to
+  // call or fold: everyoneButOneIsAllIn is false for them.
   const next = nextSeat(s, from, (p, seat) => canAct(p) && s.pending[seat]!);
   if (next !== null && !everyoneButOneIsAllIn(s)) {
-    s.toAct = next;
-    return;
-  }
-  if (next !== null && everyoneButOneIsAllIn(s) && s.players[next]!.bet < s.currentBet) {
-    // The one player left with chips still has to call or fold.
     s.toAct = next;
     return;
   }

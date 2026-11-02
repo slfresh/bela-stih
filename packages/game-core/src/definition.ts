@@ -93,6 +93,16 @@ export interface GameDefinition<
   /** The action a seat takes when its clock runs out. */
   defaultAction(s: S, seat: number, rng: Rng, level: BotLevel): A;
   /**
+   * After a timed-out seat's default action, is the turn it timed out on still
+   * unfinished - still that seat's, and only half done? Osmice says yes while
+   * the seat holds the card its default move just drew: the draw and the play
+   * of that card are one turn, and one timeout settles it rather than a second
+   * full clock. The session then applies `defaultAction` again, a few times at
+   * most. Games where a seat's next decision is a new one (Bela: winning a
+   * trick and leading the next) leave this out, and a timeout stays one move.
+   */
+  turnContinues?(s: S, seat: number): boolean;
+  /**
    * While a window several seats answer at once is open (a betting round), a
    * name for it that stays the same however many moves are made in it — a
    * bet placed is still the same window — and changes when the next one
