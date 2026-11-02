@@ -18,6 +18,7 @@ export default defineConfig({
       '@belot/cards': r('./packages/cards/src/index.ts'),
       '@belot/games-baccarat': r('./packages/games/baccarat/src/index.ts'),
       '@belot/games-blackjack': r('./packages/games/blackjack/src/index.ts'),
+      '@belot/games-holdem': r('./packages/games/holdem/src/index.ts'),
     },
   },
   test: {

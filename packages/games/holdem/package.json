@@ -1,0 +1,16 @@
+{
+  "name": "@belot/games-holdem",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Texas Hold'em, no-limit, as a game module: blinds, four betting rounds, side pots, showdowns, bots that estimate their equity.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@belot/game-core": "*",
+    "@belot/cards": "*"
+  }
+}
